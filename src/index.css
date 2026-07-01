@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* 디자인 토큰 CSS 변수 (docs/screen-spec.md §1) — Tailwind 클래스와 병행 노출 */
+  :root {
+    --color-primary: #f5b82e;
+    --color-accent: #8c5a2b;
+    --color-warn: #e4572e;
+    --color-bg: #fffdf5;
+    --color-surface: #f3f0e9;
+    --color-text: #3a3128;
+    --color-muted: #9e978c;
+    --color-border: #e6e0d4;
+    --color-photo: #eae4d8;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-cream font-sans text-text antialiased;
+    /* iOS 고무줄 스크롤 시 프레임 밖 배경색 */
+    background-color: var(--color-surface);
+  }
+
+  /* 숫자 PIN 입력 등에서 스핀 버튼 제거 */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  /* 치즈 도트 — 배경 텍스처(치즈 구멍 느낌의 은은한 점 패턴) */
+  .cheese-dots {
+    background-image: radial-gradient(rgba(245, 184, 46, 0.18) 1.5px, transparent 1.6px);
+    background-size: 18px 18px;
+    background-position: 0 0;
+  }
+}
