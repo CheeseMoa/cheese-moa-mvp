@@ -33,3 +33,6 @@ dist-ssr
 
 # Vite
 .vite
+
+# 로컬 버그 수정 문서 (노션 이관 예정 — git 추적 제외)
+bugfix/
