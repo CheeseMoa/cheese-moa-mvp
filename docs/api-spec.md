@@ -9,7 +9,7 @@
 ## 1. 공통 규약
 
 - **Base URL**: `/api/v1`
-- **포맷**: 요청/응답 `application/json` (사진 업로드만 `multipart/form-data`)
+- **포맷**: 요청/응답 `application/json`. **사진 파일 자체는 presigned URL로 S3에 직접 `PUT`**(우리 API는 JSON만 주고받고 multipart 없음).
 - **인증(제작자)**: `Authorization: Bearer <accessToken>`
 - **인증(학부모 뷰어)**: 잠금 해제로 받은 `Authorization: Bearer <viewerToken>` (이벤트 공유 토큰 범위로 제한)
 - **시간**: ISO 8601 (`2026-06-27T09:41:00+09:00`)
@@ -41,14 +41,14 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 | ERD 엔티티/관계 | API 노출 | 표면화 방식 |
 |---|---|---|
 | 유저 | `User` | pin 미노출 |
-| 모임 | `Group` | password 미노출, `memberCount`/`joinKey` |
+| 모임 | `Group` | password 미노출, `memberCount`/`joinKey`, `share`(학부모 공유·모임 단위) |
 | 유저↔모임(멤버십) | **BE 내부** (`Membership`, N:M) | `GET /groups`·`POST /groups/join`로 반영, `Group.memberCount` |
-| 이벤트 | `Event` | `share`·`analysisProgress` 포함(ERD 미모델, 화면 필요) |
+| 이벤트 | `Event` | `status`/`publishedAt`(공개 단위). 학부모 공유는 모임(`Group.share`)으로 이동 |
 | 앨범 | `Album` | 인물 앨범에 `personId`+`name` |
 | 대표 벡터 | **BE 내부(비노출)** | 모임-단위 인물 정체성+이름 보유. FE엔 `Album.personId`/`name`으로만. 벡터 raw 절대 미노출 |
 | 사진 | `Photo` | 앨범과 **다대다** → `Photo.albumIds[]` |
 | 앨범↔사진 | **BE 내부** (`AlbumPhoto`, N:M) | 앨범별 사진 목록으로 표면화 |
-| (없음) | `AnalysisJob` | ERD 미모델, 진행률 폴링용(파생) |
+| (없음) | `AnalysisJob` | ERD 미모델, 분석 상태 확인용(파생) |
 
 ### User (제작자)
 ```json
@@ -65,10 +65,16 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
   "eventCount": 8,
   "joinKey": "HAETSAL",
   "role": null,
+  "share": {
+    "token": "shr_grp1",
+    "url": "https://app.cheesemoa.kr/share/shr_grp1",
+    "hasPassword": true
+  },
   "createdAt": "2026-05-01T09:00:00+09:00"
 }
 ```
-> `joinKey` = 참여 링크용 식별자(`/join/:joinKey`). `role`은 MVP에서 항상 `null`(권한 등급 없음). 모임 비밀번호는 응답에 미포함.
+> `joinKey` = 참여 링크용 식별자(`/join/:joinKey`). `role`은 MVP에서 항상 `null`(권한 등급 없음). 제작자 합류용 모임 비밀번호는 응답에 미포함.
+> **`share`** = **학부모 무로그인 공유(모임 단위).** 모임 생성 시 자동 발급(항상 존재, `hasPassword: true`). 학부모 전용 비밀번호는 **제작자 합류용 모임 비밀번호와 별개**이며 평문은 여기 미포함 → `GET /groups/:id/share`로 멤버만 조회. 학부모는 이 링크로 들어와 **공개(published)된 이벤트만** 골라 본다.
 
 ### Event (이벤트)
 ```json
@@ -80,23 +86,18 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
   "status": "review",
   "photoCount": 124,
   "albumCount": 8,
-  "share": {
-    "token": "shr_abc123",
-    "url": "https://app.cheesemoa.kr/share/shr_abc123",
-    "hasPassword": true
-  },
   "createdAt": "2026-06-15T09:00:00+09:00",
   "publishedAt": null
 }
 ```
 > `status` ∈ `empty | analyzing | review | ready | published`.
-> `share`는 `published` 이후에만 활성(이전엔 `null` 가능). 공유 비밀번호 평문은 미포함.
+> **이벤트는 자체 공유 링크가 없다.** `published`가 되면 그 이벤트가 **모임 학부모 공유 목록**에 노출된다(공유 링크/비밀번호는 모임 단위 → `Group.share`). `publishedAt`은 공개 시각.
 
-### AnalysisJob (분석 진행)
+### AnalysisJob (분석 상태)
 ```json
-{ "eventId": "evt_1", "status": "analyzing", "progress": 72 }
+{ "eventId": "evt_1", "status": "analyzing" }
 ```
-> `status` ∈ `analyzing | done | failed`, `progress` 0–100.
+> `status` ∈ `analyzing | done | failed`. **진행률(%)은 MVP 제외** — 배지는 `분석중`만 표시(자동 폴링 없음, 완료는 화면 재진입/새로고침 시 상태로 확인).
 
 ### Album (앨범)
 ```json
@@ -183,6 +184,12 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 #### `GET /groups/:id` — 모임 상세 · 화면 05
 응답 `200` → `Group`.
 
+#### `PATCH /groups/:id` — 모임 이름 수정 · 화면 05(모임 설정 ⚙)
+요청 `{ "name": "햇살반 2기" }`
+응답 `200` → `Group`.
+오류: `400 VALIDATION_ERROR`, `404 NOT_FOUND`.
+> **이름(`name`)만 변경 가능.** 모임 비밀번호·`joinKey`·멤버 등 다른 필드는 이 엔드포인트로 변경 불가(MVP). `name` 외 필드 전송 시 무시.
+
 #### `POST /groups/join` — 모임 참여(선생님 초대 수락) · 화면 02-1
 요청 `{ "joinKey": "HAETSAL", "password": "482AVX" }`
 응답 `200` → `Group`(합류 후).
@@ -195,6 +202,13 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 ```
 > 모임 비밀번호는 멤버에게만 노출(초대 화면 전용).
 
+#### `GET /groups/:id/share` — 학부모 공유 정보 · 화면 05(학부모 공유)
+응답 `200`
+```json
+{ "token": "shr_grp1", "url": "https://app.cheesemoa.kr/share/shr_grp1", "password": "7421", "hasPassword": true }
+```
+> **학부모 무로그인 공유(모임 단위).** 링크 + **학부모 전용 비밀번호**(제작자 합류용 모임 비밀번호와 **별개**). 평문 비밀번호는 멤버에게만 노출(공유 화면 전용, 학부모 전달용). 모임 생성 시 자동 발급되어 항상 존재.
+
 ---
 
 ### 3.3 이벤트
@@ -203,11 +217,11 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 응답 `200`
 ```json
 { "events": [
-  { "id": "evt_1", "name": "여름 물놀이", "date": "2026-06-27", "status": "analyzing", "photoCount": 210, "albumCount": 0, "analysisProgress": 72, "share": null, "createdAt": "..." },
-  { "id": "evt_2", "name": "봄 소풍", "date": "2026-05-12", "status": "published", "photoCount": 128, "albumCount": 8, "share": { "token": "shr_x", "url": "...", "hasPassword": true }, "publishedAt": "..." }
+  { "id": "evt_1", "name": "여름 물놀이", "date": "2026-06-27", "status": "analyzing", "photoCount": 210, "albumCount": 0, "createdAt": "..." },
+  { "id": "evt_2", "name": "봄 소풍", "date": "2026-05-12", "status": "published", "photoCount": 128, "albumCount": 8, "publishedAt": "..." }
 ] }
 ```
-> 카드 배지 매핑: `analyzing`→`분석중 N%`(`analysisProgress`), `ready`→`공개 준비`, `published`→`공개 완료`, `empty`→`NEW`.
+> 카드 배지 매핑: `analyzing`→`분석중`, `ready`→`공개 준비`, `published`→`공개 완료`, `empty`→`NEW`.
 
 #### `POST /groups/:id/events` — 이벤트 생성 · 화면 06-M
 요청 `{ "name": "2026-06-27" }` (기본값 = 오늘 날짜, 클라이언트가 채워 전송)
@@ -224,24 +238,34 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 
 ### 3.4 업로드 / 분석
 
-#### `POST /events/:id/photos` — 사진 업로드 · 화면 06-U
-요청 `multipart/form-data`
-- `files[]`: 이미지 파일(다중)
-- `excludeEyesClosed`: `true|false` (기본 true)
-- `excludeBlurry`: `true|false` (기본 true)
+> **업로드 = presigned URL 2-step.** 파일 바이트는 서버/Lambda를 거치지 않고 **FE→S3로 직접 `PUT`**. Lambda(IAM 역할)는 ① presigned URL 발급만 하고, ② S3 업로드가 끝나면 **S3 이벤트가 Lambda를 깨워 사진을 이벤트에 자동 등록**한다(FE의 별도 `complete`/커밋 호출 없음). 흐름: **① presign → ② S3 PUT(직접) → [AI 분석]**.
 
-응답 `202`
+#### `POST /events/:id/photos/presign` — 업로드 URL 발급(①) · 화면 06-U
+요청
 ```json
-{ "uploaded": 3, "eventId": "evt_1", "photoIds": ["pht_1","pht_2","pht_3"] }
+{ "files": [
+  { "filename": "img_001.jpg", "contentType": "image/jpeg", "size": 3145728 }
+] }
 ```
-오류: `413 PAYLOAD_TOO_LARGE`.
+응답 `200`
+```json
+{ "uploads": [
+  { "photoId": "pht_1", "uploadUrl": "https://cheesemoa-uploads.s3.ap-northeast-2.amazonaws.com/evt_1/pht_1.jpg?X-Amz-...", "method": "PUT", "headers": { "Content-Type": "image/jpeg" }, "expiresAt": "2026-06-27T09:51:00+09:00" }
+] }
+```
+> Lambda가 파일별 `photoId`를 선발급 + **presigned URL**(짧은 TTL, 크기/타입 조건) 반환. FE는 AWS 자격증명 없이 이 URL로만 올린다. 오류: `400 VALIDATION_ERROR`, `413 PAYLOAD_TOO_LARGE`(size 초과).
+
+#### (②) S3 직접 업로드 — **API 아님**
+FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(병렬·재시도, 진행률은 FE가 측정). 업로드 성공 시 **S3 이벤트 → Lambda가 해당 사진을 이벤트에 자동 등록**(`photoCount` 반영). presign만 하고 `PUT` 안 한 `photoId`는 등록되지 않는다(S3 lifecycle로 정리).
 
 #### `POST /events/:id/analyze` — AI 분석 시작 · 화면 06-U
-요청 `{}` (옵션은 업로드 시 전달분 사용)
-응답 `202` → `AnalysisJob`(`status: "analyzing", progress: 0`). 이벤트 `status`→`analyzing`.
+요청 `{ "excludeEyesClosed": true, "excludeBlurry": true }` (기본 각각 `true`)
+응답 `202` → `AnalysisJob`(`status: "analyzing"`). 이벤트 `status`→`analyzing`.
+> `[AI 분석]`이 배치 종료 신호 — 이벤트에 **등록된 사진 전체**를 분석. `excludeEyesClosed`/`excludeBlurry` ON 시 해당 사진은 인물 앨범 대신 `eyes_closed`/`blurry`로 라우팅.
 
-#### `GET /events/:id/analysis` — 분석 진행률(폴링) · 화면 06-U/05
-응답 `200` → `AnalysisJob`. 완료 시 `{ "status": "done", "progress": 100 }`, 이벤트 `status`→`review`.
+#### `GET /events/:id/analysis` — 분석 상태 확인 · 화면 06-U/05
+응답 `200` → `AnalysisJob`. 완료 시 `{ "eventId": "evt_1", "status": "done" }`, 이벤트 `status`→`review`.
+> **진행률(%)·자동 폴링 없음**(MVP 제외). 완료는 화면 재진입/새로고침 시 상태로 확인.
 
 #### `GET /events/:id/review-summary` — 공개 전 검수 요약 · 화면 14
 응답 `200`
@@ -250,12 +274,12 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 ```
 
 #### `POST /events/:id/publish` — 공개하기 · 화면 14
-요청 `{}` (서버가 공유 토큰/비밀번호 생성·반환)
+요청 `{}`
 응답 `200`
 ```json
-{ "id": "evt_1", "status": "published", "publishedAt": "...", "share": { "token": "shr_abc123", "url": "https://app.cheesemoa.kr/share/shr_abc123", "password": "7421", "hasPassword": true } }
+{ "id": "evt_1", "status": "published", "publishedAt": "..." }
 ```
-> 공유 비밀번호 평문은 **이 응답에서만** 반환(학부모 전달용). 이후 조회 시엔 `hasPassword`만.
+> 공개 = 이 이벤트를 **모임 학부모 공유 목록에 노출**(`published`). **이벤트별 공유 링크/비밀번호는 없다** — 학부모 공유는 **모임 단위**(`Group.share` / `GET /groups/:id/share`)이며 모임 생성 시 이미 발급돼 있다.
 > 정책(구현 시 확정): 미검토 앨범 존재 시 `?force=true` 없이는 `409 HAS_UNREVIEWED_ALBUMS` 경고 반환 가능.
 
 ---
@@ -310,49 +334,61 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 요청 `{ "photoIds": ["pht_11","pht_12"], "sourceAlbumId": "alb_1", "targetAlbumId": "alb_2" }`
 응답 `200` `{ "movedCount": 2, "sourceAlbumId": "alb_1", "targetAlbumId": "alb_2" }`
 
-#### `DELETE /photos` — 사진 삭제(이벤트에서 영구) · 화면 09
-> 다대다라도 삭제는 **이벤트 전체에서 영구 제거**(연결된 모든 앨범에서 사라짐). 휴지통 없음.
+#### `DELETE /photos` — 앨범에서 사진 제거(연결 해제) · 화면 09
+> 다대다 모델에서 삭제 = **해당(source) 앨범 연결만 해제.** 사진은 이벤트와 **다른 앨범엔 그대로 남는다**(그 앨범들에서 사라지지 않음). 휴지통 없음.
+> 사진이 그 앨범에만 속해 있었다면 이후 어떤 앨범에도 안 남아 이벤트에서 실질적으로 사라진다(마지막 연결 해제 = 완전 삭제, 복구 없음).
 
-요청 `{ "eventId": "evt_1", "photoIds": ["pht_11","pht_12"] }`
-응답 `200` `{ "deletedCount": 2 }`
+요청 `{ "albumId": "alb_1", "photoIds": ["pht_11","pht_12"] }`
+응답 `200` `{ "removedCount": 2, "albumId": "alb_1" }`
 
 ---
 
-### 3.6 학부모 뷰어 (무로그인, 이벤트별 공유 토큰)
+### 3.6 학부모 뷰어 (무로그인, 모임 공유 토큰)
 
-> 진입: 공유 URL `…/share/:token`. 비밀번호 잠금 해제 후 발급된 `viewerToken`으로 이후 요청.
+> 진입: 모임 공유 URL `…/share/:token`(token = **모임** 공유 토큰). 비밀번호 잠금 해제 후 발급된 `viewerToken`(모임 범위)으로 이후 요청.
+> 흐름: 잠금 해제 → **공개 이벤트 목록**(15-L) → 이벤트 선택 → 앨범(15) → 인물 앨범(16).
 
 #### `POST /share/:token/unlock` — 잠금 해제 · 화면 15 진입 전
 요청 `{ "password": "7421" }`
 응답 `200`
 ```json
-{ "viewerToken": "<viewer-jwt>", "event": { "id": "evt_1", "name": "6.15 운동회 오전", "status": "published", "publishedAt": "..." } }
+{ "viewerToken": "<viewer-jwt>", "group": { "id": "grp_1", "name": "햇살반" } }
 ```
-오류: `403 WRONG_PASSWORD`, `404 NOT_FOUND`, `410 GONE`(공개 취소 등).
+> `password` = 학부모 전용 비밀번호(모임 단위). 오류: `403 WRONG_PASSWORD`, `404 NOT_FOUND`.
 
-#### `GET /share/:token` — 공개 이벤트 앨범 · 화면 15
+#### `GET /share/:token` — 공개 이벤트 목록 · 화면 15-L
 헤더 `Authorization: Bearer <viewerToken>`
 응답 `200`
 ```json
-{ "event": { "id": "evt_1", "name": "6.15 운동회 오전" },
+{ "group": { "id": "grp_1", "name": "햇살반" },
+  "events": [
+    { "id": "evt_2", "name": "봄 소풍", "date": "2026-05-12", "photoCount": 128, "albumCount": 8, "coverPhotoId": "pht_99", "publishedAt": "..." }
+  ] }
+```
+> **공개(`published`)된 이벤트만** 반환. 없으면 `events: []`(빈 목록 화면).
+
+#### `GET /share/:token/events/:eventId` — 공개 이벤트 앨범 · 화면 15
+응답 `200`
+```json
+{ "event": { "id": "evt_2", "name": "봄 소풍" },
   "albums": [
     { "id": "alb_1", "type": "person", "name": "김민준", "photoCount": 18, "coverPhotoId": "pht_10" },
     { "id": "alb_common", "type": "common", "name": "공통", "photoCount": 24, "coverPhotoId": "pht_99" }
   ] }
 ```
-> **`person`/`common`만 반환**(특수 앨범 비노출).
+> **`person`/`common`만 반환**(특수 앨범 비노출). `eventId`가 공개 이벤트가 아니면 `404 NOT_FOUND`.
 
-#### `GET /share/:token/albums/:albumId` — 인물 앨범 상세 · 화면 16
+#### `GET /share/:token/events/:eventId/albums/:albumId` — 인물 앨범 상세 · 화면 16
 응답 `200`
 ```json
 { "album": { "id": "alb_1", "name": "김민준", "photoCount": 18 },
   "photos": [ { "id": "pht_10", "url": "...", "thumbnailUrl": "...", "downloadUrl": "..." } ] }
 ```
 
-#### `GET /share/:token/albums/:albumId/download` — 앨범 일괄 다운로드 · 화면 16
+#### `GET /share/:token/events/:eventId/albums/:albumId/download` — 앨범 일괄 다운로드 · 화면 16
 응답 `200` `application/zip` (스트림) 또는
 ```json
-{ "downloadUrl": "https://cdn.cheesemoa.kr/zip/evt_1_alb_1.zip", "expiresAt": "..." }
+{ "downloadUrl": "https://cdn.cheesemoa.kr/zip/evt_2_alb_1.zip", "expiresAt": "..." }
 ```
 > 개별 사진은 `photos[].downloadUrl` 사용. MVP는 **다운로드 한도 없음**.
 
@@ -367,28 +403,33 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 | `GET /me` · `PATCH /me` | 설정/프로필 편집 |
 | `GET /groups` | 02 |
 | `POST /groups` | 03 |
-| `GET /groups/:id` | 05 |
+| `GET /groups/:id` · `PATCH /groups/:id` | 05 |
 | `POST /groups/join` | 02-1 |
 | `GET /groups/:id/invite` | 초대(211:1556) |
+| `GET /groups/:id/share` | 05(학부모 공유) |
 | `GET /groups/:id/events` | 05 |
 | `POST /groups/:id/events` | 06-M |
 | `GET /events/:id` · `PATCH /events/:id` | 06-E / 08 |
-| `POST /events/:id/photos` | 06-U |
+| `POST /events/:id/photos/presign` (→ S3 직접 PUT) | 06-U |
 | `POST /events/:id/analyze` · `GET /events/:id/analysis` | 06-U / 05 |
 | `GET /events/:id/review-summary` · `POST /events/:id/publish` | 14 |
 | `GET /events/:id/albums` | 08 |
 | `GET /albums/:id` · `PATCH /albums/:id` | 09 / 08 |
 | `GET /albums/:id/move-suggestions` · `POST /photos/move` | 09-1 |
 | `DELETE /photos` | 09 |
-| `POST /share/:token/unlock` · `GET /share/:token` | 15 |
-| `GET /share/:token/albums/:albumId` (+ `/download`) | 16 |
+| `POST /share/:token/unlock` | 15 진입 전(잠금) |
+| `GET /share/:token` | 15-L(공개 이벤트 목록) |
+| `GET /share/:token/events/:eventId` | 15(공개 이벤트 앨범) |
+| `GET /share/:token/events/:eventId/albums/:albumId` (+ `/download`) | 16 |
 
 ---
 
 ## 5. FE 개발 메모 (목 데이터)
 - 모든 엔드포인트는 MSW 핸들러로 목업 → 위 응답 예시를 픽스처로 사용.
-- 폴링(`/events/:id/analysis`)은 목업에서 progress를 0→100으로 증가시키는 타이머로 시뮬레이션.
-- `publish` 응답의 `share.password`는 화면 노출 1회용 → 클라이언트가 별도 보관/표시.
-- 인증 토큰/뷰어 토큰은 메모리+localStorage 저장(뷰어 토큰은 token별 분리).
+- `/events/:id/analysis`는 목업에서 일정 시간 후 `status`를 `analyzing`→`done`으로 전환(진행률 % 없음, 자동 폴링 없음 — 화면 재진입 시 상태 확인).
+- 업로드는 presigned 2-step: 목업에서 `presign`은 가짜 `uploadUrl`을 반환하고, FE의 S3 `PUT`은 성공으로 시뮬레이션(실제 S3 미사용), 등록은 즉시 반영으로 간주. **`complete` 엔드포인트는 없음**(실제로는 S3 이벤트가 등록 담당).
+- 학부모 공유는 **모임 단위**: 링크/비밀번호는 `GET /groups/:id/share`(멤버 전용)로 조회해 표시. `publish`는 이벤트를 목록에 노출만 시킬 뿐 비밀번호를 만들지 않음.
+- 뷰어 목록(`GET /share/:token`)은 `published` 이벤트만 필터해 반환하도록 목업 구성.
+- 인증 토큰/뷰어 토큰은 메모리+localStorage 저장(뷰어 토큰은 **모임 공유 token별** 분리).
 - 인물 이름은 `personId` 단위 공유 → 목업도 앨범 단위가 아니라 **`personId`별 이름 맵**으로 보관해, rename 시 같은 `personId`의 모든 이벤트 앨범이 함께 바뀌도록 시뮬레이션.
-- 사진은 다대다 → 목업 픽스처에서 사진을 `albumIds` 배열로 보유. move는 source 제거+target 추가, delete는 모든 앨범에서 제거.
+- 사진은 다대다 → 목업 픽스처에서 사진을 `albumIds` 배열로 보유. move는 source 제거+target 추가, delete는 **해당(source) 앨범만 `albumIds`에서 제거**(다른 앨범 유지, `albumIds`가 비면 어떤 앨범에도 안 보임).
