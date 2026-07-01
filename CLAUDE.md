@@ -38,6 +38,7 @@ React + Vite + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 
 - **애매하면 추론하지 말고 사용자에게 묻는다.** (사용자 명시 선호)
 - 사용자·문서는 한국어 — **한국어로 응답**한다.
 - 화면 작업 시 와이어프레임을 Figma MCP로 확인: file `pcgDOk6iZYtuUEhKhaPWPM`, page `211:1311`. 화면별 노드 id는 `docs/screen-spec.md` 매핑표 참조.
+- **스토리 작업 흐름**: 착수는 `/start-story CHMO-###`(Jira SP·상태 세팅 + `feature/CHMO-###-*` 브랜치), 마무리는 `/finish-story`(커밋·푸시·PR; 머지 후 재실행 시 정리+완료). `main` 직접 커밋/푸시는 가드 훅이 차단한다. 담당자는 Jira에서 직접 지정한다. 백로그는 Jira 프로젝트 `CHMO`(에픽 CHMO-96~105 / 스토리 CHMO-106~136).
 
 ## 미확정 결정 (임의로 정하지 말 것 · 상세 `docs/screen-spec.md` §5)
 
@@ -45,4 +46,10 @@ React + Vite + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 
 
 ## 명령어
 
-아직 없음(빌드 도구 미설정). FE 스캐폴딩 후 이 섹션에 dev/build/test/lint 명령을 추가한다.
+빌드 도구 미설정(스캐폴딩 후 dev/build/test/lint 추가 예정).
+
+**워크플로우 스킬**(`.claude/skills/`):
+- `/start-story CHMO-###` — 스토리 시작: SP 추천·설정, 상태 '진행 중', `feature/CHMO-###-<slug>` 브랜치 생성.
+- `/finish-story` — 커밋·푸시·PR 생성 + Jira PR 코멘트. PR 머지 후 재실행 시 브랜치 정리 + Jira '완료'.
+
+**가드 훅**(`.claude/settings.json` → `.claude/hooks/`): `main` 직접 commit/push 차단, commit/push 전 typecheck·lint(스크립트 정의 시) 실행.

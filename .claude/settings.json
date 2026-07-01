@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/guard-main.sh" },
+          { "type": "command", "command": "bash .claude/hooks/quality-gate.sh" }
+        ]
+      }
+    ]
+  }
+}
