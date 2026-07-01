@@ -18,8 +18,8 @@ case "$cmd" in
 esac
 
 branch=$(git branch --show-current 2>/dev/null)
-if [ "$branch" = "main" ]; then
-  echo "차단: main 브랜치에 직접 commit/push 금지입니다. /start-story 로 스토리 브랜치를 먼저 만드세요." >&2
+if [ "$branch" = "main" ] || [ "$branch" = "develop" ]; then
+  echo "차단: $branch 브랜치에 직접 commit/push 금지입니다. /start-story 로 스토리 브랜치를 먼저 만드세요." >&2
   exit 2
 fi
 exit 0
