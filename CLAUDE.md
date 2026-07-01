@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 치즈모아 — 유치원 행사 사진을 AI가 아이별 앨범으로 자동 분류 → 선생님이 검수 → **이벤트별 공개** → 학부모가 링크+비밀번호로 **무로그인** 조회·다운로드하는 **모바일웹** 서비스(MVP).
 
-현재 단계: **그린필드.** 코드 없음. `docs/`에 명세 3종만 존재하며 곧 프론트엔드 개발 착수.
+현재 단계: **스캐폴딩 완료(CHMO-106).** Vite+React18+TS 토대·Tailwind v3 디자인 시스템·react-router 전 라우트 뼈대·화면 스텁 18개 구축. 화면별 실제 UI·MSW 핸들러는 후속 스토리에서 구현. 소스 오브 트루스는 여전히 `docs/`.
 
 ## 소스 오브 트루스 (작업 전 관련 문서를 읽는다)
 
@@ -29,9 +29,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **BE/AI는 건드리지 않는다.** 이번 범위는 프론트엔드뿐. `docs/api-spec.md`는 FE가 소비할 **계약**이며, FE는 **MSW 목 데이터**로 개발한다.
 - MVP 제외: 결제/요금제, 다운로드 한도, 휴지통, 인물 병합, 학부모 로그인.
 
-## 기술 스택 (예정)
+## 기술 스택
 
-React + Vite + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 react-router · API 목 레이어 MSW. (아직 미스캐폴딩)
+React 18 + Vite 5 + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 react-router v6 · 스타일링 **Tailwind CSS v3**(토큰은 `tailwind.config.js` + `src/index.css`) · 데이터패칭 커스텀 `useApi` 훅 · API 목 레이어 **MSW**(`VITE_ENABLE_MSW=true`일 때만 활성, 핸들러는 후속 추가).
+
+### 코드 구조 (`src/`)
+- `main.tsx` 진입(+MSW 부트스트랩) · `router.tsx` 전 라우트 정의 · `index.css` Tailwind+디자인 토큰.
+- `components/` PhoneShell(390×844 프레임)·ScreenStub · `guards/` 제작자/뷰어 라우트 가드 · `pages/`(+`pages/viewer/`) 화면 스텁.
+- `lib/` `api.ts`(fetch 래퍼)·`auth.ts`(제작자 토큰)·`viewer.ts`(뷰어 토큰) · `hooks/useApi.ts` · `types/api.ts`(API 계약 타입) · `mocks/`(MSW).
 
 ## 작업 방식
 
@@ -46,7 +51,8 @@ React + Vite + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 
 
 ## 명령어
 
-빌드 도구 미설정(스캐폴딩 후 dev/build/test/lint 추가 예정).
+- `npm run dev` — 개발 서버(Vite, 기본 5173) · `npm run build` — 타입체크(`tsc --noEmit`)+프로덕션 빌드 · `npm run preview` — 빌드 결과 미리보기.
+- `npm run typecheck` · `npm run lint` · `npm run format`(Prettier) — 검사·정리. (테스트 러너는 미설정.)
 
 **워크플로우 스킬**(`.claude/skills/`):
 - `/start-story CHMO-###` — 스토리 시작: SP 추천·설정, 상태 '진행 중', `feature/CHMO-###-<slug>` 브랜치 생성.

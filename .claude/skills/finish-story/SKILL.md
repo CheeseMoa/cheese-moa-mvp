@@ -22,12 +22,13 @@ description: >-
    - PR MERGED → **모드 B**.
 
 ## 모드 A — 커밋·푸시·PR
-1. 변경분이 있으면 스테이징 후 커밋. **Conventional Commits**(`feat:`·`fix:`·`chore:`·`refactor:` …), 본문에 `CHMO-<번호>` 포함. 커밋 메시지 끝에:
+1. **CLAUDE.md 동기화 점검**: 이번 스토리 변경으로 `CLAUDE.md`의 서술이 사실과 어긋났는지 확인하고, 그렇다면 갱신해 **같은 커밋에 포함**한다. 점검 대상 — `## 프로젝트`의 현재 단계, `## 기술 스택`(스택·버전·코드 구조), `## 명령어`(스크립트), `## 하드 제약`, 확정/미확정 결정. 실제로 바뀐 게 없으면 손대지 않는다. (프로젝트 배경·의사결정 맥락처럼 CLAUDE.md에 담기 애매한 것은 메모리에 기록.)
+2. 변경분이 있으면 스테이징 후 커밋. **Conventional Commits**(`feat:`·`fix:`·`chore:`·`refactor:` …), 본문에 `CHMO-<번호>` 포함. 커밋 메시지 끝에:
    `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
-2. `git push -u origin <현재 브랜치>`.
-3. PR이 없으면 `gh pr create --base main --title "CHMO-<번호> [FE] <요약>" --body "<아래 템플릿>"`. 이미 있으면 push로 갱신.
-4. `addCommentToJiraIssue`로 PR URL을 코멘트로 남긴다. 상태는 '진행 중' 유지(머지는 사용자 몫).
-5. 안내: GitHub에서 리뷰 후 **스쿼시 머지**하고, 머지되면 `/finish-story`를 다시 실행하면 정리+완료 처리한다.
+3. `git push -u origin <현재 브랜치>`.
+4. PR이 없으면 `gh pr create --base main --title "CHMO-<번호> [FE] <요약>" --body "<아래 템플릿>"`. 이미 있으면 push로 갱신.
+5. `addCommentToJiraIssue`로 PR URL을 코멘트로 남긴다. 상태는 '진행 중' 유지(머지는 사용자 몫).
+6. 안내: GitHub에서 리뷰 후 **스쿼시 머지**하고, 머지되면 `/finish-story`를 다시 실행하면 정리+완료 처리한다.
 
 ### PR 본문 템플릿
 ~~~
