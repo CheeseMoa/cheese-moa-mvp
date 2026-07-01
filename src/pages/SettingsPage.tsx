@@ -10,7 +10,12 @@ export function SettingsPage() {
     navigate('/')
   }
   return (
-    <ScreenStub code="설정" title="프로필 편집" node="240:53" subtitle="닉네임 · PIN 변경 (구현 예정)">
+    <ScreenStub
+      code="설정"
+      title="프로필 편집"
+      node="240:53"
+      subtitle="닉네임 · PIN 변경 (구현 예정)"
+    >
       <StubLink to="/home">← 홈 / 내 모임 (02)</StubLink>
       <StubButton onClick={logout} variant="ghost">
         로그아웃

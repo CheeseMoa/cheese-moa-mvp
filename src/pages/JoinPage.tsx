@@ -9,7 +9,8 @@ export function JoinPage() {
 
   // 참여는 로그인 상태를 전제로 한다. 미로그인이면 로그인 유도(스텁).
   const joinAndGo = () => {
-    if (!isAuthenticated()) setAccessToken('dev-access-token')
+    // 개발용 임시 참여 — 프로덕션 빌드에서는 토큰 주입 안 함
+    if (import.meta.env.DEV && !isAuthenticated()) setAccessToken('dev-access-token')
     navigate('/groups/grp_1')
   }
 

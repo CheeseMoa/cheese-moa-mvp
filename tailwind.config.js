@@ -14,12 +14,13 @@ export default {
         muted: '#9E978C', // 보조 텍스트/플레이스홀더
         border: '#E6E0D4', // 구분선/기본 테두리
         photo: '#EAE4D8', // 사진 썸네일 플레이스홀더 배경
-        // 이벤트 상태 배지 색
+        // 이벤트 상태 배지 색 — 키는 EventStatus(src/types/api.ts)와 1:1 매칭
         status: {
-          new: '#9E978C', // NEW(사진 0장)
-          analyzing: '#E8890C', // 분석중
-          ready: '#8C5A2B', // 공개 준비(검토완료)
-          published: '#3FA34D', // 공개 완료
+          empty: '#9E978C', // empty: 사진 0장(NEW 배지)
+          analyzing: '#E8890C', // analyzing: 분석중
+          // TODO(스펙 확정 필요): 'review'(검수중) 배지 색 미정 — screen-spec에 배지 정의 없음
+          ready: '#8C5A2B', // ready: 공개 준비(검토완료)
+          published: '#3FA34D', // published: 공개 완료
         },
       },
       fontFamily: {

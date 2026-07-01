@@ -6,7 +6,8 @@ import { setAccessToken } from '../lib/auth'
 export function LoginPage() {
   const navigate = useNavigate()
   const devLogin = () => {
-    setAccessToken('dev-access-token')
+    // 개발용 임시 로그인 — 프로덕션 빌드에서는 토큰 주입 안 함(가드가 로그인으로 되돌림)
+    if (import.meta.env.DEV) setAccessToken('dev-access-token')
     navigate('/home')
   }
   return (

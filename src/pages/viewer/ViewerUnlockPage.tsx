@@ -8,7 +8,8 @@ export function ViewerUnlockPage() {
   const navigate = useNavigate()
   const unlock = () => {
     if (!token) return
-    setViewerToken(token, 'dev-viewer-token')
+    // 개발용 임시 잠금 해제 — 프로덕션 빌드에서는 토큰 주입 안 함
+    if (import.meta.env.DEV) setViewerToken(token, 'dev-viewer-token')
     navigate(`/share/${token}/events`)
   }
   return (

@@ -3,17 +3,10 @@
 @tailwind utilities;
 
 @layer base {
-  /* 디자인 토큰 CSS 변수 (docs/screen-spec.md §1) — Tailwind 클래스와 병행 노출 */
+  /* 디자인 토큰은 tailwind.config.js theme가 유일 원천.
+     Tailwind로 못 다루는 body 고무줄-스크롤 배경(아래 background-color)용으로 surface만 CSS 변수 노출. */
   :root {
-    --color-primary: #f5b82e;
-    --color-accent: #8c5a2b;
-    --color-warn: #e4572e;
-    --color-bg: #fffdf5;
     --color-surface: #f3f0e9;
-    --color-text: #3a3128;
-    --color-muted: #9e978c;
-    --color-border: #e6e0d4;
-    --color-photo: #eae4d8;
   }
 
   html,
