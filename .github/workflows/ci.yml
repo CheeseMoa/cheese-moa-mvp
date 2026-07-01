@@ -1,0 +1,38 @@
+name: CI
+
+# main 대상 PR과 main push에서 실행 (FE 검사: 타입체크·린트·빌드)
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# PR은 새 push마다 이전 실행 취소(head_ref로 그룹), main push는 run_id로 고유 그룹 → 서로 취소 안 함
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install (clean)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

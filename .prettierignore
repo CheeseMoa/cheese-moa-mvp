@@ -1,0 +1,9 @@
+dist
+node_modules
+package-lock.json
+public/mockServiceWorker.js
+
+# 문서·스킬·에이전트 설정은 수기 관리 — prettier 미적용(prose/표 재배치 방지)
+docs
+.claude
+*.md
