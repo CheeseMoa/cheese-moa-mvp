@@ -28,7 +28,8 @@ description: >-
 3. `git push -u origin <현재 브랜치>`.
 4. PR이 없으면 `gh pr create --base develop --title "[CHMO-<번호>] <요약>" --body "<아래 템플릿>"`. 이미 있으면 push로 갱신.
 5. `addCommentToJiraIssue`로 PR URL을 코멘트로 남긴다. 상태는 '진행 중' 유지(머지는 사용자 몫).
-6. 안내: GitHub에서 리뷰 후 **스쿼시 머지**하고, 머지되면 `/finish-story`를 다시 실행하면 정리+완료 처리한다.
+6. **테스트 가이드 출력** — `/test-guide` 절차(`.claude/skills/test-guide`)로 이번 변경의 수동 확인 체크리스트를 만들어 사용자에게 보여준다. PR 본문 `## 테스트` 섹션도 같은 내용으로 채운다(자동 검증 결과 + 진입 경로 → 조작 → 기대 결과).
+7. 안내: GitHub에서 리뷰 후 **스쿼시 머지**하고, 머지되면 `/finish-story`를 다시 실행하면 정리+완료 처리한다.
 
 ### PR 본문 템플릿
 ~~~
