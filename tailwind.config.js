@@ -11,6 +11,7 @@ export default {
         cream: '#FFFDF5', // 페이지 배경(--color-bg)
         surface: '#F3F0E9', // 카드/입력 표면
         text: '#3A3128', // 본문 텍스트
+        heading: '#4A3415', // Jua 헤딩/로고 워드마크(딥 브라운) — docs/design/screen-system.dc.html
         muted: '#9E978C', // 보조 텍스트/플레이스홀더
         border: '#E6E0D4', // 구분선/기본 테두리
         photo: '#EAE4D8', // 사진 썸네일 플레이스홀더 배경
