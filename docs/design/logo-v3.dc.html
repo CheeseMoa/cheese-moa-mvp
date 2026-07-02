@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif; }
+</style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+  <defs>
+    <linearGradient id="gY" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD45E"></stop>
+      <stop offset="1" stop-color="#F0AE2A"></stop>
+    </linearGradient>
+    <linearGradient id="gYd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6BE3C"></stop>
+      <stop offset="1" stop-color="#E09A1E"></stop>
+    </linearGradient>
+    <linearGradient id="gHole" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A86E12"></stop>
+      <stop offset="1" stop-color="#E8AC34"></stop>
+    </linearGradient>
+    <radialGradient id="gCwarm" cx="42%" cy="36%" r="80%">
+      <stop offset="0" stop-color="#FFF7E6"></stop>
+      <stop offset="1" stop-color="#F4E1B8"></stop>
+    </radialGradient>
+    <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFBEF"></stop>
+      <stop offset="1" stop-color="#FFEFCC"></stop>
+    </linearGradient>
+    <radialGradient id="gGlass" cx="38%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#86612C"></stop>
+      <stop offset="0.55" stop-color="#4A3415"></stop>
+      <stop offset="1" stop-color="#291B0A"></stop>
+    </radialGradient>
+    <linearGradient id="gShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.5" stop-color="#3a2710" stop-opacity="0"></stop>
+      <stop offset="1" stop-color="#3a2710" stop-opacity="0.16"></stop>
+    </linearGradient>
+
+    <symbol id="lens" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="49" fill="#E09A1E"></circle>
+      <circle cx="50" cy="50" r="41" fill="#FFF4D6"></circle>
+      <circle cx="50" cy="50" r="34" fill="#D99421"></circle>
+      <circle cx="50" cy="50" r="28" fill="url(#gGlass)"></circle>
+      <circle cx="50" cy="50" r="14" fill="#1f1407" opacity="0.55"></circle>
+      <ellipse cx="38" cy="35" rx="13" ry="8" fill="#ffffff" opacity="0.4"></ellipse>
+      <circle cx="62" cy="64" r="4.5" fill="#A9D6ED" opacity="0.5"></circle>
+    </symbol>
+
+    <symbol id="bk1" viewBox="0 0 240 240">
+      <rect width="240" height="240" rx="58" fill="url(#gCwarm)"></rect>
+      <ellipse cx="122" cy="196" rx="80" ry="12" fill="#3a2710" opacity="0.1"></ellipse>
+      <ellipse cx="118" cy="90" rx="11" ry="5" fill="#D89218"></ellipse>
+      <rect x="111" y="80" width="14" height="11" rx="4" fill="#E0991C"></rect>
+      <ellipse cx="118" cy="80" rx="7" ry="4" fill="#F4BA34"></ellipse>
+      <polygon points="54,110 164,110 194,86 84,86" fill="#FFD66A" stroke="#FFD66A" stroke-width="8" stroke-linejoin="round"></polygon>
+      <polygon points="164,110 194,86 194,164 164,188" fill="#E0991C" stroke="#E0991C" stroke-width="8" stroke-linejoin="round"></polygon>
+      <polygon points="54,110 164,110 164,188 54,188" fill="#F4BA34" stroke="#F4BA34" stroke-width="8" stroke-linejoin="round"></polygon>
+      <ellipse cx="112" cy="99" rx="6" ry="3.5" fill="#E8B23A"></ellipse>
+      <ellipse cx="180" cy="124" rx="5" ry="6" fill="#C9870F"></ellipse>
+      <ellipse cx="178" cy="154" rx="4" ry="5" fill="#C9870F"></ellipse>
+      <ellipse cx="76" cy="128" rx="8" ry="7" fill="url(#gHole)"></ellipse>
+      <ellipse cx="150" cy="130" rx="6" ry="7" fill="url(#gHole)"></ellipse>
+      <ellipse cx="80" cy="176" rx="7" ry="6" fill="url(#gHole)"></ellipse>
+      <ellipse cx="150" cy="176" rx="8" ry="7" fill="url(#gHole)"></ellipse>
+      <rect x="137" y="116" width="18" height="15" rx="3" fill="#C9870F"></rect>
+      <rect x="139" y="118" width="14" height="11" rx="2" fill="#FFF1CE"></rect>
+      <use href="#lens" x="80" y="121" width="62" height="62"></use>
+      <rect width="240" height="240" rx="58" fill="url(#gShade)"></rect>
+    </symbol>
+
+    <symbol id="bk2" viewBox="0 0 240 240">
+      <rect width="240" height="240" rx="58" fill="url(#gC)"></rect>
+      <rect x="102" y="54" width="24" height="22" rx="8" fill="url(#gYd)"></rect>
+      <ellipse cx="114" cy="56" rx="12" ry="4" fill="#FFD66A"></ellipse>
+      <rect x="150" y="62" width="24" height="16" rx="5" fill="#E0991C"></rect>
+      <rect x="153" y="64" width="18" height="12" rx="3" fill="#FFF1CE"></rect>
+      <rect x="44" y="74" width="152" height="122" rx="26" fill="url(#gY)"></rect>
+      <ellipse cx="70" cy="108" rx="9" ry="8" fill="url(#gHole)"></ellipse>
+      <ellipse cx="170" cy="118" rx="8" ry="8" fill="url(#gHole)"></ellipse>
+      <ellipse cx="74" cy="170" rx="7" ry="7" fill="url(#gHole)"></ellipse>
+      <ellipse cx="166" cy="172" rx="9" ry="8" fill="url(#gHole)"></ellipse>
+      <ellipse cx="120" cy="90" rx="6" ry="6" fill="url(#gHole)"></ellipse>
+      <use href="#lens" x="86" y="102" width="68" height="68"></use>
+      <rect width="240" height="240" rx="58" fill="url(#gShade)"></rect>
+    </symbol>
+
+    <symbol id="bk3" viewBox="0 0 240 240">
+      <rect width="240" height="240" rx="58" fill="url(#gY)"></rect>
+      <ellipse cx="120" cy="198" rx="74" ry="11" fill="#3a2710" opacity="0.1"></ellipse>
+      <rect x="106" y="56" width="22" height="22" rx="9" fill="#E0991C"></rect>
+      <ellipse cx="117" cy="58" rx="11" ry="4" fill="#FFE08A"></ellipse>
+      <rect x="64" y="82" width="126" height="96" rx="30" fill="#FFE08A"></rect>
+      <rect x="50" y="92" width="126" height="96" rx="30" fill="#FBC23E"></rect>
+      <ellipse cx="74" cy="120" rx="8" ry="7" fill="url(#gHole)"></ellipse>
+      <ellipse cx="150" cy="124" rx="7" ry="7" fill="url(#gHole)"></ellipse>
+      <ellipse cx="78" cy="166" rx="7" ry="6" fill="url(#gHole)"></ellipse>
+      <ellipse cx="148" cy="164" rx="8" ry="7" fill="url(#gHole)"></ellipse>
+      <use href="#lens" x="82" y="116" width="62" height="62"></use>
+      <rect width="240" height="240" rx="58" fill="url(#gShade)"></rect>
+    </symbol>
+
+    <symbol id="bk4" viewBox="0 0 240 240">
+      <rect width="240" height="240" rx="58" fill="url(#gCwarm)"></rect>
+      <ellipse cx="120" cy="198" rx="74" ry="11" fill="#5A3E18" opacity="0.12"></ellipse>
+      <rect x="104" y="56" width="22" height="22" rx="8" fill="#F4BA34" stroke="#5A3E18" stroke-width="5"></rect>
+      <rect x="148" y="66" width="24" height="16" rx="5" fill="#FFF1CE" stroke="#5A3E18" stroke-width="5"></rect>
+      <rect x="60" y="84" width="124" height="92" rx="26" fill="#FBCB52" stroke="#5A3E18" stroke-width="5"></rect>
+      <rect x="50" y="96" width="124" height="92" rx="26" fill="#F4BA34" stroke="#5A3E18" stroke-width="5.5"></rect>
+      <ellipse cx="74" cy="124" rx="9" ry="8" fill="#CE8A12" stroke="#5A3E18" stroke-width="3"></ellipse>
+      <ellipse cx="150" cy="128" rx="7" ry="7" fill="#CE8A12" stroke="#5A3E18" stroke-width="3"></ellipse>
+      <ellipse cx="80" cy="168" rx="7" ry="6" fill="#CE8A12" stroke="#5A3E18" stroke-width="3"></ellipse>
+      <ellipse cx="150" cy="166" rx="8" ry="7" fill="#CE8A12" stroke="#5A3E18" stroke-width="3"></ellipse>
+      <circle cx="110" cy="146" r="28" fill="#FFF0CB" stroke="#5A3E18" stroke-width="5"></circle>
+      <circle cx="110" cy="146" r="18" fill="#4A3415" stroke="#5A3E18" stroke-width="3"></circle>
+      <circle cx="103" cy="139" r="6" fill="#FFF7E6" opacity="0.85"></circle>
+    </symbol>
+  </defs>
+</svg>
+
+<div style="position:absolute;left:0;top:0;width:1120px;">
+  <div data-drags-parent="1" style="font:600 13px/1 -apple-system,sans-serif;color:#7a7a7a;margin:0 0 10px 4px;">치즈모아 — 로고 시안 v3</div>
+  <div style="background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,0.08);padding:30px 38px;display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;">
+    <div>
+      <div style="display:flex;align-items:center;gap:18px;">
+        <svg width="58" height="58" viewBox="0 0 240 240"><use href="#bk1"></use></svg>
+        <div style="font-family:Jua,sans-serif;font-size:46px;color:#4A3415;">치즈모아</div>
+      </div>
+      <div style="font:400 14px/1.5 -apple-system,sans-serif;color:#8c8275;margin-top:12px;">치즈 블록 = 카메라 · 4가지 실행 스타일 &nbsp;·&nbsp; 첨부 레퍼런스 반영</div>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:22px;">
+      <div style="text-align:center;"><div style="width:38px;height:38px;border-radius:50%;background:#F7C13E;border:1px solid rgba(0,0,0,0.06);"></div><div style="font:500 10px/1.4 monospace;color:#9a9a9a;margin-top:7px;">#F7C13E<br>치즈 옐로우</div></div>
+      <div style="text-align:center;"><div style="width:38px;height:38px;border-radius:50%;background:#E09A1E;border:1px solid rgba(0,0,0,0.06);"></div><div style="font:500 10px/1.4 monospace;color:#9a9a9a;margin-top:7px;">#E09A1E<br>딥 치즈</div></div>
+      <div style="text-align:center;"><div style="width:38px;height:38px;border-radius:50%;background:#A86E12;border:1px solid rgba(0,0,0,0.06);"></div><div style="font:500 10px/1.4 monospace;color:#9a9a9a;margin-top:7px;">#A86E12<br>홀 그림자</div></div>
+      <div style="text-align:center;"><div style="width:38px;height:38px;border-radius:50%;background:#5A3E18;border:1px solid rgba(0,0,0,0.06);"></div><div style="font:500 10px/1.4 monospace;color:#9a9a9a;margin-top:7px;">#5A3E18<br>라인 브라운</div></div>
+    </div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;top:158px;width:520px;">
+  <div data-drags-parent="1" style="font:600 13px/1 -apple-system,sans-serif;color:#7a7a7a;margin:0 0 10px 4px;">01 · 입체 3D 블록</div>
+  <div style="background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,0.08);padding:34px 34px 28px;text-align:center;">
+    <svg width="196" height="196" viewBox="0 0 240 240"><use href="#bk1"></use></svg>
+    <div style="font-family:Jua,sans-serif;font-size:44px;color:#4A3415;margin-top:22px;">치즈모아</div>
+    <div style="font:400 13px/1.5 -apple-system,sans-serif;color:#9b8f7a;margin-top:6px;">사진 정리부터 공유까지, 한 번에</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:18px;background:#F4F2EE;border-radius:12px;padding:14px;margin-top:24px;">
+      <svg width="60" height="60" viewBox="0 0 240 240"><use href="#bk1"></use></svg>
+      <svg width="40" height="40" viewBox="0 0 240 240"><use href="#bk1"></use></svg>
+      <svg width="28" height="28" viewBox="0 0 240 240"><use href="#bk1"></use></svg>
+      <span style="font:500 11px/1 -apple-system,sans-serif;color:#a8a8a8;margin-left:4px;">앱 아이콘 크기</span>
+    </div>
+    <div style="font:400 13px/1.55 -apple-system,sans-serif;color:#6f6457;margin-top:20px;">레퍼런스에 가장 가까운 입체 치즈 블록. 면 음영·광택으로 리얼하게.</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:600px;top:158px;width:520px;">
+  <div data-drags-parent="1" style="font:600 13px/1 -apple-system,sans-serif;color:#7a7a7a;margin:0 0 10px 4px;">02 · 정면 플랫</div>
+  <div style="background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,0.08);padding:34px 34px 28px;text-align:center;">
+    <svg width="196" height="196" viewBox="0 0 240 240"><use href="#bk2"></use></svg>
+    <div style="font-family:Jua,sans-serif;font-size:44px;color:#4A3415;margin-top:22px;">치즈모아</div>
+    <div style="font:400 13px/1.5 -apple-system,sans-serif;color:#9b8f7a;margin-top:6px;">사진 정리부터 공유까지, 한 번에</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:18px;background:#F4F2EE;border-radius:12px;padding:14px;margin-top:24px;">
+      <svg width="60" height="60" viewBox="0 0 240 240"><use href="#bk2"></use></svg>
+      <svg width="40" height="40" viewBox="0 0 240 240"><use href="#bk2"></use></svg>
+      <svg width="28" height="28" viewBox="0 0 240 240"><use href="#bk2"></use></svg>
+      <span style="font:500 11px/1 -apple-system,sans-serif;color:#a8a8a8;margin-left:4px;">앱 아이콘 크기</span>
+    </div>
+    <div style="font:400 13px/1.55 -apple-system,sans-serif;color:#6f6457;margin-top:20px;">정면에서 또렷하게. 작은 앱 아이콘에서도 잘 읽히는 안.</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;top:888px;width:520px;">
+  <div data-drags-parent="1" style="font:600 13px/1 -apple-system,sans-serif;color:#7a7a7a;margin:0 0 10px 4px;">03 · 둥근 큐브</div>
+  <div style="background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,0.08);padding:34px 34px 28px;text-align:center;">
+    <svg width="196" height="196" viewBox="0 0 240 240"><use href="#bk3"></use></svg>
+    <div style="font-family:Jua,sans-serif;font-size:44px;color:#4A3415;margin-top:22px;">치즈모아</div>
+    <div style="font:400 13px/1.5 -apple-system,sans-serif;color:#9b8f7a;margin-top:6px;">사진 정리부터 공유까지, 한 번에</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:18px;background:#F4F2EE;border-radius:12px;padding:14px;margin-top:24px;">
+      <svg width="60" height="60" viewBox="0 0 240 240"><use href="#bk3"></use></svg>
+      <svg width="40" height="40" viewBox="0 0 240 240"><use href="#bk3"></use></svg>
+      <svg width="28" height="28" viewBox="0 0 240 240"><use href="#bk3"></use></svg>
+      <span style="font:500 11px/1 -apple-system,sans-serif;color:#a8a8a8;margin-left:4px;">앱 아이콘 크기</span>
+    </div>
+    <div style="font:400 13px/1.55 -apple-system,sans-serif;color:#6f6457;margin-top:20px;">말랑하게 둥근 치즈 큐브. 가장 귀엽고 친근한 느낌.</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:600px;top:888px;width:520px;">
+  <div data-drags-parent="1" style="font:600 13px/1 -apple-system,sans-serif;color:#7a7a7a;margin:0 0 10px 4px;">04 · 손그림 일러스트</div>
+  <div style="background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,0.08);padding:34px 34px 28px;text-align:center;">
+    <svg width="196" height="196" viewBox="0 0 240 240"><use href="#bk4"></use></svg>
+    <div style="font-family:Jua,sans-serif;font-size:44px;color:#4A3415;margin-top:22px;">치즈모아</div>
+    <div style="font:400 13px/1.5 -apple-system,sans-serif;color:#9b8f7a;margin-top:6px;">사진 정리부터 공유까지, 한 번에</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:18px;background:#F4F2EE;border-radius:12px;padding:14px;margin-top:24px;">
+      <svg width="60" height="60" viewBox="0 0 240 240"><use href="#bk4"></use></svg>
+      <svg width="40" height="40" viewBox="0 0 240 240"><use href="#bk4"></use></svg>
+      <svg width="28" height="28" viewBox="0 0 240 240"><use href="#bk4"></use></svg>
+      <span style="font:500 11px/1 -apple-system,sans-serif;color:#a8a8a8;margin-left:4px;">앱 아이콘 크기</span>
+    </div>
+    <div style="font:400 13px/1.55 -apple-system,sans-serif;color:#6f6457;margin-top:20px;">갈색 라인의 손그림 스타일. 첨부하신 그림 톤에 가장 가까워요.</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
