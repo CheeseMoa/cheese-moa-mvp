@@ -68,6 +68,18 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // ── 개발용: 공용 컴포넌트 데모 (DEV 전용, 프로덕션 번들 제외) ──
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/components',
+          lazy: async () => ({
+            Component: (await import('./pages/dev/ComponentGalleryPage')).ComponentGalleryPage,
+          }),
+        },
+      ]
+    : []),
+
   // ── 404 ─────────────────────────────────────────────
   { path: '*', element: <NotFoundPage /> },
 ])
