@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gothic+A1:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:'Gothic A1',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif; color:#3A3128; }
+  .card { background:#fff; border-radius:18px; box-shadow:0 4px 18px rgba(0,0,0,0.08); padding:28px 30px; }
+  .sec { font:600 13px/1 -apple-system,sans-serif; color:#7a7a7a; margin:0 0 10px 4px; }
+  .note { font:400 12px/1.6 'Gothic A1',sans-serif; color:#9E978C; margin-top:16px; }
+  .chip { text-align:center; }
+  .chip .sw { width:38px; height:38px; border-radius:50%; border:1px solid rgba(0,0,0,0.06); margin:0 auto; }
+  .chip .lb { font:500 10px/1.4 monospace; color:#9a9a9a; margin-top:6px; }
+  .badge { display:inline-flex; align-items:center; gap:5px; font:700 12px/1 'Gothic A1',sans-serif; padding:6px 11px; border-radius:999px; }
+  .badge .dot { width:6px; height:6px; border-radius:50%; }
+  .btn { display:flex; align-items:center; justify-content:center; width:330px; height:48px; border-radius:14px; font:700 15px/1 'Gothic A1',sans-serif; }
+  .cheese-dots { background-color:#EAE4D8; background-image:radial-gradient(rgba(245,184,46,0.35) 1.5px, transparent 1.6px); background-size:18px 18px; }
+  .hrow { display:flex; align-items:center; width:330px; height:52px; padding:0 14px; background:#FFFDF5; border-bottom:1px solid #E6E0D4; box-sizing:border-box; }
+</style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+  <defs>
+    <linearGradient id="gY" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F7C948"></stop>
+      <stop offset="1" stop-color="#F5B82E"></stop>
+    </linearGradient>
+    <linearGradient id="gHole" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A86E12"></stop>
+      <stop offset="1" stop-color="#E8AC34"></stop>
+    </linearGradient>
+    <radialGradient id="gGlass" cx="38%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#86612C"></stop>
+      <stop offset="0.55" stop-color="#4A3415"></stop>
+      <stop offset="1" stop-color="#291B0A"></stop>
+    </radialGradient>
+    <!-- 체다 — 헤더/엠블럼용 플랫 치즈 카메라 (로고 시안 v3 · 02 정면 플랫 계열) -->
+    <symbol id="cheddar" viewBox="0 0 240 240">
+      <rect x="102" y="54" width="24" height="22" rx="8" fill="#E8890C"></rect>
+      <ellipse cx="114" cy="56" rx="12" ry="4" fill="#FFD66A"></ellipse>
+      <rect x="150" y="62" width="24" height="16" rx="5" fill="#E0991C"></rect>
+      <rect x="153" y="64" width="18" height="12" rx="3" fill="#FFF1CE"></rect>
+      <rect x="44" y="74" width="152" height="122" rx="26" fill="url(#gY)"></rect>
+      <ellipse cx="70" cy="108" rx="9" ry="8" fill="url(#gHole)"></ellipse>
+      <ellipse cx="170" cy="118" rx="8" ry="8" fill="url(#gHole)"></ellipse>
+      <ellipse cx="74" cy="170" rx="7" ry="7" fill="url(#gHole)"></ellipse>
+      <ellipse cx="166" cy="172" rx="9" ry="8" fill="url(#gHole)"></ellipse>
+      <circle cx="120" cy="136" r="34" fill="#FFF4D6"></circle>
+      <circle cx="120" cy="136" r="27" fill="#D99421"></circle>
+      <circle cx="120" cy="136" r="21" fill="url(#gGlass)"></circle>
+      <ellipse cx="111" cy="126" rx="9" ry="6" fill="#ffffff" opacity="0.4"></ellipse>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ═══════════ 배너: 타이틀 + 팔레트 ═══════════ -->
+<div style="position:absolute;left:0;top:0;width:1160px;">
+  <div class="sec" data-drags-parent="1">치즈모아 — 화면 시스템 (디자인 시스템 &amp; 공용 컴포넌트)</div>
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:28px;flex-wrap:wrap;">
+    <div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <svg width="52" height="52" viewBox="0 0 240 240"><use href="#cheddar"></use></svg>
+        <div style="font-family:Jua,sans-serif;font-size:38px;color:#4A3415;">치즈모아 화면 시스템</div>
+      </div>
+      <div style="font:400 13px/1.6 'Gothic A1',sans-serif;color:#8c8275;margin-top:10px;">
+        기준 프레임 390×844 (모바일웹) · 원천: <b>docs/screen-spec.md §1 + tailwind.config.js</b> · 폰트: Jua(로고/헤딩) + Gothic A1(본문)
+      </div>
+    </div>
+    <div>
+      <div style="display:flex;gap:16px;">
+        <div class="chip"><div class="sw" style="background:#F5B82E;"></div><div class="lb">#F5B82E<br>primary</div></div>
+        <div class="chip"><div class="sw" style="background:#8C5A2B;"></div><div class="lb">#8C5A2B<br>accent</div></div>
+        <div class="chip"><div class="sw" style="background:#E4572E;"></div><div class="lb">#E4572E<br>warn</div></div>
+        <div class="chip"><div class="sw" style="background:#FFFDF5;"></div><div class="lb">#FFFDF5<br>cream</div></div>
+        <div class="chip"><div class="sw" style="background:#F3F0E9;"></div><div class="lb">#F3F0E9<br>surface</div></div>
+        <div class="chip"><div class="sw" style="background:#3A3128;"></div><div class="lb">#3A3128<br>text</div></div>
+        <div class="chip"><div class="sw" style="background:#9E978C;"></div><div class="lb">#9E978C<br>muted</div></div>
+        <div class="chip"><div class="sw" style="background:#E6E0D4;"></div><div class="lb">#E6E0D4<br>border</div></div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:14px;">
+        <div class="chip"><div class="sw" style="background:#9E978C;"></div><div class="lb">status.empty<br>NEW</div></div>
+        <div class="chip"><div class="sw" style="background:#E8890C;"></div><div class="lb">status.analyzing<br>분석중</div></div>
+        <div class="chip"><div class="sw" style="background:#8C5A2B;"></div><div class="lb">status.ready<br>공개 준비</div></div>
+        <div class="chip"><div class="sw" style="background:#3FA34D;"></div><div class="lb">status.published<br>공개 완료</div></div>
+        <div class="chip"><div class="sw" style="background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);"></div><div class="lb">gradient<br>cheddar</div></div>
+        <div class="chip"><div class="sw" style="background:linear-gradient(135deg,#FFE7A3 0%,#FBD46A 100%);"></div><div class="lb">gradient<br>primary</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 01 Header ═══════════ -->
+<div style="position:absolute;left:0;top:380px;width:520px;">
+  <div class="sec" data-drags-parent="1">01 · Header — 체다(홈형) / 뒤로가기(서브형)</div>
+  <div class="card">
+    <div class="hrow" style="border-radius:12px 12px 0 0;">
+      <svg width="30" height="30" viewBox="0 0 240 240"><use href="#cheddar"></use></svg>
+      <span style="font-family:Jua,sans-serif;font-size:20px;color:#4A3415;margin-left:9px;">치즈모아</span>
+      <span style="margin-left:auto;font-size:18px;color:#9E978C;">⚙</span>
+    </div>
+    <div class="hrow">
+      <span style="font:500 15px/1 'Gothic A1',sans-serif;color:#8C5A2B;">‹ 홈</span>
+      <span style="font:700 16px/1 'Gothic A1',sans-serif;margin:0 auto;transform:translateX(-16px);">햇살반</span>
+    </div>
+    <div class="hrow" style="border-radius:0 0 12px 12px;border-bottom:none;box-shadow:0 1px 0 #E6E0D4;">
+      <span style="font:500 15px/1 'Gothic A1',sans-serif;color:#8C5A2B;">‹ 이벤트 상세</span>
+      <span style="font:700 16px/1 'Gothic A1',sans-serif;margin:0 auto;transform:translateX(-38px);">김민준</span>
+    </div>
+    <div class="note">홈형 = 체다 로고 + 우측 설정 ⚙. 서브형 = 뒤로가기 라벨(‹ 상위 화면명, accent 컬러) + 현재 화면 타이틀. 배경 cream, 하단 1px border.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 02 Button ═══════════ -->
+<div style="position:absolute;left:600px;top:380px;width:520px;">
+  <div class="sec" data-drags-parent="1">02 · Button — primary / secondary / warn / disabled</div>
+  <div class="card" style="display:flex;flex-direction:column;gap:14px;align-items:center;">
+    <div class="btn" style="background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);color:#3A3128;box-shadow:0 8px 30px rgba(58,49,40,0.12);">+ 이벤트 생성</div>
+    <div class="btn" style="background:#F3F0E9;border:1px solid #E6E0D4;color:#3A3128;box-sizing:border-box;">취소</div>
+    <div class="btn" style="background:#E4572E;color:#fff;">삭제</div>
+    <div class="btn" style="background:#F3F0E9;color:#9E978C;">공개하기 (disabled)</div>
+    <div style="display:flex;gap:10px;">
+      <div class="btn" style="width:auto;height:36px;padding:0 16px;border-radius:10px;font-size:13px;background:linear-gradient(135deg,#FFE7A3 0%,#FBD46A 100%);color:#3A3128;">선택</div>
+      <div class="btn" style="width:auto;height:36px;padding:0 16px;border-radius:10px;font-size:13px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;">전체 해제</div>
+    </div>
+    <div class="note" style="align-self:flex-start;">기본 h48·radius 14 · 소형 h36·radius 10. primary = cheddar 그라데이션 + text(#3A3128) — 옐로우 위 흰 글자 금지(대비). warn(#E4572E)만 흰 글자.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 03 Badge ═══════════ -->
+<div style="position:absolute;left:0;top:820px;width:520px;">
+  <div class="sec" data-drags-parent="1">03 · Badge — 이벤트 상태 / 앨범 검토</div>
+  <div class="card">
+    <div style="font:700 12px/1 'Gothic A1',sans-serif;color:#9E978C;margin-bottom:12px;">이벤트 상태 (EventStatus 1:1)</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <span class="badge" style="background:rgba(158,151,140,0.14);color:#9E978C;"><span class="dot" style="background:#9E978C;"></span>NEW</span>
+      <span class="badge" style="background:rgba(232,137,12,0.13);color:#E8890C;"><span class="dot" style="background:#E8890C;"></span>분석중</span>
+      <span class="badge" style="background:rgba(140,90,43,0.13);color:#8C5A2B;"><span class="dot" style="background:#8C5A2B;"></span>공개 준비</span>
+      <span class="badge" style="background:rgba(63,163,77,0.13);color:#3FA34D;"><span class="dot" style="background:#3FA34D;"></span>공개 완료</span>
+    </div>
+    <div style="font:700 12px/1 'Gothic A1',sans-serif;color:#9E978C;margin:20px 0 12px;">앨범 검토 상태</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <span class="badge" style="background:#8C5A2B;color:#fff;">검토완료</span>
+      <span class="badge" style="background:#fff;border:1px dashed #C9C2B4;color:#9E978C;">미검토</span>
+      <span class="badge" style="background:rgba(63,163,77,0.13);color:#3FA34D;">공개됨</span>
+    </div>
+    <div class="note">틴트 배경(13~14%) + 동일 색 텍스트 + 도트가 기본형. 검토완료만 solid(accent). 진행률 %는 MVP 제외 — '분석중' 단독 표기.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 04 Toggle / 입력 ═══════════ -->
+<div style="position:absolute;left:600px;top:820px;width:520px;">
+  <div class="sec" data-drags-parent="1">04 · Toggle / TextField / PIN</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:26px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:48px;height:28px;border-radius:999px;background:#F5B82E;position:relative;"><div style="position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div>
+        <span style="font:500 13px/1 'Gothic A1',sans-serif;">선택 모드 ON</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:48px;height:28px;border-radius:999px;background:#E6E0D4;position:relative;"><div style="position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div>
+        <span style="font:500 13px/1 'Gothic A1',sans-serif;color:#9E978C;">OFF</span>
+      </div>
+    </div>
+    <div style="width:330px;height:48px;border-radius:14px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;display:flex;align-items:center;padding:0 16px;font:500 14px/1 'Gothic A1',sans-serif;color:#9E978C;margin-top:20px;">모임 이름 (예: 햇살반 학부모)</div>
+    <div style="display:flex;gap:12px;margin-top:16px;">
+      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:2px solid #F5B82E;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:700 24px/1 'Gothic A1',sans-serif;">1</div>
+      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:2px solid #F5B82E;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:700 24px/1 'Gothic A1',sans-serif;">2</div>
+      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;"></div>
+      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;"></div>
+    </div>
+    <div class="note">입력 표면 surface + border. 포커스/입력됨 = primary 2px. PIN은 4칸 개별 박스(스핀 버튼 제거됨 — index.css).</div>
+  </div>
+</div>
+
+<!-- ═══════════ 05 GroupCard / EventCard ═══════════ -->
+<div style="position:absolute;left:0;top:1210px;width:520px;">
+  <div class="sec" data-drags-parent="1">05 · GroupCard / EventCard</div>
+  <div class="card">
+    <div style="width:330px;border:1px solid #E6E0D4;border-radius:16px;padding:16px;box-sizing:border-box;background:#fff;box-shadow:0 8px 30px rgba(58,49,40,0.12);display:flex;align-items:center;gap:13px;">
+      <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#FFE7A3 0%,#FBD46A 100%);display:flex;align-items:center;justify-content:center;"><svg width="28" height="28" viewBox="0 0 240 240"><use href="#cheddar"></use></svg></div>
+      <div>
+        <div style="font:700 16px/1.3 'Gothic A1',sans-serif;">햇살반 학부모</div>
+        <div style="font:400 12px/1.4 'Gothic A1',sans-serif;color:#9E978C;">멤버 4 · 이벤트 3</div>
+      </div>
+      <span style="margin-left:auto;color:#C9C2B4;font-size:18px;">›</span>
+    </div>
+    <div style="width:330px;border:1px solid #E6E0D4;border-radius:16px;padding:16px;box-sizing:border-box;background:#fff;box-shadow:0 8px 30px rgba(58,49,40,0.12);margin-top:14px;">
+      <div style="display:flex;align-items:center;">
+        <span style="font:700 16px/1.3 'Gothic A1',sans-serif;">여름 물놀이</span>
+        <span class="badge" style="background:rgba(232,137,12,0.13);color:#E8890C;margin-left:10px;"><span class="dot" style="background:#E8890C;"></span>분석중</span>
+        <span style="margin-left:auto;font-size:16px;color:#9E978C;">⚙</span>
+      </div>
+      <div style="font:400 12px/1.4 'Gothic A1',sans-serif;color:#9E978C;margin-top:7px;">6월 24일 · 사진 124장 · 원아 18명</div>
+    </div>
+    <div class="note">카드 공통: 흰 배경 + border + radius 16 + shadow-card. EventCard 메타는 "날짜 · 사진 N장 · 인원" 고정 포맷, 배지는 제목 우측. 관리자 배지·📌 고정은 MVP 미표시.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 06 AlbumCard ═══════════ -->
+<div style="position:absolute;left:600px;top:1210px;width:520px;">
+  <div class="sec" data-drags-parent="1">06 · AlbumCard — 검토 테두리 규칙</div>
+  <div class="card">
+    <div style="display:flex;gap:14px;">
+      <div style="width:150px;border:2px solid #8C5A2B;border-radius:16px;padding:8px;box-sizing:border-box;background:#fff;">
+        <div class="cheese-dots" style="height:96px;border-radius:10px;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
+          <div><div style="font:700 14px/1.2 'Gothic A1',sans-serif;">김민준</div><div style="font:400 11px/1.4 'Gothic A1',sans-serif;color:#9E978C;">16장</div></div>
+          <span class="badge" style="background:#8C5A2B;color:#fff;font-size:10px;padding:4px 8px;">검토완료</span>
+        </div>
+      </div>
+      <div style="width:150px;border:2px dashed #C9C2B4;border-radius:16px;padding:8px;box-sizing:border-box;background:#fff;">
+        <div class="cheese-dots" style="height:96px;border-radius:10px;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
+          <div><div style="font:700 14px/1.2 'Gothic A1',sans-serif;">이서연</div><div style="font:400 11px/1.4 'Gothic A1',sans-serif;color:#9E978C;">12장</div></div>
+          <span class="badge" style="background:#fff;border:1px dashed #C9C2B4;color:#9E978C;font-size:10px;padding:4px 8px;">미검토</span>
+        </div>
+      </div>
+      <div style="width:150px;border:2px dashed #C9C2B4;border-radius:16px;padding:8px;box-sizing:border-box;background:#fff;">
+        <div class="cheese-dots" style="height:96px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:26px;">🤔</div>
+        <div style="margin-top:9px;"><div style="font:700 13px/1.2 'Gothic A1',sans-serif;">분류가 어려워요</div><div style="font:400 11px/1.4 'Gothic A1',sans-serif;color:#9E978C;">6장 · 재분류 대상</div></div>
+      </div>
+    </div>
+    <div style="font:500 12px/1 'Gothic A1',sans-serif;color:#8C5A2B;margin-top:16px;">테두리: 갈색 실선 = 검토완료 · 회색 점선 = 미검토</div>
+    <div class="note">인물 앨범과 uncertain(분류가 어려워요)은 같은 카드 모양·같은 그리드. 특수 앨범(uncertain/눈감음/흔들림)은 뷰어(학부모)에 비노출.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 07 PhotoTile / PhotoGrid ═══════════ -->
+<div style="position:absolute;left:0;top:1620px;width:520px;">
+  <div class="sec" data-drags-parent="1">07 · PhotoTile / PhotoGrid — 치즈 도트 + 선택</div>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:repeat(3,104px);gap:9px;">
+      <div class="cheese-dots" style="height:104px;border-radius:12px;"></div>
+      <div style="height:104px;border-radius:12px;position:relative;background:#EAE4D8;box-sizing:border-box;border:3px solid #F5B82E;">
+        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:#F5B82E;color:#4A3415;font:700 13px/22px 'Gothic A1',sans-serif;text-align:center;">✓</div>
+      </div>
+      <div class="cheese-dots" style="height:104px;border-radius:12px;"></div>
+      <div class="cheese-dots" style="height:104px;border-radius:12px;"></div>
+      <div style="height:104px;border-radius:12px;position:relative;background:#EAE4D8;box-sizing:border-box;border:3px solid #F5B82E;">
+        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:#F5B82E;color:#4A3415;font:700 13px/22px 'Gothic A1',sans-serif;text-align:center;">✓</div>
+      </div>
+      <div class="cheese-dots" style="height:104px;border-radius:12px;position:relative;">
+        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.85);border:1.5px solid #C9C2B4;box-sizing:border-box;"></div>
+      </div>
+    </div>
+    <div class="note">플레이스홀더 = photo(#EAE4D8) + 치즈 도트 텍스처(.cheese-dots — primary 18% 도트, 18px 그리드). 선택 = primary 3px 링 + 치즈 옐로우 체크. 선택 모드에서만 빈 체크서클 노출. 3열 · gap 9 · radius 12.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 08 EmptyState ═══════════ -->
+<div style="position:absolute;left:600px;top:1620px;width:520px;">
+  <div class="sec" data-drags-parent="1">08 · EmptyState</div>
+  <div class="card" style="text-align:center;padding:44px 30px;">
+    <svg width="76" height="76" viewBox="0 0 240 240" style="opacity:0.85;"><use href="#cheddar"></use></svg>
+    <div style="font-family:Jua,sans-serif;font-size:21px;color:#4A3415;margin-top:16px;">아직 이벤트가 없어요</div>
+    <div style="font:400 13px/1.6 'Gothic A1',sans-serif;color:#9E978C;margin-top:8px;">첫 이벤트를 만들고 행사 사진을 올려보세요.<br>AI가 아이별 앨범으로 모아드려요.</div>
+    <div class="btn" style="background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);color:#3A3128;margin:22px auto 0;box-shadow:0 8px 30px rgba(58,49,40,0.12);">+ 이벤트 생성</div>
+    <div class="note" style="text-align:left;">구성: 체다 일러스트 + Jua 타이틀 + 본문 2줄 + primary CTA. 상황별 문구만 교체(빈 모임/빈 이벤트/빈 앨범/공개 이벤트 없음).</div>
+  </div>
+</div>
+
+<!-- ═══════════ 09 Modal / ConfirmDialog ═══════════ -->
+<div style="position:absolute;left:0;top:2080px;width:520px;">
+  <div class="sec" data-drags-parent="1">09 · Modal / ConfirmDialog</div>
+  <div class="card">
+    <div style="width:390px;height:300px;border-radius:16px;background:rgba(58,49,40,0.45);display:flex;align-items:center;justify-content:center;">
+      <div style="width:310px;background:#FFFDF5;border-radius:20px;padding:22px;box-sizing:border-box;box-shadow:0 8px 30px rgba(58,49,40,0.25);">
+        <div style="font:700 17px/1.3 'Gothic A1',sans-serif;">모임 참여</div>
+        <div style="width:100%;height:44px;border-radius:12px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;display:flex;align-items:center;padding:0 14px;font:500 13px/1 'Gothic A1',sans-serif;color:#9E978C;margin-top:14px;">모임 비밀번호</div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <div class="btn" style="flex:1;width:auto;height:44px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;font-size:14px;">취소</div>
+          <div class="btn" style="flex:1;width:auto;height:44px;background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);font-size:14px;color:#3A3128;">참여하기</div>
+        </div>
+      </div>
+    </div>
+    <div style="width:390px;height:220px;border-radius:16px;background:rgba(58,49,40,0.45);display:flex;align-items:center;justify-content:center;margin-top:14px;">
+      <div style="width:310px;background:#FFFDF5;border-radius:20px;padding:22px;box-sizing:border-box;text-align:center;box-shadow:0 8px 30px rgba(58,49,40,0.25);">
+        <div style="font:700 16px/1.4 'Gothic A1',sans-serif;">사진 12장을 삭제할까요?</div>
+        <div style="font:400 12px/1.5 'Gothic A1',sans-serif;color:#9E978C;margin-top:6px;">이 앨범에서만 제거되고, 다른 앨범에서는 유지돼요.</div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <div class="btn" style="flex:1;width:auto;height:44px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;font-size:14px;">취소</div>
+          <div class="btn" style="flex:1;width:auto;height:44px;background:#E4572E;color:#fff;font-size:14px;">삭제</div>
+        </div>
+      </div>
+    </div>
+    <div class="note">스크림 rgba(text, 0.45) · 시트 배경 cream · radius 20. ConfirmDialog는 파괴적 액션 전용(warn 버튼) — 삭제·연결 해제 정책 문구를 부제로 명시.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 10 BottomSheet / Toast ═══════════ -->
+<div style="position:absolute;left:600px;top:2080px;width:520px;">
+  <div class="sec" data-drags-parent="1">10 · BottomSheet / Toast</div>
+  <div class="card">
+    <div style="width:390px;height:340px;border-radius:16px;background:rgba(58,49,40,0.45);position:relative;overflow:hidden;">
+      <div style="position:absolute;left:0;right:0;bottom:0;background:#FFFDF5;border-radius:24px 24px 0 0;padding:12px 20px 20px;">
+        <div style="width:44px;height:4px;border-radius:99px;background:#E6E0D4;margin:0 auto;"></div>
+        <div style="font:700 16px/1 'Gothic A1',sans-serif;margin-top:16px;">사진 옮기기</div>
+        <div style="font:400 12px/1.4 'Gothic A1',sans-serif;color:#9E978C;margin-top:4px;">선택한 3장을 옮길 앨범을 고르세요</div>
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 0;border-bottom:1px solid #E6E0D4;margin-top:8px;">
+          <div class="cheese-dots" style="width:36px;height:36px;border-radius:10px;"></div>
+          <span style="font:500 14px/1 'Gothic A1',sans-serif;">박지우</span><span style="font:400 12px/1 'Gothic A1',sans-serif;color:#9E978C;margin-left:auto;">14장</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 0;">
+          <div class="cheese-dots" style="width:36px;height:36px;border-radius:10px;"></div>
+          <span style="font:500 14px/1 'Gothic A1',sans-serif;">최하은</span><span style="font:400 12px/1 'Gothic A1',sans-serif;color:#9E978C;margin-left:auto;">9장</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;margin-top:18px;">
+      <div style="background:#3A3128;color:#FFFDF5;font:500 13px/1 'Gothic A1',sans-serif;padding:13px 22px;border-radius:999px;box-shadow:0 8px 30px rgba(58,49,40,0.25);">🧀 검토 완료로 표시했어요</div>
+    </div>
+    <div class="note">BottomSheet = 상단 radius 24 + 그랩 핸들, 목록형 액션(사진 이동 09-1 등). Toast = text(#3A3128) 배경 다크 필, 하단 중앙, 치즈 이모지로 톤 유지. ToastProvider로 전역 1개만 노출.</div>
+  </div>
+</div>
+
+<!-- ═══════════ 사용 규칙 ═══════════ -->
+<div style="position:absolute;left:0;top:2660px;width:1120px;">
+  <div class="sec" data-drags-parent="1">사용 규칙</div>
+  <div class="card" style="font:400 13px/1.9 'Gothic A1',sans-serif;color:#6f6457;">
+    <b style="color:#3A3128;">① 토큰 원천은 tailwind.config.js 하나</b> — 이 문서의 값은 그 사본이며, 충돌 시 코드가 이긴다 (이 문서를 갱신할 것).&nbsp;
+    <b style="color:#3A3128;">② Jua는 로고·헤딩·EmptyState 타이틀에만</b>, 본문·버튼·배지는 Gothic A1.&nbsp;
+    <b style="color:#3A3128;">③ 치즈 옐로우 위 흰 글자 금지</b> — primary 버튼 텍스트는 text(#3A3128).&nbsp;
+    <b style="color:#3A3128;">④ AlbumCard 테두리 규칙 고정</b> — 갈색 실선=검토완료 · 회색 점선=미검토.&nbsp;
+    <b style="color:#3A3128;">⑤ 특수 앨범(분류가 어려워요·눈감음·흔들림)은 뷰어 비노출.</b>&nbsp;
+    <b style="color:#3A3128;">⑥ 미확정</b>(screen-spec §5): 홈 관리자 배지 · 품질 제외 사진 라우팅 · common 앨범 정의 — 임의 구현 금지.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

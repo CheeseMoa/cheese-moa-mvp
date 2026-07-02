@@ -1,11 +1,11 @@
 name: CI
 
-# main 대상 PR과 main push에서 실행 (FE 검사: 타입체크·린트·빌드)
+# main·develop 대상 PR과 push에서 실행 (Git Flow: feature→develop, release/hotfix→main)
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   push:
-    branches: [main]
+    branches: [main, develop]
 
 # PR은 새 push마다 이전 실행 취소(head_ref로 그룹), main push는 run_id로 고유 그룹 → 서로 취소 안 함
 concurrency:
