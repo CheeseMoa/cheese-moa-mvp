@@ -4,6 +4,7 @@
 import { http, HttpResponse } from 'msw'
 import type { AuthResponse } from '../../types/api'
 import { db, issueAccessToken, nextId, nowIso } from '../db'
+import { persistUser, updatePersistedUser } from '../persist'
 import {
   api,
   errorResponse,
@@ -42,6 +43,7 @@ export const authHandlers = [
 
     const user = { id: nextId('usr'), nickname, pin, createdAt: nowIso() }
     db.users.push(user)
+    persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
     const response: AuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
     return HttpResponse.json(response, { status: 201 })
   }),
@@ -84,6 +86,7 @@ export const authHandlers = [
 
     if (nickname !== undefined) user.nickname = nickname
     if (pin !== undefined) user.pin = pin
+    updatePersistedUser(user) // 보존 대상(가입 계정)이면 localStorage에도 반영
 
     return HttpResponse.json(toUser(user))
   }),

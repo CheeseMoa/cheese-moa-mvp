@@ -139,6 +139,12 @@ export function nextId(prefix: string): string {
   return `${prefix}_${idCounters[prefix]}`
 }
 
+/** 외부에서 유입된 ID(localStorage 보존 계정 등) 뒤로 카운터를 밀어 신규 발급 충돌을 막는다 */
+export function syncIdCounter(prefix: string, id: string): void {
+  const numeric = Number(id.slice(prefix.length + 1))
+  if (Number.isFinite(numeric)) idCounters[prefix] = Math.max(idCounters[prefix] ?? 100, numeric)
+}
+
 export function nowIso(): ISODateTime {
   return new Date().toISOString()
 }
