@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 치즈모아 — 유치원 행사 사진을 AI가 아이별 앨범으로 자동 분류 → 선생님이 검수 → **이벤트별 공개** → 학부모가 링크+비밀번호로 **무로그인** 조회·다운로드하는 **모바일웹** 서비스(MVP).
 
-현재 단계: **스캐폴딩(CHMO-106) + 공용 컴포넌트 세트(CHMO-107) 완료.** Vite+React18+TS 토대·Tailwind v3 디자인 시스템·전 라우트 뼈대·화면 스텁 18개 + 재사용 UI 14종(`src/components/ui/`, 데모 `/dev/components`). 화면별 실제 UI·MSW 핸들러는 후속 스토리에서 구현. 소스 오브 트루스는 여전히 `docs/`.
+현재 단계: **스캐폴딩(CHMO-106) + 공용 컴포넌트 세트(CHMO-107) + MSW 목 레이어 전반부(CHMO-108) 완료.** Vite+React18+TS 토대·Tailwind v3 디자인 시스템·전 라우트 뼈대·화면 스텁 18개 + 재사용 UI 14종(`src/components/ui/`, 데모 `/dev/components`) + 목 DB·픽스처·인증/모임/이벤트 핸들러(`src/mocks/`). 앨범·검수·공개·뷰어 핸들러는 CHMO-109, 화면별 실제 UI는 후속 스토리에서 구현. 소스 오브 트루스는 여전히 `docs/`.
 
 ## 소스 오브 트루스 (작업 전 관련 문서를 읽는다)
 
@@ -23,6 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 제작자 인증: 닉네임 + 4자리 PIN. **권한 등급 없음** — 로그인한 모임 멤버는 전원 동일(업로드·검수·공개 가능).
 - 모임 진입점 2개(분리): ① **선생님 초대** = 제작자 합류(모임 단위, 모임 비밀번호+참여 링크) ② **학부모 공개** = 무로그인 뷰어(**모임 단위** 공유 링크 + **학부모 전용 비밀번호**(모임 비밀번호와 별개, 모임 생성 시 자동), 조회·다운로드만). 비번 입력 후 **공개된 이벤트 목록**에서 선택.
 - 공개(publish) 단위: **이벤트별**(검수 → 공개 전 검수 → 공개하기). 학부모 접근(공유) 단위: **모임별**(공개된 이벤트만 목록 노출). 상세 [[viewer-share-group-level]].
+- 검수: **사진 단위 `reviewed`**(앨범 [검토 완료] = 일괄 처리, 앨범 자체엔 검토 상태 없음) · **미검토 사진은 뷰어 비노출**(서버 필터링) · **공개 후에도 사진 추가·재분석·이동 가능** — `published` 상태 유지, 재분석은 증분(미분류 사진만).
 - 타깃: 기관(B2B/유치원) 우선. 일반(B2C) 전용 화면은 후순위.
 
 ## 하드 제약
@@ -32,12 +33,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 기술 스택
 
-React 18 + Vite 5 + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 react-router v6 · 스타일링 **Tailwind CSS v3**(토큰은 `tailwind.config.js` + `src/index.css`) · 데이터패칭 커스텀 `useApi` 훅 · API 목 레이어 **MSW**(`VITE_ENABLE_MSW=true`일 때만 활성, 핸들러는 후속 추가).
+React 18 + Vite 5 + TypeScript(모바일웹, 기준 프레임 390×844) · 라우팅 react-router v6 · 스타일링 **Tailwind CSS v3**(토큰은 `tailwind.config.js` + `src/index.css`) · 데이터패칭 커스텀 `useApi` 훅 · API 목 레이어 **MSW**(`VITE_ENABLE_MSW=true`일 때만 활성 — 인증·모임·이벤트 핸들러 구현됨, 앨범·검수·공개·뷰어는 CHMO-109).
 
 ### 코드 구조 (`src/`)
 - `main.tsx` 진입(+MSW 부트스트랩) · `router.tsx` 전 라우트 정의 · `index.css` Tailwind+디자인 토큰.
 - `components/` PhoneShell(390×844 프레임)·ScreenStub · `components/ui/` **공용 컴포넌트 세트**(CHMO-107: Header·Button·Badge·Toggle·EmptyState·카드류·PhotoTile/Grid·Modal·BottomSheet·ConfirmDialog·Toast — 데모 `/dev/components`, DEV 전용) · `guards/` 제작자/뷰어 라우트 가드 · `pages/`(+`pages/viewer/`) 화면 스텁.
-- `lib/` `api.ts`(fetch 래퍼)·`auth.ts`(제작자 토큰)·`viewer.ts`(뷰어 토큰) · `hooks/useApi.ts` · `types/api.ts`(API 계약 타입) · `mocks/`(MSW).
+- `lib/` `api.ts`(fetch 래퍼)·`auth.ts`(제작자 토큰)·`viewer.ts`(뷰어 토큰) · `hooks/useApi.ts` · `types/api.ts`(API 계약 타입).
+- `mocks/` **MSW 목 레이어**(CHMO-108) — `db.ts`(인메모리 스토어·상태머신·증분 분석) · `fixtures.ts`(시드 — 호출마다 새 객체) · `persist.ts`(가입 계정 localStorage 보존) · `handlers/`(auth·groups·events + `shared.ts` 검증 헬퍼·`serializers.ts`). 시드 로그인: 이현정/1234.
 
 ## 작업 방식
 
