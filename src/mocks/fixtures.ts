@@ -291,8 +291,22 @@ export function createFixtures(): Db {
     ],
     albums: [...sportsAlbums, ...picnicAlbums],
     photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
+    // evt_1·evt_2는 분석 완료 이력(done) — 상태가 review/published인 이벤트는 분석을 거쳤어야 함.
     // evt_3는 시드 시점부터 분석 중 — 워커 기동 후 ANALYSIS_DURATION_MS 지나 조회하면 review로 전이
     analysisJobs: [
+      {
+        eventId: 'evt_1',
+        status: 'done',
+        startedAt: Date.now(),
+        options: { excludeEyesClosed: true, excludeBlurry: true },
+      },
+      {
+        eventId: 'evt_2',
+        status: 'done',
+        // 공개된 이벤트 — 특수 앨범 없는 앨범 구성과 맞춰 품질 제외 옵션 OFF
+        options: { excludeEyesClosed: false, excludeBlurry: false },
+        startedAt: Date.now(),
+      },
       {
         eventId: 'evt_3',
         status: 'analyzing',

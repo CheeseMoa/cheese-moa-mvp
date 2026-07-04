@@ -52,9 +52,10 @@ export const eventHandlers = [
     const group = findGroup(params.id as string)
     if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
 
-    const events = db.events
-      .filter((e) => e.groupId === group.id)
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+    const events = db.events.filter((e) => e.groupId === group.id)
+    // 분석 중인 이벤트는 조회 시점에 완료 여부 판정(스펙: 화면 재진입/새로고침으로 완료 확인)
+    for (const event of events) if (event.status === 'analyzing') settleAnalysis(event.id)
+    events.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
     return HttpResponse.json({ events: events.map(toEvent) })
   }),
 
@@ -88,6 +89,7 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = accessibleEvent(user, params.id as string)
     if (!event) return notFound(EVENT_NOT_FOUND)
+    if (event.status === 'analyzing') settleAnalysis(event.id)
     return HttpResponse.json(toEvent(event))
   }),
 
@@ -113,6 +115,15 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = accessibleEvent(user, params.id as string)
     if (!event) return notFound(EVENT_NOT_FOUND)
+    // 업로드는 empty·review·ready에서만 — 분석 중/공개 완료 이벤트는 사진 추가 불가
+    if (event.status === 'analyzing' || event.status === 'published')
+      return errorResponse(
+        400,
+        'VALIDATION_ERROR',
+        event.status === 'analyzing'
+          ? '분석 중에는 사진을 추가할 수 없습니다.'
+          : '공개된 이벤트에는 사진을 추가할 수 없습니다.',
+      )
 
     const body = await readJson<{ files?: PresignFileRequest[] }>(request)
     const files = body?.files

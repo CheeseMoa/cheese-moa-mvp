@@ -299,12 +299,13 @@ export function movePhotoBetweenAlbums(
 /**
  * 허용 전이(docs/feature-spec.md 상태머신):
  * empty --analyze--> analyzing --완료--> review --전 앨범 reviewed--> ready --publish--> published
+ * (재업로드/사진 추가 시 review·ready → analyzing 회귀 가능.)
  */
 const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   empty: ['analyzing'],
   analyzing: ['review'],
-  review: ['ready'],
-  ready: ['review', 'published'], // 검토 해제 시 review로 되돌아갈 수 있음
+  review: ['ready', 'analyzing'], // 사진 추가 후 재분석 회귀
+  ready: ['review', 'published', 'analyzing'], // 검토 해제 시 review, 재분석 시 analyzing
   published: [],
 }
 
@@ -336,10 +337,21 @@ export function findAnalysisJob(eventId: string): DbAnalysisJob | undefined {
   return db.analysisJobs.find((j) => j.eventId === eventId)
 }
 
+/** 재분석 대비 초기화 — 이전 분석이 만든 앨범과 사진 연결을 걷어낸다(사진 자체는 유지) */
+function clearAnalysisResult(eventId: string): void {
+  const albumIds = new Set(albumsOfEvent(eventId).map((a) => a.id))
+  if (albumIds.size === 0) return
+  db.albums = db.albums.filter((a) => a.eventId !== eventId)
+  for (const photo of photosOfEvent(eventId)) {
+    photo.albumIds = photo.albumIds.filter((id) => !albumIds.has(id))
+  }
+}
+
 export function startAnalysis(
   eventId: string,
   options: { excludeEyesClosed: boolean; excludeBlurry: boolean },
 ): DbAnalysisJob {
+  clearAnalysisResult(eventId)
   const existing = findAnalysisJob(eventId)
   const job: DbAnalysisJob = { eventId, status: 'analyzing', startedAt: Date.now(), options }
   if (existing) {
