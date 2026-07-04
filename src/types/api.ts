@@ -160,8 +160,52 @@ export interface MoveSuggestion {
   similarity: number | null
 }
 
+// ── 사진 이동/제거 (다대다 연결 교체·해제) ───────────────────
+export interface MovePhotosResponse {
+  movedCount: number
+  sourceAlbumId: ID
+  targetAlbumId: ID
+}
+
+export interface RemovePhotosResponse {
+  removedCount: number
+  albumId: ID
+}
+
 // ── 뷰어(학부모 무로그인) ────────────────────────────────────
+// 뷰어 응답은 서버 필터링 결과만 담는다: published 이벤트 · person/common 앨범 ·
+// 검토 완료(reviewed) 사진. 카운트/커버도 필터링된 사진 기준 파생값.
 export interface ViewerUnlockResponse {
   viewerToken: string
   group: Pick<Group, 'id' | 'name'>
+}
+
+export interface ViewerEvent {
+  id: ID
+  name: string
+  date: ISODate
+  photoCount: number
+  albumCount: number
+  coverPhotoId: ID | null
+  publishedAt: ISODateTime | null
+}
+
+export interface ViewerAlbum {
+  id: ID
+  type: AlbumType
+  name: string
+  photoCount: number
+  coverPhotoId: ID | null
+}
+
+export interface ViewerPhoto {
+  id: ID
+  url: string
+  thumbnailUrl: string
+  downloadUrl: string
+}
+
+export interface AlbumDownloadResponse {
+  downloadUrl: string
+  expiresAt: ISODateTime
 }

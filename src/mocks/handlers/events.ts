@@ -1,26 +1,30 @@
 /**
- * 이벤트 핸들러 (docs/api-spec.md §3.3~3.4 일부) —
- * 목록/생성/상세/이름수정 + 업로드 presign(2-step) + 분석 시작/상태 확인.
+ * 이벤트 핸들러 (docs/api-spec.md §3.3~3.4, §3.4 검수 요약·공개 포함) —
+ * 목록/생성/상세/이름수정 + 업로드 presign(2-step) + 분석 시작/상태 확인 + 검수 요약/공개.
  */
 import { http, HttpResponse } from 'msw'
-import type { AnalysisJob, PresignFileRequest, PresignUpload } from '../../types/api'
+import type { AnalysisJob, PresignFileRequest, PresignUpload, ReviewSummary } from '../../types/api'
 import {
+  albumsOfEvent,
+  byEventRecency,
   db,
   findAnalysisJob,
-  findEvent,
   findGroup,
   nextId,
   nowIso,
+  photoCountOfAlbum,
   photoCountOfEvent,
+  photosOfEvent,
+  recomputeEventReadiness,
   settleAnalysis,
   startAnalysis,
   todayIsoDate,
   transitionEvent,
   type DbEvent,
   type DbPhoto,
-  type DbUser,
 } from '../db'
 import {
+  accessibleEvent,
   api,
   canAccessGroup,
   errorResponse,
@@ -32,18 +36,11 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { toEvent } from './serializers'
+import { isViewerVisibleType, toEvent } from './serializers'
 
 const EVENT_NOT_FOUND = '이벤트를 찾을 수 없습니다.'
 /** presign 용량 상한(파일당) — 초과 시 413 PAYLOAD_TOO_LARGE */
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-
-/** 멤버가 접근 가능한 이벤트 조회(아니면 null → 404) */
-function accessibleEvent(user: DbUser, eventId: string): DbEvent | null {
-  const event = findEvent(eventId)
-  if (!event || !canAccessGroup(user, event.groupId)) return null
-  return event
-}
 
 export const eventHandlers = [
   // GET /groups/:id/events — 이벤트 목록(최신순) · 화면 05
@@ -56,7 +53,7 @@ export const eventHandlers = [
     const events = db.events.filter((e) => e.groupId === group.id)
     // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
     for (const event of events) settleAnalysis(event.id)
-    events.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+    events.sort(byEventRecency)
     return HttpResponse.json({ events: events.map(toEvent) })
   }),
 
@@ -162,6 +159,9 @@ export const eventHandlers = [
         expiresAt,
       }
     })
+    // 새 사진은 미검토(reviewed: false) — 전 사진 검토 완료(ready)였다면 review로 되돌려
+    // "ready = 모든 사진 검토완료" 불변식을 지킨다(published는 재계산이 건드리지 않음)
+    recomputeEventReadiness(event.id)
     return HttpResponse.json({ uploads })
   }),
 
@@ -204,5 +204,66 @@ export const eventHandlers = [
     if (!job) return notFound('분석 이력이 없습니다.')
     const response: AnalysisJob = { eventId: job.eventId, status: job.status }
     return HttpResponse.json(response)
+  }),
+
+  // GET /events/:id/review-summary — 공개 전 검수 요약 · 화면 14
+  http.get(api('/events/:id/review-summary'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const event = accessibleEvent(user, params.id as string)
+    if (!event) return notFound(EVENT_NOT_FOUND)
+    settleAnalysis(event.id)
+
+    const photos = photosOfEvent(event.id)
+    const albums = albumsOfEvent(event.id)
+    const reviewedPhotos = photos.filter((p) => p.reviewed)
+    const uncertainAlbum = albums.find((a) => a.type === 'uncertain')
+    // 미리보기 = 학부모 뷰 프리뷰(feature-spec F6.1) — 뷰어 노출 규칙과 같은 필터
+    // (person/common 앨범 소속 + 검토 완료)를 적용한다. 검토된 노출 사진이 없으면
+    // 빈 미리보기가 정직한 응답(미검토 사진을 "보일 사진"으로 보여주면 안 된다).
+    const visibleAlbumIds = new Set(albums.filter(isViewerVisibleType).map((a) => a.id))
+    const viewerPhotos = reviewedPhotos.filter((p) =>
+      p.albumIds.some((id) => visibleAlbumIds.has(id)),
+    )
+    const summary: ReviewSummary = {
+      photoCount: photos.length,
+      albumCount: albums.length,
+      reviewedPhotoCount: reviewedPhotos.length,
+      totalPhotoCount: photos.length,
+      uncertainCount: uncertainAlbum ? photoCountOfAlbum(uncertainAlbum.id) : 0,
+      previewPhotoIds: viewerPhotos.slice(0, 4).map((p) => p.id),
+    }
+    return HttpResponse.json(summary)
+  }),
+
+  // POST /events/:id/publish — 공개하기(→published, 모임 학부모 공유 목록에 노출) · 화면 14
+  // 경고 정책(스펙 "구현 시 확정"): 미검토 사진 존재 시 ?force=true 없으면 409 반환.
+  // force 공개해도 미검토 사진은 뷰어 비노출(사진 단위 필터)이라 안전하다.
+  http.post(api('/events/:id/publish'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const event = accessibleEvent(user, params.id as string)
+    if (!event) return notFound(EVENT_NOT_FOUND)
+    settleAnalysis(event.id)
+
+    if (event.status === 'published')
+      return errorResponse(400, 'VALIDATION_ERROR', '이미 공개된 이벤트입니다.')
+    if (event.status !== 'review' && event.status !== 'ready')
+      return errorResponse(400, 'VALIDATION_ERROR', '검수 단계의 이벤트만 공개할 수 있습니다.')
+    const photos = photosOfEvent(event.id)
+    if (photos.length === 0)
+      return errorResponse(400, 'VALIDATION_ERROR', '공개할 사진이 없습니다.')
+
+    const force = new URL(request.url).searchParams.get('force') === 'true'
+    const unreviewedCount = photos.filter((p) => !p.reviewed).length
+    if (unreviewedCount > 0 && !force)
+      return errorResponse(
+        409,
+        'HAS_UNREVIEWED_PHOTOS',
+        `미검토 사진 ${unreviewedCount}장이 있습니다. 그대로 공개하면 해당 사진은 학부모에게 보이지 않습니다.`,
+      )
+
+    transitionEvent(event.id, 'published')
+    return HttpResponse.json(toEvent(event))
   }),
 ]

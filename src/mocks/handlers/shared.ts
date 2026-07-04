@@ -2,7 +2,7 @@
  * 핸들러 공용 헬퍼 — 경로 프리픽스, 공통 에러 포맷, 인증/멤버십 해석.
  */
 import { HttpResponse } from 'msw'
-import { isMember, resolveUser, type DbUser } from '../db'
+import { findEvent, isMember, resolveUser, type DbEvent, type DbUser } from '../db'
 
 /** docs/api-spec.md §1 Base URL */
 export function api(path: string): string {
@@ -37,6 +37,13 @@ export function canAccessGroup(user: DbUser, groupId: string): boolean {
   return isMember(user.id, groupId)
 }
 
+/** 멤버가 접근 가능한 이벤트 조회(없거나 비멤버면 null → 404) */
+export function accessibleEvent(user: DbUser, eventId: string): DbEvent | null {
+  const event = findEvent(eventId)
+  if (!event || !canAccessGroup(user, event.groupId)) return null
+  return event
+}
+
 /** 요청 본문 JSON 파싱 — 형식 오류면 null (핸들러에서 400 처리) */
 export async function readJson<T>(request: Request): Promise<T | null> {
   try {
@@ -59,4 +66,19 @@ export function requiredString(value: unknown): string | null {
 /** 선택 문자열 필드(PATCH 부분 업데이트용) — 미전송이면 undefined 유지, 전송됐으면 requiredString 규칙 */
 export function optionalString(value: unknown): string | null | undefined {
   return value === undefined ? undefined : requiredString(value)
+}
+
+/**
+ * 필수 문자열 배열(photoIds 등) — 배열이 아니거나 비었거나 빈 문자열이 섞여 있으면
+ * null(호출부에서 400). 중복 id는 제거해 movedCount/removedCount 부풀림을 막는다.
+ */
+export function requiredStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null
+  const items: string[] = []
+  for (const entry of value) {
+    const item = requiredString(entry)
+    if (!item) return null
+    if (!items.includes(item)) items.push(item)
+  }
+  return items
 }
