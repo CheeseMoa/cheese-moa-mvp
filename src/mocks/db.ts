@@ -221,6 +221,11 @@ export function eventsOfGroup(groupId: string): DbEvent[] {
   return db.events.filter((e) => e.groupId === groupId)
 }
 
+/** 이벤트 목록 정렬 비교자 — 최신 날짜 우선, 같은 날짜면 생성 시각 최신 우선(제작자·뷰어 목록 공통) */
+export function byEventRecency(a: DbEvent, b: DbEvent): number {
+  return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
+}
+
 export function albumsOfEvent(eventId: string): DbAlbum[] {
   return db.albums.filter((a) => a.eventId === eventId)
 }
@@ -254,6 +259,15 @@ export function albumCountOf(eventId: string): number {
 
 export function photoCountOfAlbum(albumId: string): number {
   return photosOfAlbum(albumId).length
+}
+
+export function unreviewedCountOfAlbum(albumId: string): number {
+  return photosOfAlbum(albumId).filter((p) => !p.reviewed).length
+}
+
+/** 검토 완료 사진만 — 뷰어 응답·뷰어용 카운트/커버 파생의 기준 */
+export function reviewedPhotosOfAlbum(albumId: string): DbPhoto[] {
+  return photosOfAlbum(albumId).filter((p) => p.reviewed)
 }
 
 // ── 인물 이름 (personId 단위 공유 — 이름전파) ────────────────
@@ -316,6 +330,19 @@ export function movePhotoBetweenAlbums(
   linkPhotoToAlbum(photoId, targetAlbumId)
 }
 
+/**
+ * 앨범에서 사진 제거(DELETE /photos) — 마지막 연결 해제면 사진 레코드 자체를 폐기한다.
+ * albumIds가 빈 채 남겨두면 증분 재분석("앨범 없는 사진만 분류")이 삭제한 사진을
+ * 부활시키므로, "마지막 연결 해제 = 완전 삭제(복구 없음)" 스펙을 레코드 삭제로 구현.
+ */
+export function removePhotoFromAlbum(photoId: string, albumId: string): void {
+  unlinkPhotoFromAlbum(photoId, albumId)
+  const photo = db.photos.find((p) => p.id === photoId)
+  if (photo && photo.albumIds.length === 0) {
+    db.photos = db.photos.filter((p) => p.id !== photoId)
+  }
+}
+
 // ── 이벤트 상태전이 ──────────────────────────────────────────
 
 /**
@@ -326,8 +353,10 @@ export function movePhotoBetweenAlbums(
 const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   empty: ['analyzing'],
   analyzing: ['review'],
-  review: ['ready', 'analyzing'], // 사진 추가 후 재분석 회귀
-  ready: ['review', 'published', 'analyzing'], // 검토 해제 시 review, 재분석 시 analyzing
+  // published = force 공개(미검토 존재 시 409 경고 후 ?force=true) — 미검토 사진은 뷰어 비노출이라 안전
+  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장)
+  review: ['ready', 'analyzing', 'published', 'empty'],
+  ready: ['review', 'published', 'analyzing', 'empty'], // 검토 해제 시 review, 재분석 시 analyzing
   published: [], // 공개 후 편집은 상태 전이 없이 진행(뷰어 비노출은 사진 reviewed로 제어)
 }
 
@@ -341,13 +370,17 @@ export function transitionEvent(eventId: string, to: EventStatus): boolean {
   return true
 }
 
-/** 전 사진 reviewed ↔ 아니면 review — 검토 상태 변경 후 재계산(CHMO-109에서 사용) */
+/** 전 사진 reviewed ↔ 아니면 review — 검토 상태·사진 집합 변경 후 재계산(CHMO-109에서 사용) */
 export function recomputeEventReadiness(eventId: string): void {
   const event = findEvent(eventId)
   if (!event || (event.status !== 'review' && event.status !== 'ready')) return
   const photos = photosOfEvent(eventId)
-  const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
-  transitionEvent(eventId, allReviewed ? 'ready' : 'review')
+  // 사진이 전부 사라졌으면 빈 이벤트로(spec: empty = 사진 0장) — '검수 중' 0장 상태 방지
+  if (photos.length === 0) {
+    transitionEvent(eventId, 'empty')
+    return
+  }
+  transitionEvent(eventId, photos.every((p) => p.reviewed) ? 'ready' : 'review')
 }
 
 // ── 분석 시뮬레이션 (폴링 없음 — 조회 시점에 경과 시간으로 전이) ──

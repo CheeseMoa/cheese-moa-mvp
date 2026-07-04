@@ -3,14 +3,31 @@
  * pin·모임 비밀번호·학부모 비밀번호 평문은 여기서 절대 노출하지 않는다
  * (평문은 invite/share 전용 핸들러만 반환).
  */
-import type { EventItem, Group, User } from '../../types/api'
+import type {
+  Album,
+  AlbumType,
+  EventItem,
+  Group,
+  Photo,
+  User,
+  ViewerAlbum,
+  ViewerEvent,
+  ViewerPhoto,
+} from '../../types/api'
 import {
   albumCountOf,
+  albumName,
+  albumsOfEvent,
   eventCountOf,
   memberCountOf,
+  photoCountOfAlbum,
   photoCountOfEvent,
+  reviewedPhotosOfAlbum,
+  unreviewedCountOfAlbum,
+  type DbAlbum,
   type DbEvent,
   type DbGroup,
+  type DbPhoto,
   type DbUser,
 } from '../db'
 
@@ -52,6 +69,124 @@ export function toEvent(event: DbEvent): EventItem {
     photoCount: photoCountOfEvent(event.id),
     albumCount: albumCountOf(event.id),
     createdAt: event.createdAt,
+    publishedAt: event.publishedAt,
+  }
+}
+
+// ── 사진 URL (DB는 메타만 보유 — id 시드 기반 결정적 목 이미지) ──
+
+/** picsum 시드 URL — MSW가 가로채지 않는 외부 요청이라 실제 이미지가 렌더된다 */
+export function photoUrlOf(photo: DbPhoto): string {
+  return `https://picsum.photos/seed/${photo.id}/${photo.width}/${photo.height}`
+}
+
+export function photoThumbnailUrlOf(photo: DbPhoto): string {
+  // 정수 경로 세그먼트만 유효(picsum) — 4의 배수가 아닌 치수가 들어와도 소수점이 새지 않게 반올림
+  const w = Math.round(photo.width / 4)
+  const h = Math.round(photo.height / 4)
+  return `https://picsum.photos/seed/${photo.id}/${w}/${h}`
+}
+
+export function toPhoto(photo: DbPhoto): Photo {
+  return {
+    id: photo.id,
+    eventId: photo.eventId,
+    albumIds: [...photo.albumIds],
+    url: photoUrlOf(photo),
+    thumbnailUrl: photoThumbnailUrlOf(photo),
+    width: photo.width,
+    height: photo.height,
+    flags: { ...photo.flags },
+    reviewed: photo.reviewed,
+    createdAt: photo.createdAt,
+  }
+}
+
+// ── 앨범 ─────────────────────────────────────────────────────
+
+/** 그리드 표시 순서: 인물 → 공통 → 분류어려움 → 눈감음 → 흔들림 (같은 타입은 생성 순 유지) */
+const ALBUM_TYPE_ORDER: Record<AlbumType, number> = {
+  person: 0,
+  common: 1,
+  uncertain: 2,
+  eyes_closed: 3,
+  blurry: 4,
+}
+
+export function albumsOfEventSorted(eventId: string): DbAlbum[] {
+  return albumsOfEvent(eventId)
+    .slice()
+    .sort((a, b) => ALBUM_TYPE_ORDER[a.type] - ALBUM_TYPE_ORDER[b.type])
+}
+
+/** 학부모 뷰어 노출 대상 타입(person/common) — 특수 앨범은 제작자 화면 전용 */
+export function isViewerVisibleType(album: DbAlbum): boolean {
+  return album.type === 'person' || album.type === 'common'
+}
+
+export function toAlbum(album: DbAlbum): Album {
+  return {
+    id: album.id,
+    eventId: album.eventId,
+    type: album.type,
+    personId: album.personId,
+    name: albumName(album),
+    photoCount: photoCountOfAlbum(album.id),
+    unreviewedPhotoCount: unreviewedCountOfAlbum(album.id),
+    coverPhotoId: album.coverPhotoId,
+    visibleToViewer: isViewerVisibleType(album),
+  }
+}
+
+// ── 뷰어 직렬화 (서버 필터링 책임 — 검토 완료 사진만 반영) ────
+
+/**
+ * 뷰어에 노출되는 앨범 = person/common 이면서 검토 완료 사진이 1장 이상.
+ * (공개 후 추가된 미검토 사진뿐인 앨범은 빈 카드가 되므로 목록에서 제외)
+ */
+export function viewerAlbumsOfEvent(eventId: string): DbAlbum[] {
+  return albumsOfEventSorted(eventId).filter(
+    (a) => isViewerVisibleType(a) && reviewedPhotosOfAlbum(a.id).length > 0,
+  )
+}
+
+/** 뷰어 카운트·커버는 검토 완료 사진 기준(커버가 미검토면 첫 검토 사진으로 대체) */
+export function toViewerAlbum(album: DbAlbum): ViewerAlbum {
+  const reviewed = reviewedPhotosOfAlbum(album.id)
+  const cover = reviewed.some((p) => p.id === album.coverPhotoId)
+    ? album.coverPhotoId
+    : (reviewed[0]?.id ?? null)
+  return {
+    id: album.id,
+    type: album.type,
+    name: albumName(album),
+    photoCount: reviewed.length,
+    coverPhotoId: cover,
+  }
+}
+
+export function toViewerPhoto(photo: DbPhoto): ViewerPhoto {
+  return {
+    id: photo.id,
+    url: photoUrlOf(photo),
+    thumbnailUrl: photoThumbnailUrlOf(photo),
+    downloadUrl: photoUrlOf(photo),
+  }
+}
+
+export function toViewerEvent(event: DbEvent): ViewerEvent {
+  const albums = viewerAlbumsOfEvent(event.id)
+  const photoIds = new Set<string>()
+  for (const album of albums) {
+    for (const photo of reviewedPhotosOfAlbum(album.id)) photoIds.add(photo.id)
+  }
+  return {
+    id: event.id,
+    name: event.name,
+    date: event.date,
+    photoCount: photoIds.size,
+    albumCount: albums.length,
+    coverPhotoId: albums[0] ? toViewerAlbum(albums[0]).coverPhotoId : null,
     publishedAt: event.publishedAt,
   }
 }
