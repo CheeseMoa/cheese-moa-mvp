@@ -131,7 +131,7 @@ export function ComponentGalleryPage() {
         <Section title="06 · AlbumCard — 검토 테두리 규칙">
           <div className="grid grid-cols-2 gap-3.5">
             <AlbumCard
-              album={{ type: 'person', name: '김민준', photoCount: 16, reviewStatus: 'reviewed' }}
+              album={{ type: 'person', name: '김민준', photoCount: 16, unreviewedPhotoCount: 0 }}
               onClick={() => toast.show('🧀 앨범 카드 탭')}
             />
             <AlbumCard
@@ -139,7 +139,7 @@ export function ComponentGalleryPage() {
                 type: 'person',
                 name: '이서연',
                 photoCount: 12,
-                reviewStatus: 'unreviewed',
+                unreviewedPhotoCount: 12,
               }}
             />
             <AlbumCard album={{ type: 'uncertain', name: '분류가 어려워요', photoCount: 6 }} />

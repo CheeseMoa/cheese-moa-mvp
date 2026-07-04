@@ -70,7 +70,7 @@ export interface DbAlbum {
   type: AlbumType
   /** 인물 앨범만 값 보유 — 이름은 persons 맵에서 조회(이름전파) */
   personId: string | null
-  reviewStatus: 'unreviewed' | 'reviewed'
+  /** 검토 상태는 사진 단위(DbPhoto.reviewed) — 앨범은 보유하지 않는다 */
   coverPhotoId: string | null
 }
 
@@ -82,6 +82,8 @@ export interface DbPhoto {
   width: number
   height: number
   flags: PhotoFlags
+  /** 검토 여부(사진 단위) — 미검토 사진은 뷰어 응답에서 제외. 앨범 [검토 완료] = 일괄 처리 */
+  reviewed: boolean
   createdAt: ISODateTime
 }
 
@@ -298,15 +300,15 @@ export function movePhotoBetweenAlbums(
 
 /**
  * 허용 전이(docs/feature-spec.md 상태머신):
- * empty --analyze--> analyzing --완료--> review --전 앨범 reviewed--> ready --publish--> published
- * (재업로드/사진 추가 시 review·ready → analyzing 회귀 가능.)
+ * empty --analyze--> analyzing --완료--> review --전 사진 reviewed--> ready --publish--> published
+ * (사진 추가 시 재분석: review·ready → analyzing 회귀. published는 전이 없이 증분 분석 — 공개 유지.)
  */
 const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   empty: ['analyzing'],
   analyzing: ['review'],
   review: ['ready', 'analyzing'], // 사진 추가 후 재분석 회귀
   ready: ['review', 'published', 'analyzing'], // 검토 해제 시 review, 재분석 시 analyzing
-  published: [],
+  published: [], // 공개 후 편집은 상태 전이 없이 진행(뷰어 비노출은 사진 reviewed로 제어)
 }
 
 /** 허용된 전이만 적용, 성공 여부 반환 */
@@ -319,12 +321,12 @@ export function transitionEvent(eventId: string, to: EventStatus): boolean {
   return true
 }
 
-/** 전 앨범 reviewed ↔ 아니면 review — 검토 상태 변경 후 재계산(CHMO-109에서 사용) */
+/** 전 사진 reviewed ↔ 아니면 review — 검토 상태 변경 후 재계산(CHMO-109에서 사용) */
 export function recomputeEventReadiness(eventId: string): void {
   const event = findEvent(eventId)
   if (!event || (event.status !== 'review' && event.status !== 'ready')) return
-  const albums = albumsOfEvent(eventId)
-  const allReviewed = albums.length > 0 && albums.every((a) => a.reviewStatus === 'reviewed')
+  const photos = photosOfEvent(eventId)
+  const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
   transitionEvent(eventId, allReviewed ? 'ready' : 'review')
 }
 
@@ -337,21 +339,10 @@ export function findAnalysisJob(eventId: string): DbAnalysisJob | undefined {
   return db.analysisJobs.find((j) => j.eventId === eventId)
 }
 
-/** 재분석 대비 초기화 — 이전 분석이 만든 앨범과 사진 연결을 걷어낸다(사진 자체는 유지) */
-function clearAnalysisResult(eventId: string): void {
-  const albumIds = new Set(albumsOfEvent(eventId).map((a) => a.id))
-  if (albumIds.size === 0) return
-  db.albums = db.albums.filter((a) => a.eventId !== eventId)
-  for (const photo of photosOfEvent(eventId)) {
-    photo.albumIds = photo.albumIds.filter((id) => !albumIds.has(id))
-  }
-}
-
 export function startAnalysis(
   eventId: string,
   options: { excludeEyesClosed: boolean; excludeBlurry: boolean },
 ): DbAnalysisJob {
-  clearAnalysisResult(eventId)
   const existing = findAnalysisJob(eventId)
   const job: DbAnalysisJob = { eventId, status: 'analyzing', startedAt: Date.now(), options }
   if (existing) {
@@ -379,75 +370,77 @@ export function settleAnalysis(eventId: string): DbAnalysisJob | undefined {
 const PERSON_NAME_POOL = ['김민준', '이서연', '박하린', '최지우', '정도윤', '한소율']
 
 /**
- * 목 AI 분류: 이벤트 사진을 앨범 세트(인물 3 + 공통/분류어려움 + 옵션별 특수)로 분배.
+ * 목 AI 분류(증분): **아직 어떤 앨범에도 속하지 않은 사진만** 분류한다.
+ * - 재분석 시 기존 앨범·수동 배치·검토 상태(사진 단위)는 건드리지 않는다.
  * - 같은 모임 인물(personId) 재사용 → 이벤트가 달라도 동일 인물이 이어진다.
  * - 일부 사진은 인물 앨범 2곳에 연결해 다대다를 시뮬레이션.
+ * - 특수 앨범(공통/분류어려움/눈감음/흔들림)은 들어갈 사진이 생길 때만 생성(빈 앨범 미생성).
  * - excludeEyesClosed/excludeBlurry ON이면 플래그 사진을 인물 대신 특수 앨범으로 라우팅.
+ * - 새로 분류된 사진은 미검토(reviewed: false) 상태 그대로 → 검토 완료 전까지 뷰어 비노출.
  */
 export function completeAnalysis(eventId: string): void {
   const event = findEvent(eventId)
   const job = findAnalysisJob(eventId)
   if (!event || !job) return
 
-  // 모임 인물 확보(부족하면 이름 풀에서 생성)
-  const persons = db.persons.filter((p) => p.groupId === event.groupId)
-  while (persons.length < 3) {
-    const used = new Set(persons.map((p) => p.name))
-    const name = PERSON_NAME_POOL.find((n) => !used.has(n)) ?? `아이 ${persons.length + 1}`
-    const person: DbPerson = { id: nextId('psn'), groupId: event.groupId, name }
-    db.persons.push(person)
-    persons.push(person)
-  }
+  const pending = photosOfEvent(eventId).filter((p) => p.albumIds.length === 0)
+  if (pending.length > 0) {
+    const makeAlbum = (type: AlbumType, personId: string | null = null): DbAlbum => {
+      const album: DbAlbum = { id: nextId('alb'), eventId, type, personId, coverPhotoId: null }
+      db.albums.push(album)
+      return album
+    }
 
-  const makeAlbum = (type: AlbumType, personId: string | null = null): DbAlbum => {
-    const album: DbAlbum = {
-      id: nextId('alb'),
-      eventId,
-      type,
-      personId,
-      reviewStatus: 'unreviewed',
-      coverPhotoId: null,
+    // 인물 앨범: 기존 것을 재사용, 없으면(첫 분석) 모임 인물 확보 후 3개 생성
+    let personAlbums = albumsOfEvent(eventId).filter((a) => a.type === 'person')
+    if (personAlbums.length === 0) {
+      const persons = db.persons.filter((p) => p.groupId === event.groupId)
+      while (persons.length < 3) {
+        const used = new Set(persons.map((p) => p.name))
+        const name = PERSON_NAME_POOL.find((n) => !used.has(n)) ?? `아이 ${persons.length + 1}`
+        const person: DbPerson = { id: nextId('psn'), groupId: event.groupId, name }
+        db.persons.push(person)
+        persons.push(person)
+      }
+      personAlbums = persons.slice(0, 3).map((p) => makeAlbum('person', p.id))
     }
-    db.albums.push(album)
-    return album
-  }
 
-  const personAlbums = persons.slice(0, 3).map((p) => makeAlbum('person', p.id))
-  const commonAlbum = makeAlbum('common')
-  const uncertainAlbum = makeAlbum('uncertain')
-  const eyesClosedAlbum = job.options.excludeEyesClosed ? makeAlbum('eyes_closed') : null
-  const blurryAlbum = job.options.excludeBlurry ? makeAlbum('blurry') : null
+    // 특수 앨범: 사진이 실제로 라우팅될 때 기존 재사용 또는 지연 생성
+    const specialAlbum = (type: AlbumType): DbAlbum =>
+      albumsOfEvent(eventId).find((a) => a.type === type) ?? makeAlbum(type)
 
-  photosOfEvent(eventId).forEach((photo, i) => {
-    // 품질 제외 옵션 ON이면 플래그 사진은 특수 앨범으로만 라우팅
-    if (eyesClosedAlbum && photo.flags.eyesClosed) {
-      linkPhotoToAlbum(photo.id, eyesClosedAlbum.id)
-      return
-    }
-    if (blurryAlbum && photo.flags.blurry) {
-      linkPhotoToAlbum(photo.id, blurryAlbum.id)
-      return
-    }
-    if (i % 10 === 9) {
-      linkPhotoToAlbum(photo.id, uncertainAlbum.id)
-      return
-    }
-    if (i % 6 === 5) {
-      linkPhotoToAlbum(photo.id, commonAlbum.id)
-      return
-    }
-    linkPhotoToAlbum(photo.id, personAlbums[i % personAlbums.length].id)
-    // 매 4번째 사진은 다른 인물 앨범에도 연결(여러 아이 동반 촬영 = 다대다)
-    if (i % 4 === 3) {
-      linkPhotoToAlbum(photo.id, personAlbums[(i + 1) % personAlbums.length].id)
-    }
-  })
+    pending.forEach((photo, i) => {
+      // 품질 제외 옵션 ON이면 플래그 사진은 특수 앨범으로만 라우팅
+      if (job.options.excludeEyesClosed && photo.flags.eyesClosed) {
+        linkPhotoToAlbum(photo.id, specialAlbum('eyes_closed').id)
+        return
+      }
+      if (job.options.excludeBlurry && photo.flags.blurry) {
+        linkPhotoToAlbum(photo.id, specialAlbum('blurry').id)
+        return
+      }
+      if (i % 10 === 9) {
+        linkPhotoToAlbum(photo.id, specialAlbum('uncertain').id)
+        return
+      }
+      if (i % 6 === 5) {
+        linkPhotoToAlbum(photo.id, specialAlbum('common').id)
+        return
+      }
+      linkPhotoToAlbum(photo.id, personAlbums[i % personAlbums.length].id)
+      // 매 4번째 사진은 다른 인물 앨범에도 연결(여러 아이 동반 촬영 = 다대다)
+      if (i % 4 === 3) {
+        linkPhotoToAlbum(photo.id, personAlbums[(i + 1) % personAlbums.length].id)
+      }
+    })
 
-  // 커버 = 각 앨범의 첫 사진
-  for (const album of albumsOfEvent(eventId)) {
-    album.coverPhotoId = photosOfAlbum(album.id)[0]?.id ?? null
+    // 커버가 비어 있는 앨범만 채운다(기존 커버는 유지)
+    for (const album of albumsOfEvent(eventId)) {
+      if (!album.coverPhotoId) album.coverPhotoId = photosOfAlbum(album.id)[0]?.id ?? null
+    }
   }
 
   job.status = 'done'
+  // published 이벤트는 전이 엣지가 없어 공개 상태를 그대로 유지(증분 분석 — 공개 중 편집 허용)
   transitionEvent(eventId, 'review')
 }

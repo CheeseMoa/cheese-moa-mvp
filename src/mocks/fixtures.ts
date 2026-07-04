@@ -23,6 +23,7 @@ function makePhotos(eventKey: string, eventId: string, count: number, baseTime: 
       width: landscape ? 1600 : 1200,
       height: landscape ? 1200 : 1600,
       flags: { eyesClosed: i % 9 === 8, blurry: i % 13 === 12 },
+      reviewed: false,
       createdAt: baseTime,
     }
   })
@@ -81,65 +82,49 @@ const sportsAlbums: DbAlbum[] = [
     id: 'alb_1',
     eventId: 'evt_1',
     type: 'person',
-    personId: 'psn_minjun',
-    reviewStatus: 'reviewed',
-    coverPhotoId: null,
+    personId: 'psn_minjun',    coverPhotoId: null,
   },
   {
     id: 'alb_2',
     eventId: 'evt_1',
     type: 'person',
-    personId: 'psn_seoyeon',
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: 'psn_seoyeon',    coverPhotoId: null,
   },
   {
     id: 'alb_3',
     eventId: 'evt_1',
     type: 'person',
-    personId: 'psn_harin',
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: 'psn_harin',    coverPhotoId: null,
   },
   {
     id: 'alb_4',
     eventId: 'evt_1',
     type: 'person',
-    personId: 'psn_jiwoo',
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: 'psn_jiwoo',    coverPhotoId: null,
   },
   {
     id: 'alb_5',
     eventId: 'evt_1',
     type: 'common',
-    personId: null,
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: null,    coverPhotoId: null,
   },
   {
     id: 'alb_6',
     eventId: 'evt_1',
     type: 'uncertain',
-    personId: null,
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: null,    coverPhotoId: null,
   },
   {
     id: 'alb_7',
     eventId: 'evt_1',
     type: 'eyes_closed',
-    personId: null,
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: null,    coverPhotoId: null,
   },
   {
     id: 'alb_8',
     eventId: 'evt_1',
     type: 'blurry',
-    personId: null,
-    reviewStatus: 'unreviewed',
-    coverPhotoId: null,
+    personId: null,    coverPhotoId: null,
   },
 ]
 
@@ -149,33 +134,25 @@ const picnicAlbums: DbAlbum[] = [
     id: 'alb_9',
     eventId: 'evt_2',
     type: 'person',
-    personId: 'psn_minjun',
-    reviewStatus: 'reviewed',
-    coverPhotoId: null,
+    personId: 'psn_minjun',    coverPhotoId: null,
   },
   {
     id: 'alb_10',
     eventId: 'evt_2',
     type: 'person',
-    personId: 'psn_seoyeon',
-    reviewStatus: 'reviewed',
-    coverPhotoId: null,
+    personId: 'psn_seoyeon',    coverPhotoId: null,
   },
   {
     id: 'alb_11',
     eventId: 'evt_2',
     type: 'person',
-    personId: 'psn_harin',
-    reviewStatus: 'reviewed',
-    coverPhotoId: null,
+    personId: 'psn_harin',    coverPhotoId: null,
   },
   {
     id: 'alb_12',
     eventId: 'evt_2',
     type: 'common',
-    personId: null,
-    reviewStatus: 'reviewed',
-    coverPhotoId: null,
+    personId: null,    coverPhotoId: null,
   },
 ]
 
@@ -190,6 +167,8 @@ distribute(sportsPhotos, {
   blurry: sportsAlbums[7],
 })
 assignCovers(sportsAlbums, sportsPhotos)
+// 검토는 사진 단위 — 김민준(alb_1) 앨범 사진만 검토 완료된 "검수 중간" 상태 시연
+for (const photo of sportsPhotos) if (photo.albumIds.includes('alb_1')) photo.reviewed = true
 
 const picnicPhotos = makePhotos('picnic', 'evt_2', 16, '2026-05-12T11:00:00+09:00')
 distribute(picnicPhotos, {
@@ -198,6 +177,8 @@ distribute(picnicPhotos, {
   // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
 })
 assignCovers(picnicAlbums, picnicPhotos)
+// 공개된 이벤트 — 전 사진 검토 완료(뷰어에 모두 노출)
+for (const photo of picnicPhotos) photo.reviewed = true
 
 // evt_3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
 const poolPhotos = makePhotos('pool', 'evt_3', 20, '2026-06-27T10:00:00+09:00')

@@ -71,7 +71,6 @@ export interface AnalysisJob {
 
 // ── Album (앨범) ─────────────────────────────────────────────
 export type AlbumType = 'person' | 'common' | 'uncertain' | 'eyes_closed' | 'blurry'
-export type ReviewStatus = 'unreviewed' | 'reviewed'
 
 export interface Album {
   id: ID
@@ -81,7 +80,8 @@ export interface Album {
   personId: ID | null
   name: string
   photoCount: number
-  reviewStatus?: ReviewStatus
+  /** 앨범 내 미검토 사진 수(파생값) — 검토 상태는 사진 단위(Photo.reviewed) */
+  unreviewedPhotoCount?: number
   coverPhotoId: ID | null
   /** 학부모 뷰어 노출 여부(person/common만 true) */
   visibleToViewer?: boolean
@@ -103,6 +103,8 @@ export interface Photo {
   width?: number
   height?: number
   flags?: PhotoFlags
+  /** 검토 여부(사진 단위) — 미검토 사진은 뷰어 응답에서 제외 */
+  reviewed: boolean
   /** 뷰어 다운로드용 */
   downloadUrl?: string
   createdAt?: ISODateTime
@@ -143,8 +145,9 @@ export interface AnalyzeRequest {
 export interface ReviewSummary {
   photoCount: number
   albumCount: number
-  reviewedAlbumCount: number
-  totalAlbumCount: number
+  /** 검토는 사진 단위 — 검토 완료된 사진 수 / 전체 사진 수 */
+  reviewedPhotoCount: number
+  totalPhotoCount: number
   uncertainCount: number
   previewPhotoIds: ID[]
 }

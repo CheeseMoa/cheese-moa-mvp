@@ -2,7 +2,7 @@ import type { Album } from '../../types/api'
 import { Badge } from './Badge'
 import { cx } from '../../lib/cx'
 
-type AlbumCardAlbum = Pick<Album, 'type' | 'name' | 'photoCount' | 'reviewStatus'>
+type AlbumCardAlbum = Pick<Album, 'type' | 'name' | 'photoCount' | 'unreviewedPhotoCount'>
 
 interface AlbumCardProps {
   album: AlbumCardAlbum
@@ -13,13 +13,13 @@ interface AlbumCardProps {
 
 /**
  * 이벤트 상세(08) 앨범 카드 — 검토 테두리 규칙 (dc.html §06 · 고정):
- * 갈색 실선 = 검토완료 · 회색 점선 = 미검토.
+ * 갈색 실선 = 검토완료 · 회색 점선 = 미검토. (검토는 사진 단위 — 앨범 표시는 미검토 사진 수(unreviewedPhotoCount)로 파생)
  * person/common은 검토 배지 노출 · uncertain은 배지 없이 점선(재분류 대상) ·
  * 품질 앨범(eyes_closed/blurry)은 기본 테두리·배지 없음.
  */
 export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
-  const reviewed = album.reviewStatus === 'reviewed'
+  const reviewed = album.unreviewedPhotoCount === 0
   const borderCls =
     reviewable || album.type === 'uncertain'
       ? reviewable && reviewed
@@ -49,7 +49,7 @@ export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
           <span className="block truncate text-sm font-bold text-text">{album.name}</span>
           <span className="mt-0.5 block text-[11px] text-muted">{meta}</span>
         </span>
-        {reviewable && album.reviewStatus && (
+        {reviewable && album.unreviewedPhotoCount !== undefined && (
           <Badge variant={reviewed ? 'reviewed' : 'unreviewed'} size="sm" />
         )}
       </span>

@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw'
 import type { AnalysisJob, PresignFileRequest, PresignUpload } from '../../types/api'
 import {
   db,
+  findAnalysisJob,
   findEvent,
   findGroup,
   nextId,
@@ -53,8 +54,8 @@ export const eventHandlers = [
     if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
 
     const events = db.events.filter((e) => e.groupId === group.id)
-    // 분석 중인 이벤트는 조회 시점에 완료 여부 판정(스펙: 화면 재진입/새로고침으로 완료 확인)
-    for (const event of events) if (event.status === 'analyzing') settleAnalysis(event.id)
+    // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
+    for (const event of events) settleAnalysis(event.id)
     events.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
     return HttpResponse.json({ events: events.map(toEvent) })
   }),
@@ -89,7 +90,7 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = accessibleEvent(user, params.id as string)
     if (!event) return notFound(EVENT_NOT_FOUND)
-    if (event.status === 'analyzing') settleAnalysis(event.id)
+    settleAnalysis(event.id)
     return HttpResponse.json(toEvent(event))
   }),
 
@@ -115,15 +116,9 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = accessibleEvent(user, params.id as string)
     if (!event) return notFound(EVENT_NOT_FOUND)
-    // 업로드는 empty·review·ready에서만 — 분석 중/공개 완료 이벤트는 사진 추가 불가
-    if (event.status === 'analyzing' || event.status === 'published')
-      return errorResponse(
-        400,
-        'VALIDATION_ERROR',
-        event.status === 'analyzing'
-          ? '분석 중에는 사진을 추가할 수 없습니다.'
-          : '공개된 이벤트에는 사진을 추가할 수 없습니다.',
-      )
+    // 분석 진행 중에만 업로드 불가 — 공개(published) 후에도 사진 추가 가능(새 사진은 미검토로 등록돼 뷰어 비노출)
+    if (event.status === 'analyzing')
+      return errorResponse(400, 'VALIDATION_ERROR', '분석 중에는 사진을 추가할 수 없습니다.')
 
     const body = await readJson<{ files?: PresignFileRequest[] }>(request)
     const files = body?.files
@@ -155,6 +150,7 @@ export const eventHandlers = [
         height: landscape ? 1200 : 1600,
         // 픽스처와 동일한 결정적 플래그 규칙(9번째마다 눈감음, 13번째마다 흔들림)
         flags: { eyesClosed: idx % 9 === 8, blurry: idx % 13 === 12 },
+        reviewed: false,
         createdAt: nowIso(),
       }
       db.photos.push(photo)
@@ -181,8 +177,11 @@ export const eventHandlers = [
 
     if (photoCountOfEvent(event.id) === 0)
       return errorResponse(400, 'VALIDATION_ERROR', '분석할 사진이 없습니다. 먼저 업로드해 주세요.')
-    if (!transitionEvent(event.id, 'analyzing'))
-      return errorResponse(400, 'VALIDATION_ERROR', '이미 분석이 시작되었거나 완료된 이벤트입니다.')
+    if (findAnalysisJob(event.id)?.status === 'analyzing')
+      return errorResponse(400, 'VALIDATION_ERROR', '이미 분석이 진행 중인 이벤트입니다.')
+    // published는 공개를 유지한 채 증분 분석(상태 전이 없음), 그 외에는 analyzing으로 전이
+    if (event.status !== 'published' && !transitionEvent(event.id, 'analyzing'))
+      return errorResponse(400, 'VALIDATION_ERROR', '지금은 분석을 시작할 수 없는 이벤트입니다.')
 
     const body = await readJson<{ excludeEyesClosed?: boolean; excludeBlurry?: boolean }>(request)
     const job = startAnalysis(event.id, {
