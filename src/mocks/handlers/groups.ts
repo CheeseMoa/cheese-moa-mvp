@@ -7,8 +7,11 @@ import {
   api,
   canAccessGroup,
   errorResponse,
+  invalidBody,
   notFound,
+  optionalString,
   readJson,
+  requiredString,
   unauthorized,
   userFrom,
 } from './shared'
@@ -42,9 +45,9 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ name?: string; password?: string }>(request)
-    const name = body?.name?.trim()
-    const password = body?.password?.trim()
+    const body = await readJson<{ name?: unknown; password?: unknown }>(request)
+    const name = requiredString(body?.name)
+    const password = requiredString(body?.password)
     if (!name) return errorResponse(400, 'VALIDATION_ERROR', '모임 이름을 입력해 주세요.')
     if (!password) return errorResponse(400, 'VALIDATION_ERROR', '모임 비밀번호를 입력해 주세요.')
 
@@ -77,12 +80,11 @@ export const groupHandlers = [
     const group = findGroup(params.id as string)
     if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
 
-    const body = await readJson<{ name?: string }>(request)
-    if (body?.name !== undefined) {
-      const name = body.name.trim()
-      if (!name) return errorResponse(400, 'VALIDATION_ERROR', '모임 이름을 입력해 주세요.')
-      group.name = name
-    }
+    const body = await readJson<{ name?: unknown }>(request)
+    if (!body) return invalidBody()
+    const name = optionalString(body.name)
+    if (name === null) return errorResponse(400, 'VALIDATION_ERROR', '모임 이름을 입력해 주세요.')
+    if (name !== undefined) group.name = name
     return HttpResponse.json(toGroup(group, { includeShare: true }))
   }),
 
@@ -91,10 +93,14 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ joinKey?: string; password?: string }>(request)
-    const group = db.groups.find((g) => g.joinKey === body?.joinKey)
+    const body = await readJson<{ joinKey?: unknown; password?: unknown }>(request)
+    const joinKey = requiredString(body?.joinKey)
+    const password = requiredString(body?.password)
+    if (!joinKey || !password)
+      return errorResponse(400, 'VALIDATION_ERROR', '참여 코드와 모임 비밀번호를 입력해 주세요.')
+    const group = db.groups.find((g) => g.joinKey === joinKey)
     if (!group) return notFound(GROUP_NOT_FOUND)
-    if (group.password !== body?.password)
+    if (group.password !== password)
       return errorResponse(403, 'WRONG_PASSWORD', '모임 비밀번호가 올바르지 않습니다.')
     if (canAccessGroup(user, group.id))
       return errorResponse(409, 'ALREADY_MEMBER', '이미 참여 중인 모임입니다.')

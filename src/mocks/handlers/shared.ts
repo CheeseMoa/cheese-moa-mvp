@@ -22,6 +22,11 @@ export function notFound(message = '리소스를 찾을 수 없습니다.') {
   return errorResponse(404, 'NOT_FOUND', message)
 }
 
+/** 본문이 JSON이 아닐 때(readJson → null) 공통 400 */
+export function invalidBody() {
+  return errorResponse(400, 'VALIDATION_ERROR', '요청 본문이 올바르지 않습니다.')
+}
+
 /** Authorization 헤더에서 제작자 유저 해석(무효면 null) */
 export function userFrom(request: Request): DbUser | null {
   return resolveUser(request.headers.get('Authorization'))
@@ -39,4 +44,19 @@ export async function readJson<T>(request: Request): Promise<T | null> {
   } catch {
     return null
   }
+}
+
+/**
+ * 필수 문자열 필드 정규화 — 문자열이 아니거나 trim 후 비어 있으면 null(호출부에서 400).
+ * 저장할 때와 비교할 때 반드시 같은 관문을 거쳐 trim/타입 비대칭을 막는다.
+ */
+export function requiredString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed || null
+}
+
+/** 선택 문자열 필드(PATCH 부분 업데이트용) — 미전송이면 undefined 유지, 전송됐으면 requiredString 규칙 */
+export function optionalString(value: unknown): string | null | undefined {
+  return value === undefined ? undefined : requiredString(value)
 }

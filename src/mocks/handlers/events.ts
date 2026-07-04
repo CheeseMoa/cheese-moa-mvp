@@ -23,8 +23,11 @@ import {
   api,
   canAccessGroup,
   errorResponse,
+  invalidBody,
   notFound,
+  optionalString,
   readJson,
+  requiredString,
   unauthorized,
   userFrom,
 } from './shared'
@@ -62,8 +65,8 @@ export const eventHandlers = [
     const group = findGroup(params.id as string)
     if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
 
-    const body = await readJson<{ name?: string }>(request)
-    const name = body?.name?.trim()
+    const body = await readJson<{ name?: unknown }>(request)
+    const name = requiredString(body?.name)
     if (!name) return errorResponse(400, 'VALIDATION_ERROR', '이벤트 이름을 입력해 주세요.')
 
     const event: DbEvent = {
@@ -95,12 +98,11 @@ export const eventHandlers = [
     const event = accessibleEvent(user, params.id as string)
     if (!event) return notFound(EVENT_NOT_FOUND)
 
-    const body = await readJson<{ name?: string }>(request)
-    if (body?.name !== undefined) {
-      const name = body.name.trim()
-      if (!name) return errorResponse(400, 'VALIDATION_ERROR', '이벤트 이름을 입력해 주세요.')
-      event.name = name
-    }
+    const body = await readJson<{ name?: unknown }>(request)
+    if (!body) return invalidBody()
+    const name = optionalString(body.name)
+    if (name === null) return errorResponse(400, 'VALIDATION_ERROR', '이벤트 이름을 입력해 주세요.')
+    if (name !== undefined) event.name = name
     return HttpResponse.json(toEvent(event))
   }),
 
@@ -117,8 +119,14 @@ export const eventHandlers = [
     if (!Array.isArray(files) || files.length === 0)
       return errorResponse(400, 'VALIDATION_ERROR', '업로드할 파일 정보가 없습니다.')
     for (const file of files) {
-      if (!file?.filename || !file.contentType?.startsWith('image/'))
+      if (
+        !requiredString(file?.filename) ||
+        typeof file?.contentType !== 'string' ||
+        !file.contentType.startsWith('image/')
+      )
         return errorResponse(400, 'VALIDATION_ERROR', '이미지 파일만 업로드할 수 있습니다.')
+      if (typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size <= 0)
+        return errorResponse(400, 'VALIDATION_ERROR', '파일 크기 정보가 올바르지 않습니다.')
       if (file.size > MAX_UPLOAD_BYTES)
         return errorResponse(413, 'PAYLOAD_TOO_LARGE', '파일당 최대 20MB까지 업로드할 수 있습니다.')
     }
