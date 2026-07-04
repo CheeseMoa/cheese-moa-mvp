@@ -6,6 +6,7 @@ import {
   Badge,
   BottomSheet,
   Button,
+  ButtonLink,
   ConfirmDialog,
   EmptyState,
   EventCard,
@@ -15,6 +16,7 @@ import {
   Modal,
   PhotoGrid,
   PhotoTile,
+  TextField,
   Toggle,
   useToast,
 } from '../../components/ui'
@@ -77,6 +79,9 @@ export function ComponentGalleryPage() {
           <Button fullWidth disabled>
             공개하기 (disabled)
           </Button>
+          <ButtonLink to="/" variant="secondary" fullWidth>
+            로그인 진입으로 (ButtonLink — 앵커 시맨틱)
+          </ButtonLink>
           <div className="flex gap-2.5">
             <Button size="sm">선택</Button>
             <Button size="sm" variant="secondary">
@@ -108,6 +113,16 @@ export function ComponentGalleryPage() {
             <Toggle checked={eyesExclude} onChange={setEyesExclude} label="눈감은 사진 제외" />
             <Toggle checked={blurExclude} onChange={setBlurExclude} label="흔들린 사진 제외" />
           </div>
+        </Section>
+
+        <Section title="04-1 · TextField (CHMO-110 추가)">
+          <TextField label="닉네임" placeholder="닉네임 입력" defaultValue="이현정" />
+          <TextField
+            label="PIN 번호 (숫자 4자)"
+            placeholder="PIN 번호 입력"
+            defaultValue="12"
+            error="PIN은 숫자 4자리여야 합니다."
+          />
         </Section>
 
         <Section title="05 · GroupCard / EventCard">
