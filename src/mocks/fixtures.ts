@@ -7,10 +7,14 @@
  * - 이벤트 4(햇살반): review / published / analyzing / empty — 상태별 화면 시연
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
+ * - 검토는 사진 단위(reviewed) — evt_1은 alb_1 사진만, evt_2는 전 사진 검토 완료
+ *
+ * createFixtures()는 **호출마다 모든 객체를 새로 만든다** — 재시드가 이전 세션의
+ * 변형(사진 이동·검토 표시 등)을 물려받지 않게(테스트/리셋 안전).
  */
 import type { Db, DbAlbum, DbPhoto } from './db'
 
-// ── 사진 생성 헬퍼 ───────────────────────────────────────────
+// ── 생성 헬퍼 ────────────────────────────────────────────────
 
 /** 플래그는 인덱스 기반 고정 규칙(9번째마다 눈감음, 13번째마다 흔들림) — 결정적 시드 */
 function makePhotos(eventKey: string, eventId: string, count: number, baseTime: string): DbPhoto[] {
@@ -27,6 +31,16 @@ function makePhotos(eventKey: string, eventId: string, count: number, baseTime: 
       createdAt: baseTime,
     }
   })
+}
+
+/** 앨범 리터럴 축약 — 검토 상태는 사진 단위라 앨범 필드는 이게 전부 */
+function album(
+  id: string,
+  eventId: string,
+  type: DbAlbum['type'],
+  personId: string | null = null,
+): DbAlbum {
+  return { id, eventId, type, personId, coverPhotoId: null }
 }
 
 interface DistributeTargets {
@@ -74,118 +88,62 @@ function assignCovers(albums: DbAlbum[], photos: DbPhoto[]): void {
   }
 }
 
-// ── 앨범 세트 ────────────────────────────────────────────────
+// ── 앨범·사진 세트 (호출마다 새로 조립 — 재시드 순수성) ──────
 
-// evt_1 「6.15 운동회 오전」 — 검수 중(review): 인물 4 + 특수 4, 일부만 검토 완료
-const sportsAlbums: DbAlbum[] = [
-  {
-    id: 'alb_1',
-    eventId: 'evt_1',
-    type: 'person',
-    personId: 'psn_minjun',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_2',
-    eventId: 'evt_1',
-    type: 'person',
-    personId: 'psn_seoyeon',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_3',
-    eventId: 'evt_1',
-    type: 'person',
-    personId: 'psn_harin',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_4',
-    eventId: 'evt_1',
-    type: 'person',
-    personId: 'psn_jiwoo',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_5',
-    eventId: 'evt_1',
-    type: 'common',
-    personId: null,    coverPhotoId: null,
-  },
-  {
-    id: 'alb_6',
-    eventId: 'evt_1',
-    type: 'uncertain',
-    personId: null,    coverPhotoId: null,
-  },
-  {
-    id: 'alb_7',
-    eventId: 'evt_1',
-    type: 'eyes_closed',
-    personId: null,    coverPhotoId: null,
-  },
-  {
-    id: 'alb_8',
-    eventId: 'evt_1',
-    type: 'blurry',
-    personId: null,    coverPhotoId: null,
-  },
-]
+function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
+  // evt_1 「6.15 운동회 오전」 — 검수 중(review): 인물 4 + 특수 4
+  const sportsAlbums = [
+    album('alb_1', 'evt_1', 'person', 'psn_minjun'),
+    album('alb_2', 'evt_1', 'person', 'psn_seoyeon'),
+    album('alb_3', 'evt_1', 'person', 'psn_harin'),
+    album('alb_4', 'evt_1', 'person', 'psn_jiwoo'),
+    album('alb_5', 'evt_1', 'common'),
+    album('alb_6', 'evt_1', 'uncertain'),
+    album('alb_7', 'evt_1', 'eyes_closed'),
+    album('alb_8', 'evt_1', 'blurry'),
+  ]
+  const sportsPhotos = makePhotos('sports', 'evt_1', 28, '2026-06-15T10:30:00+09:00')
+  distribute(sportsPhotos, {
+    person: sportsAlbums.slice(0, 4),
+    common: sportsAlbums[4],
+    uncertain: sportsAlbums[5],
+    eyesClosed: sportsAlbums[6],
+    blurry: sportsAlbums[7],
+  })
+  assignCovers(sportsAlbums, sportsPhotos)
+  // 검토는 사진 단위 — 김민준(alb_1) 앨범 사진만 검토 완료된 "검수 중간" 상태 시연
+  for (const photo of sportsPhotos) if (photo.albumIds.includes('alb_1')) photo.reviewed = true
 
-// evt_2 「봄 소풍」 — 공개 완료(published): 인물 3 + 공통, 전부 검토 완료 (운동회와 인물 공유 → 이름전파 시연)
-const picnicAlbums: DbAlbum[] = [
-  {
-    id: 'alb_9',
-    eventId: 'evt_2',
-    type: 'person',
-    personId: 'psn_minjun',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_10',
-    eventId: 'evt_2',
-    type: 'person',
-    personId: 'psn_seoyeon',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_11',
-    eventId: 'evt_2',
-    type: 'person',
-    personId: 'psn_harin',    coverPhotoId: null,
-  },
-  {
-    id: 'alb_12',
-    eventId: 'evt_2',
-    type: 'common',
-    personId: null,    coverPhotoId: null,
-  },
-]
+  // evt_2 「봄 소풍」 — 공개 완료(published): 인물 3 + 공통 (운동회와 인물 공유 → 이름전파 시연)
+  const picnicAlbums = [
+    album('alb_9', 'evt_2', 'person', 'psn_minjun'),
+    album('alb_10', 'evt_2', 'person', 'psn_seoyeon'),
+    album('alb_11', 'evt_2', 'person', 'psn_harin'),
+    album('alb_12', 'evt_2', 'common'),
+  ]
+  const picnicPhotos = makePhotos('picnic', 'evt_2', 16, '2026-05-12T11:00:00+09:00')
+  distribute(picnicPhotos, {
+    person: picnicAlbums.slice(0, 3),
+    common: picnicAlbums[3],
+    // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
+  })
+  assignCovers(picnicAlbums, picnicPhotos)
+  // 공개된 이벤트 — 전 사진 검토 완료(뷰어에 모두 노출)
+  for (const photo of picnicPhotos) photo.reviewed = true
 
-// ── 사진 세트 ────────────────────────────────────────────────
+  // evt_3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
+  const poolPhotos = makePhotos('pool', 'evt_3', 20, '2026-06-27T10:00:00+09:00')
 
-const sportsPhotos = makePhotos('sports', 'evt_1', 28, '2026-06-15T10:30:00+09:00')
-distribute(sportsPhotos, {
-  person: sportsAlbums.slice(0, 4),
-  common: sportsAlbums[4],
-  uncertain: sportsAlbums[5],
-  eyesClosed: sportsAlbums[6],
-  blurry: sportsAlbums[7],
-})
-assignCovers(sportsAlbums, sportsPhotos)
-// 검토는 사진 단위 — 김민준(alb_1) 앨범 사진만 검토 완료된 "검수 중간" 상태 시연
-for (const photo of sportsPhotos) if (photo.albumIds.includes('alb_1')) photo.reviewed = true
-
-const picnicPhotos = makePhotos('picnic', 'evt_2', 16, '2026-05-12T11:00:00+09:00')
-distribute(picnicPhotos, {
-  person: picnicAlbums.slice(0, 3),
-  common: picnicAlbums[3],
-  // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
-})
-assignCovers(picnicAlbums, picnicPhotos)
-// 공개된 이벤트 — 전 사진 검토 완료(뷰어에 모두 노출)
-for (const photo of picnicPhotos) photo.reviewed = true
-
-// evt_3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
-const poolPhotos = makePhotos('pool', 'evt_3', 20, '2026-06-27T10:00:00+09:00')
+  return {
+    albums: [...sportsAlbums, ...picnicAlbums],
+    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
+  }
+}
 
 // ── 최종 시드 ────────────────────────────────────────────────
 
 export function createFixtures(): Db {
+  const { albums, photos } = buildAlbumsAndPhotos()
   return {
     users: [
       { id: 'usr_1', nickname: '이현정', pin: '1234', createdAt: '2026-06-01T10:00:00+09:00' },
@@ -270,8 +228,8 @@ export function createFixtures(): Db {
       { id: 'psn_harin', groupId: 'grp_1', name: '박하린' },
       { id: 'psn_jiwoo', groupId: 'grp_1', name: '최지우' },
     ],
-    albums: [...sportsAlbums, ...picnicAlbums],
-    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
+    albums,
+    photos,
     // evt_1·evt_2는 분석 완료 이력(done) — 상태가 review/published인 이벤트는 분석을 거쳤어야 함.
     // evt_3는 시드 시점부터 분석 중 — 워커 기동 후 ANALYSIS_DURATION_MS 지나 조회하면 review로 전이
     analysisJobs: [

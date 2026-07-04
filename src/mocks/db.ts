@@ -143,8 +143,12 @@ export function nowIso(): ISODateTime {
   return new Date().toISOString()
 }
 
+/** 로컬(한국) 달력 기준 오늘 — toISOString()은 UTC라 KST 자정~09시엔 하루 전 날짜가 된다 */
 export function todayIsoDate(): ISODate {
-  return new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
 }
 
 // ── 자기서술형 목 토큰 (재시드에도 유효한 무상태 토큰) ─────────
@@ -277,13 +281,23 @@ export function renamePerson(personId: string, name: string): void {
 
 export function linkPhotoToAlbum(photoId: string, albumId: string): void {
   const photo = db.photos.find((p) => p.id === photoId)
-  if (photo && !photo.albumIds.includes(albumId)) photo.albumIds.push(albumId)
+  if (!photo || photo.albumIds.includes(albumId)) return
+  photo.albumIds.push(albumId)
+  // 커버 없는 앨범에 첫 사진이 들어오면 커버로 지정
+  const album = findAlbum(albumId)
+  if (album && !album.coverPhotoId) album.coverPhotoId = photoId
 }
 
 /** 해당 앨범 연결만 해제 — 다른 앨범 소속은 유지(마지막 연결 해제 = 실질 삭제) */
 export function unlinkPhotoFromAlbum(photoId: string, albumId: string): void {
   const photo = db.photos.find((p) => p.id === photoId)
-  if (photo) photo.albumIds = photo.albumIds.filter((id) => id !== albumId)
+  if (!photo) return
+  photo.albumIds = photo.albumIds.filter((id) => id !== albumId)
+  // 빠진 사진이 커버였다면 남은 첫 사진으로 교체(없으면 비움)
+  const album = findAlbum(albumId)
+  if (album?.coverPhotoId === photoId) {
+    album.coverPhotoId = photosOfAlbum(albumId)[0]?.id ?? null
+  }
 }
 
 /** 사진 이동 = source 연결 해제 + target 연결(복사 아님) */
@@ -433,11 +447,6 @@ export function completeAnalysis(eventId: string): void {
         linkPhotoToAlbum(photo.id, personAlbums[(i + 1) % personAlbums.length].id)
       }
     })
-
-    // 커버가 비어 있는 앨범만 채운다(기존 커버는 유지)
-    for (const album of albumsOfEvent(eventId)) {
-      if (!album.coverPhotoId) album.coverPhotoId = photosOfAlbum(album.id)[0]?.id ?? null
-    }
   }
 
   job.status = 'done'
