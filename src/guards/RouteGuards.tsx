@@ -16,6 +16,17 @@ export function CreatorGuard() {
 }
 
 /**
+ * 공개(비로그인 진입: 01·01-1·01-2) 가드 — 로그인 토큰 보유 시 홈으로 (screen-spec 01 상태).
+ * 무효 토큰은 API 401 때 apiFetch가 지우므로 여기선 존재 검사로 충분하다.
+ */
+export function GuestGuard() {
+  if (getAccessToken()) {
+    return <Navigate to="/home" replace />
+  }
+  return <Outlet />
+}
+
+/**
  * 학부모(무로그인 뷰어) 가드 스텁.
  * 해당 모임 공유 토큰의 viewerToken이 없으면 잠금 해제 화면으로 보낸다.
  */
