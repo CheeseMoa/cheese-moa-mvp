@@ -10,7 +10,6 @@ import { HomePage } from './pages/HomePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupCreatePage } from './pages/GroupCreatePage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
-import { InvitePage } from './pages/InvitePage'
 import { EventDetailPage } from './pages/EventDetailPage'
 import { PhotoUploadPage } from './pages/PhotoUploadPage'
 import { AlbumDetailPage } from './pages/AlbumDetailPage'
@@ -47,8 +46,7 @@ export const router = createBrowserRouter([
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
-      { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록)
-      { path: '/groups/:groupId/invite', element: <InvitePage /> }, // 초대(선생님 초대)
+      { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함
       { path: '/groups/:groupId/events/:eventId', element: <EventDetailPage /> }, // 06-E / 08
       { path: '/groups/:groupId/events/:eventId/upload', element: <PhotoUploadPage /> }, // 06-U
       {

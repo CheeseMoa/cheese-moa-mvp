@@ -44,6 +44,19 @@ export interface Group {
   createdAt: ISODateTime
 }
 
+// ── 초대 / 학부모 공유 (멤버 전용 — 평문 비밀번호 포함) ──────
+export interface GroupInviteInfo {
+  joinKey: string
+  /** 제작자 합류용 모임 비밀번호 — 초대 화면 전용 노출 */
+  password: string
+  joinUrl: string
+}
+
+export interface GroupShareInfo extends GroupShare {
+  /** 학부모 전용 비밀번호(모임 비밀번호와 별개) — 공유 화면 전용 노출 */
+  password: string
+}
+
 // ── Event (이벤트) ───────────────────────────────────────────
 export type EventStatus = 'empty' | 'analyzing' | 'review' | 'ready' | 'published'
 
