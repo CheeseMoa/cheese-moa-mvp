@@ -7,7 +7,7 @@ interface GroupCardProps {
   onClick?: () => void
 }
 
-/** 홈(02) 모임 카드 (dc.html §05). 관리자 배지·📌 고정은 MVP 미표시(screen-spec §5). */
+/** 홈(02) 모임 카드 (dc.html §05). 관리자 배지·📌·설정 ⚙ 미표시 — 모임 설정은 상세(05) ⚙로 일원화(screen-spec 02 확정). */
 export function GroupCard({ name, memberCount, eventCount, onClick }: GroupCardProps) {
   return (
     <button
