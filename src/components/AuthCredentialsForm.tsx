@@ -1,20 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { apiFetch, ApiRequestError } from '../lib/api'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { apiFetch, toErrorMessage } from '../lib/api'
 import { setAccessToken } from '../lib/auth'
 import type { AuthResponse } from '../types/api'
 import { Button, TextField } from './ui'
 
 const PIN_RE = /^\d{4}$/
 
-/** 표준 에러 포맷이 아닌 응답(code UNKNOWN)은 영어 statusText·빈 문자열이 새지 않게 일반 문구로 */
-function toErrorMessage(err: unknown): string {
-  if (err instanceof ApiRequestError) {
-    if (err.code !== 'UNKNOWN' && err.message) return err.message
-    return '요청에 실패했어요. 잠시 후 다시 시도해 주세요.'
-  }
-  return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
+/** 로그인에 가로막힌 화면(초대 링크 JoinPage 등)이 넘기는 복귀 목적지 */
+interface AuthLocationState {
+  returnTo?: string
 }
 
 /** 모드별 문구·엔드포인트 — 모순 조합(로그인 폼 + 가입 링크 등)이 타입상 불가능하게 한곳에 묶는다 */
@@ -51,6 +47,8 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
   const { heading, submitLabel, endpoint, pinAutoComplete, switchPrompt, switchLabel, switchTo } =
     MODE_CONFIG[mode]
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = (location.state as AuthLocationState | null)?.returnTo
   const [nickname, setNickname] = useState('')
   const [pin, setPin] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -80,7 +78,8 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
       })
       if (!alive.current) return
       setAccessToken(res.accessToken)
-      navigate('/home', { replace: true })
+      // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀
+      navigate(returnTo ?? '/home', { replace: true })
     } catch (err) {
       if (!alive.current) return
       // 서버 에러 메시지(INVALID_CREDENTIALS·NICKNAME_TAKEN·INVALID_PIN)는 사용자 노출 가능한 한국어
@@ -92,6 +91,11 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
   return (
     <section className="flex flex-1 flex-col px-5 pb-9 pt-5">
       <h2 className="text-[15px] font-bold text-text">{heading}</h2>
+      {returnTo?.startsWith('/join/') && (
+        <p className="mt-3 rounded-xl bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-text">
+          🧀 초대받은 모임에 참여하려면 로그인이 필요해요 — 완료하면 참여 화면으로 이어져요.
+        </p>
+      )}
       <form onSubmit={handleSubmit} noValidate className="mt-3 flex flex-1 flex-col">
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
           <TextField
@@ -122,6 +126,7 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
             {switchPrompt}{' '}
             <Link
               to={switchTo}
+              state={location.state} // 로그인 ↔ 계정 생성 전환 시 returnTo 유실 방지
               aria-disabled={submitting || undefined}
               tabIndex={submitting ? -1 : undefined}
               onClick={(e) => {

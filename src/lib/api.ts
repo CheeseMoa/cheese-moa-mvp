@@ -18,6 +18,19 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * 표준 에러 포맷이 아닌 응답(code UNKNOWN)과 네트워크 실패(useApi가 감싼 NETWORK_ERROR 포함)는
+ * 영어 statusText·"TypeError: Failed to fetch" 같은 원문이 새지 않게 일반 문구로.
+ */
+export function toErrorMessage(err: unknown): string {
+  if (err instanceof ApiRequestError) {
+    if (err.code === 'NETWORK_ERROR') return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
+    if (err.code !== 'UNKNOWN' && err.message) return err.message
+    return '요청에 실패했어요. 잠시 후 다시 시도해 주세요.'
+  }
+  return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
+}
+
 type AuthMode = 'creator' | 'viewer' | 'none'
 
 export interface ApiOptions extends Omit<RequestInit, 'body'> {
