@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { LinkProps } from 'react-router-dom'
 import { cx } from '../../lib/cx'
 
-type ButtonVariant = 'primary' | 'secondary' | 'warn'
+type ButtonVariant = 'primary' | 'secondary' | 'warn' | 'accent'
 type ButtonSize = 'md' | 'sm'
 
 interface ButtonStyleOptions {
@@ -26,7 +26,9 @@ function buttonClasses({ variant, size, fullWidth, disabled, className }: Button
         : 'bg-gradient-primary text-text'
       : variant === 'secondary'
         ? 'border border-border bg-surface text-text'
-        : 'bg-warn text-white'
+        : variant === 'warn'
+          ? 'bg-warn text-white'
+          : 'bg-accent text-white'
   return cx(
     'inline-flex items-center justify-center font-bold transition active:scale-[0.99] disabled:active:scale-100',
     sizeCls,
@@ -45,7 +47,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /**
- * 공용 버튼. 치즈 옐로우 위 흰 글자 금지(대비) — primary는 text 컬러, warn만 흰 글자 (dc.html ③).
+ * 공용 버튼. 치즈 옐로우 위 흰 글자 금지(대비) — primary는 text 컬러, warn·accent(갈색)는 흰 글자 (dc.html ③).
  * disabled는 variant와 무관하게 surface+muted.
  */
 export function Button({

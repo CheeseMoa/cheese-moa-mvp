@@ -204,6 +204,10 @@ export function findAlbum(albumId: string): DbAlbum | undefined {
   return db.albums.find((a) => a.id === albumId)
 }
 
+export function findPhoto(photoId: string): DbPhoto | undefined {
+  return db.photos.find((p) => p.id === photoId)
+}
+
 export function isMember(userId: string, groupId: string): boolean {
   return db.memberships.some((m) => m.userId === userId && m.groupId === groupId)
 }

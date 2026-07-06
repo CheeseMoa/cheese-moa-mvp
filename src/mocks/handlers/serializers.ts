@@ -19,6 +19,7 @@ import {
   albumName,
   albumsOfEvent,
   eventCountOf,
+  findPhoto,
   memberCountOf,
   photoCountOfAlbum,
   photoCountOfEvent,
@@ -125,6 +126,7 @@ export function isViewerVisibleType(album: DbAlbum): boolean {
 }
 
 export function toAlbum(album: DbAlbum): Album {
+  const cover = album.coverPhotoId ? findPhoto(album.coverPhotoId) : undefined
   return {
     id: album.id,
     eventId: album.eventId,
@@ -134,6 +136,7 @@ export function toAlbum(album: DbAlbum): Album {
     photoCount: photoCountOfAlbum(album.id),
     unreviewedPhotoCount: unreviewedCountOfAlbum(album.id),
     coverPhotoId: album.coverPhotoId,
+    coverThumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
     visibleToViewer: isViewerVisibleType(album),
   }
 }
