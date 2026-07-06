@@ -10,6 +10,10 @@ interface ConfirmDialogProps {
   cancelLabel?: string
   /** 파괴적 액션(삭제 등) — 확인 버튼을 warn으로 */
   danger?: boolean
+  /** 처리 중 — 두 버튼 비활성 + 확인 라벨 교체(중복 제출·진행 중 닫힘 방지) */
+  busy?: boolean
+  /** busy일 때 확인 버튼에 표시할 라벨(예: "삭제 중…") */
+  busyLabel?: string
   onConfirm: () => void
   onClose: () => void
 }
@@ -22,20 +26,32 @@ export function ConfirmDialog({
   confirmLabel = '확인',
   cancelLabel = '취소',
   danger,
+  busy = false,
+  busyLabel,
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal
+      open={open}
+      onClose={() => {
+        if (!busy) onClose()
+      }}
+    >
       <div className="text-center">
         <h2 className="text-base font-bold text-text">{title}</h2>
         {description && <p className="mt-1.5 text-xs leading-normal text-muted">{description}</p>}
         <div className="mt-4 flex gap-2.5">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>
+          <Button variant="secondary" className="flex-1" disabled={busy} onClick={onClose}>
             {cancelLabel}
           </Button>
-          <Button variant={danger ? 'warn' : 'primary'} className="flex-1" onClick={onConfirm}>
-            {confirmLabel}
+          <Button
+            variant={danger ? 'warn' : 'primary'}
+            className="flex-1"
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy ? (busyLabel ?? confirmLabel) : confirmLabel}
           </Button>
         </div>
       </div>

@@ -19,7 +19,8 @@ interface AlbumCardProps {
  */
 export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
-  const reviewed = album.unreviewedPhotoCount === 0
+  // 사진 0장이면 unreviewedPhotoCount === 0이 공허하게 참 → '검토완료' 오표시. 사진이 있을 때만 완료로 본다
+  const reviewed = album.photoCount > 0 && album.unreviewedPhotoCount === 0
   const borderCls =
     reviewable || album.type === 'uncertain'
       ? reviewable && reviewed

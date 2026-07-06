@@ -96,6 +96,8 @@ export interface Album {
   /** 앨범 내 미검토 사진 수(파생값) — 검토 상태는 사진 단위(Photo.reviewed) */
   unreviewedPhotoCount?: number
   coverPhotoId: ID | null
+  /** 커버 사진 썸네일 URL(파생값 — coverPhotoId 없으면 null). 08 앨범 그리드 카드 커버용 */
+  coverThumbnailUrl?: string | null
   /** 학부모 뷰어 노출 여부(person/common만 true) */
   visibleToViewer?: boolean
 }
