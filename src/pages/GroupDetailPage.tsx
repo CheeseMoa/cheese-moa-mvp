@@ -16,10 +16,13 @@ import { useApi } from '../hooks/useApi'
 import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
 import type { EventItem, Group } from '../types/api'
 
-/** "2026-06-15" → "6월 15일" (이벤트 카드 메타) */
+/** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */
 function formatEventDate(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${Number(month)}월 ${Number(day)}일`
+  const [, month = '', day = ''] = date.split('-')
+  const m = parseInt(month, 10)
+  const d = parseInt(day, 10)
+  if (!Number.isFinite(m) || !Number.isFinite(d)) return date
+  return `${m}월 ${d}일`
 }
 
 /**
@@ -66,16 +69,8 @@ export function GroupDetailPage() {
         }
       />
       <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
-        {groupApi.loading ? (
-          <p className="py-11 text-center text-sm text-muted">모임을 불러오는 중…</p>
-        ) : groupApi.error ? (
-          <div className="flex flex-col items-center gap-3 py-11">
-            <p className="text-center text-sm text-warn">{toErrorMessage(groupApi.error)}</p>
-            <Button size="sm" variant="secondary" onClick={groupApi.refetch}>
-              다시 시도
-            </Button>
-          </div>
-        ) : group ? (
+        {/* 데이터가 있으면 재조회(이름 수정 refetch) 중에도 유지 — 로딩/에러로 화면을 교체하지 않는다 */}
+        {group ? (
           <>
             <div className="flex items-center gap-2.5">
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-text">{group.name}</h2>
@@ -134,6 +129,15 @@ export function GroupDetailPage() {
               </div>
             </div>
           </>
+        ) : groupApi.loading ? (
+          <p className="py-11 text-center text-sm text-muted">모임을 불러오는 중…</p>
+        ) : groupApi.error ? (
+          <div className="flex flex-col items-center gap-3 py-11">
+            <p className="text-center text-sm text-warn">{toErrorMessage(groupApi.error)}</p>
+            <Button size="sm" variant="secondary" onClick={groupApi.refetch}>
+              다시 시도
+            </Button>
+          </div>
         ) : null}
       </main>
 
@@ -167,13 +171,17 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // 열 때마다 현재 이름으로 초기화(이전 입력·에러가 남지 않게)
+  // 최신 이름은 ref로만 읽는다 — 의존성에 두면 열린 모달의 입력을 뒤늦은 refetch가 덮어쓴다
+  const groupNameRef = useRef(group.name)
+  groupNameRef.current = group.name
+
+  // 닫힘→열림 전환에만 현재 이름으로 초기화(이전 입력·에러가 남지 않게)
   useEffect(() => {
     if (!open) return
-    setName(group.name)
+    setName(groupNameRef.current)
     setSubmitting(false)
     setError(null)
-  }, [open, group.name])
+  }, [open])
 
   // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·갱신을 실행하지 않게 하는 플래그
   const alive = useRef(true)
