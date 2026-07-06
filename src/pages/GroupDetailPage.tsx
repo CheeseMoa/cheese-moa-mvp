@@ -3,15 +3,7 @@ import type { FormEvent } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { InviteSheet, ParentShareSheet } from '../components/GroupShareSheets'
-import {
-  Button,
-  EmptyState,
-  EventCard,
-  Header,
-  Modal,
-  TextField,
-  useToast,
-} from '../components/ui'
+import { Button, EmptyState, EventCard, Header, Modal, TextField, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
 import type { EventItem, Group } from '../types/api'
@@ -30,17 +22,17 @@ function formatEventDate(date: string): string {
  * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정).
  * 초대·학부모 공유는 이 화면 위 시트(GroupShareSheets)로 뜬다(확정 — 별도 페이지 아님).
  * 카드 메타의 '인원'은 이벤트 API에 없어 날짜·사진만 표시(확정) ·
- * 이벤트 생성 모달(06-M)은 CHMO-113 — 그전까지 버튼은 토스트 안내(확정).
+ * [+ 이벤트 생성]은 06-M 모달(CreateEventModal)로 뜬다.
  */
 export function GroupDetailPage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
   const navigate = useNavigate()
-  const toast = useToast()
   const groupApi = useApi<Group>(`/groups/${groupId}`)
   const eventsApi = useApi<{ events: EventItem[] }>(`/groups/${groupId}/events`)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
 
   // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
   if (groupApi.error?.status === 401 || eventsApi.error?.status === 401)
@@ -120,7 +112,7 @@ export function GroupDetailPage() {
               )}
 
               <div className="mt-auto flex flex-col gap-3 pt-6">
-                <Button fullWidth onClick={() => toast.show('이벤트 생성은 준비 중이에요')}>
+                <Button fullWidth onClick={() => setCreateOpen(true)}>
                   ＋ 이벤트 생성
                 </Button>
                 <Button variant="secondary" fullWidth onClick={() => setShareOpen(true)}>
@@ -143,6 +135,7 @@ export function GroupDetailPage() {
 
       <InviteSheet groupId={groupId} open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <ParentShareSheet groupId={groupId} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <CreateEventModal open={createOpen} onClose={() => setCreateOpen(false)} groupId={groupId} />
       {group && (
         <RenameGroupModal
           open={renameOpen}
@@ -243,6 +236,107 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
         ) : null}
         <Button type="submit" fullWidth disabled={!canSubmit} className="mt-1">
           {submitting ? '저장 중…' : '저장'}
+        </Button>
+      </form>
+    </Modal>
+  )
+}
+
+/** 오늘 날짜 YYYY-MM-DD(로컬) — 06-M 이벤트 이름 기본값 */
+function todayDate(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
+
+interface CreateEventModalProps {
+  open: boolean
+  onClose: () => void
+  groupId: string
+}
+
+/**
+ * 06-M. 이벤트 이름 입력(모달) · node 211:1544
+ * 기본값 = 오늘 날짜(스펙: 클라이언트가 채워 전송) · POST /groups/:id/events → 빈 이벤트(06-E)로 이동.
+ */
+function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const [name, setName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 닫힘→열림 전환에만 오늘 날짜로 초기화(이전 입력·에러가 남지 않게)
+  useEffect(() => {
+    if (!open) return
+    setName(todayDate())
+    setSubmitting(false)
+    setError(null)
+  }, [open])
+
+  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·이동을 실행하지 않게 하는 플래그
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
+
+  const canSubmit = name.trim().length > 0 && !submitting
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const event = await apiFetch<EventItem>(`/groups/${groupId}/events`, {
+        method: 'POST',
+        body: { name: name.trim() },
+      })
+      if (!alive.current) return
+      toast.show('🧀 이벤트를 만들었어요')
+      navigate(`/groups/${groupId}/events/${event.id}`)
+    } catch (err) {
+      if (!alive.current) return
+      // 401 = 토큰 무효(apiFetch가 이미 지움) — 모달 안 재시도는 영원히 실패하므로 로그인으로 복귀
+      if (err instanceof ApiRequestError && err.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+      setError(toErrorMessage(err))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={() => {
+        if (!submitting) onClose()
+      }}
+      title="이벤트 이름"
+    >
+      <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+        오늘 날짜가 들어가 있어요. 그대로 두거나 수정한 뒤 생성하세요.
+      </p>
+      <form onSubmit={handleSubmit} noValidate className="mt-3.5 flex flex-col gap-3.5">
+        <TextField
+          label="이름"
+          placeholder="예) 2026-06-27 이벤트"
+          autoComplete="off"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {error ? (
+          <p role="alert" className="text-sm text-warn">
+            {error}
+          </p>
+        ) : null}
+        <Button type="submit" fullWidth disabled={!canSubmit} className="mt-1">
+          {submitting ? '생성 중…' : '생성'}
         </Button>
       </form>
     </Modal>
