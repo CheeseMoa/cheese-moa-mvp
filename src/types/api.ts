@@ -164,7 +164,12 @@ export interface ReviewSummary {
   reviewedPhotoCount: number
   totalPhotoCount: number
   uncertainCount: number
-  previewPhotoIds: ID[]
+  /**
+   * 학부모 뷰 프리뷰용 썸네일 URL(파생값 — coverThumbnailUrl과 동일 규칙).
+   * 뷰어 노출 규칙(person/common 앨범 + 검토 완료)을 적용한 사진만, 최대 6장.
+   * id만으론 URL 조립 불가라 서버가 완성된 URL을 내려준다.
+   */
+  previewThumbnailUrls: string[]
 }
 
 // ── 이동 추천 ────────────────────────────────────────────────

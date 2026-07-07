@@ -36,7 +36,7 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { isViewerVisibleType, toEvent } from './serializers'
+import { isViewerVisibleType, photoThumbnailUrlOf, toEvent } from './serializers'
 
 const EVENT_NOT_FOUND = '이벤트를 찾을 수 없습니다.'
 /** presign 용량 상한(파일당) — 초과 시 413 PAYLOAD_TOO_LARGE */
@@ -231,7 +231,8 @@ export const eventHandlers = [
       reviewedPhotoCount: reviewedPhotos.length,
       totalPhotoCount: photos.length,
       uncertainCount: uncertainAlbum ? photoCountOfAlbum(uncertainAlbum.id) : 0,
-      previewPhotoIds: viewerPhotos.slice(0, 4).map((p) => p.id),
+      // 3×2 그리드용 최대 6장 — id가 아니라 완성된 썸네일 URL을 내려준다(coverThumbnailUrl과 동일)
+      previewThumbnailUrls: viewerPhotos.slice(0, 6).map(photoThumbnailUrlOf),
     }
     return HttpResponse.json(summary)
   }),
