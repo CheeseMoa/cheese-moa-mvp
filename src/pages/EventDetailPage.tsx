@@ -1,18 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import {
-  AlbumCard,
-  Button,
-  EventStatusBadge,
-  Header,
-  Modal,
-  TextField,
-  useToast,
-} from '../components/ui'
+import { RenameModal } from '../components/RenameModal'
+import { AlbumCard, Button, EventStatusBadge, Header } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
+import { apiFetch, toErrorMessage } from '../lib/api'
 import type { Album, EventItem, Group } from '../types/api'
 
 /**
@@ -130,7 +122,7 @@ interface EventAlbumGridProps {
  * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 이벤트명 ✎ 수정(PATCH /events/:id) ·
  * [+ 사진 추가]→06-U · [공개 전 검수]→14. 앨범 탭 → 09 앨범 상세.
- * (인물 앨범 이름수정 UI는 후속 스토리 — 이번은 이벤트명 수정만)
+ * (인물 앨범 이름수정은 09 앨범 상세 헤더 ✎ — 08 그리드엔 진입점 없음)
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
@@ -222,113 +214,17 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         </div>
       </main>
 
-      <RenameEventModal
+      <RenameModal
         open={renameOpen}
         onClose={() => setRenameOpen(false)}
-        event={event}
+        title="이벤트 이름 수정"
+        label="이벤트 이름"
+        placeholder="예) 6.15 운동회 오전"
+        initialName={event.name}
+        submit={(name) => apiFetch(`/events/${event.id}`, { method: 'PATCH', body: { name } })}
+        successMessage="🧀 이벤트 이름을 바꿨어요"
         onRenamed={onEventUpdated}
       />
     </PhoneShell>
-  )
-}
-
-interface RenameEventModalProps {
-  open: boolean
-  onClose: () => void
-  event: EventItem
-  /** PATCH 성공 후 상세 갱신(refetch) */
-  onRenamed: () => void
-}
-
-/** 이벤트명 수정(✎) · PATCH /events/:id — 08 상단 ✎ 수정 */
-function RenameEventModal({ open, onClose, event, onRenamed }: RenameEventModalProps) {
-  const navigate = useNavigate()
-  const toast = useToast()
-  const [name, setName] = useState(event.name)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // 최신 이름은 ref로만 읽는다 — 열린 모달의 입력을 뒤늦은 refetch가 덮어쓰지 않게.
-  // 단 렌더-거울(매 렌더 대입)은 저장 성공~refetch 도착 사이 stale prop을 재시드하므로,
-  // prop이 실제 바뀔 때만 동기화하고 저장 성공 시엔 직접 갱신한다(재오픈 시 되돌림 방지).
-  const eventNameRef = useRef(event.name)
-  useEffect(() => {
-    eventNameRef.current = event.name
-  }, [event.name])
-
-  // 닫힘→열림 전환에만 현재 이름으로 초기화(이전 입력·에러가 남지 않게)
-  useEffect(() => {
-    if (!open) return
-    setName(eventNameRef.current)
-    setSubmitting(false)
-    setError(null)
-  }, [open])
-
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·갱신을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  const canSubmit = name.trim().length > 0 && !submitting
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!canSubmit) return
-    setSubmitting(true)
-    setError(null)
-    try {
-      const nextName = name.trim()
-      await apiFetch<EventItem>(`/events/${event.id}`, {
-        method: 'PATCH',
-        body: { name: nextName },
-      })
-      if (!alive.current) return
-      // 성공 반영 — refetch 도착 전 재오픈해도 새 이름이 보이게(stale prop 재시드 방지)
-      eventNameRef.current = nextName
-      toast.show('🧀 이벤트 이름을 바꿨어요')
-      onRenamed()
-      onClose()
-    } catch (err) {
-      if (!alive.current) return
-      // 401 = 토큰 무효(apiFetch가 이미 지움) — 모달 안 재시도는 영원히 실패하므로 로그인으로 복귀
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={() => {
-        if (!submitting) onClose()
-      }}
-      title="이벤트 이름 수정"
-    >
-      <form onSubmit={handleSubmit} noValidate className="mt-3.5 flex flex-col gap-3.5">
-        <TextField
-          label="이벤트 이름"
-          placeholder="예) 6.15 운동회 오전"
-          autoComplete="off"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {error ? (
-          <p role="alert" className="text-sm text-warn">
-            {error}
-          </p>
-        ) : null}
-        <Button type="submit" fullWidth disabled={!canSubmit} className="mt-1">
-          {submitting ? '저장 중…' : '저장'}
-        </Button>
-      </form>
-    </Modal>
   )
 }

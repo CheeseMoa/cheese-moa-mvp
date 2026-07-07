@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
+import { MovePhotosSheet } from '../components/MovePhotosSheet'
+import { RenameModal } from '../components/RenameModal'
 import { Button, ConfirmDialog, Header, PhotoGrid, PhotoTile, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
@@ -14,9 +16,9 @@ interface AlbumDetailResponse {
 
 /**
  * 09. 앨범 상세 · node 211:1685 · GET /albums/:id · DELETE /photos · PATCH /albums/:id
- * 사진 그리드 + 선택 모드 → [삭제](현재 앨범 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 후속) ·
- * [검토 완료](앨범 내 전 사진 일괄 reviewed). 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시하고,
- * 선택모드의 검토 완료는 앨범 전체가 대상임을 다이얼로그로 확인받는다.
+ * 사진 그리드 + 선택 모드 → [삭제](현재 앨범 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트) ·
+ * [검토 완료](앨범 내 전 사진 일괄 reviewed). 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파).
+ * 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시하고, 선택모드의 검토 완료는 앨범 전체가 대상임을 확인받는다.
  */
 export function AlbumDetailPage() {
   const {
@@ -36,6 +38,8 @@ export function AlbumDetailPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [reviewConfirmOpen, setReviewConfirmOpen] = useState(false)
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 상태 갱신을 실행하지 않게 하는 플래그
@@ -135,8 +139,13 @@ export function AlbumDetailPage() {
     }
   }
 
-  // 옮기기(09-1 사진 이동 바텀시트)는 후속 스토리 — 그전까지 안내 토스트
-  const handleMoveStub = () => toast.show('🧀 사진 옮기기는 곧 제공돼요')
+  // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영
+  const handleMoved = (movedCount: number, targetName: string) => {
+    setMoveOpen(false)
+    exitSelect()
+    toast.show(`🧀 ${movedCount}장을 '${targetName}'(으)로 옮겼어요`)
+    albumApi.refetch()
+  }
 
   const hasPhotos = photos.length > 0
 
@@ -175,11 +184,21 @@ export function AlbumDetailPage() {
                 <h1 className="min-w-0 flex-1 truncate text-xl font-bold text-heading">
                   {album.name}
                 </h1>
-                {selectMode && (
+                {selectMode ? (
                   <span className="flex-none text-[13px] font-medium text-muted">
                     {selected.size}장 선택
                   </span>
-                )}
+                ) : album.type === 'person' ? (
+                  // 인물 앨범만 이름 변경(모임 전체 이름전파). 특수 앨범은 고정 라벨이라 미노출
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => setRenameOpen(true)}
+                    className="inline-flex flex-none items-center gap-1 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50"
+                  >
+                    ✎ 이름
+                  </button>
+                ) : null}
               </div>
 
               {/* stale 데이터 위에서 refetch가 실패해도 보이게(성공 토스트와 화면 모순 방지) */}
@@ -235,7 +254,7 @@ export function AlbumDetailPage() {
                   variant="accent"
                   className="flex-1 !px-2"
                   disabled={selected.size === 0 || locked}
-                  onClick={handleMoveStub}
+                  onClick={() => setMoveOpen(true)}
                 >
                   옮기기
                 </Button>
@@ -279,6 +298,34 @@ export function AlbumDetailPage() {
         onConfirm={handleReview}
         onClose={() => setReviewConfirmOpen(false)}
       />
+
+      {/* 09-1 옮기기 시트 — 선택 사진을 유사도 추천/공통 앨범으로 이동(연결 교체).
+          열려 있을 때만 마운트해 매 오픈이 새 선택 기준으로 추천을 다시 받게 한다(stale 방지). */}
+      {album && moveOpen && (
+        <MovePhotosSheet
+          onClose={() => setMoveOpen(false)}
+          sourceAlbumId={albumId}
+          photoIds={[...selected]}
+          onMoved={handleMoved}
+        />
+      )}
+
+      {/* 인물 앨범 이름 변경(모임 전체 이름전파). 로컬 캐시가 없어 현재 앨범만 refetch하면
+          다른 이벤트의 같은 personId 앨범은 다음 진입 시 갱신된 이름으로 조회된다 */}
+      {album?.type === 'person' && (
+        <RenameModal
+          open={renameOpen}
+          onClose={() => setRenameOpen(false)}
+          title="아이 이름 수정"
+          label="아이 이름"
+          placeholder="예) 김민준"
+          initialName={album.name}
+          submit={(name) => apiFetch(`/albums/${albumId}`, { method: 'PATCH', body: { name } })}
+          successMessage="🧀 아이 이름을 바꿨어요"
+          onRenamed={albumApi.refetch}
+          note="이 이름은 같은 모임의 모든 이벤트에 함께 반영돼요."
+        />
+      )}
     </PhoneShell>
   )
 }
