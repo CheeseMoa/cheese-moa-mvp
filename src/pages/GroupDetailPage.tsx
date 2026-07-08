@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { InviteSheet, ParentShareSheet } from '../components/GroupShareSheets'
-import { Button, EmptyState, EventCard, Header, Modal, TextField, useToast } from '../components/ui'
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  EventCard,
+  Header,
+  Modal,
+  TextField,
+  useToast,
+} from '../components/ui'
+import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import type { EventItem, Group } from '../types/api'
 
 /** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */
@@ -33,10 +43,6 @@ export function GroupDetailPage() {
   const [shareOpen, setShareOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (groupApi.error?.status === 401 || eventsApi.error?.status === 401)
-    return <Navigate to="/login" replace />
 
   const group = groupApi.data
   const events = eventsApi.data?.events ?? []
@@ -79,12 +85,13 @@ export function GroupDetailPage() {
               {eventsApi.loading ? (
                 <p className="py-11 text-center text-sm text-muted">이벤트를 불러오는 중…</p>
               ) : eventsApi.error ? (
-                <div className="flex flex-col items-center gap-3 py-11">
-                  <p className="text-center text-sm text-warn">{toErrorMessage(eventsApi.error)}</p>
-                  <Button size="sm" variant="secondary" onClick={eventsApi.refetch}>
-                    다시 시도
-                  </Button>
-                </div>
+                <ErrorState
+                  error={eventsApi.error}
+                  onRetry={eventsApi.refetch}
+                  unauthorizedTo="/login"
+                  notFoundTo="/home"
+                  notFoundLabel="홈으로"
+                />
               ) : events.length === 0 ? (
                 <EmptyState
                   title="아직 이벤트가 없어요"
@@ -124,12 +131,13 @@ export function GroupDetailPage() {
         ) : groupApi.loading ? (
           <p className="py-11 text-center text-sm text-muted">모임을 불러오는 중…</p>
         ) : groupApi.error ? (
-          <div className="flex flex-col items-center gap-3 py-11">
-            <p className="text-center text-sm text-warn">{toErrorMessage(groupApi.error)}</p>
-            <Button size="sm" variant="secondary" onClick={groupApi.refetch}>
-              다시 시도
-            </Button>
-          </div>
+          <ErrorState
+            error={groupApi.error}
+            onRetry={groupApi.refetch}
+            unauthorizedTo="/login"
+            notFoundTo="/home"
+            notFoundLabel="홈으로"
+          />
         ) : null}
       </main>
 
@@ -176,14 +184,7 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
     setError(null)
   }, [open])
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·갱신을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   const canSubmit = name.trim().length > 0 && !submitting
 
@@ -203,11 +204,7 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
       onClose()
     } catch (err) {
       if (!alive.current) return
-      // 401 = 토큰 무효(apiFetch가 이미 지움) — 모달 안 재시도는 영원히 실패하므로 로그인으로 복귀
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       setError(toErrorMessage(err))
       setSubmitting(false)
     }
@@ -275,14 +272,7 @@ function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
     setError(null)
   }, [open])
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   const canSubmit = name.trim().length > 0 && !submitting
 
@@ -301,11 +291,7 @@ function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
       navigate(`/groups/${groupId}/events/${event.id}`)
     } catch (err) {
       if (!alive.current) return
-      // 401 = 토큰 무효(apiFetch가 이미 지움) — 모달 안 재시도는 영원히 실패하므로 로그인으로 복귀
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       setError(toErrorMessage(err))
       setSubmitting(false)
     }

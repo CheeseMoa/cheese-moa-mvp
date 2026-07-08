@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import { cx } from '../lib/cx'
 import type { MovePhotosResponse, MoveSuggestion } from '../types/api'
-import { BottomSheet, Button, useToast } from './ui'
+import { BottomSheet, ErrorState, useToast } from './ui'
 
 interface MovePhotosSheetProps {
   onClose: () => void
@@ -40,18 +41,7 @@ export function MovePhotosSheet({
   // 두 번 이동(두 번째는 이미 원본에서 빠진 사진이라 400)하는 것을 막는다.
   const busyRef = useRef(false)
 
-  // 이동 요청 중 프레임을 떠나면(브라우저/제스처 뒤로가기 — 인앱 뒤로가기는 스크림이 가림)
-  // 늦게 온 응답이 언마운트된 시트에서 토스트·이동·로그인 이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (error?.status === 401) return <Navigate to="/login" replace />
+  const alive = useAlive()
 
   const suggestions = data?.suggestions ?? []
 
@@ -69,10 +59,7 @@ export function MovePhotosSheet({
       onMoved(res.movedCount, target.name)
     } catch (err) {
       if (!alive.current) return
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       toast.show(toErrorMessage(err))
       busyRef.current = false
       setBusy(false)
@@ -91,12 +78,7 @@ export function MovePhotosSheet({
       {loading ? (
         <p className="py-8 text-center text-sm text-muted">불러오는 중…</p>
       ) : error ? (
-        <div className="flex flex-col items-center gap-3 py-8">
-          <p className="text-center text-sm text-warn">{toErrorMessage(error)}</p>
-          <Button size="sm" variant="secondary" onClick={refetch}>
-            다시 시도
-          </Button>
-        </div>
+        <ErrorState error={error} onRetry={refetch} unauthorizedTo="/login" className="py-8" />
       ) : suggestions.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">옮길 만한 다른 앨범이 없어요.</p>
       ) : (

@@ -1,9 +1,8 @@
-import { Navigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
-import { toErrorMessage, type ApiRequestError } from '../lib/api'
+import type { ApiRequestError } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import type { GroupInviteInfo, GroupShareInfo } from '../types/api'
-import { BottomSheet, Button, useToast } from './ui'
+import { BottomSheet, Button, ErrorState, useToast } from './ui'
 
 interface SheetProps {
   groupId: string
@@ -17,17 +16,8 @@ function displayUrl(url: string): string {
 }
 
 function SheetPending({ error, onRetry }: { error: ApiRequestError | null; onRetry: () => void }) {
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (error?.status === 401) return <Navigate to="/login" replace />
   if (error)
-    return (
-      <div className="flex flex-col items-center gap-3 py-8">
-        <p className="text-center text-sm text-warn">{toErrorMessage(error)}</p>
-        <Button size="sm" variant="secondary" onClick={onRetry}>
-          다시 시도
-        </Button>
-      </div>
-    )
+    return <ErrorState error={error} onRetry={onRetry} unauthorizedTo="/login" className="py-8" />
   // useApi의 idle(효과 실행 전)과 loading 모두 — 본문이 빈 채로 그려지지 않게 기본은 로딩 문구
   return <p className="py-8 text-center text-sm text-muted">불러오는 중…</p>
 }

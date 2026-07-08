@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { MovePhotosSheet } from '../components/MovePhotosSheet'
 import { RenameModal } from '../components/RenameModal'
-import { Button, ConfirmDialog, Header, PhotoGrid, PhotoTile, useToast } from '../components/ui'
+import {
+  Button,
+  ConfirmDialog,
+  ErrorState,
+  Header,
+  PhotoGrid,
+  PhotoTile,
+  useToast,
+} from '../components/ui'
+import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import { cx } from '../lib/cx'
 import type { Album, Photo, RemovePhotosResponse } from '../types/api'
 
@@ -42,17 +51,7 @@ export function AlbumDetailPage() {
   const [renameOpen, setRenameOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 상태 갱신을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (albumApi.error?.status === 401) return <Navigate to="/login" replace />
+  const alive = useAlive()
 
   const album = albumApi.data?.album
   const photos = albumApi.data?.photos ?? []
@@ -103,10 +102,7 @@ export function AlbumDetailPage() {
       setBusy(false)
     } catch (err) {
       if (!alive.current) return
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       setConfirmOpen(false)
       toast.show(toErrorMessage(err))
       setBusy(false)
@@ -129,10 +125,7 @@ export function AlbumDetailPage() {
       setBusy(false)
     } catch (err) {
       if (!alive.current) return
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       setReviewConfirmOpen(false)
       toast.show(toErrorMessage(err))
       setBusy(false)
@@ -229,12 +222,13 @@ export function AlbumDetailPage() {
           ) : albumApi.loading ? (
             <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
           ) : albumApi.error ? (
-            <div className="flex flex-col items-center gap-3 py-11">
-              <p className="text-center text-sm text-warn">{toErrorMessage(albumApi.error)}</p>
-              <Button size="sm" variant="secondary" onClick={albumApi.refetch}>
-                다시 시도
-              </Button>
-            </div>
+            <ErrorState
+              error={albumApi.error}
+              onRetry={albumApi.refetch}
+              unauthorizedTo="/login"
+              notFoundTo={`/groups/${groupId}/events/${eventId}`}
+              notFoundLabel="이벤트 상세로"
+            />
           ) : null}
         </div>
 

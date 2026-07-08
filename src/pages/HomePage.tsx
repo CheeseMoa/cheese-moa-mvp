@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { JoinGroupModal } from '../components/JoinGroupModal'
-import { Button, ButtonLink, EmptyState, GroupCard, Header } from '../components/ui'
+import { Button, ButtonLink, EmptyState, ErrorState, GroupCard, Header } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import { toErrorMessage } from '../lib/api'
 import type { Group } from '../types/api'
 
 /**
@@ -17,9 +16,6 @@ export function HomePage() {
   const { data, error, loading, refetch } = useApi<{ groups: Group[] }>('/groups')
   const [joinOpen, setJoinOpen] = useState(false)
   const groups = data?.groups ?? []
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (error?.status === 401) return <Navigate to="/login" replace />
 
   return (
     <PhoneShell>
@@ -39,12 +35,7 @@ export function HomePage() {
           {loading ? (
             <p className="py-11 text-center text-sm text-muted">모임을 불러오는 중…</p>
           ) : error ? (
-            <div className="flex flex-col items-center gap-3 py-11">
-              <p className="text-center text-sm text-warn">{toErrorMessage(error)}</p>
-              <Button size="sm" variant="secondary" onClick={refetch}>
-                다시 시도
-              </Button>
-            </div>
+            <ErrorState error={error} onRetry={refetch} unauthorizedTo="/login" />
           ) : groups.length === 0 ? (
             <EmptyState
               title="아직 모임이 없어요"

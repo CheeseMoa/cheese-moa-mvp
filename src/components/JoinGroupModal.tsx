@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { apiFetch, toErrorMessage } from '../lib/api'
+import { useAlive } from '../hooks/useAlive'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import type { Group } from '../types/api'
 import { Button, Modal, TextField, useToast } from './ui'
 
@@ -34,14 +35,7 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     setError(null)
   }, [open])
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   // 참여 코드는 대문자 영숫자만 발급된다(HAETSAL 등) — 소문자 입력도 통과하게 정규화
   const joinKey = (fixedJoinKey ?? joinKeyInput).trim().toUpperCase()
@@ -64,6 +58,13 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
       navigate(`/groups/${group.id}`, { replace: fixedJoinKey !== undefined })
     } catch (err) {
       if (!alive.current) return
+      // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
+      if (
+        redirectIfUnauthorized(err, navigate, {
+          state: fixedJoinKey !== undefined ? { returnTo: `/join/${fixedJoinKey}` } : undefined,
+        })
+      )
+        return
       // WRONG_PASSWORD·NOT_FOUND·ALREADY_MEMBER 메시지는 사용자 노출 가능한 한국어
       setError(toErrorMessage(err))
       setSubmitting(false)

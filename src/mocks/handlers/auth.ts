@@ -2,6 +2,7 @@
  * 인증 핸들러 (docs/api-spec.md §3.1) — signup / login / me 조회·편집.
  */
 import { http, HttpResponse } from 'msw'
+import { PIN_RE } from '../../lib/pin'
 import type { AuthResponse } from '../../types/api'
 import { db, issueAccessToken, nextId, nowIso } from '../db'
 import { persistUser, updatePersistedUser } from '../persist'
@@ -16,8 +17,6 @@ import {
   userFrom,
 } from './shared'
 import { toUser } from './serializers'
-
-const PIN_RE = /^\d{4}$/
 
 /** PIN 정규화 — trim 후 숫자 4자리 '문자열'만 유효(숫자 타입 거부 → 저장·비교 타입 통일) */
 function normalizePin(value: unknown): string | null {

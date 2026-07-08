@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ApiRequestError, toErrorMessage } from '../lib/api'
+import { useAlive } from '../hooks/useAlive'
+import { redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface RenameModalProps {
@@ -61,14 +62,7 @@ export function RenameModal({
     setError(null)
   }, [open])
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·갱신을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   const canSubmit = name.trim().length > 0 && !submitting
 
@@ -88,11 +82,7 @@ export function RenameModal({
       onClose()
     } catch (err) {
       if (!alive.current) return
-      // 401 = 토큰 무효(apiFetch가 이미 지움) — 모달 안 재시도는 영원히 실패하므로 로그인으로 복귀
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       setError(toErrorMessage(err))
       setSubmitting(false)
     }

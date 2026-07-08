@@ -31,6 +31,24 @@ export function toErrorMessage(err: unknown): string {
   return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
 }
 
+/** react-router navigate와 구조적으로 호환되는 최소 타입 — lib이 라우터에 직접 의존하지 않게 */
+type NavigateLike = (to: string, options?: { replace?: boolean; state?: unknown }) => void
+
+/**
+ * 뮤테이션 catch 공용: 401 = 토큰 무효(apiFetch가 이미 삭제 — 재시도는 영원히 실패)면
+ * 재인증 화면으로 보내고 true를 반환한다. 호출부는 `if (redirectIfUnauthorized(err, navigate)) return`.
+ * 뷰어 흐름은 `to`에 잠금 해제 경로를, 초대 흐름은 `state.returnTo`로 복귀 목적지를 넘긴다.
+ */
+export function redirectIfUnauthorized(
+  err: unknown,
+  navigate: NavigateLike,
+  options: { to?: string; state?: unknown } = {},
+): boolean {
+  if (!(err instanceof ApiRequestError) || err.status !== 401) return false
+  navigate(options.to ?? '/login', { replace: true, state: options.state })
+  return true
+}
+
 type AuthMode = 'creator' | 'viewer' | 'none'
 
 export interface ApiOptions extends Omit<RequestInit, 'body'> {

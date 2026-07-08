@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ConfirmDialog, Header, PhotoGrid, useToast } from '../components/ui'
+import { Button, ConfirmDialog, ErrorState, Header, PhotoGrid, useToast } from '../components/ui'
+import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
+import { apiFetch, ApiRequestError, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import { cx } from '../lib/cx'
 import type { EventItem, ReviewSummary } from '../types/api'
 
@@ -24,18 +25,7 @@ export function PublishReviewPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
 
-  // 공개 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (eventApi.error?.status === 401 || summaryApi.error?.status === 401)
-    return <Navigate to="/login" replace />
+  const alive = useAlive()
 
   const eventPath = `/groups/${groupId}/events/${eventId}`
   const event = eventApi.data
@@ -61,10 +51,7 @@ export function PublishReviewPage() {
       navigate(`/groups/${groupId}`)
     } catch (err) {
       if (!alive.current) return
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate)) return
       setConfirmOpen(false)
       toast.show(toErrorMessage(err))
       // 다른 멤버가 먼저 공개했거나(400 "이미 공개") 상태가 그새 바뀐 실패 — 재조회 없이는
@@ -140,19 +127,17 @@ export function PublishReviewPage() {
           ) : bothLoading ? (
             <p className="py-11 text-center text-sm text-muted">요약을 불러오는 중…</p>
           ) : anyError ? (
-            <div className="flex flex-col items-center gap-3 py-11">
-              <p className="text-center text-sm text-warn">{toErrorMessage(anyError)}</p>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  eventApi.refetch()
-                  summaryApi.refetch()
-                }}
-              >
-                다시 시도
-              </Button>
-            </div>
+            <ErrorState
+              error={anyError}
+              onRetry={() => {
+                eventApi.refetch()
+                summaryApi.refetch()
+              }}
+              unauthorizedTo="/login"
+              // 여기 404 = 이벤트 자체가 사라진 것 — 이벤트 상세로 보내면 또 404라 부모(모임)로
+              notFoundTo={`/groups/${groupId}`}
+              notFoundLabel="모임 상세로"
+            />
           ) : null}
         </div>
 

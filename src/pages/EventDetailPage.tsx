@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
-import { AlbumCard, Button, EventStatusBadge, Header } from '../components/ui'
+import { AlbumCard, Button, ErrorState, EventStatusBadge, Header } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { apiFetch, toErrorMessage } from '../lib/api'
 import type { Album, EventItem, Group } from '../types/api'
@@ -23,9 +23,9 @@ export function EventDetailPage() {
   const needsGroupName = !!event && (event.status === 'empty' || event.status === 'analyzing')
   const groupApi = useApi<Group>(needsGroupName ? `/groups/${groupId}` : null)
 
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (eventApi.error?.status === 401 || groupApi.error?.status === 401)
-    return <Navigate to="/login" replace />
+  // 보조 fetch(모임명)의 401은 ErrorState를 거치지 않아 여기서 직접 복귀시킨다
+  // (eventApi 401은 아래 ErrorState unauthorizedTo가 처리)
+  if (groupApi.error?.status === 401) return <Navigate to="/login" replace />
 
   const base = `/groups/${groupId}/events/${eventId}`
 
@@ -98,12 +98,13 @@ export function EventDetailPage() {
         ) : eventApi.loading ? (
           <p className="py-11 text-center text-sm text-muted">이벤트를 불러오는 중…</p>
         ) : eventApi.error ? (
-          <div className="flex flex-col items-center gap-3 py-11">
-            <p className="text-center text-sm text-warn">{toErrorMessage(eventApi.error)}</p>
-            <Button size="sm" variant="secondary" onClick={eventApi.refetch}>
-              다시 시도
-            </Button>
-          </div>
+          <ErrorState
+            error={eventApi.error}
+            onRetry={eventApi.refetch}
+            unauthorizedTo="/login"
+            notFoundTo={`/groups/${groupId}`}
+            notFoundLabel="모임 상세로"
+          />
         ) : null}
       </main>
     </PhoneShell>
@@ -128,10 +129,6 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
   const navigate = useNavigate()
   const albumsApi = useApi<{ albums: Album[] }>(`/events/${event.id}/albums`)
   const [renameOpen, setRenameOpen] = useState(false)
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 앨범 fetch도 로그인으로 복귀시킨다.
-  // (없으면 토큰 없는 [다시 시도]가 영원히 401 — 형제 화면 09·이름수정 모달과 동일 처리)
-  if (albumsApi.error?.status === 401) return <Navigate to="/login" replace />
 
   const base = `/groups/${groupId}/events/${event.id}`
 
@@ -160,12 +157,13 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
           {albumsApi.loading ? (
             <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
           ) : albumsApi.error ? (
-            <div className="flex flex-col items-center gap-3 py-11">
-              <p className="text-center text-sm text-warn">{toErrorMessage(albumsApi.error)}</p>
-              <Button size="sm" variant="secondary" onClick={albumsApi.refetch}>
-                다시 시도
-              </Button>
-            </div>
+            <ErrorState
+              error={albumsApi.error}
+              onRetry={albumsApi.refetch}
+              unauthorizedTo="/login"
+              notFoundTo={`/groups/${groupId}`}
+              notFoundLabel="모임 상세로"
+            />
           ) : albums.length === 0 ? (
             <p className="py-11 text-center text-sm text-muted">앨범이 아직 없어요.</p>
           ) : (

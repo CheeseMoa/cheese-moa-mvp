@@ -1,8 +1,7 @@
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
-import { Badge, Button, Header } from '../../components/ui'
+import { Badge, ErrorState, Header } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
-import { toErrorMessage } from '../../lib/api'
 import type { EventItem, ViewerAlbum } from '../../types/api'
 
 interface ViewerAlbumsResponse {
@@ -22,9 +21,6 @@ export function ViewerAlbumsPage() {
     auth: 'viewer',
     viewerShareToken: token,
   })
-
-  // 401 = 뷰어 토큰 무효(apiFetch가 이미 지움) — 잠금 해제 화면으로 복귀
-  if (api.error?.status === 401) return <Navigate to={`/share/${token}`} replace />
 
   const albums = api.data?.albums ?? []
 
@@ -78,12 +74,13 @@ export function ViewerAlbumsPage() {
         ) : api.loading ? (
           <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
         ) : api.error ? (
-          <div className="flex flex-col items-center gap-3 py-11">
-            <p className="text-center text-sm text-warn">{toErrorMessage(api.error)}</p>
-            <Button size="sm" variant="secondary" onClick={api.refetch}>
-              다시 시도
-            </Button>
-          </div>
+          <ErrorState
+            error={api.error}
+            onRetry={api.refetch}
+            unauthorizedTo={`/share/${token}`}
+            notFoundTo={`/share/${token}/events`}
+            notFoundLabel="공개 이벤트로"
+          />
         ) : null}
       </main>
     </PhoneShell>

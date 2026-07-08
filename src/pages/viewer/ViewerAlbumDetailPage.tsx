@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
-import { Button, Header, PhotoGrid, PhotoTile, useToast } from '../../components/ui'
+import { Button, ErrorState, Header, PhotoGrid, PhotoTile, useToast } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../../lib/api'
+import { useAlive } from '../../hooks/useAlive'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../../lib/api'
 import { copyToClipboard } from '../../lib/clipboard'
 import type { AlbumDownloadResponse, ViewerAlbum, ViewerPhoto } from '../../types/api'
 
@@ -61,17 +62,7 @@ export function ViewerAlbumDetailPage() {
   const [downloading, setDownloading] = useState(false)
   const [viewing, setViewing] = useState<ViewerPhoto | null>(null)
 
-  // 요청 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·상태 갱신을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  // 401 = 뷰어 토큰 무효(apiFetch가 이미 지움) — 잠금 해제 화면으로 복귀
-  if (api.error?.status === 401) return <Navigate to={`/share/${token}`} replace />
+  const alive = useAlive()
 
   const album = api.data?.album
   const photos = api.data?.photos ?? []
@@ -92,10 +83,7 @@ export function ViewerAlbumDetailPage() {
       setDownloading(false)
     } catch (err) {
       if (!alive.current) return
-      if (err instanceof ApiRequestError && err.status === 401) {
-        navigate(`/share/${token}`, { replace: true })
-        return
-      }
+      if (redirectIfUnauthorized(err, navigate, { to: `/share/${token}` })) return
       toast.show(toErrorMessage(err))
       setDownloading(false)
     }
@@ -145,12 +133,13 @@ export function ViewerAlbumDetailPage() {
           ) : api.loading ? (
             <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
           ) : api.error ? (
-            <div className="flex flex-col items-center gap-3 py-11">
-              <p className="text-center text-sm text-warn">{toErrorMessage(api.error)}</p>
-              <Button size="sm" variant="secondary" onClick={api.refetch}>
-                다시 시도
-              </Button>
-            </div>
+            <ErrorState
+              error={api.error}
+              onRetry={api.refetch}
+              unauthorizedTo={`/share/${token}`}
+              notFoundTo={`/share/${token}/events/${eventId}`}
+              notFoundLabel="공개 앨범으로"
+            />
           ) : null}
         </div>
 
