@@ -1,6 +1,6 @@
 import type { ApiError } from '../types/api'
 import { clearAccessToken, getAccessToken } from './auth'
-import { getViewerToken } from './viewer'
+import { clearViewerToken, getViewerToken } from './viewer'
 
 /** docs/api-spec.md §1: Base URL */
 export const API_BASE = '/api/v1'
@@ -84,10 +84,11 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const payload: unknown = isJson ? await res.json() : null
 
   if (!res.ok) {
-    // 제작자 토큰을 붙였는데 401 = 토큰 무효(옛 dev 토큰·재시드 등).
-    // 지워 두면 가드·공개 화면 리다이렉트가 존재 검사만으로도 로그인 화면으로 복귀시킨다.
-    if (res.status === 401 && auth === 'creator' && token) {
-      clearAccessToken()
+    // 토큰을 붙였는데 401 = 토큰 무효(옛 dev 토큰·재시드 등). 지워 두면 가드·화면 리다이렉트가
+    // 존재 검사만으로도 재인증 화면(로그인/뷰어 잠금 해제)으로 복귀시킨다.
+    if (res.status === 401 && token) {
+      if (auth === 'creator') clearAccessToken()
+      else if (viewerShareToken) clearViewerToken(viewerShareToken)
     }
     const err = (payload as ApiError | null)?.error
     throw new ApiRequestError(res.status, err?.code ?? 'UNKNOWN', err?.message ?? res.statusText)

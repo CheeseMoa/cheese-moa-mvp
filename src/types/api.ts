@@ -207,6 +207,8 @@ export interface ViewerEvent {
   photoCount: number
   albumCount: number
   coverPhotoId: ID | null
+  /** 커버 사진 썸네일 URL(파생값 — Album.coverThumbnailUrl 선례, 커버 없으면 null). 15-L 카드 커버용 */
+  coverThumbnailUrl: string | null
   publishedAt: ISODateTime | null
 }
 
@@ -216,6 +218,8 @@ export interface ViewerAlbum {
   name: string
   photoCount: number
   coverPhotoId: ID | null
+  /** 커버 사진 썸네일 URL(파생값 — 커버 없으면 null). 15 앨범 카드 커버용 */
+  coverThumbnailUrl: string | null
 }
 
 export interface ViewerPhoto {
