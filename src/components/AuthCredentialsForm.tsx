@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAlive } from '../hooks/useAlive'
 import { apiFetch, toErrorMessage } from '../lib/api'
 import { setAccessToken } from '../lib/auth'
+import { PIN_RE } from '../lib/pin'
 import type { AuthResponse } from '../types/api'
-import { Button, TextField } from './ui'
-
-const PIN_RE = /^\d{4}$/
+import { Button, PinField, TextField } from './ui'
 
 /** 로그인에 가로막힌 화면(초대 링크 JoinPage 등)이 넘기는 복귀 목적지 */
 interface AuthLocationState {
@@ -56,14 +56,7 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
 
   const canSubmit = nickname.trim().length > 0 && PIN_RE.test(pin) && !submitting
 
-  // 제출 중 다른 화면으로 떠난 뒤 뒤늦게 온 응답이 토큰 저장·/home 이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -105,15 +98,12 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
           />
-          <TextField
+          <PinField
             label="PIN 번호 (숫자 4자)"
             placeholder="PIN 번호 입력"
-            type="password"
-            inputMode="numeric"
             autoComplete={pinAutoComplete}
             value={pin}
-            // maxLength는 붙여넣기를 필터보다 먼저 잘라 PIN을 훼손하므로 쓰지 않는다 — 여기서 4자리로 자름
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onChange={setPin}
           />
         </div>
         {error ? (

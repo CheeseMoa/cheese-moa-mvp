@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, TextField, useToast } from '../components/ui'
-import { apiFetch, toErrorMessage } from '../lib/api'
+import { useAlive } from '../hooks/useAlive'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
 import type { Group } from '../types/api'
 
 /**
@@ -20,14 +21,7 @@ export function GroupCreatePage() {
 
   const canSubmit = name.trim().length > 0 && password.trim().length > 0 && !submitting
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토스트·이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -45,6 +39,7 @@ export function GroupCreatePage() {
       navigate(`/groups/${group.id}`, { replace: true })
     } catch (err) {
       if (!alive.current) return
+      if (redirectIfUnauthorized(err, navigate)) return
       setError(toErrorMessage(err))
       setSubmitting(false)
     }

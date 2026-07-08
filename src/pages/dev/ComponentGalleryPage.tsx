@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { PhoneShell } from '../../components/PhoneShell'
+import { ApiRequestError } from '../../lib/api'
 import {
   AlbumCard,
   Badge,
@@ -9,6 +10,7 @@ import {
   ButtonLink,
   ConfirmDialog,
   EmptyState,
+  ErrorState,
   EventCard,
   EventStatusBadge,
   GroupCard,
@@ -189,6 +191,23 @@ export function ComponentGalleryPage() {
                 </>
               }
               action={<Button onClick={() => toast.show('🧀 이벤트 생성!')}>+ 이벤트 생성</Button>}
+            />
+          </div>
+        </Section>
+
+        <Section title="08-1 · ErrorState (CHMO-118 추가)">
+          <div className="rounded-xl border border-border">
+            <ErrorState
+              error={new ApiRequestError(500, 'INTERNAL_ERROR', '요청에 실패했어요.')}
+              onRetry={() => toast.show('🧀 다시 시도!')}
+            />
+          </div>
+          <div className="rounded-xl border border-border">
+            {/* 404 + notFoundTo → [다시 시도] 대신 돌아가기 CTA (onRetry 생략 가능) */}
+            <ErrorState
+              error={new ApiRequestError(404, 'NOT_FOUND', '모임을 찾을 수 없습니다.')}
+              notFoundTo="/dev/components"
+              notFoundLabel="홈으로"
             />
           </div>
         </Section>

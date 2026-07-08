@@ -1,8 +1,8 @@
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
-import { Button, EmptyState, Header } from '../../components/ui'
+import { Button, EmptyState, ErrorState, Header } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
-import { toErrorMessage } from '../../lib/api'
+import { clearViewerToken } from '../../lib/viewer'
 import type { Group, ViewerEvent } from '../../types/api'
 
 interface ViewerEventsResponse {
@@ -31,9 +31,6 @@ export function ViewerEventsPage() {
     auth: 'viewer',
     viewerShareToken: token,
   })
-
-  // 401 = 뷰어 토큰 무효(apiFetch가 이미 지움) — 잠금 해제 화면으로 복귀
-  if (api.error?.status === 401) return <Navigate to={`/share/${token}`} replace />
 
   const events = api.data?.events ?? []
 
@@ -92,12 +89,28 @@ export function ViewerEventsPage() {
         ) : api.loading ? (
           <p className="py-11 text-center text-sm text-muted">공개 이벤트를 불러오는 중…</p>
         ) : api.error ? (
-          <div className="flex flex-col items-center gap-3 py-11">
-            <p className="text-center text-sm text-warn">{toErrorMessage(api.error)}</p>
-            <Button size="sm" variant="secondary" onClick={api.refetch}>
-              다시 시도
-            </Button>
-          </div>
+          api.error.status === 404 ? (
+            // 공유 링크 회수/모임 삭제(영구 실패). 잠금 해제 화면은 저장된 viewerToken이 있으면
+            // 목록으로 자동 포워딩하므로, Link(notFoundTo)가 아니라 토큰을 지운 뒤 이동해야 한다
+            <ErrorState error={api.error}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  clearViewerToken(token)
+                  navigate(`/share/${token}`, { replace: true })
+                }}
+              >
+                잠금 해제로
+              </Button>
+            </ErrorState>
+          ) : (
+            <ErrorState
+              error={api.error}
+              onRetry={api.refetch}
+              unauthorizedTo={`/share/${token}`}
+            />
+          )
         ) : null}
       </main>
     </PhoneShell>

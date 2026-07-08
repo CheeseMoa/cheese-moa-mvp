@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { BrandHero } from '../../components/BrandHero'
 import { PhoneShell } from '../../components/PhoneShell'
-import { Button, TextField } from '../../components/ui'
+import { Button, PinField } from '../../components/ui'
+import { useAlive } from '../../hooks/useAlive'
 import { apiFetch, toErrorMessage } from '../../lib/api'
+import { PIN_RE } from '../../lib/pin'
 import { getViewerToken, setViewerToken } from '../../lib/viewer'
 import type { ViewerUnlockResponse } from '../../types/api'
-
-const PASSWORD_RE = /^\d{4}$/
 
 /**
  * 잠금 해제(뷰어 진입) · POST /share/:token/unlock
@@ -23,19 +23,12 @@ export function ViewerUnlockPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 토큰 저장·이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
+  const alive = useAlive()
 
   const eventsPath = `/share/${token}/events`
   if (token && getViewerToken(token)) return <Navigate to={eventsPath} replace />
 
-  const canSubmit = PASSWORD_RE.test(password) && !submitting
+  const canSubmit = PIN_RE.test(password) && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -69,15 +62,11 @@ export function ViewerUnlockPage() {
         </p>
         <form onSubmit={handleSubmit} noValidate className="mt-3 flex flex-1 flex-col">
           <div className="rounded-2xl border border-border bg-white p-4 shadow-card">
-            <TextField
+            <PinField
               label="학부모 전용 비밀번호 (숫자 4자)"
               placeholder="비밀번호 입력"
-              type="password"
-              inputMode="numeric"
-              autoComplete="off"
               value={password}
-              // maxLength는 붙여넣기를 필터보다 먼저 잘라 비밀번호를 훼손하므로 쓰지 않는다 — 여기서 4자리로 자름
-              onChange={(e) => setPassword(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onChange={setPassword}
             />
           </div>
           {error ? (

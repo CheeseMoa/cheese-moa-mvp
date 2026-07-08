@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, Header, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
+import { Button, ErrorState, Header, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
+import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
 import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
 import type { AnalysisJob, EventItem, PresignResponse } from '../types/api'
@@ -56,17 +57,7 @@ export function PhotoUploadPage() {
     [],
   )
 
-  // 제출 중 화면을 떠난 뒤 뒤늦게 온 응답이 상태 갱신·이동을 실행하지 않게 하는 플래그
-  const alive = useRef(true)
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도해도 영원히 실패하므로 로그인으로 복귀
-  if (eventApi.error?.status === 401) return <Navigate to="/login" replace />
+  const alive = useAlive()
 
   const event = eventApi.data
   const eventPath = `/groups/${groupId}/events/${eventId}`
@@ -187,12 +178,13 @@ export function PhotoUploadPage() {
           eventApi.loading ? (
             <p className="py-11 text-center text-sm text-muted">이벤트를 불러오는 중…</p>
           ) : eventApi.error ? (
-            <div className="flex flex-col items-center gap-3 py-11">
-              <p className="text-center text-sm text-warn">{toErrorMessage(eventApi.error)}</p>
-              <Button size="sm" variant="secondary" onClick={eventApi.refetch}>
-                다시 시도
-              </Button>
-            </div>
+            <ErrorState
+              error={eventApi.error}
+              onRetry={eventApi.refetch}
+              unauthorizedTo="/login"
+              notFoundTo={`/groups/${groupId}`}
+              notFoundLabel="모임 상세로"
+            />
           ) : null
         ) : event.status === 'analyzing' ? (
           // 분석 중에는 업로드 불가(presign 400) — 진입 자체를 안내로 막는다
