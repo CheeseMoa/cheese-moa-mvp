@@ -156,15 +156,14 @@ export function viewerAlbumsOfEvent(eventId: string): DbAlbum[] {
 /** 뷰어 카운트·커버는 검토 완료 사진 기준(커버가 미검토면 첫 검토 사진으로 대체) */
 export function toViewerAlbum(album: DbAlbum): ViewerAlbum {
   const reviewed = reviewedPhotosOfAlbum(album.id)
-  const cover = reviewed.some((p) => p.id === album.coverPhotoId)
-    ? album.coverPhotoId
-    : (reviewed[0]?.id ?? null)
+  const cover = reviewed.find((p) => p.id === album.coverPhotoId) ?? reviewed[0] ?? null
   return {
     id: album.id,
     type: album.type,
     name: albumName(album),
     photoCount: reviewed.length,
-    coverPhotoId: cover,
+    coverPhotoId: cover?.id ?? null,
+    coverThumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
   }
 }
 
@@ -183,13 +182,15 @@ export function toViewerEvent(event: DbEvent): ViewerEvent {
   for (const album of albums) {
     for (const photo of reviewedPhotosOfAlbum(album.id)) photoIds.add(photo.id)
   }
+  const coverAlbum = albums[0] ? toViewerAlbum(albums[0]) : null
   return {
     id: event.id,
     name: event.name,
     date: event.date,
     photoCount: photoIds.size,
     albumCount: albums.length,
-    coverPhotoId: albums[0] ? toViewerAlbum(albums[0]).coverPhotoId : null,
+    coverPhotoId: coverAlbum?.coverPhotoId ?? null,
+    coverThumbnailUrl: coverAlbum?.coverThumbnailUrl ?? null,
     publishedAt: event.publishedAt,
   }
 }
