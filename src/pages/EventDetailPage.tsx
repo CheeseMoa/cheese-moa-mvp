@@ -4,7 +4,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
 import { AlbumCard, Button, ErrorState, EventStatusBadge, Header } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, toErrorMessage } from '../lib/api'
+import { apiFetch, toErrorMessage } from '../api/client'
 import type { Album, EventItem, Group } from '../types/api'
 
 /**

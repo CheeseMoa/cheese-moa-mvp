@@ -2,17 +2,17 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import { cx } from '../lib/cx'
-import type { MovePhotosResponse, MoveSuggestion } from '../types/api'
+import type { ID, MovePhotosResponse, MoveSuggestion } from '../types/api'
 import { BottomSheet, ErrorState, useToast } from './ui'
 
 interface MovePhotosSheetProps {
   onClose: () => void
   /** 원본(현재) 앨범 — 이동 시 연결이 해제된다 */
-  sourceAlbumId: string
+  sourceAlbumId: ID
   /** 이동할 선택 사진 — 시트를 여는 시점의 선택으로 고정 */
-  photoIds: string[]
+  photoIds: ID[]
   /** 이동 성공 — 부모가 시트를 닫고(언마운트) 선택 해제 + 상세 refetch */
   onMoved: (movedCount: number, targetName: string) => void
 }

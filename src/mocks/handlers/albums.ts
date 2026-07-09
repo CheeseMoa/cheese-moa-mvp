@@ -23,8 +23,9 @@ import {
   invalidBody,
   notFound,
   readJson,
+  requiredIdArray,
   requiredString,
-  requiredStringArray,
+  toId,
   unauthorized,
   userFrom,
 } from './shared'
@@ -33,14 +34,14 @@ import { albumsOfEventSorted, toAlbum, toPhoto } from './serializers'
 const ALBUM_NOT_FOUND = '앨범을 찾을 수 없습니다.'
 
 /** 멤버가 접근 가능한 앨범 조회(소속 이벤트의 모임 멤버십 = accessibleEvent 재사용, 아니면 null → 404) */
-function accessibleAlbum(user: DbUser, albumId: string): DbAlbum | null {
+function accessibleAlbum(user: DbUser, albumId: number | null): DbAlbum | null {
   const album = findAlbum(albumId)
   if (!album || !accessibleEvent(user, album.eventId)) return null
   return album
 }
 
 /** 선택 사진이 모두 해당 앨범에 연결돼 있는지 — 아니면 요청 자체가 잘못(400) */
-function allPhotosInAlbum(photoIds: string[], albumId: string): boolean {
+function allPhotosInAlbum(photoIds: number[], albumId: number): boolean {
   const linked = new Set(photosOfAlbum(albumId).map((p) => p.id))
   return photoIds.every((id) => linked.has(id))
 }
@@ -53,7 +54,7 @@ export const albumHandlers = [
   http.get(api('/events/:id/albums'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound('이벤트를 찾을 수 없습니다.')
 
     // 재진입 시점에 분석 완료 여부 판정 — 완료됐으면 앨범이 생성돼 함께 반환된다
@@ -65,7 +66,7 @@ export const albumHandlers = [
   http.get(api('/albums/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, params.id as string)
+    const album = accessibleAlbum(user, toId(params.id))
     if (!album) return notFound(ALBUM_NOT_FOUND)
     // 딥링크/북마크로 이 상세에 바로 진입해도 증분 분석 완료가 반영되게(그리드와 동일 시점 판정)
     settleAnalysis(album.eventId)
@@ -80,7 +81,7 @@ export const albumHandlers = [
   http.patch(api('/albums/:id'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, params.id as string)
+    const album = accessibleAlbum(user, toId(params.id))
     if (!album) return notFound(ALBUM_NOT_FOUND)
 
     const body = await readJson<{ reviewed?: unknown; name?: unknown }>(request)
@@ -89,7 +90,7 @@ export const albumHandlers = [
     // 두 필드를 모두 검증한 뒤에만 변이한다 — 검증 도중 400이 나가면 아무것도 저장되지 않아야
     // 한다(rename은 모임 전체 이름전파라, 부분 반영이 남으면 클라이언트가 실패로 알고
     // refetch를 생략한 채 데이터만 바뀌는 불일치가 생긴다)
-    let rename: { personId: string; name: string } | undefined
+    let rename: { personId: number; name: string } | undefined
     if (body.name !== undefined) {
       // 이름은 personId 단위 공유 값 — 같은 모임 내 모든 이벤트의 해당 인물 앨범에 전파
       if (album.type !== 'person' || !album.personId)
@@ -116,13 +117,12 @@ export const albumHandlers = [
   http.get(api('/albums/:id/move-suggestions'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, params.id as string)
+    const album = accessibleAlbum(user, toId(params.id))
     if (!album) return notFound(ALBUM_NOT_FOUND)
 
     const photoIdsParam = new URL(request.url).searchParams.get('photoIds')
-    const photoIds = requiredStringArray(photoIdsParam ? photoIdsParam.split(',') : undefined)
-    if (!photoIds)
-      return errorResponse(400, 'VALIDATION_ERROR', '이동할 사진을 선택해 주세요.')
+    const photoIds = requiredIdArray(photoIdsParam ? photoIdsParam.split(',') : undefined)
+    if (!photoIds) return errorResponse(400, 'VALIDATION_ERROR', '이동할 사진을 선택해 주세요.')
     if (!allPhotosInAlbum(photoIds, album.id))
       return errorResponse(400, 'VALIDATION_ERROR', '선택한 사진이 이 앨범에 없습니다.')
 
@@ -153,9 +153,9 @@ export const albumHandlers = [
     }>(request)
     if (!body) return invalidBody()
 
-    const photoIds = requiredStringArray(body.photoIds)
-    const sourceAlbumId = requiredString(body.sourceAlbumId)
-    const targetAlbumId = requiredString(body.targetAlbumId)
+    const photoIds = requiredIdArray(body.photoIds)
+    const sourceAlbumId = toId(body.sourceAlbumId)
+    const targetAlbumId = toId(body.targetAlbumId)
     if (!photoIds || !sourceAlbumId || !targetAlbumId)
       return errorResponse(400, 'VALIDATION_ERROR', '이동할 사진과 원본/대상 앨범을 지정해 주세요.')
     if (sourceAlbumId === targetAlbumId)
@@ -187,8 +187,8 @@ export const albumHandlers = [
     const body = await readJson<{ albumId?: unknown; photoIds?: unknown }>(request)
     if (!body) return invalidBody()
 
-    const albumId = requiredString(body.albumId)
-    const photoIds = requiredStringArray(body.photoIds)
+    const albumId = toId(body.albumId)
+    const photoIds = requiredIdArray(body.photoIds)
     if (!albumId || !photoIds)
       return errorResponse(400, 'VALIDATION_ERROR', '제거할 사진과 앨범을 지정해 주세요.')
 

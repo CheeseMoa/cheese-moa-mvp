@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, TextField, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import type { Group } from '../types/api'
 
 /**

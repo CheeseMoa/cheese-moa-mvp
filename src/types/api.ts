@@ -3,7 +3,8 @@
  * FE는 이 타입에 맞춰 MSW 목 데이터로 개발한다. BE 확정 시 동기화.
  */
 
-export type ID = string
+/** 리소스 식별자 — BE는 전부 int64 숫자 id (CHMO-191) */
+export type ID = number
 /** ISO 8601 (예: 2026-06-27T09:41:00+09:00) */
 export type ISODateTime = string
 /** YYYY-MM-DD */

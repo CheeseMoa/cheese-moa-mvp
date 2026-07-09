@@ -5,7 +5,7 @@ import { Button, ErrorState, Header, PhotoGrid, PhotoTile, useToast } from '../.
 import { useApi } from '../../hooks/useApi'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { useAlive } from '../../hooks/useAlive'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../../api/client'
 import { copyToClipboard } from '../../lib/clipboard'
 import type { AlbumDownloadResponse, ViewerAlbum, ViewerPhoto } from '../../types/api'
 

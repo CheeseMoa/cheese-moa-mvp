@@ -17,9 +17,10 @@ function readStore(): DbUser[] {
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
+    // id 타입 검사가 숫자 ID 전환(CHMO-191) 이전의 문자열 id 항목을 걸러낸다(자연 마이그레이션)
     return parsed.filter(
       (u): u is DbUser =>
-        typeof (u as DbUser)?.id === 'string' &&
+        typeof (u as DbUser)?.id === 'number' &&
         typeof (u as DbUser)?.nickname === 'string' &&
         typeof (u as DbUser)?.pin === 'string',
     )

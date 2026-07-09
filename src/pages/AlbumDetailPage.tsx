@@ -14,9 +14,9 @@ import {
 } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import { cx } from '../lib/cx'
-import type { Album, Photo, RemovePhotosResponse } from '../types/api'
+import type { Album, ID, Photo, RemovePhotosResponse } from '../types/api'
 
 interface AlbumDetailResponse {
   album: Album
@@ -33,18 +33,20 @@ export function AlbumDetailPage() {
   const {
     groupId = '',
     eventId = '',
-    albumId = '',
+    albumId: albumIdParam = '',
   } = useParams<{
     groupId: string
     eventId: string
     albumId: string
   }>()
+  // 라우트 파라미터는 문자열 — API 계약(ID = number)에 맞춰 숫자로 변환(CHMO-191)
+  const albumId = Number(albumIdParam)
   const navigate = useNavigate()
   const toast = useToast()
   const albumApi = useApi<AlbumDetailResponse>(`/albums/${albumId}`)
 
   const [selectMode, setSelectMode] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<Set<ID>>(new Set())
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [reviewConfirmOpen, setReviewConfirmOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
@@ -72,7 +74,7 @@ export function AlbumDetailPage() {
         ? '선택한 사진은 다른 앨범에 없어 완전히 삭제돼요. 되돌릴 수 없어요.'
         : `이 앨범에서 제거돼요. 이 중 ${orphanCount}장은 다른 앨범에도 없어 완전히 삭제돼요(되돌릴 수 없음).`
 
-  const toggle = (id: string) =>
+  const toggle = (id: ID) =>
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)

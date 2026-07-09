@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import type { Group } from '../types/api'
 import { Button, Modal, TextField, useToast } from './ui'
 

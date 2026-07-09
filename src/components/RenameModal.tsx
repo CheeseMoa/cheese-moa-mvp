@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
-import { redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface RenameModalProps {

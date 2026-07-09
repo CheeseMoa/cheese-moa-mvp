@@ -25,7 +25,7 @@ function normalizePin(value: unknown): string | null {
   return PIN_RE.test(pin) ? pin : null
 }
 
-function nicknameTaken(nickname: string, exceptUserId?: string): boolean {
+function nicknameTaken(nickname: string, exceptUserId?: number): boolean {
   return db.users.some((u) => u.nickname === nickname && u.id !== exceptUserId)
 }
 

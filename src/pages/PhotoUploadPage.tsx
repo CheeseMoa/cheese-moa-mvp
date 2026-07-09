@@ -2,10 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ErrorState, Header, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
+import {
+  Button,
+  ErrorState,
+  Header,
+  PhotoGrid,
+  PhotoTile,
+  Toggle,
+  useToast,
+} from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../lib/api'
+import { apiFetch, ApiRequestError, toErrorMessage } from '../api/client'
 import type { AnalysisJob, EventItem, PresignResponse } from '../types/api'
 
 /** 기기에서 고른 파일 + 미리보기 — key는 같은 파일 중복 추가 방지용 */
