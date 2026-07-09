@@ -1,6 +1,7 @@
 /**
  * API 계약 타입 (docs/api-spec.md §2 리소스 스키마).
- * FE는 이 타입에 맞춰 MSW 목 데이터로 개발한다. BE 확정 시 동기화.
+ * 화면은 이 타입만 본다 — 실 BE·MSW 응답 형태 차이는 src/api/ 엔드포인트 계층이
+ * 흡수해 이 타입으로 변환한다(CHMO-192).
  */
 
 /** 리소스 식별자 — BE는 전부 int64 숫자 id (CHMO-191) */
@@ -36,8 +37,8 @@ export interface Group {
   id: ID
   name: string
   memberCount: number
-  eventCount: number
-  joinKey: string
+  /** BE 상세(GroupDetailResponse)엔 없음 — 상세 화면은 이벤트 목록 길이로 파생(CHMO-192) */
+  eventCount?: number
   /** MVP에서 항상 null (권한 등급 없음) */
   role: null
   /** 학부모 무로그인 공유(모임 단위). 목록 응답에는 생략될 수 있음 */
@@ -127,9 +128,12 @@ export interface Photo {
 }
 
 // ── 인증 응답 ────────────────────────────────────────────────
+/**
+ * BE AuthResponse엔 user 객체가 없다(userId·nickname·refreshToken 평면 필드 — CHMO-192).
+ * 화면이 쓰는 건 accessToken뿐이라 FE 계약도 이것만 둔다. refreshToken 저장은 CHMO-193.
+ */
 export interface AuthResponse {
   accessToken: string
-  user: User
 }
 
 // ── 업로드 presign ───────────────────────────────────────────
@@ -145,10 +149,6 @@ export interface PresignUpload {
   method: 'PUT'
   headers: Record<string, string>
   expiresAt: ISODateTime
-}
-
-export interface PresignResponse {
-  uploads: PresignUpload[]
 }
 
 // ── 분석 요청 ────────────────────────────────────────────────
@@ -184,21 +184,25 @@ export interface MoveSuggestion {
 // ── 사진 이동/제거 (다대다 연결 교체·해제) ───────────────────
 export interface MovePhotosResponse {
   movedCount: number
-  sourceAlbumId: ID
-  targetAlbumId: ID
 }
 
-export interface RemovePhotosResponse {
-  removedCount: number
-  albumId: ID
+/**
+ * BE DeletePhotosResponse 형태(CHMO-192) — 다대다에서 "연결만 해제"(detached)와
+ * "마지막 연결이라 완전 삭제"(deleted)를 구분해 준다.
+ */
+export interface DeletePhotosResponse {
+  detachedCount: number
+  deletedPhotoCount: number
 }
 
 // ── 뷰어(학부모 무로그인) ────────────────────────────────────
 // 뷰어 응답은 서버 필터링 결과만 담는다: published 이벤트 · person/common 앨범 ·
 // 검토 완료(reviewed) 사진. 카운트/커버도 필터링된 사진 기준 파생값.
+/** BE UnlockViewerResponse 형태(CHMO-192) — 모임명은 뷰어 화면들이 캐시해 쓴다(lib/viewer.ts) */
 export interface ViewerUnlockResponse {
   viewerToken: string
-  group: Pick<Group, 'id' | 'name'>
+  groupId: ID
+  groupName: string
 }
 
 export interface ViewerEvent {

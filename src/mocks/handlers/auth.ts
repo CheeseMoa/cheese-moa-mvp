@@ -3,7 +3,7 @@
  */
 import { http, HttpResponse } from 'msw'
 import { PIN_RE } from '../../lib/pin'
-import type { AuthResponse } from '../../types/api'
+import type { User } from '../../types/api'
 import { db, issueAccessToken, nextId, nowIso } from '../db'
 import { persistUser, updatePersistedUser } from '../persist'
 import {
@@ -29,6 +29,12 @@ function nicknameTaken(nickname: string, exceptUserId?: number): boolean {
   return db.users.some((u) => u.nickname === nickname && u.id !== exceptUserId)
 }
 
+/** 목 옛 계약(api-spec) — user 객체 포함. BE 형태(userId 평면·refreshToken) 이행은 CHMO-195 */
+interface MockAuthResponse {
+  accessToken: string
+  user: User
+}
+
 export const authHandlers = [
   // POST /auth/signup — 계정 생성 · 화면 01-2
   http.post(api('/auth/signup'), async ({ request }) => {
@@ -43,7 +49,7 @@ export const authHandlers = [
     const user = { id: nextId('usr'), nickname, pin, createdAt: nowIso() }
     db.users.push(user)
     persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
-    const response: AuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
+    const response: MockAuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
     return HttpResponse.json(response, { status: 201 })
   }),
 
@@ -57,7 +63,7 @@ export const authHandlers = [
       nickname && pin ? db.users.find((u) => u.nickname === nickname && u.pin === pin) : undefined
     if (!user)
       return errorResponse(401, 'INVALID_CREDENTIALS', '닉네임 또는 PIN이 올바르지 않습니다.')
-    const response: AuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
+    const response: MockAuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
     return HttpResponse.json(response)
   }),
 

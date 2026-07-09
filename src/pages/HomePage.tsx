@@ -4,7 +4,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { JoinGroupModal } from '../components/JoinGroupModal'
 import { Button, ButtonLink, EmptyState, ErrorState, GroupCard, Header } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import type { Group } from '../types/api'
+import { listGroups } from '../api/groups'
 
 /**
  * 02. 홈 / 내 모임 · node 211:1357(목록) · 211:1396(빈 상태) · GET /groups.
@@ -13,9 +13,9 @@ import type { Group } from '../types/api'
  */
 export function HomePage() {
   const navigate = useNavigate()
-  const { data, error, loading, refetch } = useApi<{ groups: Group[] }>('/groups')
+  const { data, error, loading, refetch } = useApi('groups', listGroups)
   const [joinOpen, setJoinOpen] = useState(false)
-  const groups = data?.groups ?? []
+  const groups = data ?? []
 
   return (
     <PhoneShell>
@@ -54,7 +54,8 @@ export function HomePage() {
                   <GroupCard
                     name={g.name}
                     memberCount={g.memberCount}
-                    eventCount={g.eventCount}
+                    // 목록 응답(BE·MSW 모두)엔 항상 있다 — 타입만 optional(상세 응답 결손)
+                    eventCount={g.eventCount ?? 0}
                     onClick={() => navigate(`/groups/${g.id}`)}
                   />
                 </li>

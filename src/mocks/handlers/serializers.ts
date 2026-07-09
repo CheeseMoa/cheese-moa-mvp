@@ -44,14 +44,16 @@ export function joinUrlOf(group: DbGroup): string {
   return `${window.location.origin}/join/${group.joinKey}`
 }
 
-/** 목록 응답은 share 생략(스펙 예시와 동일), 상세 응답은 includeShare로 포함 */
+/**
+ * 목록 응답은 share 생략(스펙 예시와 동일), 상세 응답은 includeShare로 포함.
+ * joinKey는 응답에 넣지 않는다 — BE와 동일하게 시크릿은 초대 전용 핸들러만 반환(CHMO-192).
+ */
 export function toGroup(group: DbGroup, opts: { includeShare?: boolean } = {}): Group {
   return {
     id: group.id,
     name: group.name,
     memberCount: memberCountOf(group.id),
     eventCount: eventCountOf(group.id),
-    joinKey: group.joinKey,
     role: null,
     ...(opts.includeShare
       ? { share: { token: group.share.token, url: shareUrlOf(group), hasPassword: true } }

@@ -13,8 +13,8 @@ import {
 } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, toErrorMessage } from '../api/client'
-import type { AnalysisJob, EventItem, PresignResponse } from '../types/api'
+import { ApiRequestError, toErrorMessage } from '../api/client'
+import { getEvent, presignUploads, startAnalysis } from '../api/events'
 
 /** 기기에서 고른 파일 + 미리보기 — key는 같은 파일 중복 추가 방지용 */
 interface PickedPhoto {
@@ -41,7 +41,7 @@ export function PhotoUploadPage() {
   const navigate = useNavigate()
   const toast = useToast()
   // 헤더 뒤로가기 라벨(‹ 이벤트명) + 분석중 진입 차단용
-  const eventApi = useApi<EventItem>(`/events/${eventId}`)
+  const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
 
   const [photos, setPhotos] = useState<PickedPhoto[]>([])
   // 품질 제외 토글 — 스펙 기본 ON. ON이면 해당 사진은 인물 앨범 대신 눈감음/흔들림 앨범으로 라우팅
@@ -117,16 +117,14 @@ export function PhotoUploadPage() {
     try {
       if (toUpload.length > 0) {
         // ① presign — 파일 메타만 JSON으로 보내고 파일별 업로드 URL을 받는다
-        const { uploads } = await apiFetch<PresignResponse>(`/events/${eventId}/photos/presign`, {
-          method: 'POST',
-          body: {
-            files: toUpload.map((p) => ({
-              filename: p.file.name,
-              contentType: p.file.type, // handlePick에서 image/*만 통과 — 위장 기본값 금지
-              size: p.file.size,
-            })),
-          },
-        })
+        const uploads = await presignUploads(
+          eventId,
+          toUpload.map((p) => ({
+            filename: p.file.name,
+            contentType: p.file.type, // handlePick에서 image/*만 통과 — 위장 기본값 금지
+            size: p.file.size,
+          })),
+        )
         // ② S3 직접 PUT(병렬) — uploads는 요청 files와 같은 순서. 진행률은 시도 로컬 카운터로
         // (이전 시도의 늦은 응답이 새 시도의 카운터를 올리지 않게 attempt 일치 시에만 반영)
         let done = 0
@@ -155,10 +153,7 @@ export function PhotoUploadPage() {
         setPhase('analyzing')
       }
       // ③ 분석 시작 — 이벤트 status→analyzing, 완료는 이벤트 상세 재진입으로 확인
-      await apiFetch<AnalysisJob>(`/events/${eventId}/analyze`, {
-        method: 'POST',
-        body: { excludeEyesClosed, excludeBlurry },
-      })
+      await startAnalysis(eventId, { excludeEyesClosed, excludeBlurry })
       if (!alive.current) return
       toast.show('🧀 AI 분석을 시작했어요')
       navigate(eventPath)

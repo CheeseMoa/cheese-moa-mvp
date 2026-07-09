@@ -1,7 +1,7 @@
 import { useApi } from '../hooks/useApi'
 import type { ApiRequestError } from '../api/client'
+import { getInviteInfo, getShareInfo } from '../api/groups'
 import { copyToClipboard } from '../lib/clipboard'
-import type { GroupInviteInfo, GroupShareInfo } from '../types/api'
 import { BottomSheet, Button, ErrorState, useToast } from './ui'
 
 interface SheetProps {
@@ -92,8 +92,8 @@ function ShareInfoContent({
  */
 export function InviteSheet({ groupId, open, onClose }: SheetProps) {
   // 열릴 때만 조회 — 닫힌 시트가 비밀번호 평문을 미리 받아두지 않게
-  const { data, error, refetch } = useApi<GroupInviteInfo>(
-    open ? `/groups/${groupId}/invite` : null,
+  const { data, error, refetch } = useApi(open ? `invite:${groupId}` : null, (signal) =>
+    getInviteInfo(groupId, signal),
   )
   return (
     <BottomSheet open={open} onClose={onClose} title="초대하기" subtitle="참여자를 초대하세요">
@@ -117,7 +117,9 @@ export function InviteSheet({ groupId, open, onClose }: SheetProps) {
  * 학부모는 링크 진입(/share/:token) 후 비밀번호를 넣어 공개된 이벤트만 본다.
  */
 export function ParentShareSheet({ groupId, open, onClose }: SheetProps) {
-  const { data, error, refetch } = useApi<GroupShareInfo>(open ? `/groups/${groupId}/share` : null)
+  const { data, error, refetch } = useApi(open ? `share-info:${groupId}` : null, (signal) =>
+    getShareInfo(groupId, signal),
+  )
   return (
     <BottomSheet
       open={open}

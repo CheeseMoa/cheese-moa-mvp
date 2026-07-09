@@ -3,7 +3,7 @@
  * 앨범 그리드/상세 + 검토 완료·이름 변경(이름전파) + 이동 추천 + 사진 이동/제거(다대다).
  */
 import { http, HttpResponse } from 'msw'
-import type { MovePhotosResponse, MoveSuggestion, RemovePhotosResponse } from '../../types/api'
+import type { MoveSuggestion } from '../../types/api'
 import {
   albumName,
   findAlbum,
@@ -171,7 +171,8 @@ export const albumHandlers = [
 
     for (const photoId of photoIds) movePhotoBetweenAlbums(photoId, source.id, target.id)
 
-    const response: MovePhotosResponse = {
+    // 목 옛 계약(api-spec) — BE 형태({movedCount}만)로의 이행은 CHMO-195
+    const response = {
       movedCount: photoIds.length,
       sourceAlbumId: source.id,
       targetAlbumId: target.id,
@@ -201,7 +202,8 @@ export const albumHandlers = [
     // 미검토 사진이 삭제로 사라졌으면 이벤트가 ready로, 전부 사라졌으면 empty로 재계산
     recomputeEventReadiness(album.eventId)
 
-    const response: RemovePhotosResponse = { removedCount: photoIds.length, albumId: album.id }
+    // 목 옛 계약(api-spec) — BE 형태({detachedCount, deletedPhotoCount})로의 이행은 CHMO-195
+    const response = { removedCount: photoIds.length, albumId: album.id }
     return HttpResponse.json(response)
   }),
 ]

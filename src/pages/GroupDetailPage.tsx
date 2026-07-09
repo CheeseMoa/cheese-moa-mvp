@@ -15,8 +15,10 @@ import {
 } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
-import type { EventItem, Group } from '../types/api'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { getGroup, renameGroup } from '../api/groups'
+import { createEvent, listGroupEvents } from '../api/events'
+import type { Group } from '../types/api'
 
 /** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */
 function formatEventDate(date: string): string {
@@ -37,15 +39,20 @@ function formatEventDate(date: string): string {
 export function GroupDetailPage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
   const navigate = useNavigate()
-  const groupApi = useApi<Group>(`/groups/${groupId}`)
-  const eventsApi = useApi<{ events: EventItem[] }>(`/groups/${groupId}/events`)
+  const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
+  const eventsApi = useApi(`group-events:${groupId}`, (signal) =>
+    listGroupEvents(groupId, signal),
+  )
   const [inviteOpen, setInviteOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
 
   const group = groupApi.data
-  const events = eventsApi.data?.events ?? []
+  const events = eventsApi.data ?? []
+  // BE 상세 응답엔 eventCount가 없어 이벤트 목록 길이로 파생하는데(CHMO-192), 목록이 아직
+  // 안 왔으면 length 0을 '이벤트 0개'로 단정하지 않는다 — 값이 확정될 때만 표시(깜빡임 방지).
+  const eventCount = group?.eventCount ?? (eventsApi.data ? events.length : null)
 
   return (
     <PhoneShell>
@@ -77,7 +84,7 @@ export function GroupDetailPage() {
               </Button>
             </div>
             <p className="mt-1 text-[13px] text-muted">
-              인원 {group.memberCount}명 · 이벤트 {group.eventCount}개
+              인원 {group.memberCount}명{eventCount !== null ? ` · 이벤트 ${eventCount}개` : ''}
             </p>
 
             <h3 className="mt-5 text-[13px] font-bold text-muted">이벤트</h3>
@@ -194,10 +201,7 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
     setSubmitting(true)
     setError(null)
     try {
-      await apiFetch<Group>(`/groups/${group.id}`, {
-        method: 'PATCH',
-        body: { name: name.trim() },
-      })
+      await renameGroup(group.id, name.trim())
       if (!alive.current) return
       toast.show('🧀 모임 이름을 바꿨어요')
       onRenamed()
@@ -282,10 +286,7 @@ function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
     setSubmitting(true)
     setError(null)
     try {
-      const event = await apiFetch<EventItem>(`/groups/${groupId}/events`, {
-        method: 'POST',
-        body: { name: name.trim() },
-      })
+      const event = await createEvent(groupId, { name: name.trim() })
       if (!alive.current) return
       toast.show('🧀 이벤트를 만들었어요')
       navigate(`/groups/${groupId}/events/${event.id}`)
