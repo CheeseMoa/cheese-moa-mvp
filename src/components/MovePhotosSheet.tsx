@@ -2,9 +2,10 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { getMoveSuggestions, movePhotos } from '../api/albums'
 import { cx } from '../lib/cx'
-import type { ID, MovePhotosResponse, MoveSuggestion } from '../types/api'
+import type { ID, MoveSuggestion } from '../types/api'
 import { BottomSheet, ErrorState, useToast } from './ui'
 
 interface MovePhotosSheetProps {
@@ -33,8 +34,9 @@ export function MovePhotosSheet({
   const navigate = useNavigate()
   const toast = useToast()
   const query = photoIds.join(',')
-  const { data, error, loading, refetch } = useApi<{ suggestions: MoveSuggestion[] }>(
-    photoIds.length > 0 ? `/albums/${sourceAlbumId}/move-suggestions?photoIds=${query}` : null,
+  const { data, error, loading, refetch } = useApi(
+    photoIds.length > 0 ? `move-suggestions:${sourceAlbumId}:${query}` : null,
+    (signal) => getMoveSuggestions(sourceAlbumId, photoIds, signal),
   )
   const [busy, setBusy] = useState(false)
   // 동기 락 — setBusy 반영(리렌더) 전 같은 프레임에 들어온 연타·다중 아바타 탭이
@@ -43,17 +45,14 @@ export function MovePhotosSheet({
 
   const alive = useAlive()
 
-  const suggestions = data?.suggestions ?? []
+  const suggestions = data ?? []
 
   const handleMove = async (target: MoveSuggestion) => {
     if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
     try {
-      const res = await apiFetch<MovePhotosResponse>('/photos/move', {
-        method: 'POST',
-        body: { photoIds, sourceAlbumId, targetAlbumId: target.albumId },
-      })
+      const res = await movePhotos({ photoIds, sourceAlbumId, targetAlbumId: target.albumId })
       if (!alive.current) return
       // 성공: 부모가 시트를 닫고(언마운트) 선택 해제 + refetch 한다
       onMoved(res.movedCount, target.name)

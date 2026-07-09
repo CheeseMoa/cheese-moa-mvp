@@ -15,6 +15,7 @@ import type {
   ISODateTime,
   PhotoFlags,
 } from '../types/api'
+import { SPECIAL_ALBUM_LABELS, UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 
 // ── 내부 레코드 타입 (BE 내부 모델 포함 — API 응답에 그대로 노출 금지) ──
 
@@ -275,18 +276,13 @@ export function reviewedPhotosOfAlbum(albumId: number): DbPhoto[] {
 
 // ── 인물 이름 (personId 단위 공유 — 이름전파) ────────────────
 
-/** 인물 앨범 이름 = 모임 단위 인물 이름. 특수 앨범은 고정 라벨 */
-export const SPECIAL_ALBUM_LABELS: Record<Exclude<AlbumType, 'person'>, string> = {
-  common: '공통',
-  uncertain: '분류가 어려워요',
-  eyes_closed: '눈감은 사진',
-  blurry: '흔들린 사진',
-}
+/** 인물 앨범 이름 = 모임 단위 인물 이름. 특수 앨범은 고정 라벨(원천 lib/albumLabels.ts — UI와 공유) */
+export { SPECIAL_ALBUM_LABELS }
 
 export function albumName(album: DbAlbum): string {
   if (album.type === 'person') {
     const person = db.persons.find((p) => p.id === album.personId)
-    return person?.name ?? '이름 없음'
+    return person?.name ?? UNNAMED_PERSON_LABEL
   }
   return SPECIAL_ALBUM_LABELS[album.type]
 }

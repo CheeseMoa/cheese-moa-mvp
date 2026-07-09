@@ -14,14 +14,15 @@ import {
 } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import {
+  deletePhotos,
+  getAlbumWithPhotos,
+  markAlbumReviewed,
+  renamePersonAlbum,
+} from '../api/albums'
 import { cx } from '../lib/cx'
-import type { Album, ID, Photo, RemovePhotosResponse } from '../types/api'
-
-interface AlbumDetailResponse {
-  album: Album
-  photos: Photo[]
-}
+import type { ID } from '../types/api'
 
 /**
  * 09. 앨범 상세 · node 211:1685 · GET /albums/:id · DELETE /photos · PATCH /albums/:id
@@ -43,7 +44,7 @@ export function AlbumDetailPage() {
   const albumId = Number(albumIdParam)
   const navigate = useNavigate()
   const toast = useToast()
-  const albumApi = useApi<AlbumDetailResponse>(`/albums/${albumId}`)
+  const albumApi = useApi(`album:${albumId}`, (signal) => getAlbumWithPhotos(albumId, signal))
 
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<ID>>(new Set())
@@ -92,10 +93,7 @@ export function AlbumDetailPage() {
     if (count === 0 || busy) return
     setBusy(true)
     try {
-      await apiFetch<RemovePhotosResponse>('/photos', {
-        method: 'DELETE',
-        body: { albumId, photoIds: [...selected] },
-      })
+      await deletePhotos({ albumId, photoIds: [...selected] })
       if (!alive.current) return
       setConfirmOpen(false)
       exitSelect()
@@ -115,10 +113,7 @@ export function AlbumDetailPage() {
     if (busy) return
     setBusy(true)
     try {
-      await apiFetch<Album>(`/albums/${albumId}`, {
-        method: 'PATCH',
-        body: { reviewed: true },
-      })
+      await markAlbumReviewed(albumId)
       if (!alive.current) return
       setReviewConfirmOpen(false)
       exitSelect()
@@ -316,7 +311,7 @@ export function AlbumDetailPage() {
           label="아이 이름"
           placeholder="예) 김민준"
           initialName={album.name}
-          submit={(name) => apiFetch(`/albums/${albumId}`, { method: 'PATCH', body: { name } })}
+          submit={(name) => renamePersonAlbum(albumId, name)}
           successMessage="🧀 아이 이름을 바꿨어요"
           onRenamed={albumApi.refetch}
           note="이 이름은 같은 모임의 모든 이벤트에 함께 반영돼요."

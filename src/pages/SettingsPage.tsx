@@ -5,10 +5,10 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, ErrorState, Header, PinField, TextField, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { getMe, updateMe } from '../api/auth'
 import { clearAccessToken } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
-import type { User } from '../types/api'
 
 /**
  * 설정 / 프로필 편집 · node 240:53 · GET /me, PATCH /me + 로그아웃.
@@ -18,7 +18,7 @@ import type { User } from '../types/api'
 export function SettingsPage() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { data: me, error: loadError, loading, refetch } = useApi<User>('/me')
+  const { data: me, error: loadError, loading, refetch } = useApi('me', getMe)
   // 저장 성공 후 dirty 판정이 stale me.nickname과 비교하지 않게 서버 반영값을 따로 든다
   const [savedNickname, setSavedNickname] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
@@ -46,10 +46,8 @@ export function SettingsPage() {
     setSubmitting(true)
     setError(null)
     try {
-      const updated = await apiFetch<User>('/me', {
-        method: 'PATCH',
-        body: pin ? { nickname: nickname.trim(), pin } : { nickname: nickname.trim() },
-      })
+      // pin은 입력했을 때만 변경 요청에 포함(undefined는 본문에서 빠진다)
+      const updated = await updateMe({ nickname: nickname.trim(), pin: pin || undefined })
       if (!alive.current) return
       setSavedNickname(updated.nickname)
       setNickname(updated.nickname)

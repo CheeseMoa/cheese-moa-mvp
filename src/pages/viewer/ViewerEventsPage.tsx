@@ -2,13 +2,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
 import { Button, EmptyState, ErrorState, Header } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
+import { getViewerEvents } from '../../api/viewer'
 import { clearViewerToken } from '../../lib/viewer'
-import type { Group, ViewerEvent } from '../../types/api'
-
-interface ViewerEventsResponse {
-  group: Pick<Group, 'id' | 'name'>
-  events: ViewerEvent[]
-}
 
 /** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */
 function formatEventDate(date: string): string {
@@ -27,10 +22,7 @@ function formatEventDate(date: string): string {
 export function ViewerEventsPage() {
   const { token = '' } = useParams<{ token: string }>()
   const navigate = useNavigate()
-  const api = useApi<ViewerEventsResponse>(`/share/${token}`, {
-    auth: 'viewer',
-    viewerShareToken: token,
-  })
+  const api = useApi(`viewer-events:${token}`, (signal) => getViewerEvents(token, signal))
 
   const events = api.data?.events ?? []
 
@@ -40,7 +32,10 @@ export function ViewerEventsPage() {
       <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
         {api.data ? (
           <>
-            <h2 className="truncate text-xl font-bold text-text">{api.data.group.name}</h2>
+            {/* 모임명은 unlock 때 캐시된 값 — 캐시가 비면(구버전 해제 등) 일반 제목으로 */}
+            <h2 className="truncate text-xl font-bold text-text">
+              {api.data.groupName || '공개 이벤트'}
+            </h2>
             <p className="mt-1 text-[13px] text-muted">공개된 이벤트를 골라 사진을 확인하세요.</p>
 
             {events.length === 0 ? (

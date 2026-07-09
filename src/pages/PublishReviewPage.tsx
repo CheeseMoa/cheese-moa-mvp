@@ -4,9 +4,9 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, ConfirmDialog, ErrorState, Header, PhotoGrid, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { ApiRequestError, redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { getEvent, getReviewSummary, publishEvent } from '../api/events'
 import { cx } from '../lib/cx'
-import type { EventItem, ReviewSummary } from '../types/api'
 
 /**
  * 14. 공개 전 검수 · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
@@ -19,8 +19,10 @@ export function PublishReviewPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
   const navigate = useNavigate()
   const toast = useToast()
-  const eventApi = useApi<EventItem>(`/events/${eventId}`)
-  const summaryApi = useApi<ReviewSummary>(`/events/${eventId}/review-summary`)
+  const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
+  const summaryApi = useApi(`review-summary:${eventId}`, (signal) =>
+    getReviewSummary(eventId, signal),
+  )
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -44,7 +46,7 @@ export function PublishReviewPage() {
     if (publishing) return
     setPublishing(true)
     try {
-      await publishEvent(eventId, hasUnreviewed)
+      await publishWithForceRetry(eventId, hasUnreviewed)
       if (!alive.current) return
       setConfirmOpen(false)
       toast.show('🧀 이벤트를 공개했어요')
@@ -178,10 +180,9 @@ export function PublishReviewPage() {
  * all-reviewed로 보였는데 그새 미검토 사진이 생긴 레이스(409 HAS_UNREVIEWED_PHOTOS)면
  * 사용자가 이미 공개에 동의했으니 force로 한 번 재시도한다(미검토 사진은 어차피 뷰어 비노출).
  */
-async function publishEvent(eventId: string, force: boolean): Promise<EventItem> {
-  const url = (f: boolean) => `/events/${eventId}/publish${f ? '?force=true' : ''}`
+async function publishWithForceRetry(eventId: string, force: boolean): Promise<void> {
   try {
-    return await apiFetch<EventItem>(url(force), { method: 'POST' })
+    await publishEvent(eventId, { force })
   } catch (err) {
     // code까지 확인 — 다른 의미의 409가 추가돼도 force로 삼키지 않고 사용자에게 그대로 보여준다
     if (
@@ -190,7 +191,7 @@ async function publishEvent(eventId: string, force: boolean): Promise<EventItem>
       err.status === 409 &&
       err.code === 'HAS_UNREVIEWED_PHOTOS'
     )
-      return apiFetch<EventItem>(url(true), { method: 'POST' })
+      return publishEvent(eventId, { force: true })
     throw err
   }
 }

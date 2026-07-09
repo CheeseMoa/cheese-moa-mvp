@@ -4,8 +4,8 @@ import { PhoneShell } from '../components/PhoneShell'
 import { JoinGroupModal } from '../components/JoinGroupModal'
 import { useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { findMyGroupByJoinKey } from '../api/groups'
 import { isAuthenticated } from '../lib/auth'
-import type { Group } from '../types/api'
 
 /**
  * 02-1. 모임 참여 (초대 링크 진입) · node 211:1520 · POST /groups/join.
@@ -21,13 +21,12 @@ export function JoinPage() {
   // 코드가 비는 잘못된 링크(/join/%20 등)는 고정 모드로 죽은 폼이 되므로 직접 입력 모드로 폴백
   const fixedJoinKey = joinKey?.trim() ? joinKey.trim().toUpperCase() : undefined
 
-  // 이미 멤버인지 사전 감지 — 조회 실패 시에는 기존처럼 모달을 띄운다(참여를 막지 않음)
-  const { data, loading } = useApi<{ groups: Group[] }>(
-    authed && fixedJoinKey ? '/groups' : null,
+  // 이미 멤버인지 사전 감지 — 목록 응답엔 joinKey가 없어(시크릿 미노출, CHMO-192)
+  // 내 모임들의 초대 정보로 대조한다. 조회 실패 시에는 기존처럼 모달을 띄운다(참여를 막지 않음)
+  const { data: memberGroup, loading } = useApi(
+    authed && fixedJoinKey ? `member-group:${fixedJoinKey}` : null,
+    (signal) => findMyGroupByJoinKey(fixedJoinKey ?? '', signal),
   )
-  const memberGroup = fixedJoinKey
-    ? data?.groups.find((g) => g.joinKey === fixedJoinKey)
-    : undefined
 
   const redirected = useRef(false)
   useEffect(() => {

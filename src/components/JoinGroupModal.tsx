@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
-import type { Group } from '../types/api'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { joinGroup } from '../api/groups'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface JoinGroupModalProps {
@@ -47,10 +47,7 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     setSubmitting(true)
     setError(null)
     try {
-      const group = await apiFetch<Group>('/groups/join', {
-        method: 'POST',
-        body: { joinKey, password: password.trim() },
-      })
+      const group = await joinGroup({ joinKey, password: password.trim() })
       if (!alive.current) return
       toast.show('🧀 모임에 참여했어요')
       // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),

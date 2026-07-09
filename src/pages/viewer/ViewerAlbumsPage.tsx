@@ -2,12 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
 import { Badge, ErrorState, Header } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
-import type { EventItem, ViewerAlbum } from '../../types/api'
-
-interface ViewerAlbumsResponse {
-  event: Pick<EventItem, 'id' | 'name'>
-  albums: ViewerAlbum[]
-}
+import { getViewerAlbums } from '../../api/viewer'
 
 /**
  * 15. 공개 이벤트 앨범 (뷰어, 무로그인) · node 211:1754/211:1789 · GET /share/:token/events/:eventId
@@ -17,10 +12,9 @@ interface ViewerAlbumsResponse {
 export function ViewerAlbumsPage() {
   const { token = '', eventId = '' } = useParams<{ token: string; eventId: string }>()
   const navigate = useNavigate()
-  const api = useApi<ViewerAlbumsResponse>(`/share/${token}/events/${eventId}`, {
-    auth: 'viewer',
-    viewerShareToken: token,
-  })
+  const api = useApi(`viewer-albums:${token}:${eventId}`, (signal) =>
+    getViewerAlbums(token, eventId, signal),
+  )
 
   const albums = api.data?.albums ?? []
 
@@ -32,7 +26,7 @@ export function ViewerAlbumsPage() {
           <>
             <div className="flex items-center gap-2.5">
               <h2 className="min-w-0 truncate text-xl font-bold text-text">
-                {api.data.event.name}
+                {api.data.eventName}
               </h2>
               {/* 공개된 이벤트만 도달 가능한 화면 — 배지는 상태 표시가 아니라 라벨(spec 15) */}
               <Badge variant="published">공개됨</Badge>

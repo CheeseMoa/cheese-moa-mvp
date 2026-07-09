@@ -32,6 +32,15 @@ export function toErrorMessage(err: unknown): string {
   return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
 }
 
+/**
+ * 목록 응답 언래핑 — 실 BE는 배열을 bare로 주고(GroupSummaryResponse[]),
+ * MSW 목은 api-spec대로 객체로 감싼다({groups: [...]} 등). 도메인 모듈이 두 형태를 흡수하는
+ * 공용 헬퍼(CHMO-192). CHMO-195에서 목이 bare 배열로 이행하면 호출부는 unwrapList를 떼면 된다.
+ */
+export function unwrapList<T>(raw: T[] | { [key: string]: T[] }, key: string): T[] {
+  return Array.isArray(raw) ? raw : (raw[key] ?? [])
+}
+
 /** react-router navigate와 구조적으로 호환되는 최소 타입 — lib이 라우터에 직접 의존하지 않게 */
 type NavigateLike = (to: string, options?: { replace?: boolean; state?: unknown }) => void
 

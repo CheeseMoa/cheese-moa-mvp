@@ -5,10 +5,10 @@ import { BrandHero } from '../../components/BrandHero'
 import { PhoneShell } from '../../components/PhoneShell'
 import { Button, PinField } from '../../components/ui'
 import { useAlive } from '../../hooks/useAlive'
-import { apiFetch, toErrorMessage } from '../../api/client'
+import { toErrorMessage } from '../../api/client'
+import { unlockViewer } from '../../api/viewer'
 import { PIN_RE } from '../../lib/pin'
-import { getViewerToken, setViewerToken } from '../../lib/viewer'
-import type { ViewerUnlockResponse } from '../../types/api'
+import { getViewerToken, setViewerGroupName, setViewerToken } from '../../lib/viewer'
 
 /**
  * 잠금 해제(뷰어 진입) · POST /share/:token/unlock
@@ -36,13 +36,11 @@ export function ViewerUnlockPage() {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await apiFetch<ViewerUnlockResponse>(`/share/${token}/unlock`, {
-        method: 'POST',
-        auth: 'none',
-        body: { password },
-      })
+      const res = await unlockViewer(token, password)
       if (!alive.current) return
       setViewerToken(token, res.viewerToken)
+      // BE는 모임명을 unlock 응답에만 준다 — 공개 이벤트 목록(15-L)이 캐시로 표시(CHMO-192)
+      setViewerGroupName(token, res.groupName)
       navigate(eventsPath, { replace: true })
     } catch (err) {
       if (!alive.current) return

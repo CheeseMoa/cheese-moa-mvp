@@ -2,10 +2,10 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
-import { apiFetch, toErrorMessage } from '../api/client'
+import { toErrorMessage } from '../api/client'
+import { login, signup } from '../api/auth'
 import { setAccessToken } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
-import type { AuthResponse } from '../types/api'
 import { Button, PinField, TextField } from './ui'
 
 /** 로그인에 가로막힌 화면(초대 링크 JoinPage 등)이 넘기는 복귀 목적지 */
@@ -13,12 +13,12 @@ interface AuthLocationState {
   returnTo?: string
 }
 
-/** 모드별 문구·엔드포인트 — 모순 조합(로그인 폼 + 가입 링크 등)이 타입상 불가능하게 한곳에 묶는다 */
+/** 모드별 문구·요청 함수 — 모순 조합(로그인 폼 + 가입 링크 등)이 타입상 불가능하게 한곳에 묶는다 */
 const MODE_CONFIG = {
   login: {
     heading: '로그인',
     submitLabel: '로그인',
-    endpoint: '/auth/login',
+    submit: login,
     pinAutoComplete: 'current-password',
     switchPrompt: '계정이 없으신가요?',
     switchLabel: '계정 생성',
@@ -27,7 +27,7 @@ const MODE_CONFIG = {
   signup: {
     heading: '계정 생성',
     submitLabel: '생성',
-    endpoint: '/auth/signup',
+    submit: signup,
     pinAutoComplete: 'new-password',
     switchPrompt: '이미 계정이 있으신가요?',
     switchLabel: '로그인',
@@ -44,7 +44,7 @@ interface AuthCredentialsFormProps {
  * 빈 값/PIN 형식 오류면 CTA 비활성(screen-spec 01-1·01-2 상태), 성공 시 토큰 저장 후 /home.
  */
 export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
-  const { heading, submitLabel, endpoint, pinAutoComplete, switchPrompt, switchLabel, switchTo } =
+  const { heading, submitLabel, submit, pinAutoComplete, switchPrompt, switchLabel, switchTo } =
     MODE_CONFIG[mode]
   const navigate = useNavigate()
   const location = useLocation()
@@ -64,11 +64,7 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await apiFetch<AuthResponse>(endpoint, {
-        method: 'POST',
-        auth: 'none',
-        body: { nickname: nickname.trim(), pin },
-      })
+      const res = await submit({ nickname: nickname.trim(), pin })
       if (!alive.current) return
       setAccessToken(res.accessToken)
       // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀

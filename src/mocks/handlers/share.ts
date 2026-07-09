@@ -8,7 +8,7 @@
  * - 사진은 reviewed: true만 (공개 후 추가된 미검토 사진 비노출)
  */
 import { http, HttpResponse } from 'msw'
-import type { AlbumDownloadResponse, ViewerUnlockResponse } from '../../types/api'
+import type { AlbumDownloadResponse } from '../../types/api'
 import {
   albumName,
   byEventRecency,
@@ -95,7 +95,8 @@ export const shareHandlers = [
     if (password !== group.share.password)
       return errorResponse(403, 'WRONG_PASSWORD', '비밀번호가 올바르지 않습니다.')
 
-    const response: ViewerUnlockResponse = {
+    // 목 옛 계약(api-spec) — group 객체 포함. BE 형태(groupId·groupName 평면) 이행은 CHMO-195
+    const response = {
       viewerToken: issueViewerToken(group.share.token),
       group: { id: group.id, name: group.name },
     }

@@ -4,8 +4,10 @@ import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
 import { AlbumCard, Button, ErrorState, EventStatusBadge, Header } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, toErrorMessage } from '../api/client'
-import type { Album, EventItem, Group } from '../types/api'
+import { toErrorMessage } from '../api/client'
+import { getGroup } from '../api/groups'
+import { getEvent, listEventAlbums, renameEvent } from '../api/events'
+import type { EventItem } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
@@ -16,12 +18,14 @@ import type { Album, EventItem, Group } from '../types/api'
 export function EventDetailPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
   const navigate = useNavigate()
-  const eventApi = useApi<EventItem>(`/events/${eventId}`)
+  const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
   const event = eventApi.data
   // 뒤로가기 '‹ 모임명'은 빈/분석중 분기에서만 쓰인다(08 그리드는 '이벤트 목록' 고정).
   // 그리드 이벤트에선 group 요청을 아예 보내지 않는다 — 불필요한 라운드트립 제거
   const needsGroupName = !!event && (event.status === 'empty' || event.status === 'analyzing')
-  const groupApi = useApi<Group>(needsGroupName ? `/groups/${groupId}` : null)
+  const groupApi = useApi(needsGroupName ? `group:${groupId}` : null, (signal) =>
+    getGroup(groupId, signal),
+  )
 
   // 보조 fetch(모임명)의 401은 ErrorState를 거치지 않아 여기서 직접 복귀시킨다
   // (eventApi 401은 아래 ErrorState unauthorizedTo가 처리)
@@ -127,12 +131,14 @@ interface EventAlbumGridProps {
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
-  const albumsApi = useApi<{ albums: Album[] }>(`/events/${event.id}/albums`)
+  const albumsApi = useApi(`event-albums:${event.id}`, (signal) =>
+    listEventAlbums(event.id, signal),
+  )
   const [renameOpen, setRenameOpen] = useState(false)
 
   const base = `/groups/${groupId}/events/${event.id}`
 
-  const albums = albumsApi.data?.albums ?? []
+  const albums = albumsApi.data ?? []
   // 스펙 08: ① 인물/공통/분류어려움 메인 그리드 · ② 품질 제외(눈감음/흔들림) 하단 별도 섹션
   const mainAlbums = albums.filter((a) => a.type !== 'eyes_closed' && a.type !== 'blurry')
   const qualityAlbums = albums.filter((a) => a.type === 'eyes_closed' || a.type === 'blurry')
@@ -219,7 +225,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         label="이벤트 이름"
         placeholder="예) 6.15 운동회 오전"
         initialName={event.name}
-        submit={(name) => apiFetch(`/events/${event.id}`, { method: 'PATCH', body: { name } })}
+        submit={(name) => renameEvent(event.id, name)}
         successMessage="🧀 이벤트 이름을 바꿨어요"
         onRenamed={onEventUpdated}
       />

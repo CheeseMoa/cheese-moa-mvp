@@ -5,14 +5,10 @@ import { Button, ErrorState, Header, PhotoGrid, PhotoTile, useToast } from '../.
 import { useApi } from '../../hooks/useApi'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { useAlive } from '../../hooks/useAlive'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../../api/client'
+import { redirectIfUnauthorized, toErrorMessage } from '../../api/client'
+import { getViewerAlbumPhotos, getViewerAlbumZip } from '../../api/viewer'
 import { copyToClipboard } from '../../lib/clipboard'
-import type { AlbumDownloadResponse, ViewerAlbum, ViewerPhoto } from '../../types/api'
-
-interface ViewerAlbumDetailResponse {
-  album: Pick<ViewerAlbum, 'id' | 'name' | 'photoCount'>
-  photos: ViewerPhoto[]
-}
+import type { ViewerPhoto } from '../../types/api'
 
 /**
  * URL을 blob으로 받아 같은 출처 임시 URL로 저장을 트리거한다.
@@ -55,9 +51,8 @@ export function ViewerAlbumDetailPage() {
   } = useParams<{ token: string; eventId: string; albumId: string }>()
   const navigate = useNavigate()
   const toast = useToast()
-  const api = useApi<ViewerAlbumDetailResponse>(
-    `/share/${token}/events/${eventId}/albums/${albumId}`,
-    { auth: 'viewer', viewerShareToken: token },
+  const api = useApi(`viewer-album:${token}:${eventId}:${albumId}`, (signal) =>
+    getViewerAlbumPhotos(token, eventId, albumId, signal),
   )
   const [downloading, setDownloading] = useState(false)
   const [viewing, setViewing] = useState<ViewerPhoto | null>(null)
@@ -72,10 +67,7 @@ export function ViewerAlbumDetailPage() {
     if (downloading) return
     setDownloading(true)
     try {
-      const res = await apiFetch<AlbumDownloadResponse>(
-        `/share/${token}/events/${eventId}/albums/${albumId}/download`,
-        { auth: 'viewer', viewerShareToken: token },
-      )
+      const res = await getViewerAlbumZip(token, eventId, albumId)
       if (!alive.current) return
       const ok = await downloadViaBlob(res.downloadUrl, `${album?.name ?? 'album'}.zip`)
       if (!alive.current) return

@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, TextField, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
-import type { Group } from '../types/api'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { createGroup } from '../api/groups'
 
 /**
  * 03. 모임 만들기 · node 211:1411 · POST /groups → 모임 상세(05).
@@ -29,10 +29,7 @@ export function GroupCreatePage() {
     setSubmitting(true)
     setError(null)
     try {
-      const group = await apiFetch<Group>('/groups', {
-        method: 'POST',
-        body: { name: name.trim(), password: password.trim() },
-      })
+      const group = await createGroup({ name: name.trim(), password: password.trim() })
       if (!alive.current) return
       toast.show('🧀 모임을 만들었어요')
       // 상세에서 뒤로가기가 작성 폼으로 돌아오지 않게 폼 히스토리를 교체
