@@ -1,5 +1,5 @@
 import type { ApiError } from '../types/api'
-import { clearAccessToken, getAccessToken } from '../lib/auth'
+import { clearAuthTokens, getAccessToken, getRefreshToken, setAuthTokens } from '../lib/auth'
 import { clearViewerToken, getViewerToken } from '../lib/viewer'
 import { toFeErrorCode } from './errors'
 
@@ -111,13 +111,68 @@ export interface ApiOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
 }
 
+// ── accessToken 자동 재발급 (CHMO-193) ───────────────────────
+// accessToken은 만료 1시간이라 401이 흔하다. 제작자 요청이 401을 받으면 refreshToken으로
+// 새 토큰 쌍을 받아 원 요청을 1회 재시도한다 — 사용자는 로그아웃되지 않는다.
+// /auth/refresh 경로는 화면이 부르지 않는 transport 인프라라 도메인(auth.ts)이 아닌 여기가
+// 소유한다. 재발급 자체는 auth:'none'으로 보내(제작자 토큰 미첨부) 인터셉터가 자기 자신에
+// 재귀하지 않게 한다.
+
+interface RawAuthTokens {
+  accessToken: string
+  refreshToken: string
+}
+
+/** 동시에 여러 요청이 401을 받아도 재발급은 한 번만 — 진행 중 promise를 공유한다 */
+let refreshInFlight: Promise<boolean> | null = null
+
+function refreshAccessTokenOnce(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = requestFreshTokens().finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
+}
+
+/** refreshToken으로 새 토큰 쌍을 받아 저장. 성공 여부만 반환(토큰 정리는 호출부). */
+async function requestFreshTokens(): Promise<boolean> {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) return false
+  try {
+    const tokens = await apiFetch<RawAuthTokens>('/auth/refresh', {
+      method: 'POST',
+      auth: 'none',
+      body: { refreshToken },
+    })
+    setAuthTokens(tokens)
+    return true
+  } catch {
+    // refreshToken까지 만료/무효(TOKEN401 등) — 세션 종료. 정리·리다이렉트는 재시도 실패 경로에서.
+    return false
+  }
+}
+
 /**
  * 공통 fetch 래퍼.
  * - JSON 요청/응답 처리, Authorization Bearer 자동 첨부
  * - 실 BE 봉투는 result 언랩 + 에러 코드 정규화 + 시각 보정, MSW 평문은 그대로
+ * - 제작자 401 시 accessToken 1회 재발급 후 재시도(CHMO-193)
  * - 실패 시 ApiRequestError throw
  */
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  return sendRequest<T>(path, options, true)
+}
+
+/**
+ * @param allowRefresh 401 시 accessToken 재발급을 시도할지 — 재발급 후 재시도 호출은 false로
+ *   넘겨 무한 재발급 루프를 막는다(1회 한정).
+ */
+async function sendRequest<T>(
+  path: string,
+  options: ApiOptions,
+  allowRefresh: boolean,
+): Promise<T> {
   const { auth = 'creator', viewerShareToken, body, headers, ...init } = options
 
   const finalHeaders = new Headers(headers)
@@ -146,15 +201,21 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     body: serializedBody,
   })
 
-  if (res.status === 204) {
-    return undefined as T
+  // 제작자 토큰을 붙였는데 401 = accessToken 만료/무효.
+  if (res.status === 401 && auth === 'creator' && token) {
+    // 1회 한정 재발급 후 새 토큰으로 원 요청 재시도 — 성공하면 사용자는 로그아웃되지 않는다.
+    if (allowRefresh && (await refreshAccessTokenOnce())) {
+      return sendRequest<T>(path, options, false)
+    }
+    // 재발급 불가/실패(또는 재시도도 401) = 세션 종료. 두 토큰을 지워 가드·화면이 로그인으로 복귀시킨다.
+    clearAuthTokens()
+  } else if (res.status === 401 && auth === 'viewer' && viewerShareToken) {
+    // 뷰어 토큰은 재발급 대상이 아니다 — 지우면 존재 검사만으로 잠금 해제 화면으로 복귀(만료 1일).
+    clearViewerToken(viewerShareToken)
   }
 
-  // 토큰을 붙였는데 401 = 토큰 무효(옛 dev 토큰·재시드 등). 지워 두면 가드·화면 리다이렉트가
-  // 존재 검사만으로도 재인증 화면(로그인/뷰어 잠금 해제)으로 복귀시킨다.
-  if (res.status === 401 && token) {
-    if (auth === 'creator') clearAccessToken()
-    else if (viewerShareToken) clearViewerToken(viewerShareToken)
+  if (res.status === 204) {
+    return undefined as T
   }
 
   const isJson = res.headers.get('Content-Type')?.includes('application/json') ?? false

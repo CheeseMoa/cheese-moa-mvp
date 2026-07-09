@@ -6,8 +6,8 @@ import { Button, ErrorState, Header, PinField, TextField, useToast } from '../co
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
 import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
-import { getMe, updateMe } from '../api/auth'
-import { clearAccessToken } from '../lib/auth'
+import { getMe, logout, updateMe } from '../api/auth'
+import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
 
 /**
@@ -24,6 +24,7 @@ export function SettingsPage() {
   const [nickname, setNickname] = useState('')
   const [pin, setPin] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const alive = useAlive()
 
@@ -63,15 +64,26 @@ export function SettingsPage() {
     }
   }
 
-  const logout = () => {
-    clearAccessToken()
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    // 서버에서 refreshToken을 무효화한 뒤 로컬 토큰 삭제 — 서버 호출이 실패해도 로컬 로그아웃은 진행
+    const refreshToken = getRefreshToken()
+    if (refreshToken) {
+      try {
+        await logout(refreshToken)
+      } catch {
+        /* 서버 무효화 실패(네트워크·이미 만료 등)는 무시 — 로컬 로그아웃으로 진행 */
+      }
+    }
+    clearAuthTokens()
     navigate('/', { replace: true })
   }
 
   return (
     <PhoneShell>
       {/* 와이어프레임의 '‹ 설정'은 별도 설정 목록 화면 전제 — MVP IA에선 이 화면이 설정 전체라 기존 서브형 헤더 관례(‹ 상위화면 + 타이틀)로 맞춘다 */}
-      <Header backTo="/home" backLabel="홈" title="설정" backDisabled={submitting} />
+      <Header backTo="/home" backLabel="홈" title="설정" backDisabled={submitting || loggingOut} />
       <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
         <h2 className="text-xl font-bold text-text">프로필 편집</h2>
         {loading ? (
@@ -107,11 +119,16 @@ export function SettingsPage() {
         )}
         {/* 로그아웃은 앱 유일의 로그아웃 표면 — 프로필 로딩/실패 중에도 항상 접근 가능해야 한다 */}
         <div className="mt-auto flex flex-col gap-3 pt-6">
-          <Button variant="secondary" fullWidth onClick={logout} disabled={submitting}>
-            로그아웃
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={handleLogout}
+            disabled={submitting || loggingOut}
+          >
+            {loggingOut ? '로그아웃 중…' : '로그아웃'}
           </Button>
           {showForm ? (
-            <Button type="submit" form="profile-form" fullWidth disabled={!canSubmit}>
+            <Button type="submit" form="profile-form" fullWidth disabled={!canSubmit || loggingOut}>
               {submitting ? '저장 중…' : '저장'}
             </Button>
           ) : null}

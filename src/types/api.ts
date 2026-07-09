@@ -129,11 +129,13 @@ export interface Photo {
 
 // ── 인증 응답 ────────────────────────────────────────────────
 /**
- * BE AuthResponse엔 user 객체가 없다(userId·nickname·refreshToken 평면 필드 — CHMO-192).
- * 화면이 쓰는 건 accessToken뿐이라 FE 계약도 이것만 둔다. refreshToken 저장은 CHMO-193.
+ * BE AuthResponse엔 user 객체가 없다(userId·nickname·accessToken·refreshToken 평면 필드).
+ * 화면이 쓰는 건 두 토큰뿐이라 FE 계약도 이것만 둔다.
+ * accessToken(만료 1시간) 401 시 refreshToken으로 자동 재발급한다(CHMO-193, client.ts).
  */
 export interface AuthResponse {
   accessToken: string
+  refreshToken: string
 }
 
 // ── 업로드 presign ───────────────────────────────────────────

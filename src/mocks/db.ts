@@ -160,14 +160,39 @@ export function todayIsoDate(): ISODate {
 // ── 자기서술형 목 토큰 (재시드에도 유효한 무상태 토큰) ─────────
 
 const ACCESS_PREFIX = 'mock-access.'
+const REFRESH_PREFIX = 'mock-refresh.'
 const VIEWER_PREFIX = 'mock-viewer.'
 
 export function issueAccessToken(userId: number): string {
   return `${ACCESS_PREFIX}${userId}`
 }
 
+/**
+ * refreshToken 발급 (CHMO-193) — 매번 고유(회전). seq를 붙여 로그아웃/재발급으로 무효화한
+ * 토큰이 이후 재로그인이 발급하는 토큰과 문자열이 겹치지 않게 한다(무효화는 정확 문자열 매칭).
+ */
+export function issueRefreshToken(userId: number): string {
+  return `${REFRESH_PREFIX}${userId}.${nextId('refresh')}`
+}
+
 export function issueViewerToken(shareToken: string): string {
   return `${VIEWER_PREFIX}${shareToken}`
+}
+
+// 무효화된 refreshToken(로그아웃·회전) — 세션 스코프 인메모리 집합(재시드/새로고침에 소멸)
+const revokedRefreshTokens = new Set<string>()
+
+/** 로그아웃/회전 시 refreshToken 무효화 — 이후 재발급 시도는 401 */
+export function revokeRefreshToken(refreshToken: string): void {
+  revokedRefreshTokens.add(refreshToken)
+}
+
+/** refreshToken에서 제작자 유저 해석(형식 오류·유저 없음·무효화됨이면 null) */
+export function resolveUserFromRefreshToken(refreshToken: string): DbUser | null {
+  if (!refreshToken.startsWith(REFRESH_PREFIX)) return null
+  if (revokedRefreshTokens.has(refreshToken)) return null
+  const userId = Number(refreshToken.slice(REFRESH_PREFIX.length).split('.')[0])
+  return db.users.find((u) => u.id === userId) ?? null
 }
 
 /** Authorization 헤더에서 제작자 유저를 해석(없거나 무효면 null) */
