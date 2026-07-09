@@ -4,7 +4,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, ConfirmDialog, ErrorState, Header, PhotoGrid, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, ApiRequestError, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { apiFetch, ApiRequestError, redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import { cx } from '../lib/cx'
 import type { EventItem, ReviewSummary } from '../types/api'
 
@@ -74,7 +74,9 @@ export function PublishReviewPage() {
           {summary && event ? (
             <>
               <h1 className="text-xl font-bold text-heading">공개 전 검수</h1>
-              <p className="mt-1 truncate text-[13px] text-muted">{event.name} · 공개 직전 최종 확인</p>
+              <p className="mt-1 truncate text-[13px] text-muted">
+                {event.name} · 공개 직전 최종 확인
+              </p>
 
               <div className="mt-4 grid grid-cols-4 gap-2">
                 <StatCard value={String(summary.photoCount)} label="사진" />

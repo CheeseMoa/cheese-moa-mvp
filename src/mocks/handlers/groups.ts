@@ -12,6 +12,7 @@ import {
   optionalString,
   readJson,
   requiredString,
+  toId,
   unauthorized,
   userFrom,
 } from './shared'
@@ -68,7 +69,7 @@ export const groupHandlers = [
   http.get(api('/groups/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const group = findGroup(params.id as string)
+    const group = findGroup(toId(params.id))
     if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
     return HttpResponse.json(toGroup(group, { includeShare: true }))
   }),
@@ -77,7 +78,7 @@ export const groupHandlers = [
   http.patch(api('/groups/:id'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const group = findGroup(params.id as string)
+    const group = findGroup(toId(params.id))
     if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
 
     const body = await readJson<{ name?: unknown }>(request)
@@ -113,7 +114,7 @@ export const groupHandlers = [
   http.get(api('/groups/:id/invite'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const group = findGroup(params.id as string)
+    const group = findGroup(toId(params.id))
     if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
     return HttpResponse.json({
       joinKey: group.joinKey,
@@ -126,7 +127,7 @@ export const groupHandlers = [
   http.get(api('/groups/:id/share'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const group = findGroup(params.id as string)
+    const group = findGroup(toId(params.id))
     if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
     return HttpResponse.json({
       token: group.share.token,

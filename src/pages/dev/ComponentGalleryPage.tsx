@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { PhoneShell } from '../../components/PhoneShell'
-import { ApiRequestError } from '../../lib/api'
+import { ApiRequestError } from '../../api/client'
 import {
   AlbumCard,
   Badge,

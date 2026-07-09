@@ -1,5 +1,5 @@
 import { useApi } from '../hooks/useApi'
-import type { ApiRequestError } from '../lib/api'
+import type { ApiRequestError } from '../api/client'
 import { copyToClipboard } from '../lib/clipboard'
 import type { GroupInviteInfo, GroupShareInfo } from '../types/api'
 import { BottomSheet, Button, ErrorState, useToast } from './ui'
@@ -117,9 +117,7 @@ export function InviteSheet({ groupId, open, onClose }: SheetProps) {
  * 학부모는 링크 진입(/share/:token) 후 비밀번호를 넣어 공개된 이벤트만 본다.
  */
 export function ParentShareSheet({ groupId, open, onClose }: SheetProps) {
-  const { data, error, refetch } = useApi<GroupShareInfo>(
-    open ? `/groups/${groupId}/share` : null,
-  )
+  const { data, error, refetch } = useApi<GroupShareInfo>(open ? `/groups/${groupId}/share` : null)
   return (
     <BottomSheet
       open={open}

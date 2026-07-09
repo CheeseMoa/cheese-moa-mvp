@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { apiFetch, ApiRequestError, type ApiOptions } from '../lib/api'
+import { apiFetch, ApiRequestError, type ApiOptions } from '../api/client'
 
 export interface UseApiResult<T> {
   data: T | null

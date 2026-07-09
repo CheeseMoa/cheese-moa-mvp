@@ -114,7 +114,7 @@ const ALBUM_TYPE_ORDER: Record<AlbumType, number> = {
   blurry: 4,
 }
 
-export function albumsOfEventSorted(eventId: string): DbAlbum[] {
+export function albumsOfEventSorted(eventId: number): DbAlbum[] {
   return albumsOfEvent(eventId)
     .slice()
     .sort((a, b) => ALBUM_TYPE_ORDER[a.type] - ALBUM_TYPE_ORDER[b.type])
@@ -147,7 +147,7 @@ export function toAlbum(album: DbAlbum): Album {
  * 뷰어에 노출되는 앨범 = person/common 이면서 검토 완료 사진이 1장 이상.
  * (공개 후 추가된 미검토 사진뿐인 앨범은 빈 카드가 되므로 목록에서 제외)
  */
-export function viewerAlbumsOfEvent(eventId: string): DbAlbum[] {
+export function viewerAlbumsOfEvent(eventId: number): DbAlbum[] {
   return albumsOfEventSorted(eventId).filter(
     (a) => isViewerVisibleType(a) && reviewedPhotosOfAlbum(a.id).length > 0,
   )
@@ -178,7 +178,7 @@ export function toViewerPhoto(photo: DbPhoto): ViewerPhoto {
 
 export function toViewerEvent(event: DbEvent): ViewerEvent {
   const albums = viewerAlbumsOfEvent(event.id)
-  const photoIds = new Set<string>()
+  const photoIds = new Set<number>()
   for (const album of albums) {
     for (const photo of reviewedPhotosOfAlbum(album.id)) photoIds.add(photo.id)
   }

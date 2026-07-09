@@ -15,7 +15,7 @@ import {
 } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../lib/api'
+import { apiFetch, redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import type { EventItem, Group } from '../types/api'
 
 /** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */

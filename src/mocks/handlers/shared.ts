@@ -33,15 +33,24 @@ export function userFrom(request: Request): DbUser | null {
 }
 
 /** 멤버 전용 리소스 접근 가능 여부(비멤버에겐 404로 존재를 숨긴다) */
-export function canAccessGroup(user: DbUser, groupId: string): boolean {
+export function canAccessGroup(user: DbUser, groupId: number): boolean {
   return isMember(user.id, groupId)
 }
 
 /** 멤버가 접근 가능한 이벤트 조회(없거나 비멤버면 null → 404) */
-export function accessibleEvent(user: DbUser, eventId: string): DbEvent | null {
+export function accessibleEvent(user: DbUser, eventId: number | null): DbEvent | null {
   const event = findEvent(eventId)
   if (!event || !canAccessGroup(user, event.groupId)) return null
   return event
+}
+
+/**
+ * 경로 파라미터/본문의 리소스 id 정규화(BE int64 = 숫자) — 숫자 문자열도 허용.
+ * 양의 정수가 아니면 null(존재할 수 없는 id — 호출부에서 404/400 처리).
+ */
+export function toId(value: unknown): number | null {
+  const id = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
+  return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null
 }
 
 /** 요청 본문 JSON 파싱 — 형식 오류면 null (핸들러에서 400 처리) */
@@ -69,16 +78,16 @@ export function optionalString(value: unknown): string | null | undefined {
 }
 
 /**
- * 필수 문자열 배열(photoIds 등) — 배열이 아니거나 비었거나 빈 문자열이 섞여 있으면
+ * 필수 id 배열(photoIds 등) — 배열이 아니거나 비었거나 유효하지 않은 id가 섞여 있으면
  * null(호출부에서 400). 중복 id는 제거해 movedCount/removedCount 부풀림을 막는다.
  */
-export function requiredStringArray(value: unknown): string[] | null {
+export function requiredIdArray(value: unknown): number[] | null {
   if (!Array.isArray(value) || value.length === 0) return null
-  const items: string[] = []
+  const items: number[] = []
   for (const entry of value) {
-    const item = requiredString(entry)
-    if (!item) return null
-    if (!items.includes(item)) items.push(item)
+    const id = toId(entry)
+    if (id === null) return null
+    if (!items.includes(id)) items.push(id)
   }
   return items
 }

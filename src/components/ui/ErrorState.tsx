@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import type { ApiRequestError } from '../../lib/api'
-import { toErrorMessage } from '../../lib/api'
+import type { ApiRequestError } from '../../api/client'
+import { toErrorMessage } from '../../api/client'
 import { cx } from '../../lib/cx'
 import { Button, ButtonLink } from './Button'
 

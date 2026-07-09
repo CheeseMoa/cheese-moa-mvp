@@ -33,6 +33,7 @@ import {
   optionalString,
   readJson,
   requiredString,
+  toId,
   unauthorized,
   userFrom,
 } from './shared'
@@ -47,7 +48,7 @@ export const eventHandlers = [
   http.get(api('/groups/:id/events'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const group = findGroup(params.id as string)
+    const group = findGroup(toId(params.id))
     if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
 
     const events = db.events.filter((e) => e.groupId === group.id)
@@ -61,7 +62,7 @@ export const eventHandlers = [
   http.post(api('/groups/:id/events'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const group = findGroup(params.id as string)
+    const group = findGroup(toId(params.id))
     if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
 
     const body = await readJson<{ name?: unknown }>(request)
@@ -85,7 +86,7 @@ export const eventHandlers = [
   http.get(api('/events/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
     settleAnalysis(event.id)
     return HttpResponse.json(toEvent(event))
@@ -95,7 +96,7 @@ export const eventHandlers = [
   http.patch(api('/events/:id'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
 
     const body = await readJson<{ name?: unknown }>(request)
@@ -111,7 +112,7 @@ export const eventHandlers = [
   http.post(api('/events/:id/photos/presign'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
     // 분석 진행 중에만 업로드 불가 — 공개(published) 후에도 사진 추가 가능(새 사진은 미검토로 등록돼 뷰어 비노출)
     if (event.status === 'analyzing')
@@ -172,7 +173,7 @@ export const eventHandlers = [
   http.post(api('/events/:id/analyze'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
 
     if (photoCountOfEvent(event.id) === 0)
@@ -197,7 +198,7 @@ export const eventHandlers = [
   http.get(api('/events/:id/analysis'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
 
     const job = settleAnalysis(event.id)
@@ -210,7 +211,7 @@ export const eventHandlers = [
   http.get(api('/events/:id/review-summary'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
     settleAnalysis(event.id)
 
@@ -243,7 +244,7 @@ export const eventHandlers = [
   http.post(api('/events/:id/publish'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, params.id as string)
+    const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
     settleAnalysis(event.id)
 

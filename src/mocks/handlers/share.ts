@@ -24,7 +24,15 @@ import {
   type DbEvent,
   type DbGroup,
 } from '../db'
-import { api, errorResponse, notFound, readJson, requiredString, unauthorized } from './shared'
+import {
+  api,
+  errorResponse,
+  notFound,
+  readJson,
+  requiredString,
+  toId,
+  unauthorized,
+} from './shared'
 import {
   isViewerVisibleType,
   toViewerAlbum,
@@ -47,7 +55,7 @@ function viewerGroup(request: Request, tokenParam: string): DbGroup | null {
 }
 
 /** 해당 모임의 공개(published) 이벤트 조회 — 아니면 null → 404(비공개 이벤트 존재를 숨김) */
-function publishedEvent(group: DbGroup, eventId: string): DbEvent | null {
+function publishedEvent(group: DbGroup, eventId: number | null): DbEvent | null {
   const event = findEvent(eventId)
   if (!event || event.groupId !== group.id || event.status !== 'published') return null
   return event
@@ -61,8 +69,8 @@ function publishedEvent(group: DbGroup, eventId: string): DbEvent | null {
 function resolveViewerAlbum(
   request: Request,
   token: string,
-  eventId: string,
-  albumId: string,
+  eventId: number | null,
+  albumId: number | null,
 ): { event: DbEvent; album: DbAlbum } | Response {
   const group = viewerGroup(request, token)
   if (!group) return unauthorized()
@@ -114,7 +122,7 @@ export const shareHandlers = [
   http.get(api('/share/:token/events/:eventId'), ({ request, params }) => {
     const group = viewerGroup(request, params.token as string)
     if (!group) return unauthorized()
-    const event = publishedEvent(group, params.eventId as string)
+    const event = publishedEvent(group, toId(params.eventId))
     if (!event) return notFound('공개된 이벤트가 아닙니다.')
     settleAnalysis(event.id)
 
@@ -129,8 +137,8 @@ export const shareHandlers = [
     const resolved = resolveViewerAlbum(
       request,
       params.token as string,
-      params.eventId as string,
-      params.albumId as string,
+      toId(params.eventId),
+      toId(params.albumId),
     )
     if (!('album' in resolved)) return resolved
 
@@ -146,8 +154,8 @@ export const shareHandlers = [
     const resolved = resolveViewerAlbum(
       request,
       params.token as string,
-      params.eventId as string,
-      params.albumId as string,
+      toId(params.eventId),
+      toId(params.albumId),
     )
     if (!('album' in resolved)) return resolved
 
