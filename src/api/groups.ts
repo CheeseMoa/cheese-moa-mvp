@@ -3,15 +3,13 @@
  * BE는 목록을 bare 배열로 주고(GroupSummaryResponse[]), 시크릿(joinKey 등)은
  * 목록에서 의도적으로 노출하지 않는다 — joinKey가 필요하면 GET /groups/:id/invite.
  */
-import { apiFetch, unwrapList } from './client'
+import { apiFetch } from './client'
 import { toGroup, type RawGroup } from './mappers'
 import type { Group, GroupInviteInfo, GroupShareInfo, ID } from '../types/api'
 
-/** GET /groups — 내 모임 목록 */
+/** GET /groups — 내 모임 목록(bare 배열) */
 export function listGroups(signal?: AbortSignal): Promise<Group[]> {
-  return apiFetch<RawGroup[] | { groups: RawGroup[] }>('/groups', { signal }).then((raw) =>
-    unwrapList(raw, 'groups').map(toGroup),
-  )
+  return apiFetch<RawGroup[]>('/groups', { signal }).then((raw) => raw.map(toGroup))
 }
 
 /** GET /groups/:id — 모임 상세(BE 응답엔 eventCount 없음 — 화면이 이벤트 목록 길이로 파생) */

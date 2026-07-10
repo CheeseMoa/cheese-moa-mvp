@@ -1,4 +1,3 @@
-import type { ApiError } from '../types/api'
 import { clearAuthTokens, getAccessToken, getRefreshToken, setAuthTokens } from '../lib/auth'
 import { clearViewerToken, getViewerToken } from '../lib/viewer'
 import { toFeErrorCode } from './errors'
@@ -32,15 +31,6 @@ export function toErrorMessage(err: unknown): string {
   return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
 }
 
-/**
- * 목록 응답 언래핑 — 실 BE는 배열을 bare로 주고(GroupSummaryResponse[]),
- * MSW 목은 api-spec대로 객체로 감싼다({groups: [...]} 등). 도메인 모듈이 두 형태를 흡수하는
- * 공용 헬퍼(CHMO-192). CHMO-195에서 목이 bare 배열로 이행하면 호출부는 unwrapList를 떼면 된다.
- */
-export function unwrapList<T>(raw: T[] | { [key: string]: T[] }, key: string): T[] {
-  return Array.isArray(raw) ? raw : (raw[key] ?? [])
-}
-
 /** react-router navigate와 구조적으로 호환되는 최소 타입 — lib이 라우터에 직접 의존하지 않게 */
 type NavigateLike = (to: string, options?: { replace?: boolean; state?: unknown }) => void
 
@@ -59,10 +49,9 @@ export function redirectIfUnauthorized(
   return true
 }
 
-// ── 실 BE 응답 봉투 흡수 ─────────────────────────────────────
-// BE는 성공/실패 모두 { isSuccess, code, message, result } 봉투로 응답한다.
-// MSW 목은 api-spec 평문(성공 = 리소스 그대로, 실패 = { error: { code, message } })이라
-// 두 규약을 여기서만 구분해 흡수한다 — 호출부는 언랩된 리소스만 본다. (CHMO-191)
+// ── 응답 봉투 흡수 ───────────────────────────────────────────
+// BE는 성공/실패 모두 { isSuccess, code, message, result } 봉투로 응답한다(MSW 목도 동일 — CHMO-195).
+// 봉투는 여기서만 벗긴다 — 호출부는 언랩된 리소스만 본다. (CHMO-191)
 
 interface BeEnvelope {
   isSuccess: boolean
@@ -83,7 +72,7 @@ function isBeEnvelope(payload: unknown): payload is BeEnvelope {
 /**
  * BE `createdAt`이 `2026-07-09T04:13:46.842202`처럼 오프셋 없는 UTC로 내려와
  * 브라우저가 로컬(KST)로 읽으면 9시간 밀린다. BE 수정(CHMO-205) 전까지 'Z'를 붙여 방어.
- * 봉투 응답(실 BE)에만 적용 — MSW 픽스처는 +09:00 오프셋을 이미 가진다.
+ * 오프셋이 이미 있는 시각(MSW 픽스처의 +09:00)은 손대지 않는다.
  */
 const OFFSETLESS_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/
 
@@ -156,7 +145,7 @@ async function requestFreshTokens(): Promise<boolean> {
 /**
  * 공통 fetch 래퍼.
  * - JSON 요청/응답 처리, Authorization Bearer 자동 첨부
- * - 실 BE 봉투는 result 언랩 + 에러 코드 정규화 + 시각 보정, MSW 평문은 그대로
+ * - 응답 봉투는 result 언랩 + 에러 코드 정규화 + 시각 보정
  * - 제작자 401 시 accessToken 1회 재발급 후 재시도(CHMO-193)
  * - 실패 시 ApiRequestError throw
  */
@@ -228,9 +217,9 @@ async function sendRequest<T>(
     return normalizeTimestamps(payload.result) as T
   }
 
+  // 봉투가 아닌 응답 = API가 아닌 무언가(프록시 오류 페이지 등). 원문이 사용자에게 새지 않게 UNKNOWN.
   if (!res.ok) {
-    const err = (payload as ApiError | null)?.error
-    throw new ApiRequestError(res.status, err?.code ?? 'UNKNOWN', err?.message ?? res.statusText)
+    throw new ApiRequestError(res.status, 'UNKNOWN', res.statusText)
   }
 
   return payload as T

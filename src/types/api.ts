@@ -1,7 +1,7 @@
 /**
  * API 계약 타입 (docs/api-spec.md §2 리소스 스키마).
- * 화면은 이 타입만 본다 — 실 BE·MSW 응답 형태 차이는 src/api/ 엔드포인트 계층이
- * 흡수해 이 타입으로 변환한다(CHMO-192).
+ * 화면은 이 타입만 본다 — 서버 응답 형태(봉투·BE 필드명)는 src/api/ 엔드포인트 계층이
+ * 흡수해 이 타입으로 변환한다(CHMO-192). MSW 목도 같은 형태로 응답한다(CHMO-195).
  */
 
 /** 리소스 식별자 — BE는 전부 int64 숫자 id (CHMO-191) */
@@ -10,14 +10,6 @@ export type ID = number
 export type ISODateTime = string
 /** YYYY-MM-DD */
 export type ISODate = string
-
-// ── 공통 에러 ────────────────────────────────────────────────
-export interface ApiError {
-  error: {
-    code: string
-    message: string
-  }
-}
 
 // ── User (제작자) ────────────────────────────────────────────
 export interface User {
@@ -41,8 +33,6 @@ export interface Group {
   eventCount?: number
   /** MVP에서 항상 null (권한 등급 없음) */
   role: null
-  /** 학부모 무로그인 공유(모임 단위). 목록 응답에는 생략될 수 있음 */
-  share?: GroupShare
   createdAt: ISODateTime
 }
 
@@ -94,18 +84,17 @@ export type AlbumType = 'person' | 'common' | 'uncertain' | 'eyes_closed' | 'blu
 
 export interface Album {
   id: ID
-  eventId?: ID
   type: AlbumType
   /** 인물 앨범만 값 보유(모임 단위 인물 식별자), 그 외 null */
   personId: ID | null
   name: string
   photoCount: number
-  /** 앨범 내 미검토 사진 수(파생값) — 검토 상태는 사진 단위(Photo.reviewed) */
+  /** 앨범 내 미검토 사진 수(파생값) — 앨범 상세 응답엔 없다(목록 전용) */
   unreviewedPhotoCount?: number
   coverPhotoId: ID | null
   /** 커버 사진 썸네일 URL(파생값 — coverPhotoId 없으면 null). 08 앨범 그리드 카드 커버용 */
   coverThumbnailUrl?: string | null
-  /** 학부모 뷰어 노출 여부(person/common만 true) */
+  /** 학부모 뷰어 노출 여부(person/common만 true — 서버는 주지 않는다, type에서 파생) */
   visibleToViewer?: boolean
 }
 
@@ -117,19 +106,15 @@ export interface PhotoFlags {
 
 export interface Photo {
   id: ID
-  eventId?: ID
   /** 앨범과 다대다 — 여러 앨범에 속할 수 있음 */
   albumIds: ID[]
+  /** 원본 URL — 서버엔 downloadUrl뿐이라 같은 값이다(치수는 주지 않는다) */
   url: string
   thumbnailUrl: string
-  width?: number
-  height?: number
   flags?: PhotoFlags
   /** 검토 여부(사진 단위) — 미검토 사진은 뷰어 응답에서 제외 */
   reviewed: boolean
-  /** 뷰어 다운로드용 */
   downloadUrl?: string
-  createdAt?: ISODateTime
 }
 
 // ── 인증 응답 ────────────────────────────────────────────────
