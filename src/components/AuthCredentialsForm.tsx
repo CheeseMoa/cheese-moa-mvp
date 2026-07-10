@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAlive } from '../hooks/useAlive'
 import { toErrorMessage } from '../api/client'
 import { login, signup } from '../api/auth'
-import { setAccessToken } from '../lib/auth'
+import { setAuthTokens } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
 import { Button, PinField, TextField } from './ui'
 
@@ -66,7 +66,7 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
     try {
       const res = await submit({ nickname: nickname.trim(), pin })
       if (!alive.current) return
-      setAccessToken(res.accessToken)
+      setAuthTokens(res)
       // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀
       navigate(returnTo ?? '/home', { replace: true })
     } catch (err) {

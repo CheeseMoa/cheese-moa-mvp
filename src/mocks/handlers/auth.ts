@@ -4,7 +4,16 @@
 import { http, HttpResponse } from 'msw'
 import { PIN_RE } from '../../lib/pin'
 import type { User } from '../../types/api'
-import { db, issueAccessToken, nextId, nowIso } from '../db'
+import {
+  db,
+  issueAccessToken,
+  issueRefreshToken,
+  nextId,
+  nowIso,
+  resolveUserFromRefreshToken,
+  revokeRefreshToken,
+  type DbUser,
+} from '../db'
 import { persistUser, updatePersistedUser } from '../persist'
 import {
   api,
@@ -29,10 +38,20 @@ function nicknameTaken(nickname: string, exceptUserId?: number): boolean {
   return db.users.some((u) => u.nickname === nickname && u.id !== exceptUserId)
 }
 
-/** 목 옛 계약(api-spec) — user 객체 포함. BE 형태(userId 평면·refreshToken) 이행은 CHMO-195 */
+/** 목 옛 계약(api-spec) — user 객체 포함. BE 형태(userId 평면) 이행은 CHMO-195 */
 interface MockAuthResponse {
   accessToken: string
+  refreshToken: string
   user: User
+}
+
+/** 로그인/회원가입/재발급 공통 응답 — 새 accessToken·refreshToken 쌍(회전) 발급 */
+function authResponse(user: DbUser): MockAuthResponse {
+  return {
+    accessToken: issueAccessToken(user.id),
+    refreshToken: issueRefreshToken(user.id),
+    user: toUser(user),
+  }
 }
 
 export const authHandlers = [
@@ -49,8 +68,7 @@ export const authHandlers = [
     const user = { id: nextId('usr'), nickname, pin, createdAt: nowIso() }
     db.users.push(user)
     persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
-    const response: MockAuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
-    return HttpResponse.json(response, { status: 201 })
+    return HttpResponse.json(authResponse(user), { status: 201 })
   }),
 
   // POST /auth/login — 로그인 · 화면 01-1
@@ -63,8 +81,27 @@ export const authHandlers = [
       nickname && pin ? db.users.find((u) => u.nickname === nickname && u.pin === pin) : undefined
     if (!user)
       return errorResponse(401, 'INVALID_CREDENTIALS', '닉네임 또는 PIN이 올바르지 않습니다.')
-    const response: MockAuthResponse = { accessToken: issueAccessToken(user.id), user: toUser(user) }
-    return HttpResponse.json(response)
+    return HttpResponse.json(authResponse(user))
+  }),
+
+  // POST /auth/refresh — refreshToken으로 accessToken 재발급(회전) · CHMO-193
+  http.post(api('/auth/refresh'), async ({ request }) => {
+    const body = await readJson<{ refreshToken?: unknown }>(request)
+    const refreshToken = requiredString(body?.refreshToken)
+    const user = refreshToken ? resolveUserFromRefreshToken(refreshToken) : null
+    if (!user) return unauthorized()
+    // 회전: 쓴 refreshToken은 무효화하고 새 토큰 쌍을 발급 — 재사용(로그아웃 뒤 등) 시 401
+    revokeRefreshToken(refreshToken as string)
+    return HttpResponse.json(authResponse(user))
+  }),
+
+  // POST /auth/logout — refreshToken 서버 무효화(멱등) · CHMO-193
+  http.post(api('/auth/logout'), async ({ request }) => {
+    const body = await readJson<{ refreshToken?: unknown }>(request)
+    const refreshToken = requiredString(body?.refreshToken)
+    if (refreshToken) revokeRefreshToken(refreshToken)
+    // 무효 토큰이어도 200(멱등) — 클라이언트 로컬 로그아웃을 막지 않는다
+    return new HttpResponse(null, { status: 204 })
   }),
 
   // GET /me — 내 프로필 · 화면 설정
