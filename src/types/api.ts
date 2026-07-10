@@ -76,12 +76,17 @@ export interface EventItem {
   coverPhotoId?: ID | null
 }
 
-// ── AnalysisJob (분석 상태) ──────────────────────────────────
-export type AnalysisStatus = 'analyzing' | 'done' | 'failed'
+// ── 분석 상태 ────────────────────────────────────────────────
+/** BE `AnalysisStatusResponse.AnalysisStatus` — 이벤트 상태에서 유도한 값(진행률·폴링 없음) */
+export type AnalysisStatus = 'none' | 'analyzing' | 'done'
 
+/**
+ * GET /events/:id/analysis — 분석 상태 확인.
+ * 분석 **실패**는 BE에 표현이 없다(이벤트를 EMPTY로 되돌려 `none`과 구분 불가 — CHMO-218).
+ */
 export interface AnalysisJob {
-  eventId: ID
-  status: AnalysisStatus
+  analysisStatus: AnalysisStatus
+  eventStatus: EventStatus
 }
 
 // ── Album (앨범) ─────────────────────────────────────────────
@@ -138,25 +143,31 @@ export interface AuthResponse {
   refreshToken: string
 }
 
-// ── 업로드 presign ───────────────────────────────────────────
+// ── 업로드 3단계 (presign → S3 PUT → 등록) ───────────────────
+/** BE는 contentType을 `fileName` 확장자로 유도한다 — 요청에 담지 않는다 */
 export interface PresignFileRequest {
-  filename: string
-  contentType: string
+  fileName: string
   size: number
 }
 
 export interface PresignUpload {
-  photoId: ID
+  /** 등록(POST /events/:id/photos) 때 되돌려 보낼 업로드 키 */
+  s3Key: string
   uploadUrl: string
-  method: 'PUT'
-  headers: Record<string, string>
-  expiresAt: ISODateTime
+  /** S3 서명에 묶인 값 — PUT의 Content-Type 헤더가 이것과 정확히 같아야 서명이 맞는다 */
+  contentType: string
 }
 
-// ── 분석 요청 ────────────────────────────────────────────────
-export interface AnalyzeRequest {
+/** POST /events/:id/photos — 등록이 곧 분석 시작이라 품질 제외 옵션을 함께 보낸다 */
+export interface RegisterPhotosRequest {
+  s3Keys: string[]
   excludeEyesClosed: boolean
   excludeBlurry: boolean
+}
+
+export interface RegisterPhotosResult {
+  jobId: string
+  registeredCount: number
 }
 
 // ── 공개 전 검수 요약 ────────────────────────────────────────

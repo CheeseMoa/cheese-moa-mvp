@@ -1,25 +1,28 @@
 /**
  * 이벤트 핸들러 (docs/api-spec.md §3.3~3.4, §3.4 검수 요약·공개 포함) —
- * 목록/생성/상세/이름수정 + 업로드 presign(2-step) + 분석 시작/상태 확인 + 검수 요약/공개.
+ * 목록/생성/상세/이름수정 + 업로드 3단계(presign → S3 PUT → 등록) + 분석 상태 확인 + 검수 요약/공개.
+ * 업로드 계약은 실 BE 기준(CHMO-194) — 등록(POST /photos)이 곧 분석 시작이다.
  */
 import { http, HttpResponse } from 'msw'
-import type { AnalysisJob, PresignFileRequest, PresignUpload, ReviewSummary } from '../../types/api'
+import type { AnalysisJob, AnalysisStatus, PresignUpload, ReviewSummary } from '../../types/api'
 import {
   albumsOfEvent,
   byEventRecency,
   db,
   findAnalysisJob,
   findGroup,
+  isObjectUploaded,
+  markObjectUploaded,
   nextId,
   nowIso,
   photoCountOfAlbum,
   photoCountOfEvent,
   photosOfEvent,
-  recomputeEventReadiness,
   settleAnalysis,
   startAnalysis,
   todayIsoDate,
   transitionEvent,
+  uploadKeyPrefixOf,
   type DbEvent,
   type DbPhoto,
 } from '../db'
@@ -38,10 +41,17 @@ import {
   userFrom,
 } from './shared'
 import { isViewerVisibleType, photoThumbnailUrlOf, toEvent } from './serializers'
+import {
+  isUploadableSize,
+  MAX_UPLOAD_BATCH,
+  MAX_UPLOAD_FILE_LABEL,
+  UPLOAD_FORMAT_LABEL,
+  uploadContentTypeOf,
+  uploadExtensionOf,
+} from '../../lib/upload'
 
 const EVENT_NOT_FOUND = '이벤트를 찾을 수 없습니다.'
-/** presign 용량 상한(파일당) — 초과 시 413 PAYLOAD_TOO_LARGE */
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+const ANALYZING_LOCKED = '분석 중에는 사진을 추가할 수 없습니다.'
 
 export const eventHandlers = [
   // GET /groups/:id/events — 이벤트 목록(최신순) · 화면 05
@@ -108,36 +118,102 @@ export const eventHandlers = [
   }),
 
   // POST /events/:id/photos/presign — 업로드 URL 발급(①) · 화면 06-U
-  // 스펙 §5: S3 PUT은 성공 시뮬레이션이므로 presign 시점에 사진 등록을 즉시 반영으로 간주.
+  // 사진은 여기서 만들지 않는다 — 등록(③)이 서버 등록 시점이다(BE 계약, CHMO-194).
   http.post(api('/events/:id/photos/presign'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
     const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
     // 분석 진행 중에만 업로드 불가 — 공개(published) 후에도 사진 추가 가능(새 사진은 미검토로 등록돼 뷰어 비노출)
-    if (event.status === 'analyzing')
-      return errorResponse(400, 'VALIDATION_ERROR', '분석 중에는 사진을 추가할 수 없습니다.')
+    if (event.status === 'analyzing') return errorResponse(400, 'VALIDATION_ERROR', ANALYZING_LOCKED)
 
-    const body = await readJson<{ files?: PresignFileRequest[] }>(request)
+    const body = await readJson<{ files?: { fileName?: unknown; size?: unknown }[] }>(request)
     const files = body?.files
     if (!Array.isArray(files) || files.length === 0)
-      return errorResponse(400, 'VALIDATION_ERROR', '업로드할 파일 정보가 없습니다.')
-    for (const file of files) {
-      if (
-        !requiredString(file?.filename) ||
-        typeof file?.contentType !== 'string' ||
-        !file.contentType.startsWith('image/')
+      return errorResponse(400, 'VALIDATION_ERROR', '파일 목록은 비어 있을 수 없습니다.')
+    if (files.length > MAX_UPLOAD_BATCH)
+      return errorResponse(
+        400,
+        'VALIDATION_ERROR',
+        `한 번에 ${MAX_UPLOAD_BATCH}장까지 업로드할 수 있습니다.`,
       )
-        return errorResponse(400, 'VALIDATION_ERROR', '이미지 파일만 업로드할 수 있습니다.')
-      if (typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size <= 0)
-        return errorResponse(400, 'VALIDATION_ERROR', '파일 크기 정보가 올바르지 않습니다.')
-      if (file.size > MAX_UPLOAD_BYTES)
-        return errorResponse(413, 'PAYLOAD_TOO_LARGE', '파일당 최대 20MB까지 업로드할 수 있습니다.')
-    }
 
-    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()
+    const uploads: PresignUpload[] = []
+    for (const file of files) {
+      const fileName = requiredString(file?.fileName)
+      if (!fileName) return errorResponse(400, 'VALIDATION_ERROR', '파일 이름은 필수입니다.')
+      // BE는 MIME이 아니라 파일명 확장자로 Content-Type을 정한다(화이트리스트 밖이면 거절)
+      const extension = uploadExtensionOf(fileName)
+      const contentType = uploadContentTypeOf(fileName)
+      if (!extension || !contentType)
+        return errorResponse(
+          400,
+          'UNSUPPORTED_FILE_TYPE',
+          `${UPLOAD_FORMAT_LABEL}만 업로드할 수 있습니다.`,
+        )
+      if (typeof file.size !== 'number' || !Number.isFinite(file.size))
+        return errorResponse(400, 'VALIDATION_ERROR', '파일 크기 정보가 올바르지 않습니다.')
+      if (!isUploadableSize(file.size))
+        return errorResponse(
+          400,
+          'VALIDATION_ERROR',
+          `파일 크기는 ${MAX_UPLOAD_FILE_LABEL} 이하여야 합니다.`,
+        )
+
+      const s3Key = `${uploadKeyPrefixOf(event.id)}${crypto.randomUUID()}.${extension}`
+      uploads.push({
+        s3Key,
+        uploadUrl: `${window.location.origin}/mock-s3/${s3Key}`,
+        contentType,
+      })
+    }
+    return HttpResponse.json(uploads)
+  }),
+
+  // (②) 가짜 S3 직접 업로드 — 성공 처리하고 키를 기록한다(③이 "PUT 안 한 키"를 거를 수 있게)
+  http.put('/mock-s3/*', ({ request }) => {
+    const s3Key = decodeURIComponent(new URL(request.url).pathname.slice('/mock-s3/'.length))
+    markObjectUploaded(s3Key)
+    return new HttpResponse(null, { status: 200 })
+  }),
+
+  // POST /events/:id/photos — 업로드 완료 등록(③) · 화면 06-U
+  // 등록이 곧 분석 시작이다: 사진을 기록하고 이벤트를 analyzing으로 전이한 뒤 분류 job을 띄운다.
+  http.post(api('/events/:id/photos'), async ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const event = accessibleEvent(user, toId(params.id))
+    if (!event) return notFound(EVENT_NOT_FOUND)
+    if (event.status === 'analyzing') return errorResponse(400, 'VALIDATION_ERROR', ANALYZING_LOCKED)
+
+    const body = await readJson<{
+      s3Keys?: unknown
+      excludeEyesClosed?: unknown
+      excludeBlurry?: unknown
+    }>(request)
+    if (!body) return invalidBody()
+    const s3Keys = body.s3Keys
+    if (!Array.isArray(s3Keys) || s3Keys.length === 0)
+      return errorResponse(400, 'VALIDATION_ERROR', 's3Key 목록은 비어 있을 수 없습니다.')
+    if (s3Keys.length > MAX_UPLOAD_BATCH)
+      return errorResponse(
+        400,
+        'VALIDATION_ERROR',
+        `한 번에 ${MAX_UPLOAD_BATCH}장까지 등록할 수 있습니다.`,
+      )
+    const prefix = uploadKeyPrefixOf(event.id)
+    if (s3Keys.some((key) => typeof key !== 'string' || !key.startsWith(prefix)))
+      return errorResponse(400, 'VALIDATION_ERROR', '이 이벤트의 업로드 키가 아닙니다.')
+    // BE StoredObjectChecker — S3에 없는 키(PUT 전)는 등록할 수 없다
+    if ((s3Keys as string[]).some((key) => !isObjectUploaded(key)))
+      return errorResponse(404, 'PHOTO_NOT_FOUND', 'S3에 업로드되지 않은 사진이 있습니다.')
+
+    // published는 공개를 유지한 채 증분 분석(상태 전이 없음), 그 외에는 analyzing으로 전이
+    if (event.status !== 'published' && !transitionEvent(event.id, 'analyzing'))
+      return errorResponse(400, 'VALIDATION_ERROR', '지금은 사진을 등록할 수 없는 이벤트입니다.')
+
     const baseIndex = photoCountOfEvent(event.id)
-    const uploads: PresignUpload[] = files.map((file, i) => {
+    s3Keys.forEach((_, i) => {
       const idx = baseIndex + i
       const landscape = idx % 3 !== 2
       const photo: DbPhoto = {
@@ -152,58 +228,54 @@ export const eventHandlers = [
         createdAt: nowIso(),
       }
       db.photos.push(photo)
-      return {
-        photoId: photo.id,
-        uploadUrl: `${window.location.origin}/mock-s3/${event.id}/${photo.id}`,
-        method: 'PUT',
-        headers: { 'Content-Type': file.contentType },
-        expiresAt,
-      }
     })
-    // 새 사진은 미검토(reviewed: false) — 전 사진 검토 완료(ready)였다면 review로 되돌려
-    // "ready = 모든 사진 검토완료" 불변식을 지킨다(published는 재계산이 건드리지 않음)
-    recomputeEventReadiness(event.id)
-    return HttpResponse.json({ uploads })
+    // 품질 제외 옵션은 analyze가 아니라 등록에 실린다(BE RegisterPhotosRequest) — 생략 시 둘 다 ON
+    startAnalysis(event.id, {
+      excludeEyesClosed: body.excludeEyesClosed !== false,
+      excludeBlurry: body.excludeBlurry !== false,
+    })
+    return HttpResponse.json(
+      { jobId: crypto.randomUUID(), registeredCount: s3Keys.length },
+      { status: 201 },
+    )
   }),
 
-  // (②) 가짜 S3 직접 업로드 — presign이 발급한 uploadUrl로의 PUT을 성공 처리
-  http.put('/mock-s3/:eventId/:photoId', () => new HttpResponse(null, { status: 200 })),
-
-  // POST /events/:id/analyze — AI 분석 시작(202, 이벤트 status→analyzing) · 화면 06-U
-  http.post(api('/events/:id/analyze'), async ({ request, params }) => {
+  // POST /events/:id/analyze — 수동 재분석 트리거(등록 시 자동 발행이 실패한 경우).
+  // 업로드 해피패스는 등록(③)이 분석을 시작하므로 화면은 이 엔드포인트를 부르지 않는다.
+  http.post(api('/events/:id/analyze'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
     const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
 
-    if (photoCountOfEvent(event.id) === 0)
-      return errorResponse(400, 'VALIDATION_ERROR', '분석할 사진이 없습니다. 먼저 업로드해 주세요.')
-    if (findAnalysisJob(event.id)?.status === 'analyzing')
+    // BE: 미처리(아직 분류되지 않은) 업로드가 없으면 400
+    const pending = photosOfEvent(event.id).filter((p) => p.albumIds.length === 0)
+    if (pending.length === 0)
+      return errorResponse(400, 'VALIDATION_ERROR', '분석할 업로드가 없습니다.')
+    const previous = findAnalysisJob(event.id)
+    if (previous?.status === 'analyzing')
       return errorResponse(400, 'VALIDATION_ERROR', '이미 분석이 진행 중인 이벤트입니다.')
-    // published는 공개를 유지한 채 증분 분석(상태 전이 없음), 그 외에는 analyzing으로 전이
     if (event.status !== 'published' && !transitionEvent(event.id, 'analyzing'))
       return errorResponse(400, 'VALIDATION_ERROR', '지금은 분석을 시작할 수 없는 이벤트입니다.')
 
-    const body = await readJson<{ excludeEyesClosed?: boolean; excludeBlurry?: boolean }>(request)
-    const job = startAnalysis(event.id, {
-      excludeEyesClosed: body?.excludeEyesClosed ?? true,
-      excludeBlurry: body?.excludeBlurry ?? true,
-    })
-    const response: AnalysisJob = { eventId: job.eventId, status: job.status }
-    return HttpResponse.json(response, { status: 202 })
+    // 재발행이라 옵션은 직전 job의 것을 잇는다(BE도 첫 업로드의 옵션을 재사용)
+    startAnalysis(event.id, previous?.options ?? { excludeEyesClosed: true, excludeBlurry: true })
+    return HttpResponse.json({ jobId: crypto.randomUUID(), imageCount: pending.length })
   }),
 
   // GET /events/:id/analysis — 분석 상태 확인 · 화면 06-U / 05
   // 폴링 없음: 조회 시점에 목 지연 경과를 판정해 analyzing→done + 이벤트 status→review 전이.
+  // BE와 동일하게 이벤트 상태에서 유도한다(EMPTY→none, ANALYZING→analyzing, 그 외 done).
   http.get(api('/events/:id/analysis'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
     const event = accessibleEvent(user, toId(params.id))
     if (!event) return notFound(EVENT_NOT_FOUND)
 
-    const job = settleAnalysis(event.id)
-    if (!job) return notFound('분석 이력이 없습니다.')
-    const response: AnalysisJob = { eventId: job.eventId, status: job.status }
+    settleAnalysis(event.id)
+    const analysisStatus: AnalysisStatus =
+      event.status === 'empty' ? 'none' : event.status === 'analyzing' ? 'analyzing' : 'done'
+    const response: AnalysisJob = { analysisStatus, eventStatus: event.status }
     return HttpResponse.json(response)
   }),
 

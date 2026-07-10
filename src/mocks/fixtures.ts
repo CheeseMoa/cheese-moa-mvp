@@ -257,5 +257,7 @@ export function createFixtures(): Db {
         options: { excludeEyesClosed: true, excludeBlurry: true },
       },
     ],
+    // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다
+    uploadedKeys: [],
   }
 }

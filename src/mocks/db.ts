@@ -105,6 +105,8 @@ export interface Db {
   albums: DbAlbum[]
   photos: DbPhoto[]
   analysisJobs: DbAnalysisJob[]
+  /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
+  uploadedKeys: string[]
 }
 
 export const db: Db = {
@@ -116,6 +118,7 @@ export const db: Db = {
   albums: [],
   photos: [],
   analysisJobs: [],
+  uploadedKeys: [],
 }
 
 /** fixtures 시드/테스트 리셋용 — 전체 교체 */
@@ -128,6 +131,23 @@ export function seedDb(data: Db): void {
   db.albums = data.albums
   db.photos = data.photos
   db.analysisJobs = data.analysisJobs
+  db.uploadedKeys = data.uploadedKeys
+}
+
+// ── 업로드 오브젝트 (S3 시뮬 — CHMO-194) ─────────────────────
+
+/** BE `PhotoKeyGenerator.keyPrefixOf` — 등록 시 이 이벤트의 키인지 검증한다 */
+export function uploadKeyPrefixOf(eventId: number): string {
+  return `originals/events/${eventId}/`
+}
+
+/** 가짜 S3 PUT 성공 기록 — 등록 단계가 "PUT하지 않은 키"를 거를 수 있게 */
+export function markObjectUploaded(s3Key: string): void {
+  if (!db.uploadedKeys.includes(s3Key)) db.uploadedKeys.push(s3Key)
+}
+
+export function isObjectUploaded(s3Key: string): boolean {
+  return db.uploadedKeys.includes(s3Key)
 }
 
 // ── ID 발급 ──────────────────────────────────────────────────
