@@ -2,7 +2,7 @@
  * 이벤트 엔드포인트 (CHMO-192) — 05 이벤트 목록·06 생성/업로드/분석·08 앨범 그리드·14 공개 전 검수.
  * BE enum(EMPTY/ANALYZING/…)·eventDate·thumbnailUrl 차이는 mappers.ts가 흡수한다.
  */
-import { ApiRequestError, apiFetch, unwrapList } from './client'
+import { ApiRequestError, apiFetch } from './client'
 import { toAlbum, toEvent, type RawAlbum, type RawEvent } from './mappers'
 import type {
   Album,
@@ -15,11 +15,11 @@ import type {
   ReviewSummary,
 } from '../types/api'
 
-/** GET /groups/:id/events — 모임의 이벤트 목록 */
+/** GET /groups/:id/events — 모임의 이벤트 목록(bare 배열) */
 export function listGroupEvents(groupId: ID | string, signal?: AbortSignal): Promise<EventItem[]> {
-  return apiFetch<RawEvent[] | { events: RawEvent[] }>(`/groups/${groupId}/events`, {
-    signal,
-  }).then((raw) => unwrapList(raw, 'events').map(toEvent))
+  return apiFetch<RawEvent[]>(`/groups/${groupId}/events`, { signal }).then((raw) =>
+    raw.map(toEvent),
+  )
 }
 
 /** POST /groups/:id/events — 이벤트 생성(이름만 — 날짜는 서버 기본) */
@@ -39,20 +39,20 @@ export async function renameEvent(eventId: ID | string, name: string): Promise<v
   await apiFetch<unknown>(`/events/${eventId}`, { method: 'PATCH', body: { name } })
 }
 
-/** GET /events/:id/albums — 이벤트의 앨범 목록(08 그리드) */
+/** GET /events/:id/albums — 이벤트의 앨범 목록(08 그리드, bare 배열) */
 export function listEventAlbums(eventId: ID | string, signal?: AbortSignal): Promise<Album[]> {
-  return apiFetch<RawAlbum[] | { albums: RawAlbum[] }>(`/events/${eventId}/albums`, {
-    signal,
-  }).then((raw) => unwrapList(raw, 'albums').map(toAlbum))
+  return apiFetch<RawAlbum[]>(`/events/${eventId}/albums`, { signal }).then((raw) =>
+    raw.map(toAlbum),
+  )
 }
 
 /** BE ReviewSummaryResponse — 프리뷰 썸네일 대신 앨범 요약 배열이 온다 */
-interface RawReviewSummary extends Partial<ReviewSummary> {
+interface RawReviewSummary {
   reviewedPhotoCount: number
   uncertainCount: number
-  totalPhotos?: number
-  totalAlbums?: number
-  albums?: RawAlbum[]
+  totalPhotos: number
+  totalAlbums: number
+  albums: RawAlbum[]
 }
 
 /**
@@ -65,13 +65,12 @@ export function getReviewSummary(
   signal?: AbortSignal,
 ): Promise<ReviewSummary> {
   return apiFetch<RawReviewSummary>(`/events/${eventId}/review-summary`, { signal }).then((raw) => {
-    if (raw.previewThumbnailUrls) return raw as ReviewSummary
-    const albums = (raw.albums ?? []).map(toAlbum)
+    const albums = raw.albums.map(toAlbum)
     return {
-      photoCount: raw.totalPhotos ?? 0,
-      albumCount: raw.totalAlbums ?? 0,
+      photoCount: raw.totalPhotos,
+      albumCount: raw.totalAlbums,
       reviewedPhotoCount: raw.reviewedPhotoCount,
-      totalPhotoCount: raw.totalPhotos ?? 0,
+      totalPhotoCount: raw.totalPhotos,
       uncertainCount: raw.uncertainCount,
       previewThumbnailUrls: albums
         .filter((a) => a.type === 'person' || a.type === 'common')

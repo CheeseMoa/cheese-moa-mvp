@@ -4,11 +4,17 @@
  * 검증하는 명제: **"실 BE가 이렇게 주면 화면은 이렇게 본다."**
  * 타입이 못 잡는 회귀가 여기 있다 — `toEvent`가 `PUBLISHED`를 소문자로 안 바꿔도 `tsc`는 통과한다.
  *
- * 목이 BE 형태로 이행(CHMO-195)하면 `msw` 픽스처를 쓰는 케이스와 mappers.ts의 폴백 분기를 함께 지운다.
+ * MSW 목도 이 형태로 응답한다(CHMO-195) — 목/실서버 겸용 계약이라 두 벌의 케이스가 필요 없다.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getMe, login } from './auth'
-import { deletePhotos, getAlbumWithPhotos, getMoveSuggestions, movePhotos } from './albums'
+import {
+  deletePhotos,
+  getAlbumWithPhotos,
+  getMoveSuggestions,
+  markAlbumReviewed,
+  movePhotos,
+} from './albums'
 import {
   createEvent,
   getEvent,
@@ -28,7 +34,7 @@ import {
   unlockViewer,
 } from './viewer'
 import { setAuthTokens } from '../lib/auth'
-import { getViewerGroupName, setViewerGroupName, setViewerToken } from '../lib/viewer'
+import { setViewerGroupName, setViewerToken } from '../lib/viewer'
 import {
   BE_ALBUM_COMMON,
   BE_ALBUM_DETAIL,
@@ -58,19 +64,6 @@ import {
   envelope,
   errorEnvelope,
 } from '../test/fixtures/be'
-import {
-  MSW_ALBUM_DETAIL,
-  MSW_ALBUMS,
-  MSW_DELETE_PHOTOS,
-  MSW_EVENTS,
-  MSW_GROUPS,
-  MSW_MOVE_SUGGESTIONS,
-  MSW_REVIEW_SUMMARY,
-  MSW_VIEWER_ALBUM_PHOTOS,
-  MSW_VIEWER_ALBUMS,
-  MSW_VIEWER_EVENTS,
-  MSW_VIEWER_UNLOCK,
-} from '../test/fixtures/msw'
 import { bodyOf, emptyResponse, jsonResponse, stubFetch } from '../test/http'
 
 const SHARE_TOKEN = 'shr_grp1'
@@ -104,13 +97,6 @@ describe('모임', () => {
   it('BE 빈 목록도 빈 배열로 통과한다', async () => {
     serve(envelope([]))
     await expect(listGroups()).resolves.toEqual([])
-  })
-
-  it('MSW 래핑 목록(`{groups:[...]}`)도 같은 결과를 낸다', async () => {
-    serve(MSW_GROUPS)
-    const groups = await listGroups()
-    expect(groups).toHaveLength(1)
-    expect(groups[0]).toMatchObject({ id: 1, name: '해바라기반', role: null })
   })
 
   it('BE 상세엔 eventCount가 없다 — 화면이 이벤트 목록 길이로 파생한다', async () => {
@@ -228,12 +214,6 @@ describe('이벤트', () => {
     expect(events[0]).toMatchObject({ id: 4, date: '2026-07-10', status: 'analyzing' })
     expect(events[0].groupId).toBeUndefined()
   })
-
-  it('MSW 래핑 목록(`{events:[...]}`)의 소문자 status·date도 그대로 통과한다', async () => {
-    serve(MSW_EVENTS)
-    const events = await listGroupEvents(1)
-    expect(events[0]).toMatchObject({ id: 1, date: '2026-06-27', status: 'review' })
-  })
 })
 
 describe('앨범 · 사진', () => {
@@ -265,13 +245,6 @@ describe('앨범 · 사진', () => {
     })
   })
 
-  it('MSW 앨범 목록은 표시명·노출 여부를 직접 준다', async () => {
-    serve(MSW_ALBUMS)
-    const albums = await listEventAlbums(1)
-    expect(albums[0]).toMatchObject({ id: 1, type: 'person', name: '지민', visibleToViewer: true })
-    expect(albums[1]).toMatchObject({ type: 'eyes_closed', name: '눈감은 사진' })
-  })
-
   it('BE 앨범 상세 — photos가 내장돼 있고 eyesClosed/blurry가 평면 필드다', async () => {
     serve(envelope(BE_ALBUM_DETAIL))
 
@@ -289,18 +262,14 @@ describe('앨범 · 사진', () => {
     })
   })
 
-  it('MSW 앨범 상세는 `{album, photos}`로 감싸고 flags 객체를 준다', async () => {
-    serve(MSW_ALBUM_DETAIL)
+  it('앨범 검토 완료 — 서버는 reviewStatus enum으로 받는다(검토 상태는 사진 단위 일괄 갱신)', async () => {
+    const calls = serve(envelope(BE_ALBUM_PERSON))
 
-    const { album, photos } = await getAlbumWithPhotos(1)
+    await markAlbumReviewed(11)
 
-    expect(album).toMatchObject({ id: 1, name: '지민' })
-    expect(photos[0]).toMatchObject({
-      id: 101,
-      url: MSW_ALBUM_DETAIL.photos[0].url,
-      downloadUrl: MSW_ALBUM_DETAIL.photos[0].url,
-      flags: { eyesClosed: false, blurry: false },
-    })
+    expect(calls[0].url).toBe('/api/v1/albums/11')
+    expect(calls[0].method).toBe('PATCH')
+    expect(bodyOf(calls[0])).toEqual({ reviewStatus: 'REVIEWED' })
   })
 
   it('BE 이동 추천 — 이름 없는 추천은 공통 앨범이다', async () => {
@@ -315,16 +284,8 @@ describe('앨범 · 사진', () => {
     ])
   })
 
-  it('MSW 이동 추천(`{suggestions:[...]}`)은 표시명을 직접 준다', async () => {
-    serve(MSW_MOVE_SUGGESTIONS)
-    await expect(getMoveSuggestions(1, [101])).resolves.toEqual([
-      { albumId: 2, name: '서준', similarity: 0.82 },
-      { albumId: 3, name: '공통', similarity: null },
-    ])
-  })
-
-  it('이동 — 응답에서 movedCount만 취한다(MSW가 덧붙이는 앨범 id는 버린다)', async () => {
-    const calls = serve({ ...BE_MOVE_PHOTOS, sourceAlbumId: 11, targetAlbumId: 12 })
+  it('이동 — 요청 본문과 movedCount 응답', async () => {
+    const calls = serve(envelope(BE_MOVE_PHOTOS))
 
     const result = await movePhotos({
       photoIds: [101, 102, 103],
@@ -349,14 +310,6 @@ describe('앨범 · 사진', () => {
     expect(calls[0].method).toBe('DELETE')
     expect(bodyOf(calls[0])).toEqual({ albumId: 11, photoIds: [101, 102] })
     expect(result).toEqual({ detachedCount: 2, deletedPhotoCount: 1 })
-  })
-
-  it('MSW 삭제는 옛 계약(removedCount) — detachedCount로 흡수한다', async () => {
-    serve(MSW_DELETE_PHOTOS)
-    await expect(deletePhotos({ albumId: 1, photoIds: [101, 102] })).resolves.toEqual({
-      detachedCount: 2,
-      deletedPhotoCount: 0,
-    })
   })
 })
 
@@ -385,11 +338,6 @@ describe('공개 전 검수 요약 (14)', () => {
 
     const summary = await getReviewSummary(4)
     expect(summary.previewThumbnailUrls).toHaveLength(6)
-  })
-
-  it('MSW는 previewThumbnailUrls를 직접 준다 — 파생하지 않고 그대로 쓴다', async () => {
-    serve(MSW_REVIEW_SUMMARY)
-    await expect(getReviewSummary(1)).resolves.toEqual(MSW_REVIEW_SUMMARY)
   })
 })
 
@@ -459,15 +407,6 @@ describe('학부모 뷰어', () => {
     })
   })
 
-  it('MSW 잠금 해제는 모임을 group 객체로 감싼다', async () => {
-    serve(MSW_VIEWER_UNLOCK)
-    await expect(unlockViewer(SHARE_TOKEN, '7421')).resolves.toEqual({
-      viewerToken: 'vwr_mock_token',
-      groupId: 1,
-      groupName: '해바라기반',
-    })
-  })
-
   it('BE 공개 이벤트 목록은 bare 배열 — 모임명은 unlock 때 캐시한 값을 쓴다', async () => {
     setViewerGroupName(SHARE_TOKEN, '치즈반')
     serve(envelope([BE_EVENT_SUMMARY]))
@@ -487,13 +426,9 @@ describe('학부모 뷰어', () => {
     })
   })
 
-  it('MSW 목록은 모임명을 함께 주고, 그 값으로 캐시를 갱신한다', async () => {
-    serve(MSW_VIEWER_EVENTS)
-
-    const { groupName } = await getViewerEvents(SHARE_TOKEN)
-
-    expect(groupName).toBe('해바라기반')
-    expect(getViewerGroupName(SHARE_TOKEN)).toBe('해바라기반')
+  it('캐시된 모임명이 없으면 빈 문자열 — 목록 응답엔 모임명이 없다', async () => {
+    serve(envelope([BE_EVENT_SUMMARY]))
+    await expect(getViewerEvents(SHARE_TOKEN)).resolves.toMatchObject({ groupName: '' })
   })
 
   it('BE 앨범 목록은 eventName이 평면 필드다', async () => {
@@ -522,13 +457,6 @@ describe('학부모 뷰어', () => {
     ])
   })
 
-  it('MSW 앨범 목록은 이벤트를 event 객체로 감싼다', async () => {
-    serve(MSW_VIEWER_ALBUMS)
-    const { eventName, albums } = await getViewerAlbums(SHARE_TOKEN, 1)
-    expect(eventName).toBe('여름 물놀이')
-    expect(albums[0]).toMatchObject({ id: 1, type: 'person', name: '지민' })
-  })
-
   it('BE 사진 그리드 — type 없이 personName만 온다. null이면 공통 앨범이다', async () => {
     serve(envelope(BE_VIEWER_ALBUM_PHOTOS_COMMON))
 
@@ -548,13 +476,6 @@ describe('학부모 뷰어', () => {
     serve(envelope(BE_VIEWER_ALBUM_PHOTOS_PERSON))
     const { album } = await getViewerAlbumPhotos(SHARE_TOKEN, 4, 11)
     expect(album).toEqual({ id: 11, name: '지민', photoCount: 1 })
-  })
-
-  it('MSW 사진 그리드는 album 요약을 직접 준다', async () => {
-    serve(MSW_VIEWER_ALBUM_PHOTOS)
-    const { album, photos } = await getViewerAlbumPhotos(SHARE_TOKEN, 1, 1)
-    expect(album).toEqual({ id: 1, name: '지민', photoCount: 1 })
-    expect(photos[0].downloadUrl).toBe(MSW_VIEWER_ALBUM_PHOTOS.photos[0].downloadUrl)
   })
 
   it('zip 다운로드 — 만료 시각도 오프셋 없이 오므로 Z 보정을 받는다', async () => {

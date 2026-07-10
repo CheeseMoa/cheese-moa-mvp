@@ -1,14 +1,17 @@
 /**
- * 실 BE 응답 ↔ MSW 목 응답(api-spec 평문) 이중 흡수 매퍼 (CHMO-192).
+ * 실 BE 응답 → FE 도메인 타입 매퍼 (CHMO-192 · 목 이행 CHMO-195).
  *
  * BE는 리소스 필드명이 docs/api-spec.md와 다르다 — id가 `groupId`/`eventId`/`albumId`/
  * `photoId`/`userId`로 오고, `eventDate`(≠date)·`thumbnailUrl`(≠coverThumbnailUrl)·
- * `personName`(≠name)·대문자 enum(PUBLISHED 등)을 쓴다. 화면은 FE 도메인 타입
+ * `personName`(≠표시명)·대문자 enum(PUBLISHED 등)을 쓴다. 화면은 FE 도메인 타입
  * (src/types/api.ts)만 알도록 여기서만 변환한다. 도메인 모듈(auth/groups/events/albums/viewer)
  * 전용 내부 파일 — 화면에서 직접 import하지 않는다.
  *
- * MSW 목이 BE 형태로 이행(CHMO-195)하면 MSW 쪽 폴백(`?? raw.id` 등)을 걷어낸다.
- * BE DTO 정렬(CHMO-201)이 확정되면 해당 필드 매핑도 제거한다.
+ * MSW 목도 이 형태로 응답한다(CHMO-195) — 이중 흡수 폴백은 없다.
+ * BE DTO 정렬(CHMO-201)이 확정되면 해당 필드 매핑을 제거한다.
+ *
+ * 응답에 없는 필드는 **BE가 주지 않는다는 뜻**이다(누락이 아니라 계약):
+ * 이벤트 목록엔 groupId·publishedAt이 없고, 앨범 상세엔 thumbnail*·unreviewedPhotoCount가 없다.
  */
 import { SPECIAL_ALBUM_LABELS, UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 import type {
@@ -22,245 +25,203 @@ import type {
   ISODateTime,
   MoveSuggestion,
   Photo,
-  PhotoFlags,
   User,
   ViewerAlbum,
   ViewerEvent,
   ViewerPhoto,
 } from '../types/api'
 
-// ── 공통 필드 폴백 (BE↔MSW 필드명 차이 — 이벤트·앨범 매퍼가 공유) ──
-// BE가 필드명을 확정(CHMO-201)하면 이 헬퍼만 고치면 제작자·뷰어 매퍼가 함께 따라온다.
-
-/** 커버 사진 id — BE thumbnailPhotoId | MSW coverPhotoId */
-function coverPhotoIdOf(raw: { thumbnailPhotoId?: ID | null; coverPhotoId?: ID | null }): ID | null {
-  return raw.thumbnailPhotoId ?? raw.coverPhotoId ?? null
-}
-
-/** 커버 썸네일 URL — BE thumbnailUrl | MSW coverThumbnailUrl */
-function coverThumbnailUrlOf(raw: {
-  thumbnailUrl?: string | null
-  coverThumbnailUrl?: string | null
-}): string | null {
-  return raw.thumbnailUrl ?? raw.coverThumbnailUrl ?? null
-}
-
-/** 이벤트 날짜 — BE eventDate | MSW date */
-function eventDateOf(raw: { eventDate?: ISODate; date?: ISODate }): ISODate {
-  return (raw.eventDate ?? raw.date)!
-}
-
 // ── User ─────────────────────────────────────────────────────
 
-/** BE UserProfileResponse(userId) | MSW User(id) */
+/** BE UserProfileResponse */
 export interface RawUser {
-  userId?: ID
-  id?: ID
+  userId: ID
   nickname: string
   createdAt: ISODateTime
 }
 
 export function toUser(raw: RawUser): User {
-  return { id: (raw.userId ?? raw.id)!, nickname: raw.nickname, createdAt: raw.createdAt }
+  return { id: raw.userId, nickname: raw.nickname, createdAt: raw.createdAt }
 }
 
 // ── Group ────────────────────────────────────────────────────
 
-/** BE GroupSummaryResponse/GroupDetailResponse(groupId) | MSW Group(id) */
+/** BE GroupSummaryResponse/GroupDetailResponse */
 export interface RawGroup {
-  groupId?: ID
-  id?: ID
+  groupId: ID
   name: string
   memberCount: number
   /** BE 상세(GroupDetailResponse)엔 없음 — 화면이 이벤트 목록 길이로 파생 */
   eventCount?: number
-  share?: Group['share']
   createdAt: ISODateTime
 }
 
 export function toGroup(raw: RawGroup): Group {
   return {
-    id: (raw.groupId ?? raw.id)!,
+    id: raw.groupId,
     name: raw.name,
     memberCount: raw.memberCount,
     eventCount: raw.eventCount,
     role: null,
-    ...(raw.share ? { share: raw.share } : {}),
     createdAt: raw.createdAt,
   }
 }
 
 // ── Event ────────────────────────────────────────────────────
 
-/** BE EventSummaryResponse/EventDetailResponse | MSW EventItem/ViewerEvent */
+/** BE EventSummaryResponse(thumbnailUrl 보유) | EventDetailResponse(groupId·publishedAt 보유) */
 export interface RawEvent {
-  eventId?: ID
-  id?: ID
+  eventId: ID
+  /** 상세에만 */
   groupId?: ID
   name: string
-  /** BE는 eventDate, MSW는 date */
-  eventDate?: ISODate
-  date?: ISODate
-  /** BE는 대문자(PUBLISHED), MSW는 소문자 */
-  status?: string
+  /** 대문자 enum(EMPTY/ANALYZING/REVIEW/READY/PUBLISHED) */
+  status: string
+  eventDate: ISODate
   photoCount: number
   albumCount: number
-  /** BE는 thumbnailPhotoId/thumbnailUrl, MSW는 coverPhotoId/coverThumbnailUrl */
   thumbnailPhotoId?: ID | null
-  coverPhotoId?: ID | null
+  /** 목록에만 */
   thumbnailUrl?: string | null
-  coverThumbnailUrl?: string | null
-  createdAt?: ISODateTime
+  /** 상세에만 */
   publishedAt?: ISODateTime | null
+  createdAt?: ISODateTime
 }
 
 export function toEvent(raw: RawEvent): EventItem {
   return {
-    id: (raw.eventId ?? raw.id)!,
+    id: raw.eventId,
     groupId: raw.groupId,
     name: raw.name,
-    date: eventDateOf(raw),
-    status: (raw.status ?? 'empty').toLowerCase() as EventStatus,
+    date: raw.eventDate,
+    status: raw.status.toLowerCase() as EventStatus,
     photoCount: raw.photoCount,
     albumCount: raw.albumCount,
     createdAt: raw.createdAt,
     publishedAt: raw.publishedAt ?? null,
-    coverPhotoId: coverPhotoIdOf(raw),
+    coverPhotoId: raw.thumbnailPhotoId ?? null,
   }
 }
 
 /** 뷰어 이벤트 목록 — BE는 제작자와 같은 EventSummaryResponse를 쓴다(CHMO-192 항목 9 선례) */
 export function toViewerEvent(raw: RawEvent): ViewerEvent {
   return {
-    id: (raw.eventId ?? raw.id)!,
+    id: raw.eventId,
     name: raw.name,
-    date: eventDateOf(raw),
+    date: raw.eventDate,
     photoCount: raw.photoCount,
     albumCount: raw.albumCount,
-    coverPhotoId: coverPhotoIdOf(raw),
-    coverThumbnailUrl: coverThumbnailUrlOf(raw),
+    coverPhotoId: raw.thumbnailPhotoId ?? null,
+    coverThumbnailUrl: raw.thumbnailUrl ?? null,
     publishedAt: raw.publishedAt ?? null,
   }
 }
 
 // ── Album ────────────────────────────────────────────────────
 
-/** BE AlbumSummaryResponse/AlbumDetailResponse | MSW Album/ViewerAlbum */
+/** BE AlbumSummaryResponse | AlbumDetailResponse(thumbnail*·unreviewedPhotoCount 없음) */
 export interface RawAlbum {
-  albumId?: ID
-  id?: ID
-  eventId?: ID
-  /** BE는 대문자(EYES_CLOSED), MSW는 소문자 */
+  albumId: ID
+  /** 대문자 enum(PERSON/COMMON/UNCERTAIN/EYES_CLOSED/BLURRY) */
   type: string
-  personId?: ID | null
-  /** BE는 personName(특수 앨범 null), MSW는 표시명 name */
-  personName?: string | null
-  name?: string
+  personId: ID | null
+  /** 인물 앨범만 값 보유 — 특수 앨범은 null(표시명은 FE가 type에서 파생) */
+  personName: string | null
   photoCount: number
   unreviewedPhotoCount?: number
   thumbnailPhotoId?: ID | null
-  coverPhotoId?: ID | null
   thumbnailUrl?: string | null
-  coverThumbnailUrl?: string | null
-  visibleToViewer?: boolean
 }
 
 /** BE는 특수 앨범 표시명을 주지 않는다 — type에서 파생(라벨 원천 lib/albumLabels.ts) */
-export function albumDisplayName(type: AlbumType, name: string | null | undefined): string {
-  if (name) return name
+export function albumDisplayName(type: AlbumType, personName: string | null | undefined): string {
+  if (personName) return personName
   return type === 'person' ? UNNAMED_PERSON_LABEL : SPECIAL_ALBUM_LABELS[type]
 }
 
 export function toAlbum(raw: RawAlbum): Album {
   const type = raw.type.toLowerCase() as AlbumType
   return {
-    id: (raw.albumId ?? raw.id)!,
-    eventId: raw.eventId,
+    id: raw.albumId,
     type,
-    personId: raw.personId ?? null,
-    name: albumDisplayName(type, raw.name ?? raw.personName),
+    personId: raw.personId,
+    name: albumDisplayName(type, raw.personName),
     photoCount: raw.photoCount,
     unreviewedPhotoCount: raw.unreviewedPhotoCount,
-    coverPhotoId: coverPhotoIdOf(raw),
-    coverThumbnailUrl: coverThumbnailUrlOf(raw),
-    visibleToViewer: raw.visibleToViewer ?? (type === 'person' || type === 'common'),
+    coverPhotoId: raw.thumbnailPhotoId ?? null,
+    coverThumbnailUrl: raw.thumbnailUrl ?? null,
+    // 뷰어 노출 여부도 BE엔 없다 — person/common만 true로 파생
+    visibleToViewer: type === 'person' || type === 'common',
   }
 }
 
 export function toViewerAlbum(raw: RawAlbum): ViewerAlbum {
   const type = raw.type.toLowerCase() as AlbumType
   return {
-    id: (raw.albumId ?? raw.id)!,
+    id: raw.albumId,
     type,
-    name: albumDisplayName(type, raw.name ?? raw.personName),
+    name: albumDisplayName(type, raw.personName),
     photoCount: raw.photoCount,
-    coverPhotoId: coverPhotoIdOf(raw),
-    coverThumbnailUrl: coverThumbnailUrlOf(raw),
+    coverPhotoId: raw.thumbnailPhotoId ?? null,
+    coverThumbnailUrl: raw.thumbnailUrl ?? null,
   }
 }
 
 // ── Photo ────────────────────────────────────────────────────
 
-/** BE PhotoInAlbumResponse/ViewerPhotoResponse | MSW Photo/ViewerPhoto */
+/** BE PhotoInAlbumResponse — 원본 url 필드가 없다(downloadUrl이 원본 겸 다운로드) */
 export interface RawPhoto {
-  photoId?: ID
-  id?: ID
-  eventId?: ID
-  albumIds?: ID[]
-  /** BE엔 원본 url 필드가 없다 — downloadUrl이 원본 겸 다운로드 */
-  url?: string
-  downloadUrl?: string
+  photoId: ID
+  s3Key?: string
   thumbnailUrl: string
-  width?: number
-  height?: number
-  /** BE는 eyesClosed/blurry 평면 필드, MSW는 flags 객체 */
-  flags?: PhotoFlags
+  downloadUrl: string
   eyesClosed?: boolean
   blurry?: boolean
   reviewed?: boolean
-  createdAt?: ISODateTime
+  albumIds?: ID[]
 }
 
 export function toPhoto(raw: RawPhoto): Photo {
   return {
-    id: (raw.photoId ?? raw.id)!,
-    eventId: raw.eventId,
+    id: raw.photoId,
     albumIds: raw.albumIds ?? [],
-    url: (raw.url ?? raw.downloadUrl)!,
+    url: raw.downloadUrl,
     thumbnailUrl: raw.thumbnailUrl,
-    width: raw.width,
-    height: raw.height,
-    flags: raw.flags ?? { eyesClosed: raw.eyesClosed ?? false, blurry: raw.blurry ?? false },
+    flags: { eyesClosed: raw.eyesClosed ?? false, blurry: raw.blurry ?? false },
     reviewed: raw.reviewed ?? false,
-    downloadUrl: raw.downloadUrl ?? raw.url,
-    createdAt: raw.createdAt,
+    downloadUrl: raw.downloadUrl,
   }
 }
 
-export function toViewerPhoto(raw: RawPhoto): ViewerPhoto {
-  const download = (raw.downloadUrl ?? raw.url)!
+/** BE ViewerPhotoResponse — 검토 완료 사진만 내려온다(서버 필터링) */
+export interface RawViewerPhoto {
+  photoId: ID
+  thumbnailUrl: string
+  downloadUrl: string
+}
+
+export function toViewerPhoto(raw: RawViewerPhoto): ViewerPhoto {
   return {
-    id: (raw.photoId ?? raw.id)!,
-    url: raw.url ?? download,
+    id: raw.photoId,
+    url: raw.downloadUrl,
     thumbnailUrl: raw.thumbnailUrl,
-    downloadUrl: download,
+    downloadUrl: raw.downloadUrl,
   }
 }
 
 // ── 이동 추천 ────────────────────────────────────────────────
 
-/** BE MoveSuggestionResponse(personName) | MSW MoveSuggestion(name) — 공통 앨범은 이름 없이 온다 */
+/** BE MoveSuggestionResponse — 공통 앨범은 이름도 유사도도 없이 온다 */
 export interface RawMoveSuggestion {
   albumId: ID
-  name?: string
-  personName?: string | null
-  similarity?: number | null
+  personName: string | null
+  similarity: number | null
 }
 
 export function toMoveSuggestion(raw: RawMoveSuggestion): MoveSuggestion {
   return {
     albumId: raw.albumId,
-    name: raw.name ?? raw.personName ?? SPECIAL_ALBUM_LABELS.common,
-    similarity: raw.similarity ?? null,
+    name: raw.personName ?? SPECIAL_ALBUM_LABELS.common,
+    similarity: raw.similarity,
   }
 }

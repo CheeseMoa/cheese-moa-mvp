@@ -1,28 +1,26 @@
 /**
- * DB 레코드 → API 응답 스키마 직렬화 (docs/api-spec.md §2).
+ * DB 레코드 → **실 BE 응답 DTO** 직렬화 (CHMO-195).
+ *
+ * 함수 이름은 BE DTO를 따른다(GroupSummaryResponse → toGroupSummary …). 목록/상세가
+ * 서로 다른 필드를 주는 것까지 BE 그대로다 — 예: 이벤트 목록엔 thumbnailUrl이 있고
+ * groupId·publishedAt이 없다. 표시명('공통' 등)·flags 객체 같은 FE 계약 형태는 만들지 않는다.
+ * 변환은 `src/api/mappers.ts`가 한다.
+ *
  * pin·모임 비밀번호·학부모 비밀번호 평문은 여기서 절대 노출하지 않는다
  * (평문은 invite/share 전용 핸들러만 반환).
  */
-import type {
-  Album,
-  AlbumType,
-  EventItem,
-  Group,
-  Photo,
-  User,
-  ViewerAlbum,
-  ViewerEvent,
-  ViewerPhoto,
-} from '../../types/api'
+import type { AlbumType } from '../../types/api'
 import {
   albumCountOf,
-  albumName,
   albumsOfEvent,
   eventCountOf,
   findPhoto,
   memberCountOf,
+  personNameOf,
   photoCountOfAlbum,
   photoCountOfEvent,
+  photosOfAlbum,
+  photosOfEvent,
   reviewedPhotosOfAlbum,
   unreviewedCountOfAlbum,
   type DbAlbum,
@@ -32,8 +30,9 @@ import {
   type DbUser,
 } from '../db'
 
-export function toUser(user: DbUser): User {
-  return { id: user.id, nickname: user.nickname, createdAt: user.createdAt }
+/** BE UserProfileResponse — id가 아니라 userId */
+export function toUser(user: DbUser) {
+  return { userId: user.id, nickname: user.nickname, createdAt: user.createdAt }
 }
 
 export function shareUrlOf(group: DbGroup): string {
@@ -44,35 +43,27 @@ export function joinUrlOf(group: DbGroup): string {
   return `${window.location.origin}/join/${group.joinKey}`
 }
 
-/**
- * 목록 응답은 share 생략(스펙 예시와 동일), 상세 응답은 includeShare로 포함.
- * joinKey는 응답에 넣지 않는다 — BE와 동일하게 시크릿은 초대 전용 핸들러만 반환(CHMO-192).
- */
-export function toGroup(group: DbGroup, opts: { includeShare?: boolean } = {}): Group {
+// ── 모임 ─────────────────────────────────────────────────────
+// joinKey·비밀번호·공유 토큰은 응답에 없다 — 시크릿은 invite/share 전용 핸들러만 반환한다.
+
+/** BE GroupSummaryResponse — 목록 전용(eventCount 포함) */
+export function toGroupSummary(group: DbGroup) {
   return {
-    id: group.id,
+    groupId: group.id,
     name: group.name,
     memberCount: memberCountOf(group.id),
     eventCount: eventCountOf(group.id),
-    role: null,
-    ...(opts.includeShare
-      ? { share: { token: group.share.token, url: shareUrlOf(group), hasPassword: true } }
-      : {}),
     createdAt: group.createdAt,
   }
 }
 
-export function toEvent(event: DbEvent): EventItem {
+/** BE GroupDetailResponse — 상세엔 **eventCount가 없다**(화면이 이벤트 목록 길이로 파생) */
+export function toGroupDetail(group: DbGroup) {
   return {
-    id: event.id,
-    groupId: event.groupId,
-    name: event.name,
-    date: event.date,
-    status: event.status,
-    photoCount: photoCountOfEvent(event.id),
-    albumCount: albumCountOf(event.id),
-    createdAt: event.createdAt,
-    publishedAt: event.publishedAt,
+    groupId: group.id,
+    name: group.name,
+    memberCount: memberCountOf(group.id),
+    createdAt: group.createdAt,
   }
 }
 
@@ -90,18 +81,59 @@ export function photoThumbnailUrlOf(photo: DbPhoto): string {
   return `https://picsum.photos/seed/${photo.id}/${w}/${h}`
 }
 
-export function toPhoto(photo: DbPhoto): Photo {
+// ── 이벤트 ───────────────────────────────────────────────────
+
+/** 이벤트 커버 = 등록된 첫 사진(BE thumbnailPhotoId의 목 대응물) */
+function eventCoverOf(eventId: number): DbPhoto | undefined {
+  return photosOfEvent(eventId)[0]
+}
+
+/** BE EventSummaryResponse — 목록 전용. thumbnailUrl이 있고 groupId·publishedAt은 없다 */
+export function toEventSummary(event: DbEvent) {
+  const cover = eventCoverOf(event.id)
   return {
-    id: photo.id,
-    eventId: photo.eventId,
-    albumIds: [...photo.albumIds],
-    url: photoUrlOf(photo),
+    eventId: event.id,
+    name: event.name,
+    status: event.status.toUpperCase(),
+    eventDate: event.date,
+    thumbnailPhotoId: cover?.id ?? null,
+    thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+    photoCount: photoCountOfEvent(event.id),
+    albumCount: albumCountOf(event.id),
+    createdAt: event.createdAt,
+  }
+}
+
+/** BE EventDetailResponse — groupId·publishedAt이 있고 **thumbnailUrl은 없다** */
+export function toEventDetail(event: DbEvent) {
+  const cover = eventCoverOf(event.id)
+  return {
+    eventId: event.id,
+    groupId: event.groupId,
+    name: event.name,
+    status: event.status.toUpperCase(),
+    eventDate: event.date,
+    thumbnailPhotoId: cover?.id ?? null,
+    photoCount: photoCountOfEvent(event.id),
+    albumCount: albumCountOf(event.id),
+    publishedAt: event.publishedAt,
+    createdAt: event.createdAt,
+  }
+}
+
+// ── 사진 ─────────────────────────────────────────────────────
+
+/** BE PhotoInAlbumResponse — 원본 url·치수 없이 downloadUrl, 플래그는 평면 필드 */
+export function toPhotoInAlbum(photo: DbPhoto) {
+  return {
+    photoId: photo.id,
+    s3Key: photo.s3Key,
     thumbnailUrl: photoThumbnailUrlOf(photo),
-    width: photo.width,
-    height: photo.height,
-    flags: { ...photo.flags },
+    downloadUrl: photoUrlOf(photo),
+    blurry: photo.flags.blurry,
+    eyesClosed: photo.flags.eyesClosed,
     reviewed: photo.reviewed,
-    createdAt: photo.createdAt,
+    albumIds: [...photo.albumIds],
   }
 }
 
@@ -127,19 +159,39 @@ export function isViewerVisibleType(album: DbAlbum): boolean {
   return album.type === 'person' || album.type === 'common'
 }
 
-export function toAlbum(album: DbAlbum): Album {
+/** BE reviewStatus — 앨범엔 검토 상태가 없다(사진 단위 reviewed의 파생값). 빈 앨범은 미검토 */
+function reviewStatusOf(albumId: number, photoCount: number): 'REVIEWED' | 'UNREVIEWED' {
+  return photoCount > 0 && unreviewedCountOfAlbum(albumId) === 0 ? 'REVIEWED' : 'UNREVIEWED'
+}
+
+/** BE AlbumSummaryResponse — 대문자 type, 표시명 대신 personName(특수 앨범은 null) */
+export function toAlbumSummary(album: DbAlbum) {
   const cover = album.coverPhotoId ? findPhoto(album.coverPhotoId) : undefined
+  const photoCount = photoCountOfAlbum(album.id)
   return {
-    id: album.id,
-    eventId: album.eventId,
-    type: album.type,
+    albumId: album.id,
+    type: album.type.toUpperCase(),
+    personName: personNameOf(album),
     personId: album.personId,
-    name: albumName(album),
-    photoCount: photoCountOfAlbum(album.id),
+    photoCount,
     unreviewedPhotoCount: unreviewedCountOfAlbum(album.id),
-    coverPhotoId: album.coverPhotoId,
-    coverThumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
-    visibleToViewer: isViewerVisibleType(album),
+    thumbnailPhotoId: cover?.id ?? null,
+    thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+    reviewStatus: reviewStatusOf(album.id, photoCount),
+  }
+}
+
+/** BE AlbumDetailResponse — photos를 내장하고 thumbnail*·unreviewedPhotoCount·eventId가 없다 */
+export function toAlbumDetail(album: DbAlbum) {
+  const photos = photosOfAlbum(album.id)
+  return {
+    albumId: album.id,
+    type: album.type.toUpperCase(),
+    personName: personNameOf(album),
+    personId: album.personId,
+    photoCount: photos.length,
+    reviewStatus: reviewStatusOf(album.id, photos.length),
+    photos: photos.map(toPhotoInAlbum),
   }
 }
 
@@ -155,44 +207,53 @@ export function viewerAlbumsOfEvent(eventId: number): DbAlbum[] {
   )
 }
 
-/** 뷰어 카운트·커버는 검토 완료 사진 기준(커버가 미검토면 첫 검토 사진으로 대체) */
-export function toViewerAlbum(album: DbAlbum): ViewerAlbum {
+/**
+ * 뷰어 앨범 — BE는 제작자와 같은 AlbumSummaryResponse를 쓴다.
+ * 카운트·커버는 검토 완료 사진 기준(커버가 미검토면 첫 검토 사진으로 대체).
+ */
+export function toViewerAlbumSummary(album: DbAlbum) {
   const reviewed = reviewedPhotosOfAlbum(album.id)
   const cover = reviewed.find((p) => p.id === album.coverPhotoId) ?? reviewed[0] ?? null
   return {
-    id: album.id,
-    type: album.type,
-    name: albumName(album),
+    albumId: album.id,
+    type: album.type.toUpperCase(),
+    personName: personNameOf(album),
+    personId: album.personId,
     photoCount: reviewed.length,
-    coverPhotoId: cover?.id ?? null,
-    coverThumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+    // 뷰어엔 검토 완료 사진만 내려간다 — 미검토는 존재 자체가 노출되지 않는다
+    unreviewedPhotoCount: 0,
+    thumbnailPhotoId: cover?.id ?? null,
+    thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+    reviewStatus: 'REVIEWED' as const,
   }
 }
 
-export function toViewerPhoto(photo: DbPhoto): ViewerPhoto {
+/** BE ViewerPhotoResponse — 원본 url이 없다(downloadUrl이 원본 겸 다운로드) */
+export function toViewerPhoto(photo: DbPhoto) {
   return {
-    id: photo.id,
-    url: photoUrlOf(photo),
+    photoId: photo.id,
     thumbnailUrl: photoThumbnailUrlOf(photo),
     downloadUrl: photoUrlOf(photo),
   }
 }
 
-export function toViewerEvent(event: DbEvent): ViewerEvent {
+/** 뷰어 이벤트 목록 — BE는 제작자와 같은 EventSummaryResponse를 쓴다(카운트·커버만 검토 완료 기준) */
+export function toViewerEventSummary(event: DbEvent) {
   const albums = viewerAlbumsOfEvent(event.id)
   const photoIds = new Set<number>()
   for (const album of albums) {
     for (const photo of reviewedPhotosOfAlbum(album.id)) photoIds.add(photo.id)
   }
-  const coverAlbum = albums[0] ? toViewerAlbum(albums[0]) : null
+  const cover = albums[0] ? toViewerAlbumSummary(albums[0]) : null
   return {
-    id: event.id,
+    eventId: event.id,
     name: event.name,
-    date: event.date,
+    status: event.status.toUpperCase(),
+    eventDate: event.date,
+    thumbnailPhotoId: cover?.thumbnailPhotoId ?? null,
+    thumbnailUrl: cover?.thumbnailUrl ?? null,
     photoCount: photoIds.size,
     albumCount: albums.length,
-    coverPhotoId: coverAlbum?.coverPhotoId ?? null,
-    coverThumbnailUrl: coverAlbum?.coverThumbnailUrl ?? null,
-    publishedAt: event.publishedAt,
+    createdAt: event.createdAt,
   }
 }

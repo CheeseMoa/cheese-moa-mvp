@@ -16,7 +16,7 @@
  * createFixtures()는 **호출마다 모든 객체를 새로 만든다** — 재시드가 이전 세션의
  * 변형(사진 이동·검토 표시 등)을 물려받지 않게(테스트/리셋 안전).
  */
-import type { Db, DbAlbum, DbPhoto } from './db'
+import { uploadKeyPrefixOf, type Db, type DbAlbum, type DbPhoto } from './db'
 
 // ── 생성 헬퍼 ────────────────────────────────────────────────
 
@@ -24,9 +24,12 @@ import type { Db, DbAlbum, DbPhoto } from './db'
 function makePhotos(idBase: number, eventId: number, count: number, baseTime: string): DbPhoto[] {
   return Array.from({ length: count }, (_, i) => {
     const landscape = i % 3 !== 2 // 2/3는 가로, 1/3은 세로
+    const id = idBase + i + 1
     return {
-      id: idBase + i + 1,
+      id,
       eventId,
+      // 시드 사진은 presign을 거치지 않았지만 BE 응답엔 s3Key가 있다 — 키 규칙만 맞춘 결정적 값
+      s3Key: `${uploadKeyPrefixOf(eventId)}seed-${id}.jpg`,
       albumIds: [],
       width: landscape ? 1600 : 1200,
       height: landscape ? 1200 : 1600,

@@ -10,13 +10,13 @@
 import { http, HttpResponse } from 'msw'
 import type { AlbumDownloadResponse } from '../../types/api'
 import {
-  albumName,
   byEventRecency,
   db,
   eventsOfGroup,
   findAlbum,
   findEvent,
   issueViewerToken,
+  personNameOf,
   resolveViewerShareToken,
   reviewedPhotosOfAlbum,
   settleAnalysis,
@@ -27,7 +27,9 @@ import {
 import {
   api,
   errorResponse,
+  invalidRequest,
   notFound,
+  ok,
   readJson,
   requiredString,
   toId,
@@ -35,8 +37,8 @@ import {
 } from './shared'
 import {
   isViewerVisibleType,
-  toViewerAlbum,
-  toViewerEvent,
+  toViewerAlbumSummary,
+  toViewerEventSummary,
   toViewerPhoto,
   viewerAlbumsOfEvent,
 } from './serializers'
@@ -91,19 +93,20 @@ export const shareHandlers = [
 
     const body = await readJson<{ password?: unknown }>(request)
     const password = requiredString(body?.password)
-    if (!password) return errorResponse(400, 'VALIDATION_ERROR', '비밀번호를 입력해 주세요.')
+    if (!password) return invalidRequest('비밀번호를 입력해 주세요.')
+    // BE JOIN403 — 모임 참여(제작자 비밀번호)도 같은 코드를 쓴다
     if (password !== group.share.password)
-      return errorResponse(403, 'WRONG_PASSWORD', '비밀번호가 올바르지 않습니다.')
+      return errorResponse(403, 'JOIN403', '비밀번호가 일치하지 않습니다.')
 
-    // 목 옛 계약(api-spec) — group 객체 포함. BE 형태(groupId·groupName 평면) 이행은 CHMO-195
-    const response = {
+    // 모임명은 이 응답에만 온다 — 목록(GET /share/:token)은 bare 배열이라 이름이 없다
+    return ok({
       viewerToken: issueViewerToken(group.share.token),
-      group: { id: group.id, name: group.name },
-    }
-    return HttpResponse.json(response)
+      groupId: group.id,
+      groupName: group.name,
+    })
   }),
 
-  // GET /share/:token — 공개 이벤트 목록 · 화면 15-L
+  // GET /share/:token — 공개 이벤트 목록(bare 배열, 모임명 없음) · 화면 15-L
   http.get(api('/share/:token'), ({ request, params }) => {
     const group = viewerGroup(request, params.token as string)
     if (!group) return unauthorized()
@@ -113,10 +116,7 @@ export const shareHandlers = [
     for (const event of events) settleAnalysis(event.id)
     events.sort(byEventRecency)
 
-    return HttpResponse.json({
-      group: { id: group.id, name: group.name },
-      events: events.map(toViewerEvent),
-    })
+    return ok(events.map(toViewerEventSummary))
   }),
 
   // GET /share/:token/events/:eventId — 공개 이벤트 앨범(person/common만) · 화면 15
@@ -127,9 +127,11 @@ export const shareHandlers = [
     if (!event) return notFound('공개된 이벤트가 아닙니다.')
     settleAnalysis(event.id)
 
-    return HttpResponse.json({
-      event: { id: event.id, name: event.name },
-      albums: viewerAlbumsOfEvent(event.id).map(toViewerAlbum),
+    // BE ViewerEventAlbumsResponse — eventId·eventName이 평면 필드다
+    return ok({
+      eventId: event.id,
+      eventName: event.name,
+      albums: viewerAlbumsOfEvent(event.id).map(toViewerAlbumSummary),
     })
   }),
 
@@ -143,10 +145,11 @@ export const shareHandlers = [
     )
     if (!('album' in resolved)) return resolved
 
-    const photos = reviewedPhotosOfAlbum(resolved.album.id)
-    return HttpResponse.json({
-      album: { id: resolved.album.id, name: albumName(resolved.album), photoCount: photos.length },
-      photos: photos.map(toViewerPhoto),
+    // BE ViewerAlbumPhotosResponse — type도 photoCount도 없고 personName만 온다(공통 앨범은 null)
+    return ok({
+      albumId: resolved.album.id,
+      personName: personNameOf(resolved.album),
+      photos: reviewedPhotosOfAlbum(resolved.album.id).map(toViewerPhoto),
     })
   }),
 
@@ -164,7 +167,7 @@ export const shareHandlers = [
       downloadUrl: `${window.location.origin}/mock-zip/${resolved.event.id}_${resolved.album.id}.zip`,
       expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
     }
-    return HttpResponse.json(response)
+    return ok(response)
   }),
 
   // 가짜 zip 다운로드 — 빈 ZIP(EOCD 22바이트)으로 다운로드 동작 자체를 시뮬레이션

@@ -15,7 +15,6 @@ import type {
   ISODateTime,
   PhotoFlags,
 } from '../types/api'
-import { SPECIAL_ALBUM_LABELS, UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 
 // ── 내부 레코드 타입 (BE 내부 모델 포함 — API 응답에 그대로 노출 금지) ──
 
@@ -78,8 +77,11 @@ export interface DbAlbum {
 export interface DbPhoto {
   id: number
   eventId: number
+  /** 원본 오브젝트 키(등록 시 클라이언트가 되돌려 보낸 presign 키) — BE PhotoInAlbumResponse.s3Key */
+  s3Key: string
   /** 앨범과 다대다 — 비어 있으면 어떤 앨범에도 안 보임 */
   albumIds: number[]
+  /** 목 이미지 URL 조립용 내부 값 — API 응답엔 노출하지 않는다(BE도 치수를 주지 않는다) */
   width: number
   height: number
   flags: PhotoFlags
@@ -321,15 +323,13 @@ export function reviewedPhotosOfAlbum(albumId: number): DbPhoto[] {
 
 // ── 인물 이름 (personId 단위 공유 — 이름전파) ────────────────
 
-/** 인물 앨범 이름 = 모임 단위 인물 이름. 특수 앨범은 고정 라벨(원천 lib/albumLabels.ts — UI와 공유) */
-export { SPECIAL_ALBUM_LABELS }
-
-export function albumName(album: DbAlbum): string {
-  if (album.type === 'person') {
-    const person = db.persons.find((p) => p.id === album.personId)
-    return person?.name ?? UNNAMED_PERSON_LABEL
-  }
-  return SPECIAL_ALBUM_LABELS[album.type]
+/**
+ * 앨범의 인물 이름 — BE와 동일하게 **인물 앨범만 값을 갖고 특수 앨범은 null**이다.
+ * 특수 앨범 표시명('공통' 등)은 서버가 주지 않는다 — FE가 type에서 파생한다(api/mappers.ts).
+ */
+export function personNameOf(album: DbAlbum): string | null {
+  if (album.type !== 'person') return null
+  return db.persons.find((p) => p.id === album.personId)?.name ?? null
 }
 
 /**

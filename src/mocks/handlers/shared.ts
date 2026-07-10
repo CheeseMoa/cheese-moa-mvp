@@ -1,5 +1,9 @@
 /**
- * 핸들러 공용 헬퍼 — 경로 프리픽스, 공통 에러 포맷, 인증/멤버십 해석.
+ * 핸들러 공용 헬퍼 — 경로 프리픽스, BE 응답 봉투, 인증/멤버십 해석.
+ *
+ * 응답 규약은 실 BE와 동일하다(CHMO-195): 성공·실패 모두
+ * `{ isSuccess, code, message, result }` 봉투로 내려간다. 언랩·에러 코드 정규화는
+ * `src/api/client.ts`·`errors.ts`가 하므로 화면은 봉투를 보지 않는다.
  */
 import { HttpResponse } from 'msw'
 import { findEvent, isMember, resolveUser, type DbEvent, type DbUser } from '../db'
@@ -9,22 +13,66 @@ export function api(path: string): string {
   return `/api/v1${path}`
 }
 
-/** 공통 에러 포맷 { error: { code, message } } */
+// ── BE 응답 봉투 ─────────────────────────────────────────────
+
+/** 성공 봉투 — 리소스는 result에 담긴다(목록은 bare 배열) */
+export function ok<T>(result: T) {
+  return HttpResponse.json({ isSuccess: true, code: 'COMMON200', message: '성공입니다.', result })
+}
+
+/** 생성 성공 봉투 (201) */
+export function created<T>(result: T) {
+  return HttpResponse.json(
+    { isSuccess: true, code: 'COMMON201', message: '성공입니다.', result },
+    { status: 201 },
+  )
+}
+
+/** 본문 없는 성공 (로그아웃) — BE 응답 코드는 미확인 */
+export function noContent() {
+  return new HttpResponse(null, { status: 204 })
+}
+
+/** 실패 봉투 — result 없이 code·message만 (HTTP 200이어도 isSuccess:false면 실패) */
 export function errorResponse(status: number, code: string, message: string) {
-  return HttpResponse.json({ error: { code, message } }, { status })
+  return HttpResponse.json({ isSuccess: false, code, message }, { status })
 }
 
+/**
+ * 에러 코드는 실서버에서 **채집된 것만** BE 코드를 쓴다(`src/test/fixtures/be.ts`).
+ * 채집되지 않은 케이스(모임 404·닉네임 중복·이미 멤버·미검토 공개)는 FE 의미 코드를
+ * 그대로 둔다 — `errors.ts`는 미지의 코드를 통과시키므로 화면 분기는 그대로 동작하고,
+ * 추측한 코드를 BE 진실 테이블에 굳히지 않는다. BE 코드를 확인하면 여기와 errors.ts만 고친다.
+ */
+
+/** 인증 필요/토큰 무효 — BE COMMON401 */
 export function unauthorized() {
-  return errorResponse(401, 'UNAUTHORIZED', '로그인이 필요합니다.')
+  return errorResponse(401, 'COMMON401', '인증이 필요합니다.')
 }
 
+/** BE 코드 미확인 — 모임·공유 링크 404는 채집되지 않았다 */
 export function notFound(message = '리소스를 찾을 수 없습니다.') {
   return errorResponse(404, 'NOT_FOUND', message)
 }
 
+/** 이벤트 없음 — BE MOMENT404(BE 도메인명이 moment다) */
+export function eventNotFound() {
+  return errorResponse(404, 'MOMENT404', '이벤트를 찾을 수 없습니다.')
+}
+
+/** 앨범 없음 — BE ALBUM404 */
+export function albumNotFound() {
+  return errorResponse(404, 'ALBUM404', '앨범을 찾을 수 없습니다.')
+}
+
+/** 검증 실패 — BE VALID400(업로드 키 불일치 응답에서 채집: 도메인 무관 공용 검증 코드) */
+export function invalidRequest(message: string) {
+  return errorResponse(400, 'VALID400', message)
+}
+
 /** 본문이 JSON이 아닐 때(readJson → null) 공통 400 */
 export function invalidBody() {
-  return errorResponse(400, 'VALIDATION_ERROR', '요청 본문이 올바르지 않습니다.')
+  return invalidRequest('요청 본문이 올바르지 않습니다.')
 }
 
 /** Authorization 헤더에서 제작자 유저 해석(무효면 null) */

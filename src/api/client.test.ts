@@ -1,29 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ApiRequestError,
-  apiFetch,
-  redirectIfUnauthorized,
-  toErrorMessage,
-  unwrapList,
-} from './client'
+import { ApiRequestError, apiFetch, redirectIfUnauthorized, toErrorMessage } from './client'
 import { clearRefreshToken, getAccessToken, getRefreshToken, setAuthTokens } from '../lib/auth'
 import { getViewerToken, setViewerToken } from '../lib/viewer'
 import { BE_ERRORS, envelope, errorEnvelope } from '../test/fixtures/be'
-import { mswError } from '../test/fixtures/msw'
 import { bodyOf, emptyResponse, jsonResponse, stubFetch, textResponse } from '../test/http'
 
 const REFRESH_URL = '/api/v1/auth/refresh'
 
-/** 실 BE 봉투 · MSW 평문 · 401 자동 재발급 — 화면이 절대 보지 않는 transport 계약 */
+/** 응답 봉투 · 시각 보정 · 401 자동 재발급 — 화면이 절대 보지 않는 transport 계약 */
 describe('apiFetch — 응답 흡수', () => {
-  it('BE 봉투는 result만 돌려준다', async () => {
+  it('봉투는 result만 돌려준다', async () => {
     stubFetch(() => jsonResponse(envelope({ groupId: 6, name: '해바라기반' })))
     await expect(apiFetch('/groups/6')).resolves.toEqual({ groupId: 6, name: '해바라기반' })
   })
 
-  it('MSW 평문은 그대로 돌려준다', async () => {
-    stubFetch(() => jsonResponse({ groups: [] }))
-    await expect(apiFetch('/groups')).resolves.toEqual({ groups: [] })
+  it('bare 배열 result도 그대로 돌려준다 — 목록 응답은 감싸지 않는다', async () => {
+    stubFetch(() => jsonResponse(envelope([{ groupId: 6 }])))
+    await expect(apiFetch('/groups')).resolves.toEqual([{ groupId: 6 }])
   })
 
   it('204는 본문을 읽지 않고 undefined를 돌려준다', async () => {
@@ -31,12 +24,13 @@ describe('apiFetch — 응답 흡수', () => {
     await expect(apiFetch('/photos')).resolves.toBeUndefined()
   })
 
-  it('오프셋 없는 UTC 시각에만 Z를 붙인다 — 이미 Z가 있거나 날짜뿐이면 그대로', async () => {
+  it('오프셋 없는 UTC 시각에만 Z를 붙인다 — 오프셋이 이미 있거나 날짜뿐이면 그대로', async () => {
     stubFetch(() =>
       jsonResponse(
         envelope({
           createdAt: '2026-07-10T03:33:06.41365825',
           publishedAt: '2026-07-10T03:33:06.314638Z',
+          seededAt: '2026-06-27T09:41:00+09:00',
           eventDate: '2026-07-10',
           nested: { at: '2026-07-10T03:33:06' },
           list: [{ at: '2026-07-10T03:33:06.1' }],
@@ -48,21 +42,17 @@ describe('apiFetch — 응답 흡수', () => {
     await expect(apiFetch('/events/4')).resolves.toEqual({
       createdAt: '2026-07-10T03:33:06.41365825Z',
       publishedAt: '2026-07-10T03:33:06.314638Z',
+      seededAt: '2026-06-27T09:41:00+09:00',
       eventDate: '2026-07-10',
       nested: { at: '2026-07-10T03:33:06Z' },
       list: [{ at: '2026-07-10T03:33:06.1Z' }],
       uploadUrl: 'https://s3/obj.jpg?X-Amz-Date=20260710T043130Z',
     })
   })
-
-  it('MSW 평문의 오프셋 있는 시각은 손대지 않는다', async () => {
-    stubFetch(() => jsonResponse({ createdAt: '2026-06-27T09:41:00+09:00' }))
-    await expect(apiFetch('/me')).resolves.toEqual({ createdAt: '2026-06-27T09:41:00+09:00' })
-  })
 })
 
 describe('apiFetch — 실패', () => {
-  it('BE 실패 봉투는 FE 의미 코드로 정규화해 던진다', async () => {
+  it('실패 봉투는 FE 의미 코드로 정규화해 던진다', async () => {
     const { status, payload } = BE_ERRORS.AUTH401
     stubFetch(() => jsonResponse(payload, status))
 
@@ -80,16 +70,18 @@ describe('apiFetch — 실패', () => {
     await expect(apiFetch('/groups/join')).rejects.toMatchObject({ code: 'WRONG_PASSWORD' })
   })
 
-  it('MSW 평문 실패 `{error:{code,message}}`도 같은 예외로 던진다', async () => {
-    stubFetch(() => jsonResponse(mswError('WRONG_PASSWORD', '비밀번호가 올바르지 않습니다.'), 403))
-    await expect(apiFetch('/groups/join')).rejects.toMatchObject({
-      status: 403,
-      code: 'WRONG_PASSWORD',
-      message: '비밀번호가 올바르지 않습니다.',
+  it('매핑에 없는 코드는 그대로 통과한다 — BE message는 이미 한국어다', async () => {
+    const { status, payload } = BE_ERRORS.PHOTO400
+    stubFetch(() => jsonResponse(payload, status))
+
+    await expect(apiFetch('/events/4/photos/presign', { method: 'POST' })).rejects.toMatchObject({
+      status: 400,
+      code: 'PHOTO400',
+      message: '지원하지 않는 파일 형식입니다.',
     })
   })
 
-  it('봉투도 error 포맷도 아닌 실패는 UNKNOWN — 원문이 사용자에게 새지 않는다', async () => {
+  it('봉투가 아닌 실패는 UNKNOWN — 원문이 사용자에게 새지 않는다', async () => {
     stubFetch(() => textResponse('Bad Gateway', 502))
 
     const err = await apiFetch('/groups').catch((e: unknown) => e)
@@ -222,17 +214,6 @@ describe('apiFetch — accessToken 자동 재발급 (CHMO-193)', () => {
     })
     expect(calls).toHaveLength(1)
     expect(getAccessToken()).toBe('expired')
-  })
-})
-
-describe('unwrapList', () => {
-  it('BE bare 배열은 그대로, MSW 래핑 객체는 키로 꺼낸다', () => {
-    expect(unwrapList([{ id: 1 }], 'groups')).toEqual([{ id: 1 }])
-    expect(unwrapList({ groups: [{ id: 1 }] }, 'groups')).toEqual([{ id: 1 }])
-  })
-
-  it('키가 없으면 빈 배열', () => {
-    expect(unwrapList<{ id: number }>({}, 'groups')).toEqual([])
   })
 })
 
