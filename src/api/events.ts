@@ -2,15 +2,16 @@
  * 이벤트 엔드포인트 (CHMO-192) — 05 이벤트 목록·06 생성/업로드/분석·08 앨범 그리드·14 공개 전 검수.
  * BE enum(EMPTY/ANALYZING/…)·eventDate·thumbnailUrl 차이는 mappers.ts가 흡수한다.
  */
-import { apiFetch, unwrapList } from './client'
+import { ApiRequestError, apiFetch, unwrapList } from './client'
 import { toAlbum, toEvent, type RawAlbum, type RawEvent } from './mappers'
 import type {
   Album,
-  AnalyzeRequest,
   EventItem,
   ID,
   PresignFileRequest,
   PresignUpload,
+  RegisterPhotosRequest,
+  RegisterPhotosResult,
   ReviewSummary,
 } from '../types/api'
 
@@ -91,22 +92,60 @@ export async function publishEvent(
   })
 }
 
+// ── 업로드 3단계 (06-U · CHMO-194) ───────────────────────────
+// presign(①) → presigned URL로 S3 직접 PUT(②) → 등록(③). 등록이 곧 분석 시작이다.
+
 /**
- * POST /events/:id/photos/presign — 업로드 URL 발급(06-U ①).
- * BE는 {s3Key, uploadUrl}의 bare 배열 + 별도 등록 단계(3단계 업로드)라 계약이 다르다 —
- * 실 BE 업로드 흐름 전환은 CHMO-194. 여기선 MSW 계약(uploads 언래핑)만 정리해 둔다.
+ * POST /events/:id/photos/presign — 업로드 URL 발급(①).
+ * 응답은 요청 `files`와 같은 순서의 배열. contentType은 BE가 파일명 확장자로 정한다.
  */
 export function presignUploads(
   eventId: ID | string,
   files: PresignFileRequest[],
 ): Promise<PresignUpload[]> {
-  return apiFetch<PresignUpload[] | { uploads: PresignUpload[] }>(
-    `/events/${eventId}/photos/presign`,
-    { method: 'POST', body: { files } },
-  ).then((raw) => unwrapList(raw, 'uploads'))
+  return apiFetch<PresignUpload[]>(`/events/${eventId}/photos/presign`, {
+    method: 'POST',
+    body: { files },
+  })
 }
 
-/** POST /events/:id/analyze — AI 분석 시작(06-U ③). 완료 확인은 이벤트 상세 재진입(폴링 없음 — MVP) */
-export async function startAnalysis(eventId: ID | string, input: AnalyzeRequest): Promise<void> {
-  await apiFetch<unknown>(`/events/${eventId}/analyze`, { method: 'POST', body: input })
+/**
+ * presigned URL로 S3에 직접 PUT(②) — BE 엔드포인트가 아니라 apiFetch를 타지 않는다.
+ * 서명에 `content-type`·`content-length`가 묶여 있어 헤더를 정확히 맞춰야 S3가 받는다
+ * (Content-Length는 브라우저가 body 크기로 채운다 — 직접 설정 불가).
+ *
+ * 실패는 `UPLOAD_FAILED`로 고정한다. presign URL 만료의 401/403이 제작자 세션 만료로
+ * 오인돼 로그인으로 튕기지 않게 하는 구분자다(호출부가 code로 분기).
+ */
+export async function uploadToPresignedUrl(
+  upload: PresignUpload,
+  file: File,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(upload.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': upload.contentType },
+    body: file,
+    signal,
+  })
+  if (!res.ok)
+    throw new ApiRequestError(
+      res.status,
+      'UPLOAD_FAILED',
+      '사진 업로드에 실패했어요. 다시 시도해 주세요.',
+    )
+}
+
+/**
+ * POST /events/:id/photos — 업로드 완료 등록(③).
+ * **등록이 곧 분석 시작이다**: BE가 사진을 기록하고 이벤트를 analyzing으로 전이한 뒤 AI 분류를 발행한다.
+ * `POST /events/:id/analyze`는 등록 시 발행이 실패했을 때의 **수동 재분석 트리거**라 여기서 부르지 않는다
+ * (불렀다면 같은 사진이 두 job으로 발행돼 앞 job의 결과가 버려진다).
+ * 완료 확인은 이벤트 상세 재진입(폴링 없음 — MVP).
+ */
+export function registerPhotos(
+  eventId: ID | string,
+  input: RegisterPhotosRequest,
+): Promise<RegisterPhotosResult> {
+  return apiFetch<RegisterPhotosResult>(`/events/${eventId}/photos`, { method: 'POST', body: input })
 }
