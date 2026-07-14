@@ -58,7 +58,9 @@ interface RawReviewSummary {
 /**
  * GET /events/:id/review-summary — 공개 전 검수 요약(14).
  * BE엔 previewThumbnailUrls가 없어 albums[].thumbnailUrl에서 파생한다 —
- * 뷰어 노출 규칙(person/common)의 앨범 커버만, 최대 6장(FE 계약과 동일 취지).
+ * 뷰어 노출 규칙(person/common)에 **검토 완료 사진이 있는** 앨범 커버만, 최대 6장.
+ * 전부 미검토면 빈 미리보기가 정직한 응답이다(미검토 사진은 뷰어 비노출 —
+ * 미검토 커버를 "보일 사진"으로 담으면 14의 빈 상태 경고가 사라진다).
  */
 export function getReviewSummary(
   eventId: ID | string,
@@ -73,7 +75,7 @@ export function getReviewSummary(
       totalPhotoCount: raw.totalPhotos,
       uncertainCount: raw.uncertainCount,
       previewThumbnailUrls: albums
-        .filter((a) => a.type === 'person' || a.type === 'common')
+        .filter((a) => a.visibleToViewer && a.photoCount - (a.unreviewedPhotoCount ?? 0) > 0)
         .map((a) => a.coverThumbnailUrl)
         .filter((url): url is string => !!url)
         .slice(0, 6),
