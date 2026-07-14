@@ -1,5 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { CreatorGuard, ViewerGuard } from './guards/RouteGuards'
+import { CreatorGuard, GuestGuard, ViewerGuard } from './guards/RouteGuards'
 
 // 제작자 화면
 import { LandingPage } from './pages/LandingPage'
@@ -10,7 +10,6 @@ import { HomePage } from './pages/HomePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupCreatePage } from './pages/GroupCreatePage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
-import { InvitePage } from './pages/InvitePage'
 import { EventDetailPage } from './pages/EventDetailPage'
 import { PhotoUploadPage } from './pages/PhotoUploadPage'
 import { AlbumDetailPage } from './pages/AlbumDetailPage'
@@ -29,11 +28,16 @@ import { NotFoundPage } from './pages/NotFoundPage'
  * 제작자 경로는 CreatorGuard, 뷰어 경로는 ViewerGuard로 감싼다.
  */
 export const router = createBrowserRouter([
-  // ── 공개(비로그인 진입) ──────────────────────────────
-  { path: '/', element: <LandingPage /> }, // 01 로그인 진입
-  { path: '/login', element: <LoginPage /> }, // 01-1 로그인
-  { path: '/signup', element: <SignupPage /> }, // 01-2 계정 생성
-  { path: '/join/:joinKey', element: <JoinPage /> }, // 02-1 모임 참여(초대 링크 진입)
+  // ── 공개(비로그인 진입) — 토큰 보유 시 GuestGuard가 /home으로 ──
+  {
+    element: <GuestGuard />,
+    children: [
+      { path: '/', element: <LandingPage /> }, // 01 로그인 진입
+      { path: '/login', element: <LoginPage /> }, // 01-1 로그인
+      { path: '/signup', element: <SignupPage /> }, // 01-2 계정 생성
+    ],
+  },
+  { path: '/join/:joinKey', element: <JoinPage /> }, // 02-1 모임 참여(초대 링크 진입) — 로그인 제작자도 사용하므로 GuestGuard 밖
 
   // ── 제작자(로그인) ──────────────────────────────────
   {
@@ -42,8 +46,7 @@ export const router = createBrowserRouter([
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
-      { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록)
-      { path: '/groups/:groupId/invite', element: <InvitePage /> }, // 초대(선생님 초대)
+      { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함
       { path: '/groups/:groupId/events/:eventId', element: <EventDetailPage /> }, // 06-E / 08
       { path: '/groups/:groupId/events/:eventId/upload', element: <PhotoUploadPage /> }, // 06-U
       {
@@ -67,6 +70,18 @@ export const router = createBrowserRouter([
       }, // 16 인물 앨범 상세
     ],
   },
+
+  // ── 개발용: 공용 컴포넌트 데모 (DEV 전용, 프로덕션 번들 제외) ──
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/components',
+          lazy: async () => ({
+            Component: (await import('./pages/dev/ComponentGalleryPage')).ComponentGalleryPage,
+          }),
+        },
+      ]
+    : []),
 
   // ── 404 ─────────────────────────────────────────────
   { path: '*', element: <NotFoundPage /> },
