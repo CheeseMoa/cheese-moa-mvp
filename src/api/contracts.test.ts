@@ -339,6 +339,18 @@ describe('공개 전 검수 요약 (14)', () => {
     const summary = await getReviewSummary(4)
     expect(summary.previewThumbnailUrls).toHaveLength(6)
   })
+
+  it('전 사진 미검토면 미리보기가 빈다 — 미검토 커버를 "보일 사진"으로 담지 않는다 (CHMO-233)', async () => {
+    const albums = [
+      { ...BE_ALBUM_PERSON, unreviewedPhotoCount: BE_ALBUM_PERSON.photoCount },
+      { ...BE_ALBUM_COMMON, unreviewedPhotoCount: BE_ALBUM_COMMON.photoCount },
+      BE_ALBUM_EYES_CLOSED,
+    ]
+    serve(envelope({ ...BE_REVIEW_SUMMARY, reviewedPhotoCount: 0, albums }))
+
+    const summary = await getReviewSummary(4)
+    expect(summary.previewThumbnailUrls).toEqual([])
+  })
 })
 
 describe('업로드 3단계 (06-U)', () => {
