@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       // 실 BE 경로에는 /api/v1 프리픽스가 없어(스웨거 확인) 벗겨서 전달한다. (CHMO-191)
       proxy: {
         '/api/v1': {
-          target: env.VITE_API_ORIGIN || 'http://3.35.177.22',
+          target: env.VITE_API_ORIGIN || 'https://api.cheese-moa.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/v1/, ''),
         },
