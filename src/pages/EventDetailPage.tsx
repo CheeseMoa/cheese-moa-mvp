@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
@@ -12,7 +12,7 @@ import type { EventItem } from '../types/api'
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
  * - empty → 06-E 빈 이벤트(node 211:1572): 📷 빈 상태 + [사진 업로드]→06-U
- * - analyzing → 분석중: 자동 폴링 없음(MVP) — 재진입/[분석 완료 확인] 버튼으로 상태 확인
+ * - analyzing → 분석중: 5초 간격 자동 폴링(MVP) — 완료되면 앨범 그리드로 자연 전환
  * - review/ready/published → 08 앨범 그리드(EventAlbumGrid, node 211:1619)
  */
 export function EventDetailPage() {
@@ -26,6 +26,15 @@ export function EventDetailPage() {
   const groupApi = useApi(needsGroupName ? `group:${groupId}` : null, (signal) =>
     getGroup(groupId, signal),
   )
+
+  // 분석중 자동 폴링(MVP) — 5초마다 상태를 다시 확인하고, 완료되면 앨범 그리드로 자연 전환.
+  // 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
+  const analyzing = event?.status === 'analyzing'
+  useEffect(() => {
+    if (!analyzing) return
+    const timer = setInterval(eventApi.refetch, 5000)
+    return () => clearInterval(timer)
+  }, [analyzing, eventApi.refetch])
 
   // 보조 fetch(모임명)의 401은 ErrorState를 거치지 않아 여기서 직접 복귀시킨다
   // (eventApi 401은 아래 ErrorState unauthorizedTo가 처리)
@@ -66,35 +75,25 @@ export function EventDetailPage() {
               </>
             ) : (
               <>
-                {/* 분석중 — 진행률 %·자동 폴링 없음(MVP). 완료는 재진입/버튼으로 확인 */}
+                {/* 분석중 — 5초 자동 폴링(위 effect). 완료되면 앨범 그리드로 자연 전환 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-8 py-16 text-center">
-                  <span aria-hidden className="text-4xl">
+                  <span aria-hidden className="animate-pulse text-4xl">
                     🤖
                   </span>
                   <p className="mt-3 font-display text-[19px] text-heading">
                     AI가 사진을 분류하고 있어요
                   </p>
                   <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                    완료되면 아이별 앨범이 만들어져요.
+                    완료되면 아이별 앨범이 자동으로 열려요.
                     <br />
-                    잠시 후 아래 버튼으로 확인해 주세요.
+                    잠시만 기다려 주세요.
                   </p>
-                </div>
-                <div className="mt-auto pt-6">
-                  {/* refetch 실패는 stale 데이터 때문에 아래 에러 분기에 못 가므로 여기서 직접 보여준다 */}
+                  {/* 폴링 refetch 실패는 stale 데이터 때문에 아래 에러 분기에 못 가므로 여기서 직접 보여준다 */}
                   {eventApi.error ? (
-                    <p role="alert" className="mb-3 text-center text-sm text-warn">
+                    <p role="alert" className="mt-4 text-sm text-warn">
                       {toErrorMessage(eventApi.error)}
                     </p>
                   ) : null}
-                  <Button
-                    variant="secondary"
-                    fullWidth
-                    disabled={eventApi.loading}
-                    onClick={eventApi.refetch}
-                  >
-                    {eventApi.loading ? '확인 중…' : '분석 완료 확인'}
-                  </Button>
                 </div>
               </>
             )}
