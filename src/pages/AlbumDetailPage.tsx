@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { MovePhotosSheet } from '../components/MovePhotosSheet'
+import { LightboxToolbarButton, PhotoLightbox } from '../components/PhotoLightbox'
 import { RenameModal } from '../components/RenameModal'
 import {
+  Badge,
   Button,
   ConfirmDialog,
   ErrorState,
   Header,
+  IconFolderMove,
+  IconTrash,
   PhotoGrid,
   PhotoTile,
   useToast,
@@ -29,6 +33,9 @@ import type { ID } from '../types/api'
  * 사진 그리드 + 선택 모드 → [삭제](현재 앨범 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트) ·
  * [검토 완료](앨범 내 전 사진 일괄 reviewed). 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파).
  * 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시하고, 선택모드의 검토 완료는 앨범 전체가 대상임을 확인받는다.
+ * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
+ * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
+ * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
  */
 export function AlbumDetailPage() {
   const {
@@ -48,10 +55,12 @@ export function AlbumDetailPage() {
 
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<ID>>(new Set())
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  // 삭제/이동 대상 사진(null=닫힘) — 선택모드(선택 사진들)와 라이트박스(현재 1장)가 공유
+  const [pendingDelete, setPendingDelete] = useState<ID[] | null>(null)
+  const [pendingMove, setPendingMove] = useState<ID[] | null>(null)
   const [reviewConfirmOpen, setReviewConfirmOpen] = useState(false)
-  const [moveOpen, setMoveOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
+  const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
 
   const alive = useAlive()
@@ -67,13 +76,21 @@ export function AlbumDetailPage() {
   const locked = busy || albumApi.loading
 
   // 삭제 시 이 앨범이 마지막 연결인 사진(다른 앨범에 없음)은 완전 삭제된다(api-spec: 복구 불가)
-  const orphanCount = photos.filter((p) => selected.has(p.id) && p.albumIds.length <= 1).length
+  const deleteTargets = pendingDelete ?? []
+  const orphanCount = photos.filter(
+    (p) => deleteTargets.includes(p.id) && p.albumIds.length <= 1,
+  ).length
   const deleteDescription =
     orphanCount === 0
       ? '이 앨범에서만 제거되고, 다른 앨범에는 그대로 남아요.'
-      : orphanCount === selected.size
+      : orphanCount === deleteTargets.length
         ? '선택한 사진은 다른 앨범에 없어 완전히 삭제돼요. 되돌릴 수 없어요.'
         : `이 앨범에서 제거돼요. 이 중 ${orphanCount}장은 다른 앨범에도 없어 완전히 삭제돼요(되돌릴 수 없음).`
+
+  // 삭제/이동으로 사진이 빠지면 배열이 줄어든다 — 인덱스를 남은 범위로 눌러 다음 사진을 이어 보여준다
+  const lightboxIndex =
+    viewIndex != null && photos.length > 0 ? Math.min(viewIndex, photos.length - 1) : null
+  const lightboxPhoto = lightboxIndex != null ? photos[lightboxIndex] : null
 
   const toggle = (id: ID) =>
     setSelected((prev) => {
@@ -89,21 +106,21 @@ export function AlbumDetailPage() {
   }
 
   const handleDelete = async () => {
-    const count = selected.size
-    if (count === 0 || busy) return
+    const ids = pendingDelete ?? []
+    if (ids.length === 0 || busy) return
     setBusy(true)
     try {
-      await deletePhotos({ albumId, photoIds: [...selected] })
+      await deletePhotos({ albumId, photoIds: ids })
       if (!alive.current) return
-      setConfirmOpen(false)
-      exitSelect()
-      toast.show(`🧀 ${count}장을 앨범에서 제거했어요`)
+      setPendingDelete(null)
+      if (selectMode) exitSelect()
+      toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
       albumApi.refetch()
       setBusy(false)
     } catch (err) {
       if (!alive.current) return
       if (redirectIfUnauthorized(err, navigate)) return
-      setConfirmOpen(false)
+      setPendingDelete(null)
       toast.show(toErrorMessage(err))
       setBusy(false)
     }
@@ -129,10 +146,10 @@ export function AlbumDetailPage() {
     }
   }
 
-  // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영
+  // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐)
   const handleMoved = (movedCount: number, targetName: string) => {
-    setMoveOpen(false)
-    exitSelect()
+    setPendingMove(null)
+    if (selectMode) exitSelect()
     toast.show(`🧀 ${movedCount}장을 '${targetName}'(으)로 옮겼어요`)
     albumApi.refetch()
   }
@@ -201,13 +218,21 @@ export function AlbumDetailPage() {
               {hasPhotos ? (
                 <div className="mt-4">
                   <PhotoGrid>
-                    {photos.map((photo) => (
+                    {photos.map((photo, i) => (
                       <PhotoTile
                         key={photo.id}
                         src={photo.thumbnailUrl}
                         selectable={selectMode}
                         selected={selected.has(photo.id)}
-                        onClick={selectMode && !locked ? () => toggle(photo.id) : undefined}
+                        // 탭: 선택모드=선택 토글 · 일반 모드=라이트박스 크게 보기(CHMO-242).
+                        // 선택모드 진입 롱프레스는 CHMO-243 몫 — 여기선 탭 의미만 확정
+                        onClick={
+                          locked
+                            ? undefined
+                            : selectMode
+                              ? () => toggle(photo.id)
+                              : () => setViewIndex(i)
+                        }
                       />
                     ))}
                   </PhotoGrid>
@@ -235,18 +260,20 @@ export function AlbumDetailPage() {
               <>
                 <Button
                   variant="warn"
-                  className="flex-1 !px-2"
+                  className="flex-1 gap-1.5 !px-2"
                   disabled={selected.size === 0 || locked}
-                  onClick={() => setConfirmOpen(true)}
+                  onClick={() => setPendingDelete([...selected])}
                 >
+                  <IconTrash size={18} />
                   삭제
                 </Button>
                 <Button
                   variant="accent"
-                  className="flex-1 !px-2"
+                  className="flex-1 gap-1.5 !px-2"
                   disabled={selected.size === 0 || locked}
-                  onClick={() => setMoveOpen(true)}
+                  onClick={() => setPendingMove([...selected])}
                 >
+                  <IconFolderMove size={18} />
                   옮기기
                 </Button>
                 {/* 검토 완료는 선택과 무관하게 앨범 전체 대상 — 선택 옆에 있어 오해 소지가 있어 확인받는다 */}
@@ -267,16 +294,60 @@ export function AlbumDetailPage() {
         )}
       </main>
 
+      {/* 라이트박스(크게 보기) — 확인 다이얼로그·이동 시트가 이 위에 떠야 하므로 JSX상 이들보다 앞에 둔다(같은 z-40) */}
+      {lightboxPhoto && lightboxIndex != null && (
+        <PhotoLightbox
+          photos={photos}
+          index={lightboxIndex}
+          onIndexChange={setViewIndex}
+          onClose={() => setViewIndex(null)}
+          disabled={locked || pendingDelete !== null || pendingMove !== null}
+          info={(photo) => (
+            <>
+              <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />
+              {photo.flags?.eyesClosed && (
+                <span className="rounded-full bg-warn px-[11px] py-1.5 text-xs font-bold text-white">
+                  눈감음
+                </span>
+              )}
+              {photo.flags?.blurry && (
+                <span className="rounded-full bg-warn px-[11px] py-1.5 text-xs font-bold text-white">
+                  흔들림
+                </span>
+              )}
+            </>
+          )}
+          actions={(photo) => (
+            <>
+              <LightboxToolbarButton
+                icon={<IconFolderMove />}
+                label="옮기기"
+                disabled={locked}
+                onClick={() => setPendingMove([photo.id])}
+              />
+              {/* 삭제는 iOS 사진 앱 휴지통처럼 맨 오른쪽 */}
+              <LightboxToolbarButton
+                tone="warn"
+                icon={<IconTrash />}
+                label="삭제"
+                disabled={locked}
+                onClick={() => setPendingDelete([photo.id])}
+              />
+            </>
+          )}
+        />
+      )}
+
       <ConfirmDialog
-        open={confirmOpen}
+        open={pendingDelete !== null}
         danger
         busy={busy}
         busyLabel="삭제 중…"
-        title={`사진 ${selected.size}장을 삭제할까요?`}
+        title={`사진 ${deleteTargets.length}장을 삭제할까요?`}
         description={deleteDescription}
         confirmLabel="삭제"
         onConfirm={handleDelete}
-        onClose={() => setConfirmOpen(false)}
+        onClose={() => setPendingDelete(null)}
       />
 
       <ConfirmDialog
@@ -290,13 +361,13 @@ export function AlbumDetailPage() {
         onClose={() => setReviewConfirmOpen(false)}
       />
 
-      {/* 09-1 옮기기 시트 — 선택 사진을 유사도 추천/공통 앨범으로 이동(연결 교체).
-          열려 있을 때만 마운트해 매 오픈이 새 선택 기준으로 추천을 다시 받게 한다(stale 방지). */}
-      {album && moveOpen && (
+      {/* 09-1 옮기기 시트 — 대상 사진(선택모드 선택분 또는 라이트박스 현재 1장)을 유사도 추천/공통 앨범으로
+          이동(연결 교체). 열려 있을 때만 마운트해 매 오픈이 새 대상 기준으로 추천을 다시 받게 한다(stale 방지). */}
+      {album && pendingMove && (
         <MovePhotosSheet
-          onClose={() => setMoveOpen(false)}
+          onClose={() => setPendingMove(null)}
           sourceAlbumId={albumId}
-          photoIds={[...selected]}
+          photoIds={pendingMove}
           onMoved={handleMoved}
         />
       )}

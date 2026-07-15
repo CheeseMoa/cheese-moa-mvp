@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/v1/:path*", "destination": "http://3.35.177.22/:path*" },
+    { "source": "/api/v1/:path*", "destination": "https://api.cheese-moa.com/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

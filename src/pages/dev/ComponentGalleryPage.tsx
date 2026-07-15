@@ -15,6 +15,10 @@ import {
   EventStatusBadge,
   GroupCard,
   Header,
+  IconClose,
+  IconDownload,
+  IconFolderMove,
+  IconTrash,
   Modal,
   PhotoGrid,
   PhotoTile,
@@ -88,6 +92,34 @@ export function ComponentGalleryPage() {
             <Button size="sm">선택</Button>
             <Button size="sm" variant="secondary">
               전체 해제
+            </Button>
+          </div>
+        </Section>
+
+        <Section title="02-1 · Icons — SF Symbols풍 라인 아이콘 (CHMO-242 추가)">
+          <div className="flex items-center gap-5 text-accent">
+            <IconDownload />
+            <IconFolderMove />
+            <span className="text-warn">
+              <IconTrash />
+            </span>
+            <span className="text-text">
+              <IconClose />
+            </span>
+            <span className="text-xs text-muted">저장 · 옮기기 · 삭제 · 닫기 (currentColor)</span>
+          </div>
+          <div className="flex gap-2.5">
+            <Button variant="warn" className="flex-1 gap-1.5 !px-2">
+              <IconTrash size={18} />
+              삭제
+            </Button>
+            <Button variant="accent" className="flex-1 gap-1.5 !px-2">
+              <IconFolderMove size={18} />
+              옮기기
+            </Button>
+            <Button className="flex-1 gap-1.5 !px-2">
+              <IconDownload size={18} />
+              저장
             </Button>
           </div>
         </Section>
