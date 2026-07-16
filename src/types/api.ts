@@ -64,6 +64,18 @@ export interface EventItem {
   publishedAt?: ISODateTime | null
   /** 뷰어 목록에서 커버 썸네일 */
   coverPhotoId?: ID | null
+  /**
+   * AI 분석 진행률(CHMO-287) — **상세 응답에만** 있고 목록엔 없다.
+   * 분석 job 진행 중에만 non-null(완료 직후 잠시 100을 유지하다 null로 돌아간다 — 실서버 관찰).
+   */
+  progress?: AnalysisProgress | null
+}
+
+/** AI 분석 진행률 — GET /events/:id의 `progress`(BE가 percent까지 계산해 준다) */
+export interface AnalysisProgress {
+  processed: number
+  total: number
+  percent: number
 }
 
 // ── 분석 상태 ────────────────────────────────────────────────

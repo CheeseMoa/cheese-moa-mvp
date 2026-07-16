@@ -91,6 +91,20 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
   })
 
+  it('분석 진행률 — 분석중 상세에만 progress, 분석 아니면 null (CHMO-287)', () => {
+    // 이벤트 3(여름 물놀이) — 시드 시점부터 분석중, job total 20(미분류 사진 수와 일치)
+    const analyzing = toEvent(toEventDetail(findEvent(3)!))
+    expect(analyzing.progress).not.toBeNull()
+    expect(analyzing.progress!.total).toBe(20)
+    expect(analyzing.progress!.percent).toBeGreaterThanOrEqual(0)
+    expect(analyzing.progress!.percent).toBeLessThanOrEqual(100)
+
+    // 분석중이 아닌 이벤트(봄 소풍 published) — BE처럼 null
+    expect(toEvent(toEventDetail(findEvent(2)!)).progress).toBeNull()
+    // 목록(EventSummaryResponse)엔 BE도 progress를 주지 않는다 — 매퍼가 null로 채운다
+    expect(toEvent(toEventSummary(findEvent(3)!)).progress).toBeNull()
+  })
+
   it('분석 상태 — 대문자 enum이 소문자로, 이벤트 상태에서 유도', () => {
     // empty → NONE, analyzing → ANALYZING, 그 외(review/published) → DONE
     expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(4)!))).toEqual({

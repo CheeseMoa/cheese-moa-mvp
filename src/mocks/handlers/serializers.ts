@@ -21,6 +21,7 @@ import {
   photoCountOfEvent,
   photosOfAlbum,
   photosOfEvent,
+  progressOf,
   reviewedPhotosOfAlbum,
   unreviewedCountOfAlbum,
   type DbAlbum,
@@ -123,6 +124,8 @@ export function toEventDetail(event: DbEvent) {
     albumCount: albumCountOf(event.id),
     publishedAt: event.publishedAt,
     createdAt: event.createdAt,
+    // AI 분석 진행률(CHMO-287) — 상세 전용, 분석 중에만 non-null(목록엔 BE도 안 준다)
+    progress: progressOf(event.id),
   }
 }
 
