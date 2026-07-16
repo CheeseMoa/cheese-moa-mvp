@@ -359,10 +359,15 @@ export function unlinkPhotoFromAlbum(photoId: number, albumId: number): void {
   const photo = db.photos.find((p) => p.id === photoId)
   if (!photo) return
   photo.albumIds = photo.albumIds.filter((id) => id !== albumId)
-  // 빠진 사진이 커버였다면 남은 첫 사진으로 교체(없으면 비움)
+  // 이동·삭제로 0장이 된 앨범은 BE가 자동 삭제한다(CHMO-231) — 인물(persons)은 모임 스코프라 보존
+  if (photosOfAlbum(albumId).length === 0) {
+    db.albums = db.albums.filter((a) => a.id !== albumId)
+    return
+  }
+  // 빠진 사진이 커버였다면 남은 첫 사진으로 교체
   const album = findAlbum(albumId)
   if (album?.coverPhotoId === photoId) {
-    album.coverPhotoId = photosOfAlbum(albumId)[0]?.id ?? null
+    album.coverPhotoId = photosOfAlbum(albumId)[0]!.id
   }
 }
 
