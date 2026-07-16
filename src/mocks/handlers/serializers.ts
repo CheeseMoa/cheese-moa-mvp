@@ -206,6 +206,57 @@ export function toAlbumDetail(album: DbAlbum) {
   }
 }
 
+// ── 검수 요약 (화면 14) ──────────────────────────────────────
+
+/**
+ * BE ReviewSummaryResponse — 공개 전 검수 요약. previewThumbnailUrls는 없다
+ * (화면이 albums[].thumbnailUrl에서 파생). 앨범 검토 상태는 사진 단위 reviewed의 파생값
+ * (빈 앨범은 미검토). 호출부는 settleAnalysis를 마친 event를 넘긴다.
+ */
+export function toReviewSummaryResponse(event: DbEvent) {
+  const photos = photosOfEvent(event.id)
+  const albums = albumsOfEvent(event.id)
+  const uncertainAlbum = albums.find((a) => a.type === 'uncertain')
+  const reviewedAlbums = albums.filter(
+    (a) => photoCountOfAlbum(a.id) > 0 && unreviewedCountOfAlbum(a.id) === 0,
+  ).length
+  return {
+    eventId: event.id,
+    eventStatus: event.status.toUpperCase(),
+    totalAlbums: albums.length,
+    reviewedAlbums,
+    unreviewedAlbums: albums.length - reviewedAlbums,
+    totalPhotos: photos.length,
+    reviewedPhotoCount: photos.filter((p) => p.reviewed).length,
+    uncertainCount: uncertainAlbum ? photoCountOfAlbum(uncertainAlbum.id) : 0,
+    albums: albumsOfEventSorted(event.id).map(toAlbumSummary),
+  }
+}
+
+// ── 사진 이동/제거 응답 (화면 09·09-1) ───────────────────────
+
+/** BE MoveSuggestionResponse 항목 — 공통 앨범은 이름·유사도 없이 온다(personName·similarity null) */
+export function toMoveSuggestionResponse(album: DbAlbum, similarity: number | null) {
+  return { albumId: album.id, personName: personNameOf(album), similarity }
+}
+
+/** BE MovePhotosResponse — 이동 완료 건수 */
+export function toMovePhotosResponse(photoIds: number[]) {
+  return { movedCount: photoIds.length }
+}
+
+/**
+ * BE DeletePhotosResponse — 연결만 해제된 사진과 마지막 연결이라 폐기된 사진을 구분한다.
+ * (removePhotoFromAlbum이 마지막 연결이면 레코드를 지운다 → findPhoto가 undefined)
+ * 호출부가 removePhotoFromAlbum을 마친 뒤의 photoIds를 넘긴다.
+ */
+export function toDeletePhotosResponse(photoIds: number[]) {
+  return {
+    detachedCount: photoIds.length,
+    deletedPhotoCount: photoIds.filter((id) => !findPhoto(id)).length,
+  }
+}
+
 // ── 뷰어 직렬화 (서버 필터링 책임 — 검토 완료 사진만 반영) ────
 
 /**
@@ -245,6 +296,29 @@ export function toViewerPhoto(photo: DbPhoto) {
     photoId: photo.id,
     thumbnailUrl: photoThumbnailUrlOf(photo),
     downloadUrl: photoUrlOf(photo),
+  }
+}
+
+/** BE UnlockViewerResponse — 모임명은 이 응답에만 온다(목록 GET /share/:token은 bare 배열) */
+export function toViewerUnlockResponse(group: DbGroup, viewerToken: string) {
+  return { viewerToken, groupId: group.id, groupName: group.name }
+}
+
+/** BE ViewerEventAlbumsResponse — eventId·eventName이 평면 필드다(person/common만 노출) */
+export function toViewerEventAlbumsResponse(event: DbEvent) {
+  return {
+    eventId: event.id,
+    eventName: event.name,
+    albums: viewerAlbumsOfEvent(event.id).map(toViewerAlbumSummary),
+  }
+}
+
+/** BE ViewerAlbumPhotosResponse — type·photoCount 없이 personName만 온다(공통 앨범은 null) */
+export function toViewerAlbumPhotosResponse(album: DbAlbum) {
+  return {
+    albumId: album.id,
+    personName: personNameOf(album),
+    photos: reviewedPhotosOfAlbum(album.id).map(toViewerPhoto),
   }
 }
 

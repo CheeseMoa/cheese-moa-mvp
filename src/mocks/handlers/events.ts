@@ -6,7 +6,6 @@
 import { http, HttpResponse } from 'msw'
 import type { PresignUpload } from '../../types/api'
 import {
-  albumsOfEvent,
   byEventRecency,
   db,
   findAnalysisJob,
@@ -15,14 +14,12 @@ import {
   markObjectUploaded,
   nextId,
   nowIso,
-  photoCountOfAlbum,
   photoCountOfEvent,
   photosOfEvent,
   settleAnalysis,
   startAnalysis,
   todayIsoDate,
   transitionEvent,
-  unreviewedCountOfAlbum,
   uploadKeyPrefixOf,
   type DbEvent,
   type DbPhoto,
@@ -46,11 +43,10 @@ import {
   userFrom,
 } from './shared'
 import {
-  albumsOfEventSorted,
-  toAlbumSummary,
   toAnalysisStatusResponse,
   toEventDetail,
   toEventSummary,
+  toReviewSummaryResponse,
 } from './serializers'
 import {
   isUploadableSize,
@@ -277,26 +273,7 @@ export const eventHandlers = [
     const event = accessibleEvent(user, toId(params.id))
     if (!event) return eventNotFound()
     settleAnalysis(event.id)
-
-    const photos = photosOfEvent(event.id)
-    const albums = albumsOfEvent(event.id)
-    const uncertainAlbum = albums.find((a) => a.type === 'uncertain')
-    // 앨범 검토 상태는 사진 단위 reviewed의 파생값(빈 앨범은 미검토)
-    const reviewedAlbums = albums.filter(
-      (a) => photoCountOfAlbum(a.id) > 0 && unreviewedCountOfAlbum(a.id) === 0,
-    ).length
-
-    return ok({
-      eventId: event.id,
-      eventStatus: event.status.toUpperCase(),
-      totalAlbums: albums.length,
-      reviewedAlbums,
-      unreviewedAlbums: albums.length - reviewedAlbums,
-      totalPhotos: photos.length,
-      reviewedPhotoCount: photos.filter((p) => p.reviewed).length,
-      uncertainCount: uncertainAlbum ? photoCountOfAlbum(uncertainAlbum.id) : 0,
-      albums: albumsOfEventSorted(event.id).map(toAlbumSummary),
-    })
+    return ok(toReviewSummaryResponse(event))
   }),
 
   // POST /events/:id/publish — 공개하기(→published, 모임 학부모 공유 목록에 노출) · 화면 14

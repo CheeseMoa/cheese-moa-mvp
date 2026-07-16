@@ -5,9 +5,7 @@
 import { http } from 'msw'
 import {
   findAlbum,
-  findPhoto,
   movePhotoBetweenAlbums,
-  personNameOf,
   photosOfAlbum,
   recomputeEventReadiness,
   removePhotoFromAlbum,
@@ -31,7 +29,14 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { albumsOfEventSorted, toAlbumDetail, toAlbumSummary } from './serializers'
+import {
+  albumsOfEventSorted,
+  toAlbumDetail,
+  toAlbumSummary,
+  toDeletePhotosResponse,
+  toMovePhotosResponse,
+  toMoveSuggestionResponse,
+} from './serializers'
 
 /** 멤버가 접근 가능한 앨범 조회(소속 이벤트의 모임 멤버십 = accessibleEvent 재사용, 아니면 null → 404) */
 function accessibleAlbum(user: DbUser, albumId: number | null): DbAlbum | null {
@@ -48,13 +53,6 @@ function allPhotosInAlbum(photoIds: number[], albumId: number): boolean {
 
 /** 목 유사도(대표 벡터는 BE 내부 — 결정적 내림차순 값으로 시뮬레이션) */
 const MOCK_SIMILARITIES = [0.92, 0.78, 0.65, 0.51, 0.4, 0.31]
-
-/** BE MoveSuggestionResponse — 공통 앨범은 이름도 유사도도 없이 온다 */
-interface MockMoveSuggestion {
-  albumId: number
-  personName: string | null
-  similarity: number | null
-}
 
 export const albumHandlers = [
   // GET /events/:id/albums — 앨범 그리드(bare 배열) · 화면 08
@@ -138,15 +136,11 @@ export const albumHandlers = [
     // 같은 이벤트의 다른 인물 앨범(목 유사도 내림차순) + 공통 앨범(고정 옵션, similarity null)
     // BE MoveSuggestionResponse는 표시명이 아니라 personName을 준다(공통 앨범은 null).
     const siblings = albumsOfEventSorted(album.eventId).filter((a) => a.id !== album.id)
-    const suggestions: MockMoveSuggestion[] = siblings
+    const suggestions = siblings
       .filter((a) => a.type === 'person')
-      .map((a, i) => ({
-        albumId: a.id,
-        personName: personNameOf(a),
-        similarity: MOCK_SIMILARITIES[i] ?? 0.25,
-      }))
+      .map((a, i) => toMoveSuggestionResponse(a, MOCK_SIMILARITIES[i] ?? 0.25))
     const common = siblings.find((a) => a.type === 'common')
-    if (common) suggestions.push({ albumId: common.id, personName: null, similarity: null })
+    if (common) suggestions.push(toMoveSuggestionResponse(common, null))
 
     return ok(suggestions)
   }),
@@ -180,7 +174,7 @@ export const albumHandlers = [
 
     for (const photoId of photoIds) movePhotoBetweenAlbums(photoId, source.id, target.id)
 
-    return ok({ movedCount: photoIds.length })
+    return ok(toMovePhotosResponse(photoIds))
   }),
 
   // DELETE /photos — 앨범에서 사진 제거(해당 앨범 연결만 해제, 마지막 연결이면 완전 삭제) · 화면 09
@@ -204,11 +198,6 @@ export const albumHandlers = [
     // 미검토 사진이 삭제로 사라졌으면 이벤트가 ready로, 전부 사라졌으면 empty로 재계산
     recomputeEventReadiness(album.eventId)
 
-    // BE DeletePhotosResponse — 연결만 해제된 사진과 마지막 연결이라 폐기된 사진을 구분한다
-    // (removePhotoFromAlbum이 마지막 연결이면 레코드 자체를 지운다 → findPhoto가 undefined)
-    return ok({
-      detachedCount: photoIds.length,
-      deletedPhotoCount: photoIds.filter((id) => !findPhoto(id)).length,
-    })
+    return ok(toDeletePhotosResponse(photoIds))
   }),
 ]
