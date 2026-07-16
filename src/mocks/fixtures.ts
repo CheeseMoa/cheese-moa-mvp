@@ -245,6 +245,7 @@ export function createFixtures(): Db {
         eventId: 1,
         status: 'done',
         startedAt: Date.now(),
+        total: 24,
         options: { excludeEyesClosed: true, excludeBlurry: true },
       },
       {
@@ -253,11 +254,14 @@ export function createFixtures(): Db {
         // 공개된 이벤트 — 특수 앨범 없는 앨범 구성과 맞춰 품질 제외 옵션 OFF
         options: { excludeEyesClosed: false, excludeBlurry: false },
         startedAt: Date.now(),
+        total: 16,
       },
       {
         eventId: 3,
         status: 'analyzing',
         startedAt: Date.now(),
+        // 진행률 분모 = 물놀이 미분류 사진 20장(poolPhotos)과 일치해야 함(CHMO-287)
+        total: 20,
         options: { excludeEyesClosed: true, excludeBlurry: true },
       },
     ],

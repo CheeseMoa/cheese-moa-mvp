@@ -16,12 +16,13 @@ import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
-import type { EventItem } from '../types/api'
+import type { AnalysisProgress, EventItem } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
  * - empty → 06-E 빈 이벤트(node 211:1572): 📷 빈 상태 + [사진 업로드]→06-U
- * - analyzing → 분석중: 5초 간격 자동 폴링(MVP) — 완료되면 앨범 그리드로 자연 전환
+ * - analyzing → 분석중: 2초 간격 자동 폴링(BE 요청 주기) — 진행률(progress)과 함께 갱신되고,
+ *   완료되면 앨범 그리드로 자연 전환
  * - review/ready/published → 08 앨범 그리드(EventAlbumGrid, node 211:1619)
  * 어느 상태든 헤더 ⚙ = 이벤트 설정(이름 수정 + 이벤트 삭제 — CHMO-278).
  */
@@ -38,12 +39,12 @@ export function EventDetailPage() {
     getGroup(groupId, signal),
   )
 
-  // 분석중 자동 폴링(MVP) — 5초마다 상태를 다시 확인하고, 완료되면 앨범 그리드로 자연 전환.
-  // 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
+  // 분석중 자동 폴링 — 2초마다 진행률·상태를 다시 확인하고(BE 요청 주기), 완료되면 앨범
+  // 그리드로 자연 전환. 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
   const analyzing = event?.status === 'analyzing'
   useEffect(() => {
     if (!analyzing) return
-    const timer = setInterval(eventApi.refetch, 5000)
+    const timer = setInterval(eventApi.refetch, 2000)
     return () => clearInterval(timer)
   }, [analyzing, eventApi.refetch])
 
@@ -90,15 +91,13 @@ export function EventDetailPage() {
               </>
             ) : (
               <>
-                {/* 분석중 — 5초 자동 폴링(위 effect). 완료되면 앨범 그리드로 자연 전환 */}
-                <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-8 py-16 text-center">
-                  <span aria-hidden className="animate-pulse text-4xl">
-                    🤖
-                  </span>
-                  <p className="mt-3 font-display text-[19px] text-heading">
+                {/* 분석중 — 2초 자동 폴링(위 effect). 진행률 따라 쥐가 치즈로 다가가고, 완료되면 앨범 그리드로 자연 전환 */}
+                <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-6 py-14 text-center">
+                  <p className="font-display text-[19px] text-heading">
                     AI가 사진을 분류하고 있어요
                   </p>
-                  <p className="mt-2 text-[13px] leading-relaxed text-muted">
+                  <ChaseProgress progress={event.progress ?? null} />
+                  <p className="mt-4 text-[13px] leading-relaxed text-muted">
                     완료되면 아이별 앨범이 자동으로 열려요.
                     <br />
                     잠시만 기다려 주세요.
@@ -135,6 +134,59 @@ export function EventDetailPage() {
         />
       )}
     </PhoneShell>
+  )
+}
+
+/**
+ * AI 분석 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
+ * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
+ * progress가 아직 null이면(등록 직후 등) 쥐가 트랙 위를 왕복하는 인디터미넌트로 폴백.
+ * 쥐 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
+ * (숨김 탭·임베디드 프리뷰)에선 transition이 걸린 속성이 첫 값에 얼어붙어, 폴링으로
+ * 스타일이 갱신돼도 화면이 영영 안 움직인다. 진행 위치는 상태라 장식(총총거림)과 달리
+ * 어느 환경에서든 즉시 반영돼야 한다.
+ */
+function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
+  const percent = progress?.percent
+  return (
+    <div
+      role="progressbar"
+      aria-label="AI 분석 진행률"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      className="mt-6 w-full"
+    >
+      {/* 추격 무대 — 치즈는 결승점(오른쪽 끝) 고정, 쥐는 percent 위치 */}
+      <div className="relative h-9">
+        <span aria-hidden className="absolute -right-1.5 bottom-0 text-[26px]">
+          🧀
+        </span>
+        <span
+          aria-hidden
+          className={`absolute bottom-0 -translate-x-1/2 ${percent == null ? 'animate-chase-roam' : ''}`}
+          style={percent == null ? undefined : { left: `${percent}%` }}
+        >
+          <span className="inline-block animate-chase-scurry text-[26px]">🐭</span>
+        </span>
+      </div>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
+        <div
+          className="h-full rounded-full bg-gradient-cheddar"
+          style={{ width: `${percent ?? 0}%` }}
+        />
+      </div>
+      {progress ? (
+        <p className="mt-3 text-sm font-bold text-heading">
+          {progress.percent}%
+          <span className="ml-1.5 font-normal text-muted">
+            · {progress.processed}/{progress.total}장 분류
+          </span>
+        </p>
+      ) : (
+        <p className="mt-3 text-sm text-muted">사진을 살펴보는 중…</p>
+      )}
+    </div>
   )
 }
 
