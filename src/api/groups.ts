@@ -27,6 +27,14 @@ export function renameGroup(groupId: ID | string, name: string): Promise<Group> 
   return apiFetch<RawGroup>(`/groups/${groupId}`, { method: 'PATCH', body: { name } }).then(toGroup)
 }
 
+/**
+ * DELETE /groups/:id — 모임 삭제(하위 이벤트·앨범·사진 연쇄, 학부모 공유 링크도 무효화).
+ * BE는 CHMO-273 진행 중(스웨거 미배포) — 응답 본문은 쓰지 않으므로 봉투 result 형태와 무관.
+ */
+export function deleteGroup(groupId: ID | string): Promise<void> {
+  return apiFetch<unknown>(`/groups/${groupId}`, { method: 'DELETE' }).then(() => undefined)
+}
+
 /** POST /groups/join — 참여 코드+모임 비밀번호로 합류 */
 export function joinGroup(input: { joinKey: string; password: string }): Promise<Group> {
   return apiFetch<RawGroup>('/groups/join', { method: 'POST', body: input }).then(toGroup)

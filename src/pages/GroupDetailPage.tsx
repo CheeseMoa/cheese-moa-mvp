@@ -5,6 +5,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { InviteSheet, ParentShareSheet } from '../components/GroupShareSheets'
 import {
   Button,
+  ConfirmDialog,
   EmptyState,
   EventCard,
   Header,
@@ -15,7 +16,7 @@ import {
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { getGroup, renameGroup } from '../api/groups'
+import { deleteGroup, getGroup, renameGroup } from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
 import type { Group } from '../types/api'
 
@@ -30,7 +31,8 @@ function formatEventDate(date: string): string {
 
 /**
  * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 211:1432/211:1505(빈/신규)
- * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정).
+ * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정) ·
+ * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277).
  * 초대·학부모 공유는 이 화면 위 시트(GroupShareSheets)로 뜬다(확정 — 별도 페이지 아님).
  * 카드 메타의 '인원'은 이벤트 API에 없어 날짜·사진만 표시(확정) ·
  * [+ 이벤트 생성]은 06-M 모달(CreateEventModal)로 뜬다.
@@ -38,6 +40,8 @@ function formatEventDate(date: string): string {
 export function GroupDetailPage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
   const navigate = useNavigate()
+  const toast = useToast()
+  const mutate = useMutation()
   const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
   const eventsApi = useApi(`group-events:${groupId}`, (signal) =>
     listGroupEvents(groupId, signal),
@@ -46,6 +50,24 @@ export function GroupDetailPage() {
   const [shareOpen, setShareOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  // 모임 삭제(F2.5) — 성공 시 홈으로(뒤로가기로 죽은 상세에 돌아오지 않게 replace)
+  const handleDelete = async () => {
+    setDeleting(true)
+    await mutate(() => deleteGroup(groupId), {
+      onSuccess: () => {
+        toast.show('🧀 모임을 삭제했어요')
+        navigate('/home', { replace: true })
+      },
+      onError: (msg) => {
+        toast.show(msg)
+        setDeleting(false)
+        setDeleteOpen(false)
+      },
+    })
+  }
 
   const group = groupApi.data
   const events = eventsApi.data ?? []
@@ -156,8 +178,23 @@ export function GroupDetailPage() {
           onClose={() => setRenameOpen(false)}
           group={group}
           onRenamed={groupApi.refetch}
+          onDeleteRequest={() => {
+            setRenameOpen(false)
+            setDeleteOpen(true)
+          }}
         />
       )}
+      <ConfirmDialog
+        open={deleteOpen}
+        title="모임을 삭제할까요?"
+        description="모임의 모든 이벤트·앨범·사진이 삭제되고, 학부모 공유 링크도 더 이상 열리지 않아요. 되돌릴 수 없어요."
+        confirmLabel="삭제"
+        danger
+        busy={deleting}
+        busyLabel="삭제 중…"
+        onConfirm={handleDelete}
+        onClose={() => setDeleteOpen(false)}
+      />
     </PhoneShell>
   )
 }
@@ -168,10 +205,15 @@ interface RenameGroupModalProps {
   group: Group
   /** PATCH 성공 후 상세 갱신(refetch) */
   onRenamed: () => void
+  /** '모임 삭제' 탭 — 이 모달을 닫고 확인 다이얼로그를 연다(모달 중첩 회피) */
+  onDeleteRequest: () => void
 }
 
-/** 모임 설정 ⚙ = 모임 이름 수정(F2.4 — name만 변경 가능) · PATCH /groups/:id */
-function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalProps) {
+/**
+ * 모임 설정 ⚙ = 이름 수정(F2.4 — name만 변경 가능) · PATCH /groups/:id
+ * + 모임 삭제 진입점(CHMO-277 — 위험 동작이라 설정 문맥 하단에 배치, 확인은 ConfirmDialog).
+ */
+function RenameGroupModal({ open, onClose, group, onRenamed, onDeleteRequest }: RenameGroupModalProps) {
   const toast = useToast()
   const mutate = useMutation()
   const [name, setName] = useState(group.name)
@@ -216,7 +258,7 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
       onClose={() => {
         if (!submitting) onClose()
       }}
-      title="모임 이름 수정"
+      title="모임 설정"
     >
       <form onSubmit={handleSubmit} noValidate className="mt-3.5 flex flex-col gap-3.5">
         <TextField
@@ -235,6 +277,16 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
           {submitting ? '저장 중…' : '저장'}
         </Button>
       </form>
+      {/* 위험 동작이지만 확인 다이얼로그(warn 버튼)가 한 번 더 뜨므로 여기선 secondary로 톤을 낮춘다 */}
+      <Button
+        variant="secondary"
+        fullWidth
+        onClick={onDeleteRequest}
+        disabled={submitting}
+        className="mt-2.5 text-warn"
+      >
+        모임 삭제
+      </Button>
     </Modal>
   )
 }
