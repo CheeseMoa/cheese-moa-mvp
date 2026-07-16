@@ -8,6 +8,7 @@ import type { PresignUpload } from '../../types/api'
 import {
   byEventRecency,
   db,
+  deleteEventCascade,
   findAnalysisJob,
   findGroup,
   isObjectUploaded,
@@ -121,6 +122,17 @@ export const eventHandlers = [
     if (name === null) return invalidRequest('이벤트 이름을 입력해 주세요.')
     if (name !== undefined) event.name = name
     return ok(toEventDetail(event))
+  }),
+
+  // DELETE /events/:id — 이벤트 삭제(하위 앨범·사진 연쇄 정리) · 화면 06-E/08 ⚙
+  // BE CHMO-272 진행 중(스웨거 미배포) — 성공 봉투(result null)로 응답, 배포 후 계약 재확인
+  http.delete(api('/events/:id'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const event = accessibleEvent(user, toId(params.id))
+    if (!event) return eventNotFound()
+    deleteEventCascade(event.id)
+    return ok(null)
   }),
 
   // POST /events/:id/photos/presign — 업로드 URL 발급(①) · 화면 06-U

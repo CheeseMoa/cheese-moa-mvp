@@ -387,7 +387,21 @@ export function removePhotoFromAlbum(photoId: number, albumId: number): void {
   }
 }
 
-// ── 모임 삭제 (연쇄) ─────────────────────────────────────────
+// ── 모임·이벤트 삭제 (연쇄) ──────────────────────────────────
+
+/**
+ * 이벤트 삭제 — 자식→부모 순: 사진 → 앨범 → 분석 job → 업로드 키 → 이벤트(CHMO-278).
+ * 인물(persons)은 모임 스코프라 보존한다 — 다른 이벤트의 인물 앨범이 같은 personId를 쓴다.
+ * published 이벤트도 레코드가 사라지므로 뷰어 공개 목록에서 자연히 빠진다.
+ */
+export function deleteEventCascade(eventId: number): void {
+  const keyPrefix = uploadKeyPrefixOf(eventId)
+  db.photos = db.photos.filter((p) => p.eventId !== eventId)
+  db.albums = db.albums.filter((a) => a.eventId !== eventId)
+  db.analysisJobs = db.analysisJobs.filter((j) => j.eventId !== eventId)
+  db.uploadedKeys = db.uploadedKeys.filter((key) => !key.startsWith(keyPrefix))
+  db.events = db.events.filter((e) => e.id !== eventId)
+}
 
 /**
  * 모임 삭제 — BE CHMO-273의 자식→부모 순 수동 삭제 대응(cascade 설정 없음):
