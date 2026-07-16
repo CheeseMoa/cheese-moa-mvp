@@ -98,6 +98,17 @@ export function AlbumDetailPage() {
       return next
     })
 
+  // 롱프레스(꾹 누르기)로 선택모드 진입 + 해당 사진 선택 — 모바일 사진 앱 관용 UX(CHMO-243)
+  const enterSelectWith = (id: ID) => {
+    setSelectMode(true)
+    setSelected(new Set([id]))
+  }
+
+  const allSelected = photos.length > 0 && selected.size === photos.length
+  // 전체 선택/해제 토글 — 하나라도 빠졌으면 전체 선택, 다 찼으면 전체 해제
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
+
   const exitSelect = () => {
     setSelectMode(false)
     setSelected(new Set())
@@ -188,9 +199,19 @@ export function AlbumDetailPage() {
                   {album.name}
                 </h1>
                 {selectMode ? (
-                  <span className="flex-none text-[13px] font-medium text-muted">
-                    {selected.size}장 선택
-                  </span>
+                  <div className="flex flex-none items-center gap-2">
+                    <span className="text-[13px] font-medium text-muted">
+                      {selected.size}장 선택
+                    </span>
+                    <button
+                      type="button"
+                      disabled={locked}
+                      onClick={toggleAll}
+                      className="inline-flex items-center rounded-full border border-border bg-white px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50"
+                    >
+                      {allSelected ? '전체 해제' : '전체 선택'}
+                    </button>
+                  </div>
                 ) : album.type === 'person' ? (
                   // 인물 앨범만 이름 변경(모임 전체 이름전파). 특수 앨범은 고정 라벨이라 미노출
                   <button
@@ -221,13 +242,17 @@ export function AlbumDetailPage() {
                         selectable={selectMode}
                         selected={selected.has(photo.id)}
                         // 탭: 선택모드=선택 토글 · 일반 모드=라이트박스 크게 보기(CHMO-242).
-                        // 선택모드 진입 롱프레스는 CHMO-243 몫 — 여기선 탭 의미만 확정
                         onClick={
                           locked
                             ? undefined
                             : selectMode
                               ? () => toggle(photo.id)
                               : () => setViewIndex(i)
+                        }
+                        // 롱프레스: 일반 모드에서 꾹 누르면 선택모드 진입 + 이 사진 선택(CHMO-243).
+                        // 탭=확대 / 롱프레스=선택이라 라이트박스와 제스처가 겹치지 않는다.
+                        onLongPress={
+                          locked || selectMode ? undefined : () => enterSelectWith(photo.id)
                         }
                       />
                     ))}
