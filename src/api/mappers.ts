@@ -17,6 +17,8 @@ import { SPECIAL_ALBUM_LABELS, UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 import type {
   Album,
   AlbumType,
+  AnalysisJob,
+  AnalysisStatus,
   EventItem,
   EventStatus,
   Group,
@@ -114,6 +116,23 @@ export function toViewerEvent(raw: RawEvent): ViewerEvent {
     coverPhotoId: raw.thumbnailPhotoId ?? null,
     coverThumbnailUrl: raw.thumbnailUrl ?? null,
     publishedAt: raw.publishedAt ?? null,
+  }
+}
+
+// ── Analysis (분석 상태) ─────────────────────────────────────
+
+/** BE AnalysisStatusResponse — 두 필드 모두 대문자 enum */
+export interface RawAnalysisStatus {
+  /** 대문자 enum(NONE/ANALYZING/DONE) */
+  analysisStatus: string
+  /** 대문자 enum(EMPTY/ANALYZING/REVIEW/READY/PUBLISHED) */
+  eventStatus: string
+}
+
+export function toAnalysisJob(raw: RawAnalysisStatus): AnalysisJob {
+  return {
+    analysisStatus: raw.analysisStatus.toLowerCase() as AnalysisStatus,
+    eventStatus: raw.eventStatus.toLowerCase() as EventStatus,
   }
 }
 

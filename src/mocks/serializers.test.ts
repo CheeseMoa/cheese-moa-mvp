@@ -15,6 +15,7 @@ import { createFixtures } from './fixtures'
 import {
   toAlbumDetail,
   toAlbumSummary,
+  toAnalysisStatusResponse,
   toEventDetail,
   toEventSummary,
   toGroupDetail,
@@ -27,6 +28,7 @@ import {
 } from './handlers/serializers'
 import {
   toAlbum,
+  toAnalysisJob,
   toEvent,
   toGroup,
   toMoveSuggestion,
@@ -70,6 +72,22 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const detail = toEvent(toEventDetail(event))
     expect(detail).toMatchObject({ id: 2, groupId: 1, status: 'published' })
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
+  })
+
+  it('분석 상태 — 대문자 enum이 소문자로, 이벤트 상태에서 유도', () => {
+    // empty → NONE, analyzing → ANALYZING, 그 외(review/published) → DONE
+    expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(4)!))).toEqual({
+      analysisStatus: 'none',
+      eventStatus: 'empty',
+    })
+    expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(3)!))).toEqual({
+      analysisStatus: 'analyzing',
+      eventStatus: 'analyzing',
+    })
+    expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(1)!))).toEqual({
+      analysisStatus: 'done',
+      eventStatus: 'review',
+    })
   })
 
   it('앨범 요약 — personName이 표시명으로, 특수 앨범은 라벨 파생', () => {

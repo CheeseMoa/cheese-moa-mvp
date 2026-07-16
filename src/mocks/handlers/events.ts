@@ -4,7 +4,7 @@
  * 업로드 계약은 실 BE 기준(CHMO-194) — 등록(POST /photos)이 곧 분석 시작이다.
  */
 import { http, HttpResponse } from 'msw'
-import type { AnalysisJob, AnalysisStatus, PresignUpload } from '../../types/api'
+import type { PresignUpload } from '../../types/api'
 import {
   albumsOfEvent,
   byEventRecency,
@@ -45,7 +45,13 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { albumsOfEventSorted, toAlbumSummary, toEventDetail, toEventSummary } from './serializers'
+import {
+  albumsOfEventSorted,
+  toAlbumSummary,
+  toAnalysisStatusResponse,
+  toEventDetail,
+  toEventSummary,
+} from './serializers'
 import {
   isUploadableSize,
   MAX_UPLOAD_BATCH,
@@ -251,8 +257,7 @@ export const eventHandlers = [
 
   // GET /events/:id/analysis — 분석 상태 확인 · 화면 06-U / 05
   // 폴링 없음: 조회 시점에 목 지연 경과를 판정해 analyzing→done + 이벤트 status→review 전이.
-  // BE와 동일하게 이벤트 상태에서 유도한다(EMPTY→none, ANALYZING→analyzing, 그 외 done).
-  // 응답 필드 형태는 미채집(BE AnalysisStatusResponse) — 도메인 함수도 화면도 이 엔드포인트를 부르지 않는다.
+  // 응답은 BE AnalysisStatusResponse 계약(대문자 enum) — serializer가 이벤트 상태에서 유도한다.
   http.get(api('/events/:id/analysis'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
@@ -260,10 +265,7 @@ export const eventHandlers = [
     if (!event) return eventNotFound()
 
     settleAnalysis(event.id)
-    const analysisStatus: AnalysisStatus =
-      event.status === 'empty' ? 'none' : event.status === 'analyzing' ? 'analyzing' : 'done'
-    const response: AnalysisJob = { analysisStatus, eventStatus: event.status }
-    return ok(response)
+    return ok(toAnalysisStatusResponse(event))
   }),
 
   // GET /events/:id/review-summary — 공개 전 검수 요약 · 화면 14

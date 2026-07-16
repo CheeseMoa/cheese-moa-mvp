@@ -121,6 +121,17 @@ export function toEventDetail(event: DbEvent) {
   }
 }
 
+/**
+ * BE AnalysisStatusResponse — 분석 상태(GET /events/:id/analysis).
+ * 두 필드 모두 대문자 enum이다(다른 이벤트 직렬화와 동일). analysisStatus는 이벤트
+ * 상태에서 유도한다: EMPTY→NONE · ANALYZING→ANALYZING · 그 외→DONE(BE와 동일).
+ */
+export function toAnalysisStatusResponse(event: DbEvent) {
+  const analysisStatus =
+    event.status === 'empty' ? 'NONE' : event.status === 'analyzing' ? 'ANALYZING' : 'DONE'
+  return { analysisStatus, eventStatus: event.status.toUpperCase() }
+}
+
 // ── 사진 ─────────────────────────────────────────────────────
 
 /** BE PhotoInAlbumResponse — 원본 url·치수 없이 downloadUrl, 플래그는 평면 필드 */
