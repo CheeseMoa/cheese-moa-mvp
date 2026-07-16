@@ -39,6 +39,14 @@ export async function renameEvent(eventId: ID | string, name: string): Promise<v
   await apiFetch<unknown>(`/events/${eventId}`, { method: 'PATCH', body: { name } })
 }
 
+/**
+ * DELETE /events/:id — 이벤트 삭제(하위 앨범·사진 연쇄, published면 뷰어 목록에서도 사라짐).
+ * BE는 CHMO-272 진행 중(스웨거 미배포) — 응답 본문은 쓰지 않으므로 봉투 result 형태와 무관.
+ */
+export function deleteEvent(eventId: ID | string): Promise<void> {
+  return apiFetch<unknown>(`/events/${eventId}`, { method: 'DELETE' }).then(() => undefined)
+}
+
 /** GET /events/:id/albums — 이벤트의 앨범 목록(08 그리드, bare 배열) */
 export function listEventAlbums(eventId: ID | string, signal?: AbortSignal): Promise<Album[]> {
   return apiFetch<RawAlbum[]>(`/events/${eventId}/albums`, { signal }).then((raw) =>

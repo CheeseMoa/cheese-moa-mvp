@@ -19,12 +19,17 @@ interface RenameModalProps {
   onRenamed: () => void
   /** 입력 아래 보조 안내(이름전파 고지 등) */
   note?: ReactNode
+  /** 위험 동작(삭제 등) 진입 버튼 라벨 — onDangerRequest와 함께 주면 폼 아래에 배치 */
+  dangerLabel?: string
+  /** 위험 동작 탭 — 호출부가 이 모달을 닫고 확인 다이얼로그를 연다(모달 중첩 회피) */
+  onDangerRequest?: () => void
 }
 
 /**
  * 이름 수정 모달 공용 — 이벤트명(08)·인물 앨범명(09, 이름전파)에서 재사용.
  * 저장 중 화면을 떠났을 때의 늦은 응답, 열린 입력을 덮는 뒤늦은 refetch, 401(토큰 무효)
  * 복귀를 모두 여기서 처리한다. 실제 PATCH는 호출부가 `submit`으로 주입한다.
+ * 위험 동작 슬롯(dangerLabel)을 주면 설정 모달 꼴이 된다(⚙ 이벤트 설정 — CHMO-278).
  */
 export function RenameModal({
   open,
@@ -37,6 +42,8 @@ export function RenameModal({
   successMessage,
   onRenamed,
   note,
+  dangerLabel,
+  onDangerRequest,
 }: RenameModalProps) {
   const toast = useToast()
   const mutate = useMutation()
@@ -109,6 +116,18 @@ export function RenameModal({
           {submitting ? '저장 중…' : '저장'}
         </Button>
       </form>
+      {/* 위험 동작이지만 확인 다이얼로그(warn 버튼)가 한 번 더 뜨므로 여기선 secondary로 톤을 낮춘다 */}
+      {dangerLabel && onDangerRequest ? (
+        <Button
+          variant="secondary"
+          fullWidth
+          onClick={onDangerRequest}
+          disabled={submitting}
+          className="mt-2.5 text-warn"
+        >
+          {dangerLabel}
+        </Button>
+      ) : null}
     </Modal>
   )
 }
