@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useAlive } from '../hooks/useAlive'
-import { toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { login, signup } from '../api/auth'
 import { setAuthTokens } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
@@ -48,6 +47,7 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
     MODE_CONFIG[mode]
   const navigate = useNavigate()
   const location = useLocation()
+  const mutate = useMutation()
   const returnTo = (location.state as AuthLocationState | null)?.returnTo
   const [nickname, setNickname] = useState('')
   const [pin, setPin] = useState('')
@@ -56,25 +56,25 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
 
   const canSubmit = nickname.trim().length > 0 && PIN_RE.test(pin) && !submitting
 
-  const alive = useAlive()
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      const res = await submit({ nickname: nickname.trim(), pin })
-      if (!alive.current) return
-      setAuthTokens(res)
-      // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀
-      navigate(returnTo ?? '/home', { replace: true })
-    } catch (err) {
-      if (!alive.current) return
+    // 401(자격 오류)도 리다이렉트하지 않고 에러로 — 이 화면 자체가 로그인 표면이다
+    await mutate(() => submit({ nickname: nickname.trim(), pin }), {
+      noAuthRedirect: true,
+      onSuccess: (res) => {
+        setAuthTokens(res)
+        // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀
+        navigate(returnTo ?? '/home', { replace: true })
+      },
       // 서버 에러 메시지(INVALID_CREDENTIALS·NICKNAME_TAKEN·INVALID_PIN)는 사용자 노출 가능한 한국어
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (

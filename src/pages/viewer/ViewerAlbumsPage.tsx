@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
-import { Badge, ErrorState, Header } from '../../components/ui'
+import { Badge, Header, LoadState } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { getViewerAlbums } from '../../api/viewer'
 
@@ -65,17 +65,17 @@ export function ViewerAlbumsPage() {
               </div>
             )}
           </>
-        ) : api.loading ? (
-          <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
-        ) : api.error ? (
-          <ErrorState
+        ) : (
+          <LoadState
+            loading={api.loading}
             error={api.error}
+            loadingText="앨범을 불러오는 중…"
             onRetry={api.refetch}
             unauthorizedTo={`/share/${token}`}
             notFoundTo={`/share/${token}/events`}
             notFoundLabel="공개 이벤트로"
           />
-        ) : null}
+        )}
       </main>
     </PhoneShell>
   )

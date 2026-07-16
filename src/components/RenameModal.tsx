@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAlive } from '../hooks/useAlive'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface RenameModalProps {
@@ -40,8 +38,8 @@ export function RenameModal({
   onRenamed,
   note,
 }: RenameModalProps) {
-  const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,8 +60,6 @@ export function RenameModal({
     setError(null)
   }, [open])
 
-  const alive = useAlive()
-
   const canSubmit = name.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
@@ -71,21 +67,20 @@ export function RenameModal({
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      const nextName = name.trim()
-      await submit(nextName)
-      if (!alive.current) return
-      // 성공 반영 — refetch 도착 전 재오픈해도 새 이름이 보이게(stale prop 재시드 방지)
-      initialNameRef.current = nextName
-      toast.show(successMessage)
-      onRenamed()
-      onClose()
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+    const nextName = name.trim()
+    await mutate(() => submit(nextName), {
+      onSuccess: () => {
+        // 성공 반영 — refetch 도착 전 재오픈해도 새 이름이 보이게(stale prop 재시드 방지)
+        initialNameRef.current = nextName
+        toast.show(successMessage)
+        onRenamed()
+        onClose()
+      },
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (
