@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { MovePhotosSheet } from '../components/MovePhotosSheet'
 import { LightboxToolbarButton, PhotoLightbox } from '../components/PhotoLightbox'
@@ -50,6 +50,7 @@ export function AlbumDetailPage() {
   // 라우트 파라미터는 문자열 — API 계약(ID = number)에 맞춰 숫자로 변환(CHMO-191)
   const albumId = Number(albumIdParam)
   const toast = useToast()
+  const navigate = useNavigate()
   const mutate = useMutation()
   const albumApi = useApi(`album:${albumId}`, (signal) => getAlbumWithPhotos(albumId, signal))
 
@@ -114,6 +115,15 @@ export function AlbumDetailPage() {
     setSelected(new Set())
   }
 
+  // 사진이 0장이 되면 BE가 앨범을 자동 삭제한다(CHMO-231) — refetch하면 404(ErrorState)를
+  // 마주하므로, 남는 사진이 없을 땐 재조회 대신 이벤트 앨범 그리드(08)로 나간다(CHMO-289).
+  // replace: 뒤로가기로 사라진 앨범에 되돌아오지 않게 한다.
+  const exitToEventIfEmptied = (removedCount: number): boolean => {
+    if (removedCount < photos.length) return false
+    navigate(eventPath, { replace: true })
+    return true
+  }
+
   const handleDelete = async () => {
     const ids = pendingDelete ?? []
     if (ids.length === 0 || busy) return
@@ -123,6 +133,7 @@ export function AlbumDetailPage() {
         setPendingDelete(null)
         if (selectMode) exitSelect()
         toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
+        if (exitToEventIfEmptied(ids.length)) return
         albumApi.refetch()
         setBusy(false)
       },
@@ -158,6 +169,7 @@ export function AlbumDetailPage() {
     setPendingMove(null)
     if (selectMode) exitSelect()
     toast.show(`🧀 ${movedCount}장을 '${targetName}'(으)로 옮겼어요`)
+    if (exitToEventIfEmptied(movedCount)) return
     albumApi.refetch()
   }
 
