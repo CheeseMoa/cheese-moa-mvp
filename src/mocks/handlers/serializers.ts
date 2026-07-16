@@ -39,8 +39,13 @@ export function shareUrlOf(group: DbGroup): string {
   return `${window.location.origin}/share/${group.share.token}`
 }
 
+/**
+ * 실 BE 계약(CHMO-237): joinUrl은 **쿼리형**(`/join?joinKey=…`)이라 FE 라우트(`/join/:joinKey`)와
+ * 안 맞는다 — 화면이 이 값을 그대로 쓰면 목에서도 404가 나게 그대로 흉내 낸다.
+ * FE는 이 값을 버리고 joinKey로 경로형을 파생한다(`src/api/groups.ts`).
+ */
 export function joinUrlOf(group: DbGroup): string {
-  return `${window.location.origin}/join/${group.joinKey}`
+  return `${window.location.origin}/join?joinKey=${group.joinKey}`
 }
 
 // ── 모임 ─────────────────────────────────────────────────────

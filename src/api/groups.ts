@@ -40,9 +40,28 @@ export function joinGroup(input: { joinKey: string; password: string }): Promise
   return apiFetch<RawGroup>('/groups/join', { method: 'POST', body: input }).then(toGroup)
 }
 
-/** GET /groups/:id/invite — 선생님 초대 정보(모임 비밀번호 평문 포함, 멤버 전용) */
+/** BE GroupInviteResponse — joinUrl이 쿼리형(`/join?joinKey=…`)이라 FE 라우트와 안 맞는다 */
+interface RawGroupInvite {
+  joinKey: string
+  password: string
+  joinUrl: string
+}
+
+/**
+ * GET /groups/:id/invite — 선생님 초대 정보(모임 비밀번호 평문 포함, 멤버 전용).
+ * 참여 링크는 BE joinUrl을 신뢰하지 않고 joinKey로 **FE 오리진 기준 경로형**(`/join/:joinKey`)을
+ * 파생한다(CHMO-237) — BE 것을 그대로 공유하면 받은 사람이 404로 떨어진다.
+ */
 export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promise<GroupInviteInfo> {
-  return apiFetch<GroupInviteInfo>(`/groups/${groupId}/invite`, { signal })
+  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then((raw) => {
+    // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
+    const origin = typeof window === 'undefined' ? '' : window.location.origin
+    return {
+      joinKey: raw.joinKey,
+      password: raw.password,
+      joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
+    }
+  })
 }
 
 /** GET /groups/:id/share — 학부모 공유 정보(학부모 전용 비밀번호 평문 포함, 멤버 전용) */
