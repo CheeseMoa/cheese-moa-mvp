@@ -6,16 +6,15 @@ import { InviteSheet, ParentShareSheet } from '../components/GroupShareSheets'
 import {
   Button,
   EmptyState,
-  ErrorState,
   EventCard,
   Header,
+  LoadState,
   Modal,
   TextField,
   useToast,
 } from '../components/ui'
-import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { getGroup, renameGroup } from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
 import type { Group } from '../types/api'
@@ -89,11 +88,11 @@ export function GroupDetailPage() {
 
             <h3 className="mt-5 text-[13px] font-bold text-muted">이벤트</h3>
             <div className="mt-2 flex flex-1 flex-col">
-              {eventsApi.loading ? (
-                <p className="py-11 text-center text-sm text-muted">이벤트를 불러오는 중…</p>
-              ) : eventsApi.error ? (
-                <ErrorState
+              {eventsApi.loading || eventsApi.error ? (
+                <LoadState
+                  loading={eventsApi.loading}
                   error={eventsApi.error}
+                  loadingText="이벤트를 불러오는 중…"
                   onRetry={eventsApi.refetch}
                   unauthorizedTo="/login"
                   notFoundTo="/home"
@@ -135,17 +134,17 @@ export function GroupDetailPage() {
               </div>
             </div>
           </>
-        ) : groupApi.loading ? (
-          <p className="py-11 text-center text-sm text-muted">모임을 불러오는 중…</p>
-        ) : groupApi.error ? (
-          <ErrorState
+        ) : (
+          <LoadState
+            loading={groupApi.loading}
             error={groupApi.error}
+            loadingText="모임을 불러오는 중…"
             onRetry={groupApi.refetch}
             unauthorizedTo="/login"
             notFoundTo="/home"
             notFoundLabel="홈으로"
           />
-        ) : null}
+        )}
       </main>
 
       <InviteSheet groupId={groupId} open={inviteOpen} onClose={() => setInviteOpen(false)} />
@@ -173,8 +172,8 @@ interface RenameGroupModalProps {
 
 /** 모임 설정 ⚙ = 모임 이름 수정(F2.4 — name만 변경 가능) · PATCH /groups/:id */
 function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalProps) {
-  const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const [name, setName] = useState(group.name)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -191,8 +190,6 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
     setError(null)
   }, [open])
 
-  const alive = useAlive()
-
   const canSubmit = name.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
@@ -200,18 +197,17 @@ function RenameGroupModal({ open, onClose, group, onRenamed }: RenameGroupModalP
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      await renameGroup(group.id, name.trim())
-      if (!alive.current) return
-      toast.show('🧀 모임 이름을 바꿨어요')
-      onRenamed()
-      onClose()
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+    await mutate(() => renameGroup(group.id, name.trim()), {
+      onSuccess: () => {
+        toast.show('🧀 모임 이름을 바꿨어요')
+        onRenamed()
+        onClose()
+      },
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (
@@ -264,6 +260,7 @@ interface CreateEventModalProps {
 function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
   const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -276,8 +273,6 @@ function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
     setError(null)
   }, [open])
 
-  const alive = useAlive()
-
   const canSubmit = name.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
@@ -285,17 +280,16 @@ function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      const event = await createEvent(groupId, { name: name.trim() })
-      if (!alive.current) return
-      toast.show('🧀 이벤트를 만들었어요')
-      navigate(`/groups/${groupId}/events/${event.id}`)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+    await mutate(() => createEvent(groupId, { name: name.trim() }), {
+      onSuccess: (event) => {
+        toast.show('🧀 이벤트를 만들었어요')
+        navigate(`/groups/${groupId}/events/${event.id}`)
+      },
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (

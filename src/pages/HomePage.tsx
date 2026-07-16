@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { JoinGroupModal } from '../components/JoinGroupModal'
-import { Button, ButtonLink, EmptyState, ErrorState, GroupCard, Header } from '../components/ui'
+import { Button, ButtonLink, EmptyState, GroupCard, Header, LoadState } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { listGroups } from '../api/groups'
 
@@ -32,10 +32,14 @@ export function HomePage() {
 
         <h3 className="mt-5 text-[13px] font-bold text-muted">모임</h3>
         <div className="mt-2 flex flex-1 flex-col">
-          {loading ? (
-            <p className="py-11 text-center text-sm text-muted">모임을 불러오는 중…</p>
-          ) : error ? (
-            <ErrorState error={error} onRetry={refetch} unauthorizedTo="/login" />
+          {loading || error ? (
+            <LoadState
+              loading={loading}
+              error={error}
+              loadingText="모임을 불러오는 중…"
+              onRetry={refetch}
+              unauthorizedTo="/login"
+            />
           ) : groups.length === 0 ? (
             <EmptyState
               title="아직 모임이 없어요"

@@ -4,8 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import {
   Button,
-  ErrorState,
   Header,
+  LoadState,
   PhotoGrid,
   PhotoTile,
   Toggle,
@@ -224,17 +224,15 @@ export function PhotoUploadPage() {
         <h1 className="text-xl font-bold text-text">사진 업로드</h1>
 
         {!event ? (
-          eventApi.loading ? (
-            <p className="py-11 text-center text-sm text-muted">이벤트를 불러오는 중…</p>
-          ) : eventApi.error ? (
-            <ErrorState
-              error={eventApi.error}
-              onRetry={eventApi.refetch}
-              unauthorizedTo="/login"
-              notFoundTo={`/groups/${groupId}`}
-              notFoundLabel="모임 상세로"
-            />
-          ) : null
+          <LoadState
+            loading={eventApi.loading}
+            error={eventApi.error}
+            loadingText="이벤트를 불러오는 중…"
+            onRetry={eventApi.refetch}
+            unauthorizedTo="/login"
+            notFoundTo={`/groups/${groupId}`}
+            notFoundLabel="모임 상세로"
+          />
         ) : event.status === 'analyzing' ? (
           // 분석 중에는 업로드 불가 — 진입 자체를 안내로 막는다
           <>

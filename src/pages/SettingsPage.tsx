@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ErrorState, Header, PinField, TextField, useToast } from '../components/ui'
-import { useAlive } from '../hooks/useAlive'
+import { Button, Header, LoadState, PinField, TextField, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { getMe, logout, updateMe } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
@@ -18,6 +17,7 @@ import { PIN_RE } from '../lib/pin'
 export function SettingsPage() {
   const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const { data: me, error: loadError, loading, refetch } = useApi('me', getMe)
   // 저장 성공 후 dirty 판정이 stale me.nickname과 비교하지 않게 서버 반영값을 따로 든다
   const [savedNickname, setSavedNickname] = useState<string | null>(null)
@@ -26,7 +26,6 @@ export function SettingsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const alive = useAlive()
 
   useEffect(() => {
     if (me) {
@@ -46,22 +45,21 @@ export function SettingsPage() {
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      // pin은 입력했을 때만 변경 요청에 포함(undefined는 본문에서 빠진다)
-      const updated = await updateMe({ nickname: nickname.trim(), pin: pin || undefined })
-      if (!alive.current) return
-      setSavedNickname(updated.nickname)
-      setNickname(updated.nickname)
-      setPin('')
-      toast.show('🧀 저장했어요')
-      setSubmitting(false)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
+    // pin은 입력했을 때만 변경 요청에 포함(undefined는 본문에서 빠진다)
+    await mutate(() => updateMe({ nickname: nickname.trim(), pin: pin || undefined }), {
+      onSuccess: (updated) => {
+        setSavedNickname(updated.nickname)
+        setNickname(updated.nickname)
+        setPin('')
+        toast.show('🧀 저장했어요')
+        setSubmitting(false)
+      },
       // 서버 에러 메시지(NICKNAME_TAKEN·INVALID_PIN)는 사용자 노출 가능한 한국어
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   const handleLogout = async () => {
@@ -86,10 +84,14 @@ export function SettingsPage() {
       <Header backTo="/home" backLabel="홈" title="설정" backDisabled={submitting || loggingOut} />
       <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
         <h2 className="text-xl font-bold text-text">프로필 편집</h2>
-        {loading ? (
-          <p className="py-11 text-center text-sm text-muted">프로필을 불러오는 중…</p>
-        ) : loadError ? (
-          <ErrorState error={loadError} onRetry={refetch} unauthorizedTo="/login" />
+        {loading || loadError ? (
+          <LoadState
+            loading={loading}
+            error={loadError}
+            loadingText="프로필을 불러오는 중…"
+            onRetry={refetch}
+            unauthorizedTo="/login"
+          />
         ) : (
           <form id="profile-form" onSubmit={handleSubmit} noValidate className="mt-4">
             <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">

@@ -1,12 +1,10 @@
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { getMoveSuggestions, movePhotos } from '../api/albums'
 import { cx } from '../lib/cx'
 import type { ID, MoveSuggestion } from '../types/api'
-import { BottomSheet, ErrorState, useToast } from './ui'
+import { BottomSheet, LoadState, useToast } from './ui'
 
 interface MovePhotosSheetProps {
   onClose: () => void
@@ -31,8 +29,8 @@ export function MovePhotosSheet({
   photoIds,
   onMoved,
 }: MovePhotosSheetProps) {
-  const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const query = photoIds.join(',')
   const { data, error, loading, refetch } = useApi(
     photoIds.length > 0 ? `move-suggestions:${sourceAlbumId}:${query}` : null,
@@ -43,26 +41,21 @@ export function MovePhotosSheet({
   // 두 번 이동(두 번째는 이미 원본에서 빠진 사진이라 400)하는 것을 막는다.
   const busyRef = useRef(false)
 
-  const alive = useAlive()
-
   const suggestions = data ?? []
 
   const handleMove = async (target: MoveSuggestion) => {
     if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
-    try {
-      const res = await movePhotos({ photoIds, sourceAlbumId, targetAlbumId: target.albumId })
-      if (!alive.current) return
+    await mutate(() => movePhotos({ photoIds, sourceAlbumId, targetAlbumId: target.albumId }), {
       // 성공: 부모가 시트를 닫고(언마운트) 선택 해제 + refetch 한다
-      onMoved(res.movedCount, target.name)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      toast.show(toErrorMessage(err))
-      busyRef.current = false
-      setBusy(false)
-    }
+      onSuccess: (res) => onMoved(res.movedCount, target.name),
+      onError: (msg) => {
+        toast.show(msg)
+        busyRef.current = false
+        setBusy(false)
+      },
+    })
   }
 
   return (
@@ -74,10 +67,14 @@ export function MovePhotosSheet({
       title="다른 사진첩으로 옮기기"
       subtitle="유사도가 높은 순으로 추천해요"
     >
-      {loading ? (
-        <p className="py-8 text-center text-sm text-muted">불러오는 중…</p>
-      ) : error ? (
-        <ErrorState error={error} onRetry={refetch} unauthorizedTo="/login" className="py-8" />
+      {loading || error ? (
+        <LoadState
+          loading={loading}
+          error={error}
+          onRetry={refetch}
+          unauthorizedTo="/login"
+          className="py-8"
+        />
       ) : suggestions.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">옮길 만한 다른 앨범이 없어요.</p>
       ) : (

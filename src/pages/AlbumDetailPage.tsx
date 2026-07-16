@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { MovePhotosSheet } from '../components/MovePhotosSheet'
 import { LightboxToolbarButton, PhotoLightbox } from '../components/PhotoLightbox'
@@ -8,17 +8,17 @@ import {
   Badge,
   Button,
   ConfirmDialog,
-  ErrorState,
   Header,
   IconFolderMove,
   IconTrash,
+  LoadState,
   PhotoGrid,
   PhotoTile,
   useToast,
 } from '../components/ui'
-import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
+import { toErrorMessage } from '../api/client'
 import {
   deletePhotos,
   getAlbumWithPhotos,
@@ -49,8 +49,8 @@ export function AlbumDetailPage() {
   }>()
   // 라우트 파라미터는 문자열 — API 계약(ID = number)에 맞춰 숫자로 변환(CHMO-191)
   const albumId = Number(albumIdParam)
-  const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const albumApi = useApi(`album:${albumId}`, (signal) => getAlbumWithPhotos(albumId, signal))
 
   const [selectMode, setSelectMode] = useState(false)
@@ -62,8 +62,6 @@ export function AlbumDetailPage() {
   const [renameOpen, setRenameOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
-
-  const alive = useAlive()
 
   const album = albumApi.data?.album
   const photos = albumApi.data?.photos ?? []
@@ -109,41 +107,39 @@ export function AlbumDetailPage() {
     const ids = pendingDelete ?? []
     if (ids.length === 0 || busy) return
     setBusy(true)
-    try {
-      await deletePhotos({ albumId, photoIds: ids })
-      if (!alive.current) return
-      setPendingDelete(null)
-      if (selectMode) exitSelect()
-      toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
-      albumApi.refetch()
-      setBusy(false)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setPendingDelete(null)
-      toast.show(toErrorMessage(err))
-      setBusy(false)
-    }
+    await mutate(() => deletePhotos({ albumId, photoIds: ids }), {
+      onSuccess: () => {
+        setPendingDelete(null)
+        if (selectMode) exitSelect()
+        toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
+        albumApi.refetch()
+        setBusy(false)
+      },
+      onError: (msg) => {
+        setPendingDelete(null)
+        toast.show(msg)
+        setBusy(false)
+      },
+    })
   }
 
   const handleReview = async () => {
     if (busy) return
     setBusy(true)
-    try {
-      await markAlbumReviewed(albumId)
-      if (!alive.current) return
-      setReviewConfirmOpen(false)
-      exitSelect()
-      toast.show('🧀 검토 완료로 표시했어요')
-      albumApi.refetch()
-      setBusy(false)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setReviewConfirmOpen(false)
-      toast.show(toErrorMessage(err))
-      setBusy(false)
-    }
+    await mutate(() => markAlbumReviewed(albumId), {
+      onSuccess: () => {
+        setReviewConfirmOpen(false)
+        exitSelect()
+        toast.show('🧀 검토 완료로 표시했어요')
+        albumApi.refetch()
+        setBusy(false)
+      },
+      onError: (msg) => {
+        setReviewConfirmOpen(false)
+        toast.show(msg)
+        setBusy(false)
+      },
+    })
   }
 
   // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐)
@@ -241,17 +237,17 @@ export function AlbumDetailPage() {
                 <p className="py-11 text-center text-sm text-muted">이 앨범에 사진이 없어요.</p>
               )}
             </>
-          ) : albumApi.loading ? (
-            <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
-          ) : albumApi.error ? (
-            <ErrorState
+          ) : (
+            <LoadState
+              loading={albumApi.loading}
               error={albumApi.error}
+              loadingText="앨범을 불러오는 중…"
               onRetry={albumApi.refetch}
               unauthorizedTo="/login"
               notFoundTo={`/groups/${groupId}/events/${eventId}`}
               notFoundLabel="이벤트 상세로"
             />
-          ) : null}
+          )}
         </div>
 
         {album && hasPhotos && (

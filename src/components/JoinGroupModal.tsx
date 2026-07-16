@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAlive } from '../hooks/useAlive'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { joinGroup } from '../api/groups'
 import { Button, Modal, TextField, useToast } from './ui'
 
@@ -21,6 +20,7 @@ interface JoinGroupModalProps {
 export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalProps) {
   const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const [joinKeyInput, setJoinKeyInput] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -35,8 +35,6 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     setError(null)
   }, [open])
 
-  const alive = useAlive()
-
   // 참여 코드는 대문자 영숫자만 발급된다(HAETSAL 등) — 소문자 입력도 통과하게 정규화
   const joinKey = (fixedJoinKey ?? joinKeyInput).trim().toUpperCase()
   const canSubmit = joinKey.length > 0 && password.trim().length > 0 && !submitting
@@ -46,26 +44,23 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      const group = await joinGroup({ joinKey, password: password.trim() })
-      if (!alive.current) return
-      toast.show('🧀 모임에 참여했어요')
-      // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
-      // 홈 모달 진입은 push — 뒤로가기로 홈 복귀
-      navigate(`/groups/${group.id}`, { replace: fixedJoinKey !== undefined })
-    } catch (err) {
-      if (!alive.current) return
+    await mutate(() => joinGroup({ joinKey, password: password.trim() }), {
+      onSuccess: (group) => {
+        toast.show('🧀 모임에 참여했어요')
+        // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
+        // 홈 모달 진입은 push — 뒤로가기로 홈 복귀
+        navigate(`/groups/${group.id}`, { replace: fixedJoinKey !== undefined })
+      },
       // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
-      if (
-        redirectIfUnauthorized(err, navigate, {
-          state: fixedJoinKey !== undefined ? { returnTo: `/join/${fixedJoinKey}` } : undefined,
-        })
-      )
-        return
+      redirect: {
+        state: fixedJoinKey !== undefined ? { returnTo: `/join/${fixedJoinKey}` } : undefined,
+      },
       // WRONG_PASSWORD·NOT_FOUND·ALREADY_MEMBER 메시지는 사용자 노출 가능한 한국어
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (

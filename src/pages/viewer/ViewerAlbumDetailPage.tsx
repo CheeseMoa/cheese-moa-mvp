@@ -4,9 +4,9 @@ import { PhoneShell } from '../../components/PhoneShell'
 import { PhotoLightbox } from '../../components/PhotoLightbox'
 import {
   Button,
-  ErrorState,
   Header,
   IconDownload,
+  LoadState,
   PhotoGrid,
   PhotoTile,
   useToast,
@@ -104,17 +104,17 @@ export function ViewerAlbumDetailPage() {
                 <p className="py-11 text-center text-sm text-muted">이 앨범에 사진이 없어요.</p>
               )}
             </>
-          ) : api.loading ? (
-            <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
-          ) : api.error ? (
-            <ErrorState
+          ) : (
+            <LoadState
+              loading={api.loading}
               error={api.error}
+              loadingText="앨범을 불러오는 중…"
               onRetry={api.refetch}
               unauthorizedTo={`/share/${token}`}
               notFoundTo={`/share/${token}/events/${eventId}`}
               notFoundLabel="공개 앨범으로"
             />
-          ) : null}
+          )}
         </div>
 
         {album && hasPhotos && (
