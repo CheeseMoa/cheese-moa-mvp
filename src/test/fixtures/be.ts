@@ -44,6 +44,8 @@ export const BE_ERRORS = {
   },
   /** 비밀번호 불일치 — POST /share/:token/unlock (모임 참여도 같은 코드) */
   JOIN403: { status: 403, payload: errorEnvelope('JOIN403', '비밀번호가 일치하지 않습니다.') },
+  /** 모임 없음 — POST /groups/join (없는 joinKey · 2026-07-16 CHMO-285 착수 중 채집) */
+  SPACE404: { status: 404, payload: errorEnvelope('SPACE404', '모임을 찾을 수 없습니다.') },
   /** 앨범 없음 — GET /albums/999999 */
   ALBUM404: { status: 404, payload: errorEnvelope('ALBUM404', '앨범을 찾을 수 없습니다.') },
   /** 지원하지 않는 확장자 — POST /events/:id/photos/presign (a.gif) */

@@ -162,7 +162,7 @@ export function createFixtures(): Db {
         id: 1,
         name: '햇살반',
         password: '482AVX',
-        joinKey: 'HAETSAL',
+        joinKey: 'Haetsal3Kx9q',
         share: { token: 'shr_grp1', password: '7421' },
         createdAt: '2026-05-01T09:00:00+09:00',
       },
@@ -170,16 +170,17 @@ export function createFixtures(): Db {
         id: 2,
         name: '달님반',
         password: '913BQZ',
-        joinKey: 'DALNIM',
+        joinKey: 'Dalnim7Qw2pz',
         share: { token: 'shr_grp2', password: '5830' },
         createdAt: '2026-06-10T09:00:00+09:00',
       },
-      // 유저 1 미가입 — 모임 참여(joinKey: BYEOL + 비밀번호) 플로우 시연용
+      // 유저 1 미가입 — 모임 참여(joinKey: ByeolJoin5x8 + 비밀번호) 플로우 시연용.
+      // 시드 joinKey도 실 BE처럼 대소문자 혼합 12자 — 대문자 변환이 끼어들면 목에서도 참여가 깨진다(CHMO-285)
       {
         id: 3,
         name: '별님반',
         password: '274CKD',
-        joinKey: 'BYEOL',
+        joinKey: 'ByeolJoin5x8',
         share: { token: 'shr_grp3', password: '1946' },
         createdAt: '2026-06-20T09:00:00+09:00',
       },

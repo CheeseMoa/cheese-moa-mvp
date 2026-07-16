@@ -19,7 +19,7 @@ import {
   errorResponse,
   invalidBody,
   invalidRequest,
-  notFound,
+  groupNotFound,
   ok,
   optionalString,
   readJson,
@@ -30,13 +30,12 @@ import {
 } from './shared'
 import { joinUrlOf, shareUrlOf, toGroupDetail, toGroupSummary } from './serializers'
 
-const GROUP_NOT_FOUND = '모임을 찾을 수 없습니다.'
-
 function randomJoinKey(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  // 실 BE는 대소문자 혼합 12자를 발급하고 대소문자를 구분해 매칭한다(채집 예: Fh1TDIk81EPP — CHMO-285)
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   let key = ''
   do {
-    key = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    key = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
   } while (db.groups.some((g) => g.joinKey === key))
   return key
 }
@@ -82,7 +81,7 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
     return ok(toGroupDetail(group))
   }),
 
@@ -91,7 +90,7 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
 
     const body = await readJson<{ name?: unknown }>(request)
     if (!body) return invalidBody()
@@ -107,7 +106,7 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
     deleteGroupCascade(group.id)
     return ok(null)
   }),
@@ -122,7 +121,7 @@ export const groupHandlers = [
     const password = requiredString(body?.password)
     if (!joinKey || !password) return invalidRequest('참여 코드와 모임 비밀번호를 입력해 주세요.')
     const group = db.groups.find((g) => g.joinKey === joinKey)
-    if (!group) return notFound(GROUP_NOT_FOUND)
+    if (!group) return groupNotFound()
     // BE JOIN403 — 뷰어 잠금 해제(학부모 비밀번호)도 같은 코드를 쓴다
     if (group.password !== password)
       return errorResponse(403, 'JOIN403', '비밀번호가 일치하지 않습니다.')
@@ -139,7 +138,7 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
     return ok({
       joinKey: group.joinKey,
       password: group.password,
@@ -152,7 +151,7 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
     return ok({
       token: group.share.token,
       url: shareUrlOf(group),
