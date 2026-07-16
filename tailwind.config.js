@@ -36,6 +36,22 @@ export default {
       boxShadow: {
         card: '0 8px 30px rgba(58, 49, 40, 0.12)',
       },
+      // AI 분석 진행률 — 쥐가 치즈를 쫓아가는 프로그레스(CHMO-287, 분석중 화면 전용)
+      keyframes: {
+        'chase-scurry': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-4px)' },
+        },
+        // 진행률 없는 동안(인디터미넌트) 쥐가 트랙 위를 왕복 — left만 움직여 translate와 안 겹침
+        'chase-roam': {
+          '0%': { left: '4%' },
+          '100%': { left: '96%' },
+        },
+      },
+      animation: {
+        'chase-scurry': 'chase-scurry 0.45s ease-in-out infinite',
+        'chase-roam': 'chase-roam 1.8s ease-in-out infinite alternate',
+      },
       borderRadius: {
         '4xl': '2rem',
       },

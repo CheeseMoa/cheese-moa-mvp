@@ -154,6 +154,26 @@ export const BE_EVENT_DETAIL = {
   createdAt: '2026-07-10T03:33:06.413658Z',
 }
 
+/**
+ * GET /events/:id — 분석 job 진행 중(2026-07-16 채집, CHMO-287).
+ * `progress`가 붙는다(BE가 percent까지 계산). 완료 후엔 null로 돌아간다.
+ * 채집 당시 두 번째 job이 돌던 이벤트라 status가 REVIEW인 채로 progress가 왔다 —
+ * status와 progress는 독립이다(첫 업로드에선 ANALYZING과 함께 온다).
+ */
+export const BE_EVENT_DETAIL_WITH_PROGRESS = {
+  eventId: 42,
+  groupId: 6,
+  name: '진행률API 관찰용',
+  status: 'REVIEW',
+  eventDate: '2026-07-16',
+  thumbnailPhotoId: null,
+  photoCount: 22,
+  albumCount: 1,
+  publishedAt: null,
+  createdAt: '2026-07-16T07:17:38.138371Z',
+  progress: { processed: 9, total: 20, percent: 45 },
+}
+
 /** 공개된 이벤트 (스키마 기준) — 대문자 enum이 소문자로 내려오는지 고정 */
 export const BE_EVENT_PUBLISHED = {
   eventId: 7,

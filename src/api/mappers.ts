@@ -18,6 +18,7 @@ import type {
   Album,
   AlbumType,
   AnalysisJob,
+  AnalysisProgress,
   AnalysisStatus,
   EventItem,
   EventStatus,
@@ -88,6 +89,8 @@ export interface RawEvent {
   /** 상세에만 */
   publishedAt?: ISODateTime | null
   createdAt?: ISODateTime
+  /** 상세에만(CHMO-287) — 분석 job 진행 중에만 non-null. 필드명·형태가 FE와 같아 그대로 통과 */
+  progress?: AnalysisProgress | null
 }
 
 export function toEvent(raw: RawEvent): EventItem {
@@ -102,6 +105,7 @@ export function toEvent(raw: RawEvent): EventItem {
     createdAt: raw.createdAt,
     publishedAt: raw.publishedAt ?? null,
     coverPhotoId: raw.thumbnailPhotoId ?? null,
+    progress: raw.progress ?? null,
   }
 }
 

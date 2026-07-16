@@ -44,6 +44,7 @@ import {
   BE_DELETE_PHOTOS,
   BE_EVENT_CREATED,
   BE_EVENT_DETAIL,
+  BE_EVENT_DETAIL_WITH_PROGRESS,
   BE_EVENT_PUBLISHED,
   BE_EVENT_SUMMARY,
   BE_GROUP_DETAIL,
@@ -194,7 +195,17 @@ describe('이벤트', () => {
       createdAt: '2026-07-10T03:33:06.413658Z',
       publishedAt: null,
       coverPhotoId: null,
+      // progress 필드가 없던 채집분 — 매퍼가 null로 채운다(CHMO-287 전 BE와의 호환)
+      progress: null,
     })
+  })
+
+  it('BE 분석 진행률(progress)은 그대로 통과한다 — 분석중 화면 쥐→치즈 프로그레스의 원천 (CHMO-287)', async () => {
+    serve(envelope(BE_EVENT_DETAIL_WITH_PROGRESS))
+    const event = await getEvent(42)
+    expect(event.progress).toEqual({ processed: 9, total: 20, percent: 45 })
+    // 채집 당시 두 번째 job — status와 progress는 독립이라 REVIEW인 채로도 올 수 있다
+    expect(event.status).toBe('review')
   })
 
   it('BE PUBLISHED는 소문자 published가 된다 — 05 배지·뷰어 노출의 분기 기준', async () => {

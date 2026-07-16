@@ -93,8 +93,10 @@ export interface DbPhoto {
 export interface DbAnalysisJob {
   eventId: number
   status: AnalysisStatus
-  /** analyzing 시작 시각(ms) — 경과 시간으로 완료 전이 판정 */
+  /** analyzing 시작 시각(ms) — 경과 시간으로 완료 전이·진행률 계산 */
   startedAt: number
+  /** 이 job이 분류할 사진 수(시작 시점 미분류 사진) — 진행률 분모(CHMO-287) */
+  total: number
   options: { excludeEyesClosed: boolean; excludeBlurry: boolean }
 }
 
@@ -476,13 +478,28 @@ export function startAnalysis(
   options: { excludeEyesClosed: boolean; excludeBlurry: boolean },
 ): DbAnalysisJob {
   const existing = findAnalysisJob(eventId)
-  const job: DbAnalysisJob = { eventId, status: 'analyzing', startedAt: Date.now(), options }
+  const total = photosOfEvent(eventId).filter((p) => p.albumIds.length === 0).length
+  const job: DbAnalysisJob = { eventId, status: 'analyzing', startedAt: Date.now(), total, options }
   if (existing) {
     Object.assign(existing, job)
     return existing
   }
   db.analysisJobs.push(job)
   return job
+}
+
+/**
+ * AI 분석 진행률(CHMO-287) — BE EventDetailResponse의 `progress` 대응물.
+ * 분석 중에만 non-null(BE는 완료 직후 잠시 100을 유지하지만, 목은 완료 즉시 이벤트가
+ * review로 전이돼 화면이 그리드로 넘어가므로 흉내 낼 필요가 없다).
+ * 경과 시간 비례로 processed를 계산한다 — 실 BE도 percent를 서버가 계산해 준다.
+ */
+export function progressOf(eventId: number): { processed: number; total: number; percent: number } | null {
+  const job = findAnalysisJob(eventId)
+  if (!job || job.status !== 'analyzing' || job.total === 0) return null
+  const ratio = Math.min(1, (Date.now() - job.startedAt) / ANALYSIS_DURATION_MS)
+  const processed = Math.min(job.total, Math.floor(ratio * job.total))
+  return { processed, total: job.total, percent: Math.round((processed / job.total) * 100) }
 }
 
 /**
