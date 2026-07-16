@@ -2,7 +2,16 @@
  * 모임 핸들러 (docs/api-spec.md §3.2) — 목록/생성/상세/이름수정/참여/초대/학부모 공유.
  */
 import { http } from 'msw'
-import { addMembership, db, findGroup, groupsOfUser, nextId, nowIso, type DbGroup } from '../db'
+import {
+  addMembership,
+  db,
+  deleteGroupCascade,
+  findGroup,
+  groupsOfUser,
+  nextId,
+  nowIso,
+  type DbGroup,
+} from '../db'
 import {
   api,
   canAccessGroup,
@@ -90,6 +99,17 @@ export const groupHandlers = [
     if (name === null) return invalidRequest('모임 이름을 입력해 주세요.')
     if (name !== undefined) group.name = name
     return ok(toGroupDetail(group))
+  }),
+
+  // DELETE /groups/:id — 모임 삭제(하위 이벤트·앨범·사진 연쇄 정리) · 화면 05 ⚙
+  // BE CHMO-273 진행 중(스웨거 미배포) — 성공 봉투(result null)로 응답, 배포 후 계약 재확인
+  http.delete(api('/groups/:id'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const group = findGroup(toId(params.id))
+    if (!group || !canAccessGroup(user, group.id)) return notFound(GROUP_NOT_FOUND)
+    deleteGroupCascade(group.id)
+    return ok(null)
   }),
 
   // POST /groups/join — 모임 참여(선생님 초대 수락) · 화면 02-1
