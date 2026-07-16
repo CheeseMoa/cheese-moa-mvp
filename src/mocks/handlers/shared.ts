@@ -40,7 +40,7 @@ export function errorResponse(status: number, code: string, message: string) {
 
 /**
  * 에러 코드는 실서버에서 **채집된 것만** BE 코드를 쓴다(`src/test/fixtures/be.ts`).
- * 채집되지 않은 케이스(모임 404·닉네임 중복·이미 멤버·미검토 공개)는 FE 의미 코드를
+ * 채집되지 않은 케이스(닉네임 중복·이미 멤버·미검토 공개)는 FE 의미 코드를
  * 그대로 둔다 — `errors.ts`는 미지의 코드를 통과시키므로 화면 분기는 그대로 동작하고,
  * 추측한 코드를 BE 진실 테이블에 굳히지 않는다. BE 코드를 확인하면 여기와 errors.ts만 고친다.
  */
@@ -50,9 +50,14 @@ export function unauthorized() {
   return errorResponse(401, 'COMMON401', '인증이 필요합니다.')
 }
 
-/** BE 코드 미확인 — 모임·공유 링크 404는 채집되지 않았다 */
+/** BE 코드 미확인 — 공유 링크 404는 채집되지 않았다 */
 export function notFound(message = '리소스를 찾을 수 없습니다.') {
   return errorResponse(404, 'NOT_FOUND', message)
+}
+
+/** 모임 없음 — BE SPACE404(BE 도메인명이 space다 · 2026-07-16 채집, CHMO-285) */
+export function groupNotFound() {
+  return errorResponse(404, 'SPACE404', '모임을 찾을 수 없습니다.')
 }
 
 /** 이벤트 없음 — BE MOMENT404(BE 도메인명이 moment다) */

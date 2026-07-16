@@ -34,7 +34,7 @@ import {
   eventNotFound,
   invalidBody,
   invalidRequest,
-  notFound,
+  groupNotFound,
   ok,
   optionalString,
   readJson,
@@ -66,7 +66,7 @@ export const eventHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
 
     const events = db.events.filter((e) => e.groupId === group.id)
     // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
@@ -80,7 +80,7 @@ export const eventHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return notFound('모임을 찾을 수 없습니다.')
+    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
 
     const body = await readJson<{ name?: unknown }>(request)
     const name = requiredString(body?.name)
