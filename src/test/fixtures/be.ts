@@ -96,11 +96,15 @@ export const BE_GROUP_DETAIL = {
   createdAt: '2026-07-10T03:33:06.314638Z',
 }
 
-/** GET /groups/:id/invite — 평문 모임 비밀번호 포함(값은 치환). 목록엔 joinKey가 없어 이걸로 대조한다 */
+/**
+ * GET /groups/:id/invite — 평문 모임 비밀번호 포함(값은 치환). 목록엔 joinKey가 없어 이걸로 대조한다.
+ * joinUrl은 **쿼리형**이라 FE 라우트(`/join/:joinKey`)와 안 맞는다 — FE는 이 값을 쓰지 않고
+ * joinKey로 파생한다(CHMO-237). 2026-07-16 재채집: 오리진이 EC2 IP → 배포 FE(vercel)로 바뀌었지만 여전히 쿼리형.
+ */
 export const BE_GROUP_INVITE = {
   joinKey: '<join-key>',
   password: '<group-password>',
-  joinUrl: 'http://3.35.177.22/join?joinKey=<join-key>',
+  joinUrl: 'https://cheese-moa-mvp.vercel.app/join?joinKey=<join-key>',
 }
 
 // ── 이벤트 ───────────────────────────────────────────────────

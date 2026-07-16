@@ -25,7 +25,7 @@ import {
   registerPhotos,
   uploadToPresignedUrl,
 } from './events'
-import { findMyGroupByJoinKey, getGroup, listGroups } from './groups'
+import { findMyGroupByJoinKey, getGroup, getInviteInfo, listGroups } from './groups'
 import {
   getViewerAlbumPhotos,
   getViewerAlbums,
@@ -104,6 +104,14 @@ describe('모임', () => {
     const group = await getGroup(6)
     expect(group.id).toBe(6)
     expect(group.eventCount).toBeUndefined()
+  })
+
+  it('초대 joinUrl은 BE 것(쿼리형)을 버리고 joinKey로 경로형을 파생한다 (CHMO-237)', async () => {
+    serve(envelope({ ...BE_GROUP_INVITE, joinKey: 'Fh1TDIk81EPP' }))
+    const invite = await getInviteInfo(6)
+    expect(invite.joinKey).toBe('Fh1TDIk81EPP')
+    // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다
+    expect(invite.joinUrl).toBe('/join/Fh1TDIk81EPP')
   })
 })
 
