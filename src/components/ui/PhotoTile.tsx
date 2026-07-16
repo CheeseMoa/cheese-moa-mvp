@@ -48,6 +48,8 @@ export function PhotoTile({
     clearTimer()
     timerRef.current = window.setTimeout(() => {
       firedRef.current = true
+      // 선택 발화 순간 가벼운 진동으로 "이제 손 떼도 됨"을 알린다(구글 포토 관용 · 미지원 브라우저는 무시)
+      navigator.vibrate?.(10)
       onLongPress()
     }, LONG_PRESS_MS)
   }
@@ -76,7 +78,7 @@ export function PhotoTile({
       onPointerUp={onLongPress ? clearTimer : undefined}
       onPointerCancel={onLongPress ? clearTimer : undefined}
       onPointerLeave={onLongPress ? clearTimer : undefined}
-      // 롱프레스 시 iOS 이미지 저장 콜아웃/텍스트 선택 방지
+      // 롱프레스 시 컨텍스트 메뉴/콜아웃 방지(iOS는 touch-callout, 안드로이드 크롬은 이 preventDefault)
       onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
       className={cx(
         'cheese-dots relative aspect-square w-full select-none overflow-hidden rounded-xl bg-photo',
@@ -84,7 +86,17 @@ export function PhotoTile({
         selected && 'border-[3px] border-primary',
       )}
     >
-      {src && <img src={src} alt={alt} className="h-full w-full object-cover" />}
+      {/* 롱프레스 대상일 땐 이미지를 이벤트 대상에서 뺀다(pointer-events-none) — 안드로이드 크롬이
+          "이미지를 길게 눌렀다"고 보고 네이티브 이미지 프리뷰/저장 메뉴를 띄우는 걸 원천 차단.
+          터치 타깃은 버튼이 되고, 우리 pointerdown 핸들러는 그대로 발화한다. draggable=false로 드래그도 막는다. */}
+      {src && (
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          className={cx('h-full w-full object-cover', onLongPress && 'pointer-events-none')}
+        />
+      )}
       {selected ? (
         <span className="absolute right-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary text-[13px] font-bold text-heading">
           ✓
