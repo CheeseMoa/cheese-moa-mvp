@@ -387,6 +387,41 @@ export function removePhotoFromAlbum(photoId: number, albumId: number): void {
   }
 }
 
+// ── 모임·이벤트 삭제 (연쇄) ──────────────────────────────────
+
+/**
+ * 이벤트 삭제 — 자식→부모 순: 사진 → 앨범 → 분석 job → 업로드 키 → 이벤트(CHMO-278).
+ * 인물(persons)은 모임 스코프라 보존한다 — 다른 이벤트의 인물 앨범이 같은 personId를 쓴다.
+ * published 이벤트도 레코드가 사라지므로 뷰어 공개 목록에서 자연히 빠진다.
+ */
+export function deleteEventCascade(eventId: number): void {
+  const keyPrefix = uploadKeyPrefixOf(eventId)
+  db.photos = db.photos.filter((p) => p.eventId !== eventId)
+  db.albums = db.albums.filter((a) => a.eventId !== eventId)
+  db.analysisJobs = db.analysisJobs.filter((j) => j.eventId !== eventId)
+  db.uploadedKeys = db.uploadedKeys.filter((key) => !key.startsWith(keyPrefix))
+  db.events = db.events.filter((e) => e.id !== eventId)
+}
+
+/**
+ * 모임 삭제 — BE CHMO-273의 자식→부모 순 수동 삭제 대응(cascade 설정 없음):
+ * 사진 → 앨범 → 분석 job → 업로드 키 → 이벤트 → 인물 → 멤버십 → 모임.
+ * BE는 Person/PersonCluster를 보존하고 SpacePerson 행만 지우는데, 목의 persons가
+ * 곧 SpacePerson(모임 스코프 이름 맵)이므로 함께 삭제한다.
+ */
+export function deleteGroupCascade(groupId: number): void {
+  const eventIds = new Set(eventsOfGroup(groupId).map((e) => e.id))
+  const keyPrefixes = [...eventIds].map(uploadKeyPrefixOf)
+  db.photos = db.photos.filter((p) => !eventIds.has(p.eventId))
+  db.albums = db.albums.filter((a) => !eventIds.has(a.eventId))
+  db.analysisJobs = db.analysisJobs.filter((j) => !eventIds.has(j.eventId))
+  db.uploadedKeys = db.uploadedKeys.filter((key) => !keyPrefixes.some((pre) => key.startsWith(pre)))
+  db.events = db.events.filter((e) => e.groupId !== groupId)
+  db.persons = db.persons.filter((p) => p.groupId !== groupId)
+  db.memberships = db.memberships.filter((m) => m.groupId !== groupId)
+  db.groups = db.groups.filter((g) => g.id !== groupId)
+}
+
 // ── 이벤트 상태전이 ──────────────────────────────────────────
 
 /**
