@@ -7,7 +7,8 @@
  * BE message는 이미 한국어라 그대로 노출해도 안전하다.
  *
  * 근거: 2026-07-09 실서버 curl 대조(AUTH400·AUTH401·COMMON401) + CHMO-191 스토리
- * (JOIN403·MOMENT404·ALBUM404). 새 코드를 확인하면 여기에만 추가하면 된다.
+ * (JOIN403·MOMENT404·ALBUM404) + 2026-07-16 참여 실패 채집(SPACE404 — CHMO-285).
+ * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
   /** PIN 형식 오류(400) — "PIN은 4자리 숫자여야 합니다." */
@@ -18,6 +19,8 @@ const BE_CODE_MAP: Record<string, string> = {
   COMMON401: 'UNAUTHORIZED',
   /** 모임 참여 비밀번호 불일치(403) */
   JOIN403: 'WRONG_PASSWORD',
+  /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
+  SPACE404: 'NOT_FOUND',
   /** 이벤트(BE 도메인명 moment) 없음(404) */
   MOMENT404: 'NOT_FOUND',
   /** 앨범 없음(404) */

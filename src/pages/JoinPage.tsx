@@ -19,7 +19,8 @@ export function JoinPage() {
   const authed = isAuthenticated()
 
   // 코드가 비는 잘못된 링크(/join/%20 등)는 고정 모드로 죽은 폼이 되므로 직접 입력 모드로 폴백
-  const fixedJoinKey = joinKey?.trim() ? joinKey.trim().toUpperCase() : undefined
+  // joinKey는 대소문자 구분 — 대소문자 변환 없이 그대로 쓴다(CHMO-285)
+  const fixedJoinKey = joinKey?.trim() ? joinKey.trim() : undefined
 
   // 이미 멤버인지 사전 감지 — 목록 응답엔 joinKey가 없어(시크릿 미노출, CHMO-192)
   // 내 모임들의 초대 정보로 대조한다. 조회 실패 시에는 기존처럼 모달을 띄운다(참여를 막지 않음)

@@ -35,8 +35,8 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     setError(null)
   }, [open])
 
-  // 참여 코드는 대문자 영숫자만 발급된다(HAETSAL 등) — 소문자 입력도 통과하게 정규화
-  const joinKey = (fixedJoinKey ?? joinKeyInput).trim().toUpperCase()
+  // 실 BE joinKey는 대소문자 혼합 발급 + 대소문자 구분 매칭 — 케이스를 훼손하면 안 된다(CHMO-285)
+  const joinKey = (fixedJoinKey ?? joinKeyInput).trim()
   const canSubmit = joinKey.length > 0 && password.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: FormEvent) => {

@@ -11,6 +11,7 @@ describe('toFeErrorCode', () => {
   it('나머지 매핑도 api-spec 의미 코드로 옮긴다', () => {
     expect(toFeErrorCode('AUTH400')).toBe('INVALID_PIN')
     expect(toFeErrorCode(BE_ERRORS.JOIN403.payload.code)).toBe('WRONG_PASSWORD')
+    expect(toFeErrorCode(BE_ERRORS.SPACE404.payload.code)).toBe('NOT_FOUND')
     expect(toFeErrorCode('MOMENT404')).toBe('NOT_FOUND')
     expect(toFeErrorCode(BE_ERRORS.ALBUM404.payload.code)).toBe('NOT_FOUND')
   })
