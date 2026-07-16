@@ -16,9 +16,7 @@ import {
   findAlbum,
   findEvent,
   issueViewerToken,
-  personNameOf,
   resolveViewerShareToken,
-  reviewedPhotosOfAlbum,
   settleAnalysis,
   type DbAlbum,
   type DbEvent,
@@ -37,10 +35,10 @@ import {
 } from './shared'
 import {
   isViewerVisibleType,
-  toViewerAlbumSummary,
+  toViewerAlbumPhotosResponse,
+  toViewerEventAlbumsResponse,
   toViewerEventSummary,
-  toViewerPhoto,
-  viewerAlbumsOfEvent,
+  toViewerUnlockResponse,
 } from './serializers'
 
 const SHARE_NOT_FOUND = '공유 링크를 찾을 수 없습니다.'
@@ -99,11 +97,7 @@ export const shareHandlers = [
       return errorResponse(403, 'JOIN403', '비밀번호가 일치하지 않습니다.')
 
     // 모임명은 이 응답에만 온다 — 목록(GET /share/:token)은 bare 배열이라 이름이 없다
-    return ok({
-      viewerToken: issueViewerToken(group.share.token),
-      groupId: group.id,
-      groupName: group.name,
-    })
+    return ok(toViewerUnlockResponse(group, issueViewerToken(group.share.token)))
   }),
 
   // GET /share/:token — 공개 이벤트 목록(bare 배열, 모임명 없음) · 화면 15-L
@@ -127,12 +121,7 @@ export const shareHandlers = [
     if (!event) return notFound('공개된 이벤트가 아닙니다.')
     settleAnalysis(event.id)
 
-    // BE ViewerEventAlbumsResponse — eventId·eventName이 평면 필드다
-    return ok({
-      eventId: event.id,
-      eventName: event.name,
-      albums: viewerAlbumsOfEvent(event.id).map(toViewerAlbumSummary),
-    })
+    return ok(toViewerEventAlbumsResponse(event))
   }),
 
   // GET /share/:token/events/:eventId/albums/:albumId — 앨범 상세(검토 완료 사진만) · 화면 16
@@ -145,12 +134,7 @@ export const shareHandlers = [
     )
     if (!('album' in resolved)) return resolved
 
-    // BE ViewerAlbumPhotosResponse — type도 photoCount도 없고 personName만 온다(공통 앨범은 null)
-    return ok({
-      albumId: resolved.album.id,
-      personName: personNameOf(resolved.album),
-      photos: reviewedPhotosOfAlbum(resolved.album.id).map(toViewerPhoto),
-    })
+    return ok(toViewerAlbumPhotosResponse(resolved.album))
   }),
 
   // GET …/albums/:albumId/download — 앨범 일괄 다운로드(zip URL 변형) · 화면 16

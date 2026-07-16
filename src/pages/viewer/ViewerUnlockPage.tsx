@@ -4,8 +4,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { BrandHero } from '../../components/BrandHero'
 import { PhoneShell } from '../../components/PhoneShell'
 import { Button, PinField } from '../../components/ui'
-import { useAlive } from '../../hooks/useAlive'
-import { toErrorMessage } from '../../api/client'
+import { useMutation } from '../../hooks/useMutation'
 import { unlockViewer } from '../../api/viewer'
 import { PIN_RE } from '../../lib/pin'
 import { getViewerToken, setViewerGroupName, setViewerToken } from '../../lib/viewer'
@@ -19,11 +18,10 @@ import { getViewerToken, setViewerGroupName, setViewerToken } from '../../lib/vi
 export function ViewerUnlockPage() {
   const { token = '' } = useParams<{ token: string }>()
   const navigate = useNavigate()
+  const mutate = useMutation()
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const alive = useAlive()
 
   const eventsPath = `/share/${token}/events`
   if (token && getViewerToken(token)) return <Navigate to={eventsPath} replace />
@@ -35,19 +33,21 @@ export function ViewerUnlockPage() {
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      const res = await unlockViewer(token, password)
-      if (!alive.current) return
-      setViewerToken(token, res.viewerToken)
-      // BE는 모임명을 unlock 응답에만 준다 — 공개 이벤트 목록(15-L)이 캐시로 표시(CHMO-192)
-      setViewerGroupName(token, res.groupName)
-      navigate(eventsPath, { replace: true })
-    } catch (err) {
-      if (!alive.current) return
+    // 401(자격 오류)도 리다이렉트하지 않고 에러로 — 이 화면 자체가 잠금 해제 표면이다
+    await mutate(() => unlockViewer(token, password), {
+      noAuthRedirect: true,
+      onSuccess: (res) => {
+        setViewerToken(token, res.viewerToken)
+        // BE는 모임명을 unlock 응답에만 준다 — 공개 이벤트 목록(15-L)이 캐시로 표시(CHMO-192)
+        setViewerGroupName(token, res.groupName)
+        navigate(eventsPath, { replace: true })
+      },
       // 서버 에러 메시지(WRONG_PASSWORD·NOT_FOUND)는 사용자 노출 가능한 한국어
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (

@@ -3,8 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, TextField, useToast } from '../components/ui'
-import { useAlive } from '../hooks/useAlive'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
 import { createGroup } from '../api/groups'
 
 /**
@@ -14,6 +13,7 @@ import { createGroup } from '../api/groups'
 export function GroupCreatePage() {
   const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -21,25 +21,22 @@ export function GroupCreatePage() {
 
   const canSubmit = name.trim().length > 0 && password.trim().length > 0 && !submitting
 
-  const alive = useAlive()
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    try {
-      const group = await createGroup({ name: name.trim(), password: password.trim() })
-      if (!alive.current) return
-      toast.show('🧀 모임을 만들었어요')
-      // 상세에서 뒤로가기가 작성 폼으로 돌아오지 않게 폼 히스토리를 교체
-      navigate(`/groups/${group.id}`, { replace: true })
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setError(toErrorMessage(err))
-      setSubmitting(false)
-    }
+    await mutate(() => createGroup({ name: name.trim(), password: password.trim() }), {
+      onSuccess: (group) => {
+        toast.show('🧀 모임을 만들었어요')
+        // 상세에서 뒤로가기가 작성 폼으로 돌아오지 않게 폼 히스토리를 교체
+        navigate(`/groups/${group.id}`, { replace: true })
+      },
+      onError: (msg) => {
+        setError(msg)
+        setSubmitting(false)
+      },
+    })
   }
 
   return (

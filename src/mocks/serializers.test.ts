@@ -10,23 +10,42 @@
  * 지킨다 — 둘 다 있어야 목/실서버 양쪽(`VITE_ENABLE_MSW` 스위치)이 산다.
  */
 import { describe, expect, it, beforeEach } from 'vitest'
-import { seedDb, findAlbum, findEvent, findGroup, db, photosOfAlbum, personNameOf } from './db'
+import {
+  seedDb,
+  findAlbum,
+  findEvent,
+  findGroup,
+  db,
+  photosOfAlbum,
+  photosOfEvent,
+  albumsOfEvent,
+  personNameOf,
+} from './db'
 import { createFixtures } from './fixtures'
 import {
   toAlbumDetail,
   toAlbumSummary,
+  toAnalysisStatusResponse,
+  toDeletePhotosResponse,
   toEventDetail,
   toEventSummary,
   toGroupDetail,
   toGroupSummary,
+  toMovePhotosResponse,
+  toMoveSuggestionResponse,
   toPhotoInAlbum,
+  toReviewSummaryResponse,
   toUser as serializeUser,
+  toViewerAlbumPhotosResponse,
   toViewerAlbumSummary,
+  toViewerEventAlbumsResponse,
   toViewerEventSummary,
   toViewerPhoto as serializeViewerPhoto,
+  toViewerUnlockResponse,
 } from './handlers/serializers'
 import {
   toAlbum,
+  toAnalysisJob,
   toEvent,
   toGroup,
   toMoveSuggestion,
@@ -70,6 +89,22 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const detail = toEvent(toEventDetail(event))
     expect(detail).toMatchObject({ id: 2, groupId: 1, status: 'published' })
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
+  })
+
+  it('분석 상태 — 대문자 enum이 소문자로, 이벤트 상태에서 유도', () => {
+    // empty → NONE, analyzing → ANALYZING, 그 외(review/published) → DONE
+    expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(4)!))).toEqual({
+      analysisStatus: 'none',
+      eventStatus: 'empty',
+    })
+    expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(3)!))).toEqual({
+      analysisStatus: 'analyzing',
+      eventStatus: 'analyzing',
+    })
+    expect(toAnalysisJob(toAnalysisStatusResponse(findEvent(1)!))).toEqual({
+      analysisStatus: 'done',
+      eventStatus: 'review',
+    })
   })
 
   it('앨범 요약 — personName이 표시명으로, 특수 앨범은 라벨 파생', () => {
@@ -123,11 +158,14 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     })
   })
 
-  it('이동 추천 — personName null이면 공통', () => {
-    expect(
-      toMoveSuggestion({ albumId: 2, personName: personNameOf(findAlbum(2)!), similarity: 0.9 }),
-    ).toEqual({ albumId: 2, name: '이서연', similarity: 0.9 })
-    expect(toMoveSuggestion({ albumId: 5, personName: null, similarity: null })).toEqual({
+  it('이동 추천 — 핸들러 항목 직렬화가 매퍼와 맞는다(personName null이면 공통)', () => {
+    // 핸들러가 인라인으로 조립하던 항목을 toMoveSuggestionResponse로 승격(CHMO-227)
+    expect(toMoveSuggestion(toMoveSuggestionResponse(findAlbum(2)!, 0.9))).toEqual({
+      albumId: 2,
+      name: '이서연',
+      similarity: 0.9,
+    })
+    expect(toMoveSuggestion(toMoveSuggestionResponse(findAlbum(5)!, null))).toEqual({
       albumId: 5,
       name: '공통',
       similarity: null,
@@ -156,5 +194,63 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const albums = db.albums.filter((a) => a.eventId === 1).map((a) => toAlbum(toAlbumSummary(a)))
     expect(albums.find((a) => a.id === 1)!.unreviewedPhotoCount).toBe(0)
     expect(albums.find((a) => a.id === 2)!.unreviewedPhotoCount).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * 예전엔 핸들러가 객체 리터럴로 그 자리에서 조립하던 응답들 (CHMO-227).
+ * export된 직렬화 함수만 왕복하던 이음매 테스트의 사각지대라, 여기서 필드명 오타
+ * (totalPhotos→totalPhoto 등)가 나도 npm run test가 초록이고 MSW 모드에서만 조용히 깨졌다.
+ * serializers.ts 함수로 승격해 소비처(api/*.ts)가 읽는 필드명을 여기서 고정한다.
+ */
+describe('인라인 조립 응답 → 소비처 필드명 이음매 (CHMO-227)', () => {
+  it('검수 요약 — getReviewSummary가 읽는 스칼라·albums 필드명', () => {
+    const event = findEvent(1)! // review 상태 — 앨범·사진 보유
+    const raw = toReviewSummaryResponse(event)
+    expect(raw.totalPhotos).toBe(photosOfEvent(1).length)
+    expect(raw.totalAlbums).toBe(albumsOfEvent(1).length)
+    expect(raw.reviewedPhotoCount).toBe(photosOfEvent(1).filter((p) => p.reviewed).length)
+    expect(typeof raw.uncertainCount).toBe('number')
+    // albums는 AlbumSummaryResponse[] — 매퍼가 그대로 읽어 화면 카드가 된다
+    expect(raw.albums.map(toAlbum)[0]).toMatchObject({
+      id: expect.any(Number),
+      name: expect.any(String),
+    })
+  })
+
+  it('사진 이동 응답 — movedCount 필드명', () => {
+    expect(toMovePhotosResponse([101, 102, 103])).toEqual({ movedCount: 3 })
+  })
+
+  it('사진 제거 응답 — detached(연결 해제)/deleted(폐기) 구분 필드명', () => {
+    // 존재하는 id는 detach만, 없는 id는 마지막 연결 폐기로 집계된다
+    const existing = photosOfAlbum(1)[0].id
+    expect(toDeletePhotosResponse([existing, 999999])).toEqual({
+      detachedCount: 2,
+      deletedPhotoCount: 1,
+    })
+  })
+
+  it('뷰어 잠금해제 — viewerToken·groupId·groupName 필드명', () => {
+    expect(toViewerUnlockResponse(findGroup(1)!, 'tok')).toEqual({
+      viewerToken: 'tok',
+      groupId: 1,
+      groupName: '햇살반',
+    })
+  })
+
+  it('뷰어 이벤트 앨범 — eventId·eventName 평면 필드 + albums 매핑', () => {
+    const raw = toViewerEventAlbumsResponse(findEvent(2)!) // published
+    expect(raw.eventId).toBe(2)
+    expect(raw.eventName).toBe('봄 소풍')
+    expect(raw.albums.map(toViewerAlbum)[0]).toMatchObject({ id: expect.any(Number) })
+  })
+
+  it('뷰어 앨범 사진 — albumId·personName·photos 필드', () => {
+    const album = findAlbum(9)! // published 이벤트의 인물 앨범
+    const raw = toViewerAlbumPhotosResponse(album)
+    expect(raw.albumId).toBe(9)
+    expect(raw.personName).toBe(personNameOf(album))
+    expect(raw.photos.map(toViewerPhoto)[0]).toMatchObject({ id: expect.any(Number) })
   })
 })

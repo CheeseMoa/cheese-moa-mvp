@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
-import { AlbumCard, Button, ErrorState, EventStatusBadge, Header } from '../components/ui'
+import { AlbumCard, Button, EventStatusBadge, Header, LoadState } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
@@ -98,17 +98,17 @@ export function EventDetailPage() {
               </>
             )}
           </>
-        ) : eventApi.loading ? (
-          <p className="py-11 text-center text-sm text-muted">이벤트를 불러오는 중…</p>
-        ) : eventApi.error ? (
-          <ErrorState
+        ) : (
+          <LoadState
+            loading={eventApi.loading}
             error={eventApi.error}
+            loadingText="이벤트를 불러오는 중…"
             onRetry={eventApi.refetch}
             unauthorizedTo="/login"
             notFoundTo={`/groups/${groupId}`}
             notFoundLabel="모임 상세로"
           />
-        ) : null}
+        )}
       </main>
     </PhoneShell>
   )
@@ -159,11 +159,11 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
             </button>
           </div>
 
-          {albumsApi.loading ? (
-            <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
-          ) : albumsApi.error ? (
-            <ErrorState
+          {albumsApi.loading || albumsApi.error ? (
+            <LoadState
+              loading={albumsApi.loading}
               error={albumsApi.error}
+              loadingText="앨범을 불러오는 중…"
               onRetry={albumsApi.refetch}
               unauthorizedTo="/login"
               notFoundTo={`/groups/${groupId}`}

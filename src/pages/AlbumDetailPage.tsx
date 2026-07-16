@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { MovePhotosSheet } from '../components/MovePhotosSheet'
 import { LightboxToolbarButton, PhotoLightbox } from '../components/PhotoLightbox'
@@ -8,17 +8,17 @@ import {
   Badge,
   Button,
   ConfirmDialog,
-  ErrorState,
   Header,
   IconFolderMove,
   IconTrash,
+  LoadState,
   PhotoGrid,
   PhotoTile,
   useToast,
 } from '../components/ui'
-import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
-import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
+import { toErrorMessage } from '../api/client'
 import {
   deletePhotos,
   getAlbumWithPhotos,
@@ -49,8 +49,8 @@ export function AlbumDetailPage() {
   }>()
   // 라우트 파라미터는 문자열 — API 계약(ID = number)에 맞춰 숫자로 변환(CHMO-191)
   const albumId = Number(albumIdParam)
-  const navigate = useNavigate()
   const toast = useToast()
+  const mutate = useMutation()
   const albumApi = useApi(`album:${albumId}`, (signal) => getAlbumWithPhotos(albumId, signal))
 
   const [selectMode, setSelectMode] = useState(false)
@@ -62,8 +62,6 @@ export function AlbumDetailPage() {
   const [renameOpen, setRenameOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
-
-  const alive = useAlive()
 
   const album = albumApi.data?.album
   const photos = albumApi.data?.photos ?? []
@@ -100,6 +98,17 @@ export function AlbumDetailPage() {
       return next
     })
 
+  // 롱프레스(꾹 누르기)로 선택모드 진입 + 해당 사진 선택 — 모바일 사진 앱 관용 UX(CHMO-243)
+  const enterSelectWith = (id: ID) => {
+    setSelectMode(true)
+    setSelected(new Set([id]))
+  }
+
+  const allSelected = photos.length > 0 && selected.size === photos.length
+  // 전체 선택/해제 토글 — 하나라도 빠졌으면 전체 선택, 다 찼으면 전체 해제
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
+
   const exitSelect = () => {
     setSelectMode(false)
     setSelected(new Set())
@@ -109,41 +118,39 @@ export function AlbumDetailPage() {
     const ids = pendingDelete ?? []
     if (ids.length === 0 || busy) return
     setBusy(true)
-    try {
-      await deletePhotos({ albumId, photoIds: ids })
-      if (!alive.current) return
-      setPendingDelete(null)
-      if (selectMode) exitSelect()
-      toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
-      albumApi.refetch()
-      setBusy(false)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setPendingDelete(null)
-      toast.show(toErrorMessage(err))
-      setBusy(false)
-    }
+    await mutate(() => deletePhotos({ albumId, photoIds: ids }), {
+      onSuccess: () => {
+        setPendingDelete(null)
+        if (selectMode) exitSelect()
+        toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
+        albumApi.refetch()
+        setBusy(false)
+      },
+      onError: (msg) => {
+        setPendingDelete(null)
+        toast.show(msg)
+        setBusy(false)
+      },
+    })
   }
 
   const handleReview = async () => {
     if (busy) return
     setBusy(true)
-    try {
-      await markAlbumReviewed(albumId)
-      if (!alive.current) return
-      setReviewConfirmOpen(false)
-      exitSelect()
-      toast.show('🧀 검토 완료로 표시했어요')
-      albumApi.refetch()
-      setBusy(false)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setReviewConfirmOpen(false)
-      toast.show(toErrorMessage(err))
-      setBusy(false)
-    }
+    await mutate(() => markAlbumReviewed(albumId), {
+      onSuccess: () => {
+        setReviewConfirmOpen(false)
+        exitSelect()
+        toast.show('🧀 검토 완료로 표시했어요')
+        albumApi.refetch()
+        setBusy(false)
+      },
+      onError: (msg) => {
+        setReviewConfirmOpen(false)
+        toast.show(msg)
+        setBusy(false)
+      },
+    })
   }
 
   // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐)
@@ -192,9 +199,19 @@ export function AlbumDetailPage() {
                   {album.name}
                 </h1>
                 {selectMode ? (
-                  <span className="flex-none text-[13px] font-medium text-muted">
-                    {selected.size}장 선택
-                  </span>
+                  <div className="flex flex-none items-center gap-2">
+                    <span className="text-[13px] font-medium text-muted">
+                      {selected.size}장 선택
+                    </span>
+                    <button
+                      type="button"
+                      disabled={locked}
+                      onClick={toggleAll}
+                      className="inline-flex items-center rounded-full border border-border bg-white px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50"
+                    >
+                      {allSelected ? '전체 해제' : '전체 선택'}
+                    </button>
+                  </div>
                 ) : album.type === 'person' ? (
                   // 인물 앨범만 이름 변경(모임 전체 이름전파). 특수 앨범은 고정 라벨이라 미노출
                   <button
@@ -225,13 +242,17 @@ export function AlbumDetailPage() {
                         selectable={selectMode}
                         selected={selected.has(photo.id)}
                         // 탭: 선택모드=선택 토글 · 일반 모드=라이트박스 크게 보기(CHMO-242).
-                        // 선택모드 진입 롱프레스는 CHMO-243 몫 — 여기선 탭 의미만 확정
                         onClick={
                           locked
                             ? undefined
                             : selectMode
                               ? () => toggle(photo.id)
                               : () => setViewIndex(i)
+                        }
+                        // 롱프레스: 일반 모드에서 꾹 누르면 선택모드 진입 + 이 사진 선택(CHMO-243).
+                        // 탭=확대 / 롱프레스=선택이라 라이트박스와 제스처가 겹치지 않는다.
+                        onLongPress={
+                          locked || selectMode ? undefined : () => enterSelectWith(photo.id)
                         }
                       />
                     ))}
@@ -241,17 +262,17 @@ export function AlbumDetailPage() {
                 <p className="py-11 text-center text-sm text-muted">이 앨범에 사진이 없어요.</p>
               )}
             </>
-          ) : albumApi.loading ? (
-            <p className="py-11 text-center text-sm text-muted">앨범을 불러오는 중…</p>
-          ) : albumApi.error ? (
-            <ErrorState
+          ) : (
+            <LoadState
+              loading={albumApi.loading}
               error={albumApi.error}
+              loadingText="앨범을 불러오는 중…"
               onRetry={albumApi.refetch}
               unauthorizedTo="/login"
               notFoundTo={`/groups/${groupId}/events/${eventId}`}
               notFoundLabel="이벤트 상세로"
             />
-          ) : null}
+          )}
         </div>
 
         {album && hasPhotos && (

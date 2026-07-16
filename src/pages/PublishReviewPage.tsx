@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ConfirmDialog, ErrorState, Header, PhotoGrid, useToast } from '../components/ui'
-import { useAlive } from '../hooks/useAlive'
+import { Button, ConfirmDialog, Header, LoadState, PhotoGrid, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
-import { ApiRequestError, redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { useMutation } from '../hooks/useMutation'
+import { ApiRequestError } from '../api/client'
 import { getEvent, getReviewSummary, publishEvent } from '../api/events'
 import { cx } from '../lib/cx'
 
@@ -27,7 +27,7 @@ export function PublishReviewPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
 
-  const alive = useAlive()
+  const mutate = useMutation()
 
   const eventPath = `/groups/${groupId}/events/${eventId}`
   const event = eventApi.data
@@ -45,23 +45,22 @@ export function PublishReviewPage() {
   const handlePublish = async () => {
     if (publishing) return
     setPublishing(true)
-    try {
-      await publishWithForceRetry(eventId, hasUnreviewed)
-      if (!alive.current) return
-      setConfirmOpen(false)
-      toast.show('🧀 이벤트를 공개했어요')
-      navigate(`/groups/${groupId}`)
-    } catch (err) {
-      if (!alive.current) return
-      if (redirectIfUnauthorized(err, navigate)) return
-      setConfirmOpen(false)
-      toast.show(toErrorMessage(err))
-      // 다른 멤버가 먼저 공개했거나(400 "이미 공개") 상태가 그새 바뀐 실패 — 재조회 없이는
-      // stale 화면이 활성 [공개하기]로 남아 같은 400을 무한 반복한다(권한 등급 없음 = 동시 작업이 정상)
-      eventApi.refetch()
-      summaryApi.refetch()
-      setPublishing(false)
-    }
+    await mutate(() => publishWithForceRetry(eventId, hasUnreviewed), {
+      onSuccess: () => {
+        setConfirmOpen(false)
+        toast.show('🧀 이벤트를 공개했어요')
+        navigate(`/groups/${groupId}`)
+      },
+      onError: (msg) => {
+        setConfirmOpen(false)
+        toast.show(msg)
+        // 다른 멤버가 먼저 공개했거나(400 "이미 공개") 상태가 그새 바뀐 실패 — 재조회 없이는
+        // stale 화면이 활성 [공개하기]로 남아 같은 400을 무한 반복한다(권한 등급 없음 = 동시 작업이 정상)
+        eventApi.refetch()
+        summaryApi.refetch()
+        setPublishing(false)
+      },
+    })
   }
 
   const bothLoading = eventApi.loading || summaryApi.loading
@@ -128,11 +127,11 @@ export function PublishReviewPage() {
                 </p>
               )}
             </>
-          ) : bothLoading ? (
-            <p className="py-11 text-center text-sm text-muted">요약을 불러오는 중…</p>
-          ) : anyError ? (
-            <ErrorState
+          ) : (
+            <LoadState
+              loading={bothLoading}
               error={anyError}
+              loadingText="요약을 불러오는 중…"
               onRetry={() => {
                 eventApi.refetch()
                 summaryApi.refetch()
@@ -142,7 +141,7 @@ export function PublishReviewPage() {
               notFoundTo={`/groups/${groupId}`}
               notFoundLabel="모임 상세로"
             />
-          ) : null}
+          )}
         </div>
 
         {summary && event && (
