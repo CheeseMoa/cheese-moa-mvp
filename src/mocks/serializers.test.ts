@@ -230,12 +230,15 @@ describe('인라인 조립 응답 → 소비처 필드명 이음매 (CHMO-227)',
     const raw = toReviewSummaryResponse(event)
     expect(raw.totalPhotos).toBe(photosOfEvent(1).length)
     expect(raw.totalAlbums).toBe(albumsOfEvent(1).length)
+    // 아래 둘은 소비처가 더는 안 읽지만(CHMO-347·357) BE 계약이라 목은 계속 준다 — 스위치 양쪽 동형
     expect(raw.reviewedPhotoCount).toBe(photosOfEvent(1).filter((p) => p.reviewed).length)
     expect(typeof raw.uncertainCount).toBe('number')
-    // albums는 AlbumSummaryResponse[] — 매퍼가 그대로 읽어 화면 카드가 된다
+    // albums는 AlbumSummaryResponse[] — 매퍼가 그대로 읽어 화면 카드·검토 진척(앨범 단위, CHMO-357)이 된다
     expect(raw.albums.map(toAlbum)[0]).toMatchObject({
       id: expect.any(Number),
       name: expect.any(String),
+      photoCount: expect.any(Number),
+      unreviewedPhotoCount: expect.any(Number),
     })
   })
 
