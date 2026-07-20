@@ -189,6 +189,8 @@ export interface MoveSuggestion {
   name: string
   /** 대표 벡터 기반 유사도(0~1). '공통'은 null */
   similarity: number | null
+  /** 대표 사진 썸네일 URL(CHMO-232) — 커버 없는 앨범은 null(플레이스홀더 폴백) */
+  thumbnailUrl: string | null
 }
 
 // ── 사진 이동/제거 (다대다 연결 교체·해제) ───────────────────

@@ -234,11 +234,12 @@ export function toViewerPhoto(raw: RawViewerPhoto): ViewerPhoto {
 
 // ── 이동 추천 ────────────────────────────────────────────────
 
-/** BE MoveSuggestionResponse — 공통 앨범은 이름도 유사도도 없이 온다 */
+/** BE MoveSuggestionResponse — 공통 앨범은 이름도 유사도도 없이 온다. thumbnailUrl은 CHMO-232 추가분 */
 export interface RawMoveSuggestion {
   albumId: ID
   personName: string | null
   similarity: number | null
+  thumbnailUrl: string | null
 }
 
 export function toMoveSuggestion(raw: RawMoveSuggestion): MoveSuggestion {
@@ -246,5 +247,6 @@ export function toMoveSuggestion(raw: RawMoveSuggestion): MoveSuggestion {
     albumId: raw.albumId,
     name: raw.personName ?? SPECIAL_ALBUM_LABELS.common,
     similarity: raw.similarity,
+    thumbnailUrl: raw.thumbnailUrl,
   }
 }
