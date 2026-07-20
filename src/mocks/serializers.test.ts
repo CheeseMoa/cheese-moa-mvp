@@ -174,15 +174,22 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
 
   it('이동 추천 — 핸들러 항목 직렬화가 매퍼와 맞는다(personName null이면 공통)', () => {
     // 핸들러가 인라인으로 조립하던 항목을 toMoveSuggestionResponse로 승격(CHMO-227)
-    expect(toMoveSuggestion(toMoveSuggestionResponse(findAlbum(2)!, 0.9))).toEqual({
+    // 썸네일은 검수 그리드(AlbumSummary)와 같은 커버 규약(CHMO-232) — 커버가 실재하는지도 확인
+    const person = findAlbum(2)!
+    const personCover = toAlbumSummary(person).thumbnailUrl
+    expect(personCover).not.toBeNull()
+    expect(toMoveSuggestion(toMoveSuggestionResponse(person, 0.9))).toEqual({
       albumId: 2,
       name: '이서연',
       similarity: 0.9,
+      thumbnailUrl: personCover,
     })
-    expect(toMoveSuggestion(toMoveSuggestionResponse(findAlbum(5)!, null))).toEqual({
+    const common = findAlbum(5)!
+    expect(toMoveSuggestion(toMoveSuggestionResponse(common, null))).toEqual({
       albumId: 5,
       name: '공통',
       similarity: null,
+      thumbnailUrl: toAlbumSummary(common).thumbnailUrl,
     })
   })
 

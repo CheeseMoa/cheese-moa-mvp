@@ -256,10 +256,20 @@ export const BE_ALBUM_DETAIL = {
   photos: [BE_PHOTO_IN_ALBUM],
 }
 
-/** GET /albums/:id/move-suggestions — MoveSuggestionResponse[] (스키마 기준) */
-export const BE_MOVE_SUGGESTION_PERSON = { albumId: 12, personName: '서준', similarity: 0.82 }
-/** 공통 앨범 추천엔 이름도 유사도도 없다 */
-export const BE_MOVE_SUGGESTION_COMMON = { albumId: 13, personName: null, similarity: null }
+/** GET /albums/:id/move-suggestions — MoveSuggestionResponse[] (스키마 기준 + thumbnailUrl은 CHMO-232 티켓 기준 — 스웨거 잠김) */
+export const BE_MOVE_SUGGESTION_PERSON = {
+  albumId: 12,
+  personName: '서준',
+  similarity: 0.82,
+  thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/105.jpg',
+}
+/** 공통 앨범 추천엔 이름도 유사도도 없다 — 커버 없으면 thumbnailUrl도 null */
+export const BE_MOVE_SUGGESTION_COMMON = {
+  albumId: 13,
+  personName: null,
+  similarity: null,
+  thumbnailUrl: null,
+}
 
 /** DELETE /photos — DeletePhotosResponse (스키마 기준) */
 export const BE_DELETE_PHOTOS = { detachedCount: 2, deletedPhotoCount: 1 }
