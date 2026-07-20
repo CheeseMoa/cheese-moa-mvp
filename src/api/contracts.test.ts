@@ -338,33 +338,46 @@ describe('앨범 · 사진', () => {
 })
 
 describe('공개 전 검수 요약 (14)', () => {
-  it('BE엔 previewThumbnailUrls가 없다 — 뷰어 노출 앨범 커버에서 파생한다', async () => {
+  it('미리보기 앨범은 BE albums[]에서 파생한다 — 뷰어 노출(person/common)만 (CHMO-346)', async () => {
     serve(envelope(BE_REVIEW_SUMMARY))
 
-    await expect(getReviewSummary(4)).resolves.toEqual({
+    const summary = await getReviewSummary(4)
+
+    expect(summary).toMatchObject({
       photoCount: 19,
       albumCount: 3,
       reviewedPhotoCount: 5,
       totalPhotoCount: 19,
       uncertainCount: 2,
-      // person·common의 커버만 — 특수 앨범(eyes_closed)과 커버 없는 앨범은 빠진다
-      previewThumbnailUrls: [BE_ALBUM_PERSON.thumbnailUrl, BE_ALBUM_COMMON.thumbnailUrl],
     })
+    // person·common만 — 특수 앨범(eyes_closed)은 뷰어 비노출이라 빠진다.
+    // 앨범 카드가 쓰는 이름·검토 수치·커버까지 매핑돼 온다
+    expect(summary.previewAlbums).toHaveLength(2)
+    expect(summary.previewAlbums[0]).toMatchObject({
+      id: 11,
+      type: 'person',
+      name: '지민',
+      photoCount: 12,
+      unreviewedPhotoCount: 3,
+      coverThumbnailUrl: BE_ALBUM_PERSON.thumbnailUrl,
+    })
+    expect(summary.previewAlbums[1]).toMatchObject({ id: 13, type: 'common', name: '공통' })
   })
 
-  it('미리보기는 최대 6장 (3×2 그리드)', async () => {
+  it('앨범 카드 그리드는 상한 없이 전량 — 커버 없는 앨범도 카드로 나온다 (CHMO-346, 6장 캡 제거)', async () => {
     const albums = Array.from({ length: 8 }, (_, i) => ({
       ...BE_ALBUM_PERSON,
       albumId: 20 + i,
-      thumbnailUrl: `https://cdn/thumb/${i}.jpg`,
+      thumbnailPhotoId: null,
+      thumbnailUrl: null,
     }))
     serve(envelope({ ...BE_REVIEW_SUMMARY, albums }))
 
     const summary = await getReviewSummary(4)
-    expect(summary.previewThumbnailUrls).toHaveLength(6)
+    expect(summary.previewAlbums).toHaveLength(8)
   })
 
-  it('전 사진 미검토면 미리보기가 빈다 — 미검토 커버를 "보일 사진"으로 담지 않는다 (CHMO-233)', async () => {
+  it('전 사진 미검토면 미리보기가 빈다 — 미검토 앨범을 "보일 앨범"으로 담지 않는다 (CHMO-233)', async () => {
     const albums = [
       { ...BE_ALBUM_PERSON, unreviewedPhotoCount: BE_ALBUM_PERSON.photoCount },
       { ...BE_ALBUM_COMMON, unreviewedPhotoCount: BE_ALBUM_COMMON.photoCount },
@@ -373,7 +386,7 @@ describe('공개 전 검수 요약 (14)', () => {
     serve(envelope({ ...BE_REVIEW_SUMMARY, reviewedPhotoCount: 0, albums }))
 
     const summary = await getReviewSummary(4)
-    expect(summary.previewThumbnailUrls).toEqual([])
+    expect(summary.previewAlbums).toEqual([])
   })
 })
 
