@@ -357,12 +357,13 @@ describe('공개 전 검수 요약 (14)', () => {
 
     const summary = await getReviewSummary(4)
 
+    // 검토 진척은 앨범 단위 파생(CHMO-357): person(미검토 3장)·common(전량 검토)만 세고
+    // eyes_closed는 미검토여도 제외 — BE reviewedAlbums(1)/unreviewedAlbums(2)와 다른 값이 맞다
     expect(summary).toMatchObject({
       photoCount: 19,
       albumCount: 3,
-      reviewedPhotoCount: 5,
-      totalPhotoCount: 19,
-      uncertainCount: 2,
+      reviewedAlbumCount: 1,
+      reviewableAlbumCount: 2,
     })
     // person·common만 — 특수 앨범(eyes_closed)은 뷰어 비노출이라 빠진다.
     // 앨범 카드가 쓰는 이름·검토 수치·커버까지 매핑돼 온다
@@ -401,6 +402,9 @@ describe('공개 전 검수 요약 (14)', () => {
 
     const summary = await getReviewSummary(4)
     expect(summary.previewAlbums).toEqual([])
+    // 사진은 있는데 전부 미검토 — 검토한 앨범 0/2 (사진 0장 공허 완료와 구분, CHMO-357)
+    expect(summary.reviewedAlbumCount).toBe(0)
+    expect(summary.reviewableAlbumCount).toBe(2)
   })
 })
 
