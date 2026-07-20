@@ -37,11 +37,11 @@ export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
           <span className="flex h-full items-center justify-center text-2xl">🤔</span>
         ) : null}
       </span>
-      <span className="mt-2 flex items-end justify-between gap-1">
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-bold text-text">{album.name}</span>
-          <span className="mt-0.5 block text-[11px] text-muted">{meta}</span>
-        </span>
+      {/* 풀네임 최대 노출(피드백 #6, CHMO-354): 이름이 배지와 폭을 나누지 않게 카드 전폭 + 2줄 클램프.
+          break-keep은 쓰지 않는다 — 공백 없는 긴 이름이 줄바꿈 못 하고 수평으로 잘린다 */}
+      <span className="mt-2 line-clamp-2 text-sm font-bold text-text">{album.name}</span>
+      <span className="mt-0.5 flex items-end justify-between gap-1">
+        <span className="text-[11px] text-muted">{meta}</span>
         {reviewable && album.unreviewedPhotoCount !== undefined && (
           <Badge variant={reviewed ? 'reviewed' : 'unreviewed'} size="sm" />
         )}

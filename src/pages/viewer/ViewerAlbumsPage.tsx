@@ -53,7 +53,8 @@ export function ViewerAlbumsPage() {
                       )}
                     </span>
                     <span className="mt-2 block min-w-0">
-                      <span className="block truncate text-sm font-bold text-text">
+                      {/* 풀네임 최대 노출 — 08 앨범 카드와 같은 2줄 허용(피드백 #6, CHMO-354) */}
+                      <span className="line-clamp-2 text-sm font-bold text-text">
                         {album.name}
                       </span>
                       <span className="mt-0.5 block text-[11px] text-muted">
