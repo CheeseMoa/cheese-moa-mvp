@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useApi } from '../hooks/useApi'
+import { useDragScrollX } from '../hooks/useDragScrollX'
 import { useMutation } from '../hooks/useMutation'
 import { getMoveSuggestions, movePhotos } from '../api/albums'
 import { cx } from '../lib/cx'
@@ -36,6 +37,7 @@ export function MovePhotosSheet({
     photoIds.length > 0 ? `move-suggestions:${sourceAlbumId}:${query}` : null,
     (signal) => getMoveSuggestions(sourceAlbumId, photoIds, signal),
   )
+  const dragScroll = useDragScrollX()
   const [busy, setBusy] = useState(false)
   // 동기 락 — setBusy 반영(리렌더) 전 같은 프레임에 들어온 연타·다중 아바타 탭이
   // 두 번 이동(두 번째는 이미 원본에서 빠진 사진이라 400)하는 것을 막는다.
@@ -78,8 +80,8 @@ export function MovePhotosSheet({
       ) : suggestions.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">옮길 만한 다른 앨범이 없어요.</p>
       ) : (
-        // 추천 5개가 프레임 너비를 넘을 수 있어 가로 스크롤
-        <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
+        // 추천 5개가 프레임 너비를 넘을 수 있어 가로 스크롤 — 마우스는 끌어서(CHMO-345)
+        <div {...dragScroll} className="mt-2 flex select-none gap-3 overflow-x-auto pb-1">
           {suggestions.map((s) => {
             const isCommon = s.similarity === null
             return (
