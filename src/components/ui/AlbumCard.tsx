@@ -13,21 +13,19 @@ interface AlbumCardProps {
 }
 
 /**
- * 이벤트 상세(08) 앨범 카드 — 검토 테두리 규칙 (dc.html §06 · 고정):
+ * 이벤트 상세(08) 앨범 카드 — 검토 테두리 규칙:
  * 갈색 실선 = 검토완료 · 회색 점선 = 미검토. (검토는 사진 단위 — 앨범 표시는 미검토 사진 수(unreviewedPhotoCount)로 파생)
- * person/common은 검토 배지 노출 · uncertain은 배지 없이 점선(재분류 대상) ·
- * 품질 앨범(eyes_closed/blurry)은 기본 테두리·배지 없음.
+ * 품질 앨범(eyes_closed/blurry)도 같은 검토 테두리를 탄다(피드백 #7 — dc.html §06의 '기본 테두리' 규칙을 대체, CHMO-355) ·
+ * uncertain은 검토와 무관하게 항상 점선(재분류 대상) · 검토 배지는 person/common에만.
  */
 export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
   // 사진 0장이면 unreviewedPhotoCount === 0이 공허하게 참 → '검토완료' 오표시. 사진이 있을 때만 완료로 본다
   const reviewed = album.photoCount > 0 && album.unreviewedPhotoCount === 0
   const borderCls =
-    reviewable || album.type === 'uncertain'
-      ? reviewable && reviewed
-        ? 'border-2 border-accent'
-        : 'border-2 border-dashed border-[#C9C2B4]'
-      : 'border border-border'
+    reviewed && album.type !== 'uncertain'
+      ? 'border-2 border-accent'
+      : 'border-2 border-dashed border-[#C9C2B4]'
   const meta =
     album.type === 'uncertain' ? `${album.photoCount}장 · 재분류 대상` : `${album.photoCount}장`
   const content = (
