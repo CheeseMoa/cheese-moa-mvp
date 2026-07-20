@@ -11,6 +11,7 @@ import { getMe, login } from './auth'
 import {
   deletePhotos,
   getAlbumWithPhotos,
+  getAlbumZip,
   getMoveSuggestions,
   markAlbumReviewed,
   movePhotos,
@@ -50,6 +51,7 @@ import {
   BE_GROUP_DETAIL,
   BE_GROUP_INVITE,
   BE_GROUP_SUMMARY,
+  BE_MEMBER_ZIP,
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
   BE_MOVE_SUGGESTION_PERSON,
@@ -279,6 +281,18 @@ describe('앨범 · 사진', () => {
       flags: { eyesClosed: true, blurry: false },
       reviewed: false,
     })
+  })
+
+  it('멤버 zip 다운로드 — 경로는 평면 /albums/:id/download, 멤버 토큰을 쓴다(CHMO-338)', async () => {
+    const calls = serve(envelope(BE_MEMBER_ZIP))
+
+    await expect(getAlbumZip(279)).resolves.toEqual({
+      downloadUrl: BE_MEMBER_ZIP.downloadUrl,
+      // 실서버가 Z를 붙여 주는 케이스 — 보정이 이중으로 붙지 않아야 한다
+      expiresAt: '2026-07-20T07:11:37.636027303Z',
+    })
+    expect(calls[0].url).toBe('/api/v1/albums/279/download')
+    expect(calls[0].headers.get('Authorization')).toBe('Bearer at')
   })
 
   it('앨범 검토 완료 — 서버는 reviewStatus enum으로 받는다(검토 상태는 사진 단위 일괄 갱신)', async () => {
