@@ -15,7 +15,7 @@ export function GroupCard({ name, memberCount, eventCount, onClick }: GroupCardP
       onClick={onClick}
       className="flex w-full items-center gap-3 rounded-2xl border border-border bg-white p-4 text-left shadow-card transition active:scale-[0.99]"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-primary">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-emblem">
         <Cheddar size={28} />
       </span>
       <span className="min-w-0 flex-1">
