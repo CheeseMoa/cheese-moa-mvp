@@ -11,6 +11,7 @@ import { getMe, login } from './auth'
 import {
   deletePhotos,
   getAlbumWithPhotos,
+  getAlbumZip,
   getMoveSuggestions,
   markAlbumReviewed,
   movePhotos,
@@ -50,6 +51,7 @@ import {
   BE_GROUP_DETAIL,
   BE_GROUP_INVITE,
   BE_GROUP_SUMMARY,
+  BE_MEMBER_ZIP,
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
   BE_MOVE_SUGGESTION_PERSON,
@@ -281,6 +283,18 @@ describe('앨범 · 사진', () => {
     })
   })
 
+  it('멤버 zip 다운로드 — 경로는 평면 /albums/:id/download, 멤버 토큰을 쓴다(CHMO-338)', async () => {
+    const calls = serve(envelope(BE_MEMBER_ZIP))
+
+    await expect(getAlbumZip(279)).resolves.toEqual({
+      downloadUrl: BE_MEMBER_ZIP.downloadUrl,
+      // 실서버가 Z를 붙여 주는 케이스 — 보정이 이중으로 붙지 않아야 한다
+      expiresAt: '2026-07-20T07:11:37.636027303Z',
+    })
+    expect(calls[0].url).toBe('/api/v1/albums/279/download')
+    expect(calls[0].headers.get('Authorization')).toBe('Bearer at')
+  })
+
   it('앨범 검토 완료 — 서버는 reviewStatus enum으로 받는다(검토 상태는 사진 단위 일괄 갱신)', async () => {
     const calls = serve(envelope(BE_ALBUM_PERSON))
 
@@ -338,33 +352,47 @@ describe('앨범 · 사진', () => {
 })
 
 describe('공개 전 검수 요약 (14)', () => {
-  it('BE엔 previewThumbnailUrls가 없다 — 뷰어 노출 앨범 커버에서 파생한다', async () => {
+  it('미리보기 앨범은 BE albums[]에서 파생한다 — 뷰어 노출(person/common)만 (CHMO-346)', async () => {
     serve(envelope(BE_REVIEW_SUMMARY))
 
-    await expect(getReviewSummary(4)).resolves.toEqual({
+    const summary = await getReviewSummary(4)
+
+    // 검토 진척은 앨범 단위 파생(CHMO-357): person(미검토 3장)·common(전량 검토)만 세고
+    // eyes_closed는 미검토여도 제외 — BE reviewedAlbums(1)/unreviewedAlbums(2)와 다른 값이 맞다
+    expect(summary).toMatchObject({
       photoCount: 19,
       albumCount: 3,
-      reviewedPhotoCount: 5,
-      totalPhotoCount: 19,
-      uncertainCount: 2,
-      // person·common의 커버만 — 특수 앨범(eyes_closed)과 커버 없는 앨범은 빠진다
-      previewThumbnailUrls: [BE_ALBUM_PERSON.thumbnailUrl, BE_ALBUM_COMMON.thumbnailUrl],
+      reviewedAlbumCount: 1,
+      reviewableAlbumCount: 2,
     })
+    // person·common만 — 특수 앨범(eyes_closed)은 뷰어 비노출이라 빠진다.
+    // 앨범 카드가 쓰는 이름·검토 수치·커버까지 매핑돼 온다
+    expect(summary.previewAlbums).toHaveLength(2)
+    expect(summary.previewAlbums[0]).toMatchObject({
+      id: 11,
+      type: 'person',
+      name: '지민',
+      photoCount: 12,
+      unreviewedPhotoCount: 3,
+      coverThumbnailUrl: BE_ALBUM_PERSON.thumbnailUrl,
+    })
+    expect(summary.previewAlbums[1]).toMatchObject({ id: 13, type: 'common', name: '공통' })
   })
 
-  it('미리보기는 최대 6장 (3×2 그리드)', async () => {
+  it('앨범 카드 그리드는 상한 없이 전량 — 커버 없는 앨범도 카드로 나온다 (CHMO-346, 6장 캡 제거)', async () => {
     const albums = Array.from({ length: 8 }, (_, i) => ({
       ...BE_ALBUM_PERSON,
       albumId: 20 + i,
-      thumbnailUrl: `https://cdn/thumb/${i}.jpg`,
+      thumbnailPhotoId: null,
+      thumbnailUrl: null,
     }))
     serve(envelope({ ...BE_REVIEW_SUMMARY, albums }))
 
     const summary = await getReviewSummary(4)
-    expect(summary.previewThumbnailUrls).toHaveLength(6)
+    expect(summary.previewAlbums).toHaveLength(8)
   })
 
-  it('전 사진 미검토면 미리보기가 빈다 — 미검토 커버를 "보일 사진"으로 담지 않는다 (CHMO-233)', async () => {
+  it('전 사진 미검토면 미리보기가 빈다 — 미검토 앨범을 "보일 앨범"으로 담지 않는다 (CHMO-233)', async () => {
     const albums = [
       { ...BE_ALBUM_PERSON, unreviewedPhotoCount: BE_ALBUM_PERSON.photoCount },
       { ...BE_ALBUM_COMMON, unreviewedPhotoCount: BE_ALBUM_COMMON.photoCount },
@@ -373,7 +401,10 @@ describe('공개 전 검수 요약 (14)', () => {
     serve(envelope({ ...BE_REVIEW_SUMMARY, reviewedPhotoCount: 0, albums }))
 
     const summary = await getReviewSummary(4)
-    expect(summary.previewThumbnailUrls).toEqual([])
+    expect(summary.previewAlbums).toEqual([])
+    // 사진은 있는데 전부 미검토 — 검토한 앨범 0/2 (사진 0장 공허 완료와 구분, CHMO-357)
+    expect(summary.reviewedAlbumCount).toBe(0)
+    expect(summary.reviewableAlbumCount).toBe(2)
   })
 })
 

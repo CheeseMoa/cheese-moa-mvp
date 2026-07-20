@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ConfirmDialog, Header, LoadState, PhotoGrid, useToast } from '../components/ui'
+import { AlbumCard, Button, ConfirmDialog, Header, LoadState, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
@@ -10,8 +10,9 @@ import { cx } from '../lib/cx'
 
 /**
  * 14. 공개 전 검수 · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
- * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토완료/분류애매) + 학부모 뷰 프리뷰(3열 썸네일) + [공개하기].
- * 공개는 되돌리기 어려운 외부 노출이라 항상 확인 다이얼로그로 받는다 — 미검토 사진이 있으면
+ * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토한 앨범 — 분류 애매는 공개와 무관해 비노출(CHMO-347),
+ * 검토 진척은 검토 행위 단위인 앨범으로 정산(CHMO-357)) + 학부모 뷰 프리뷰(08과 같은 앨범 카드 그리드 — CHMO-346) + [공개하기].
+ * 공개는 되돌리기 어려운 외부 노출이라 항상 확인 다이얼로그로 받는다 — 미검토 앨범이 있으면
  * 경고 문구 + ?force=true로 공개(미검토 사진은 공개 후에도 뷰어 비노출). 성공 시 05 모임 상세로 복귀
  * (거기서 '공개 완료' 배지·학부모 공유 진입이 보인다). 이벤트명은 부제용으로 /events/:id에서 함께 읽는다.
  */
@@ -33,14 +34,16 @@ export function PublishReviewPage() {
   const event = eventApi.data
   const summary = summaryApi.data
   const published = event?.status === 'published'
-  const unreviewedCount = summary ? summary.totalPhotoCount - summary.reviewedPhotoCount : 0
-  const hasUnreviewed = unreviewedCount > 0
-  // 뷰어 노출 사진(검토 완료 + person/common) 존재 여부 — 0장이면 공개해도 학부모에겐 빈 이벤트
-  const hasVisiblePhotos = !!summary && summary.previewThumbnailUrls.length > 0
+  const unreviewedAlbumCount = summary
+    ? summary.reviewableAlbumCount - summary.reviewedAlbumCount
+    : 0
+  const hasUnreviewed = unreviewedAlbumCount > 0
+  // 뷰어 노출 앨범(검토 완료 사진 보유 + person/common) 존재 여부 — 0개면 공개해도 학부모에겐 빈 이벤트
+  const hasVisiblePhotos = !!summary && summary.previewAlbums.length > 0
   // 서버 정책과 동일하게 review/ready에서만 공개 가능 — published 재진입은 물론
   // empty/analyzing 딥링크(고아 사진 한계 — api-spec 기록)에서도 눌리면 항상 400이라 버튼을 잠근다
   const publishable = event?.status === 'review' || event?.status === 'ready'
-  const canPublish = !!summary && summary.totalPhotoCount > 0 && publishable && !publishing
+  const canPublish = !!summary && summary.photoCount > 0 && publishable && !publishing
 
   const handlePublish = async () => {
     if (publishing) return
@@ -79,38 +82,40 @@ export function PublishReviewPage() {
                 {event.name} · 공개 직전 최종 확인
               </p>
 
-              <div className="mt-4 grid grid-cols-4 gap-2">
+              <div className="mt-4 grid grid-cols-3 gap-2">
                 <StatCard value={String(summary.photoCount)} label="사진" />
                 <StatCard value={String(summary.albumCount)} label="앨범" />
                 <StatCard
-                  value={`${summary.reviewedPhotoCount}/${summary.totalPhotoCount}`}
-                  label="검토완료"
+                  value={`${summary.reviewedAlbumCount}/${summary.reviewableAlbumCount}`}
+                  label="검토한 앨범"
                   warn={hasUnreviewed}
                 />
-                <StatCard value={String(summary.uncertainCount)} label="분류 애매" />
               </div>
 
               {hasUnreviewed && (
                 <p className="mt-3 text-xs leading-normal text-warn">
-                  미검토 사진 {unreviewedCount}장은 공개해도 학부모에게 보이지 않아요.
+                  아직 검토하지 않은 앨범이 {unreviewedAlbumCount}개 있어요. 검토 안 된 사진은
+                  공개해도 학부모에게 보이지 않아요.
                 </p>
               )}
 
               <h2 className="mt-6 text-[13px] font-bold text-muted">미리보기</h2>
               {hasVisiblePhotos ? (
-                <div className="mt-2">
-                  <PhotoGrid>
-                    {/* 탭 동작이 없는 순수 프리뷰 — PhotoTile(<button>)을 쓰면 무동작 포커스 버튼이 생긴다 */}
-                    {summary.previewThumbnailUrls.map((url, i) => (
-                      <div
-                        key={i}
-                        className="cheese-dots aspect-square w-full overflow-hidden rounded-xl bg-photo"
-                      >
-                        <img src={url} alt="" className="h-full w-full object-cover" />
-                      </div>
+                <>
+                  {/* 08과 같은 앨범 카드(앨범명·검토 테두리) — onClick 없이 순수 프리뷰(CHMO-346) */}
+                  <div className="mt-2 grid grid-cols-3 gap-2.5">
+                    {summary.previewAlbums.map((album) => (
+                      <AlbumCard
+                        key={album.id}
+                        album={album}
+                        coverUrl={album.coverThumbnailUrl ?? undefined}
+                      />
                     ))}
-                  </PhotoGrid>
-                </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted">
+                    테두리: 갈색=검토완료 · 회색 점선=미검토
+                  </p>
+                </>
               ) : (
                 <p className="mt-2 rounded-xl bg-surface px-4 py-8 text-center text-[13px] leading-relaxed text-muted">
                   공개하면 보일 사진이 아직 없어요.
@@ -163,7 +168,7 @@ export function PublishReviewPage() {
           !hasVisiblePhotos
             ? '지금 공개하면 학부모에게 보이는 사진이 없어요. 사진을 검토 완료하고 인물·공통 앨범으로 정리한 뒤 공개하는 걸 권해요.'
             : hasUnreviewed
-              ? `공개하면 학부모가 공유 링크로 볼 수 있어요. 미검토 사진 ${unreviewedCount}장은 검토 전까지 보이지 않아요.`
+              ? `공개하면 학부모가 공유 링크로 볼 수 있어요. 검토 안 한 앨범 ${unreviewedAlbumCount}개의 사진은 검토 전까지 보이지 않아요.`
               : '공개하면 학부모가 공유 링크로 사진을 볼 수 있어요.'
         }
         confirmLabel="공개하기"
@@ -175,9 +180,11 @@ export function PublishReviewPage() {
 }
 
 /**
- * 공개 POST. 미검토 사진이 있으면 force로 공개(경고는 이미 다이얼로그로 고지).
+ * 공개 POST. 미검토 앨범이 있으면 force로 공개(경고는 이미 다이얼로그로 고지).
  * all-reviewed로 보였는데 그새 미검토 사진이 생긴 레이스(409 HAS_UNREVIEWED_PHOTOS)면
  * 사용자가 이미 공개에 동의했으니 force로 한 번 재시도한다(미검토 사진은 어차피 뷰어 비노출).
+ * force 판정이 앨범 단위(인물·공통)라 특수 앨범에만 미검토 사진이 남으면 force 없이 나가는데,
+ * BE가 사진 단위로 409를 주더라도 같은 재시도가 받아준다(CHMO-357).
  */
 async function publishWithForceRetry(eventId: string, force: boolean): Promise<void> {
   try {
@@ -198,7 +205,7 @@ async function publishWithForceRetry(eventId: string, force: boolean): Promise<v
 interface StatCardProps {
   value: string
   label: string
-  /** 미검토 사진이 남았을 때 검토완료 수치를 warn 색으로 강조 */
+  /** 미검토 앨범이 남았을 때 검토 수치를 warn 색으로 강조 */
   warn?: boolean
 }
 

@@ -14,6 +14,7 @@ import {
 } from './mappers'
 import type {
   Album,
+  AlbumDownloadResponse,
   DeletePhotosResponse,
   ID,
   MovePhotosResponse,
@@ -54,6 +55,15 @@ export async function markAlbumReviewed(albumId: ID | string): Promise<void> {
 /** PATCH /albums/:id — 인물 앨범 이름 변경(모임 단위 personId 이름전파) */
 export async function renamePersonAlbum(albumId: ID | string, name: string): Promise<void> {
   await apiFetch<unknown>(`/albums/${albumId}`, { method: 'PATCH', body: { name } })
+}
+
+/**
+ * GET /albums/:id/download — 멤버용 앨범 ZIP URL 발급(CHMO-338, 미검토 포함 전체).
+ * person/common만 대상 — 특수 앨범(uncertain·eyes_closed·blurry)은 BE가 ALBUM404를
+ * 준다(2026-07-20 실서버 채집). 호출부가 특수 앨범에서 진입로를 숨긴다.
+ */
+export function getAlbumZip(albumId: ID | string): Promise<AlbumDownloadResponse> {
+  return apiFetch<AlbumDownloadResponse>(`/albums/${albumId}/download`)
 }
 
 /** GET /albums/:id/move-suggestions — 선택 사진 기준 이동 추천(유사도순 + 공통, bare 배열) */

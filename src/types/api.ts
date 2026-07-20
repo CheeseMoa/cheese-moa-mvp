@@ -171,16 +171,19 @@ export interface RegisterPhotosResult {
 export interface ReviewSummary {
   photoCount: number
   albumCount: number
-  /** 검토는 사진 단위 — 검토 완료된 사진 수 / 전체 사진 수 */
-  reviewedPhotoCount: number
-  totalPhotoCount: number
-  uncertainCount: number
   /**
-   * 학부모 뷰 프리뷰용 썸네일 URL(파생값 — coverThumbnailUrl과 동일 규칙).
-   * 뷰어 노출 규칙(person/common 앨범 + 검토 완료)을 적용한 사진만, 최대 6장.
-   * id만으론 URL 조립 불가라 서버가 완성된 URL을 내려준다.
+   * 검토 진척은 앨범 단위로 보여준다(CHMO-357) — 검토 행위가 앨범 일괄뿐이라
+   * 사진 수 정산은 선생님의 머릿속 진척("앨범 2/3 끝냄")과 어긋난다(피드백 #17).
+   * 집계는 학부모에게 보일 인물·공통(사진 보유)만 — 특수 앨범 검토는 공개 결과와 무관.
    */
-  previewThumbnailUrls: string[]
+  reviewedAlbumCount: number
+  reviewableAlbumCount: number
+  /**
+   * 학부모 뷰 프리뷰용 앨범(파생값 — BE albums[]에 뷰어 노출 규칙 적용).
+   * person/common 앨범 중 검토 완료 사진이 있는 것만 — 공개 시 학부모 목록(15)에 보일 앨범과 동일.
+   * 14 미리보기가 08과 같은 앨범 카드(앨범명·검토 테두리)로 그린다(CHMO-346).
+   */
+  previewAlbums: Album[]
 }
 
 // ── 이동 추천 ────────────────────────────────────────────────
