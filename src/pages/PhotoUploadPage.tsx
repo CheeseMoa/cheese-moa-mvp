@@ -16,6 +16,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiRequestError, toErrorMessage } from '../api/client'
 import { getEvent, presignUploads, registerPhotos, uploadToPresignedUrl } from '../api/events'
 import { runWithConcurrency } from '../lib/concurrency'
+import { createPreviewThumbnail } from '../lib/previewThumb'
 import {
   isUploadableSize,
   MAX_UPLOAD_BATCH,
@@ -26,6 +27,8 @@ import {
 
 /** S3 PUT 동시 실행 수 — 브라우저의 호스트당 커넥션 한도(≈6)에 맞춘다 */
 const UPLOAD_CONCURRENCY = 6
+/** 미리보기 축소 동시 실행 수 — 디코드·캔버스가 CPU 작업이라 낮게 잡아 화면 멈춤을 피한다 */
+const PREVIEW_CONCURRENCY = 2
 
 /** 기기에서 고른 파일 + 미리보기 — key는 같은 파일 중복 추가 방지용 */
 interface PickedPhoto {
@@ -105,20 +108,38 @@ export function PhotoUploadPage() {
       )
     if (notices.length > 0) toast.show(notices.join(' · '))
     if (accepted.length === 0) return
-    setPhotos((prev) => {
-      const seen = new Set(prev.map((p) => p.key))
-      const added = accepted
-        .map((file) => ({ key: `${file.name}:${file.size}:${file.lastModified}`, file }))
-        .filter(({ key }) => !seen.has(key))
-        .map(({ key, file }) => ({
-          key,
-          file,
-          previewUrl: URL.createObjectURL(file),
-          selected: true,
-          s3Key: null,
-          registered: false,
-        }))
-      return [...prev, ...added]
+    const seen = new Set(photos.map((p) => p.key))
+    const added = accepted
+      .map((file) => ({ key: `${file.name}:${file.size}:${file.lastModified}`, file }))
+      .filter(({ key }) => !seen.has(key))
+      .map(({ key, file }) => ({
+        key,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        selected: true,
+        s3Key: null,
+        registered: false,
+      }))
+    if (added.length === 0) return
+    setPhotos((prev) => [...prev, ...added])
+    void shrinkPreviews(added)
+  }
+
+  /**
+   * 원본 미리보기를 축소 썸네일로 순차 교체(CHMO-369) — 원본 수십 장을 타일에 그대로
+   * 디코드하면 피커 복귀 직후 화면이 멈춘다. 축소 실패 항목은 원본 미리보기를 유지한다.
+   */
+  const shrinkPreviews = async (items: PickedPhoto[]) => {
+    await runWithConcurrency(items, PREVIEW_CONCURRENCY, async ({ key, file }) => {
+      const thumbUrl = await createPreviewThumbnail(file)
+      if (!thumbUrl) return
+      if (!alive.current) {
+        URL.revokeObjectURL(thumbUrl)
+        return
+      }
+      const original = photosRef.current.find((p) => p.key === key)?.previewUrl
+      setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, previewUrl: thumbUrl } : p)))
+      if (original) URL.revokeObjectURL(original)
     })
   }
 
@@ -254,71 +275,74 @@ export function PhotoUploadPage() {
           </>
         ) : (
           <>
-            <p className="mt-3">
-              <span className="inline-flex items-center rounded-full bg-primary/[.15] px-3 py-1 text-xs font-bold text-heading">
-                선택됨 {selectedCount}장
-              </span>
-            </p>
+            {/* 카운트·품질 토글은 그리드 위 sticky — 사진이 쌓여 화면이 길어져도 항상 보인다(CHMO-369) */}
+            <div className="sticky top-0 z-10 -mx-5 bg-cream px-5 pb-3 pt-3">
+              <p>
+                <span className="inline-flex items-center rounded-full bg-primary/[.15] px-3 py-1 text-xs font-bold text-heading">
+                  선택됨 {selectedCount}장
+                </span>
+              </p>
 
-            <div className="mt-3">
-              <PhotoGrid>
-                <button
-                  type="button"
-                  aria-label="사진 선택"
-                  disabled={busy}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex aspect-square w-full items-center justify-center rounded-xl border-2 border-dashed border-border bg-white text-2xl text-muted disabled:opacity-50"
-                >
-                  ＋
-                </button>
-                {photos.map((p) => (
-                  <PhotoTile
-                    key={p.key}
-                    src={p.previewUrl}
-                    alt={p.file.name}
-                    selectable
-                    selected={p.selected}
-                    onClick={() => {
-                      if (!busy) toggleSelected(p.key)
-                    }}
+              <div className="mt-3 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
+                  <span className="text-sm font-medium text-text">눈감은 사진 제외</span>
+                  <Toggle
+                    checked={excludeEyesClosed}
+                    onChange={setExcludeEyesClosed}
+                    disabled={busy}
                   />
-                ))}
-              </PhotoGrid>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
+                  <span className="text-sm font-medium text-text">흔들린 사진 제외</span>
+                  <Toggle checked={excludeBlurry} onChange={setExcludeBlurry} disabled={busy} />
+                </div>
+              </div>
+              {/* 카피는 기능 명세 정정본 기준 — 제외 사진은 눈감음/흔들림 앨범으로 라우팅(08 참고) */}
+              <p className="mt-2.5 text-xs leading-relaxed text-muted">
+                제외한 사진은 &lsquo;눈감은 사진&rsquo;·&lsquo;흔들린 사진&rsquo; 사진첩으로 이동해요
+              </p>
             </div>
 
-            <div className="mt-5 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
-                <span className="text-sm font-medium text-text">눈감은 사진 제외</span>
-                <Toggle
-                  checked={excludeEyesClosed}
-                  onChange={setExcludeEyesClosed}
-                  disabled={busy}
+            <PhotoGrid>
+              <button
+                type="button"
+                aria-label="사진 선택"
+                disabled={busy}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex aspect-square w-full items-center justify-center rounded-xl border-2 border-dashed border-border bg-white text-2xl text-muted disabled:opacity-50"
+              >
+                ＋
+              </button>
+              {photos.map((p) => (
+                <PhotoTile
+                  key={p.key}
+                  src={p.previewUrl}
+                  alt={p.file.name}
+                  selectable
+                  selected={p.selected}
+                  onClick={() => {
+                    if (!busy) toggleSelected(p.key)
+                  }}
                 />
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
-                <span className="text-sm font-medium text-text">흔들린 사진 제외</span>
-                <Toggle checked={excludeBlurry} onChange={setExcludeBlurry} disabled={busy} />
-              </div>
-            </div>
-            {/* 카피는 기능 명세 정정본 기준 — 제외 사진은 눈감음/흔들림 앨범으로 라우팅(08 참고) */}
-            <p className="mt-2.5 text-xs leading-relaxed text-muted">
-              제외한 사진은 &lsquo;눈감은 사진&rsquo;·&lsquo;흔들린 사진&rsquo; 사진첩으로 이동해요
-            </p>
+              ))}
+            </PhotoGrid>
 
-            {overBatchLimit ? (
-              <p role="alert" className="mt-3 text-sm text-warn">
-                한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요. {selectedCount - MAX_UPLOAD_BATCH}
-                장을 선택 해제해 주세요.
-              </p>
-            ) : null}
+            {/* CTA는 하단 sticky — 경고·에러도 버튼과 함께 항상 보인다. -mb-9가 main의 pb-9를
+                상쇄하고 자체 pb-9를 채워, 스크롤 중에도 버튼 아래가 크림색으로 차 있다(CHMO-369) */}
+            <div className="sticky bottom-0 z-10 -mx-5 -mb-9 mt-auto bg-cream px-5 pb-9 pt-3">
+              {overBatchLimit ? (
+                <p role="alert" className="mb-2.5 text-sm text-warn">
+                  한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}
+                  {selectedCount - MAX_UPLOAD_BATCH}장을 선택 해제해 주세요.
+                </p>
+              ) : null}
 
-            {error ? (
-              <p role="alert" className="mt-3 text-sm text-warn">
-                {error}
-              </p>
-            ) : null}
+              {error ? (
+                <p role="alert" className="mb-2.5 text-sm text-warn">
+                  {error}
+                </p>
+              ) : null}
 
-            <div className="mt-auto pt-6">
               <Button
                 fullWidth
                 disabled={selectedCount === 0 || overBatchLimit || busy}
