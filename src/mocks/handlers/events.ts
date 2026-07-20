@@ -277,8 +277,8 @@ export const eventHandlers = [
   }),
 
   // GET /events/:id/review-summary — 공개 전 검수 요약 · 화면 14
-  // BE ReviewSummaryResponse엔 previewThumbnailUrls가 없다 — 화면이 쓰는 미리보기는
-  // api/events.ts가 albums[].thumbnailUrl(뷰어 노출 앨범 커버)에서 파생한다.
+  // BE ReviewSummaryResponse엔 미리보기 전용 필드가 없다 — 화면이 쓰는 미리보기 앨범은
+  // api/events.ts가 albums[](뷰어 노출 앨범)에서 파생한다(CHMO-346).
   http.get(api('/events/:id/review-summary'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()

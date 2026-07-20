@@ -8,6 +8,7 @@ interface AlbumCardProps {
   album: AlbumCardAlbum
   /** 커버 썸네일 URL — 없으면 치즈 도트 플레이스홀더 */
   coverUrl?: string
+  /** 없으면 순수 표시용 <div>로 렌더 — 무동작 포커스 버튼을 만들지 않는다(14 미리보기, CHMO-346) */
   onClick?: () => void
 }
 
@@ -29,15 +30,8 @@ export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
       : 'border border-border'
   const meta =
     album.type === 'uncertain' ? `${album.photoCount}장 · 재분류 대상` : `${album.photoCount}장`
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        'w-full rounded-2xl bg-white p-2 text-left transition active:scale-[0.99]',
-        borderCls,
-      )}
-    >
+  const content = (
+    <>
       <span className="cheese-dots block h-24 overflow-hidden rounded-[10px] bg-photo">
         {coverUrl ? (
           <img src={coverUrl} alt="" className="h-full w-full object-cover" />
@@ -54,6 +48,17 @@ export function AlbumCard({ album, coverUrl, onClick }: AlbumCardProps) {
           <Badge variant={reviewed ? 'reviewed' : 'unreviewed'} size="sm" />
         )}
       </span>
+    </>
+  )
+  const baseCls = cx('w-full rounded-2xl bg-white p-2 text-left', borderCls)
+  if (!onClick) return <div className={baseCls}>{content}</div>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(baseCls, 'transition active:scale-[0.99]')}
+    >
+      {content}
     </button>
   )
 }

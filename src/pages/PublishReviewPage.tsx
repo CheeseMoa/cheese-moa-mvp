@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ConfirmDialog, Header, LoadState, PhotoGrid, useToast } from '../components/ui'
+import { AlbumCard, Button, ConfirmDialog, Header, LoadState, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
@@ -10,7 +10,7 @@ import { cx } from '../lib/cx'
 
 /**
  * 14. 공개 전 검수 · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
- * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토완료/분류애매) + 학부모 뷰 프리뷰(3열 썸네일) + [공개하기].
+ * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토완료/분류애매) + 학부모 뷰 프리뷰(08과 같은 앨범 카드 그리드 — CHMO-346) + [공개하기].
  * 공개는 되돌리기 어려운 외부 노출이라 항상 확인 다이얼로그로 받는다 — 미검토 사진이 있으면
  * 경고 문구 + ?force=true로 공개(미검토 사진은 공개 후에도 뷰어 비노출). 성공 시 05 모임 상세로 복귀
  * (거기서 '공개 완료' 배지·학부모 공유 진입이 보인다). 이벤트명은 부제용으로 /events/:id에서 함께 읽는다.
@@ -35,8 +35,8 @@ export function PublishReviewPage() {
   const published = event?.status === 'published'
   const unreviewedCount = summary ? summary.totalPhotoCount - summary.reviewedPhotoCount : 0
   const hasUnreviewed = unreviewedCount > 0
-  // 뷰어 노출 사진(검토 완료 + person/common) 존재 여부 — 0장이면 공개해도 학부모에겐 빈 이벤트
-  const hasVisiblePhotos = !!summary && summary.previewThumbnailUrls.length > 0
+  // 뷰어 노출 앨범(검토 완료 사진 보유 + person/common) 존재 여부 — 0개면 공개해도 학부모에겐 빈 이벤트
+  const hasVisiblePhotos = !!summary && summary.previewAlbums.length > 0
   // 서버 정책과 동일하게 review/ready에서만 공개 가능 — published 재진입은 물론
   // empty/analyzing 딥링크(고아 사진 한계 — api-spec 기록)에서도 눌리면 항상 400이라 버튼을 잠근다
   const publishable = event?.status === 'review' || event?.status === 'ready'
@@ -98,19 +98,21 @@ export function PublishReviewPage() {
 
               <h2 className="mt-6 text-[13px] font-bold text-muted">미리보기</h2>
               {hasVisiblePhotos ? (
-                <div className="mt-2">
-                  <PhotoGrid>
-                    {/* 탭 동작이 없는 순수 프리뷰 — PhotoTile(<button>)을 쓰면 무동작 포커스 버튼이 생긴다 */}
-                    {summary.previewThumbnailUrls.map((url, i) => (
-                      <div
-                        key={i}
-                        className="cheese-dots aspect-square w-full overflow-hidden rounded-xl bg-photo"
-                      >
-                        <img src={url} alt="" className="h-full w-full object-cover" />
-                      </div>
+                <>
+                  {/* 08과 같은 앨범 카드(앨범명·검토 테두리) — onClick 없이 순수 프리뷰(CHMO-346) */}
+                  <div className="mt-2 grid grid-cols-3 gap-2.5">
+                    {summary.previewAlbums.map((album) => (
+                      <AlbumCard
+                        key={album.id}
+                        album={album}
+                        coverUrl={album.coverThumbnailUrl ?? undefined}
+                      />
                     ))}
-                  </PhotoGrid>
-                </div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted">
+                    테두리: 갈색=검토완료 · 회색 점선=미검토
+                  </p>
+                </>
               ) : (
                 <p className="mt-2 rounded-xl bg-surface px-4 py-8 text-center text-[13px] leading-relaxed text-muted">
                   공개하면 보일 사진이 아직 없어요.

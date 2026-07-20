@@ -176,11 +176,11 @@ export interface ReviewSummary {
   totalPhotoCount: number
   uncertainCount: number
   /**
-   * 학부모 뷰 프리뷰용 썸네일 URL(파생값 — coverThumbnailUrl과 동일 규칙).
-   * 뷰어 노출 규칙(person/common 앨범 + 검토 완료)을 적용한 사진만, 최대 6장.
-   * id만으론 URL 조립 불가라 서버가 완성된 URL을 내려준다.
+   * 학부모 뷰 프리뷰용 앨범(파생값 — BE albums[]에 뷰어 노출 규칙 적용).
+   * person/common 앨범 중 검토 완료 사진이 있는 것만 — 공개 시 학부모 목록(15)에 보일 앨범과 동일.
+   * 14 미리보기가 08과 같은 앨범 카드(앨범명·검토 테두리)로 그린다(CHMO-346).
    */
-  previewThumbnailUrls: string[]
+  previewAlbums: Album[]
 }
 
 // ── 이동 추천 ────────────────────────────────────────────────

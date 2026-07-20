@@ -65,10 +65,10 @@ interface RawReviewSummary {
 
 /**
  * GET /events/:id/review-summary — 공개 전 검수 요약(14).
- * BE엔 previewThumbnailUrls가 없어 albums[].thumbnailUrl에서 파생한다 —
- * 뷰어 노출 규칙(person/common)에 **검토 완료 사진이 있는** 앨범 커버만, 최대 6장.
+ * 미리보기는 albums[]에서 파생한다 — 뷰어 노출 규칙(person/common)에
+ * **검토 완료 사진이 있는** 앨범만(공개 시 학부모 목록(15)에 보일 앨범과 동일, CHMO-346).
  * 전부 미검토면 빈 미리보기가 정직한 응답이다(미검토 사진은 뷰어 비노출 —
- * 미검토 커버를 "보일 사진"으로 담으면 14의 빈 상태 경고가 사라진다).
+ * 미검토 앨범을 "보일 앨범"으로 담으면 14의 빈 상태 경고가 사라진다).
  */
 export function getReviewSummary(
   eventId: ID | string,
@@ -82,11 +82,9 @@ export function getReviewSummary(
       reviewedPhotoCount: raw.reviewedPhotoCount,
       totalPhotoCount: raw.totalPhotos,
       uncertainCount: raw.uncertainCount,
-      previewThumbnailUrls: albums
-        .filter((a) => a.visibleToViewer && a.photoCount - (a.unreviewedPhotoCount ?? 0) > 0)
-        .map((a) => a.coverThumbnailUrl)
-        .filter((url): url is string => !!url)
-        .slice(0, 6),
+      previewAlbums: albums.filter(
+        (a) => a.visibleToViewer && a.photoCount - (a.unreviewedPhotoCount ?? 0) > 0,
+      ),
     }
   })
 }
