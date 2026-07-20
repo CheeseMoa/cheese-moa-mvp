@@ -243,9 +243,15 @@ export function toReviewSummaryResponse(event: DbEvent) {
 
 // ── 사진 이동/제거 응답 (화면 09·09-1) ───────────────────────
 
-/** BE MoveSuggestionResponse 항목 — 공통 앨범은 이름·유사도 없이 온다(personName·similarity null) */
+/** BE MoveSuggestionResponse 항목 — 공통 앨범은 이름·유사도 없이 온다(personName·similarity null). thumbnailUrl은 CHMO-232 */
 export function toMoveSuggestionResponse(album: DbAlbum, similarity: number | null) {
-  return { albumId: album.id, personName: personNameOf(album), similarity }
+  const cover = album.coverPhotoId ? findPhoto(album.coverPhotoId) : undefined
+  return {
+    albumId: album.id,
+    personName: personNameOf(album),
+    similarity,
+    thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+  }
 }
 
 /** BE MovePhotosResponse — 이동 완료 건수 */
