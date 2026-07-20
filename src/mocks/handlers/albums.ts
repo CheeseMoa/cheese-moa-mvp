@@ -37,6 +37,7 @@ import {
   toMovePhotosResponse,
   toMoveSuggestionResponse,
 } from './serializers'
+import type { AlbumDownloadResponse } from '../../types/api'
 
 /** 멤버가 접근 가능한 앨범 조회(소속 이벤트의 모임 멤버십 = accessibleEvent 재사용, 아니면 null → 404) */
 function accessibleAlbum(user: DbUser, albumId: number | null): DbAlbum | null {
@@ -118,6 +119,22 @@ export const albumHandlers = [
     }
 
     return ok(toAlbumSummary(album))
+  }),
+
+  // GET /albums/:id/download — 멤버용 앨범 ZIP URL 발급(CHMO-338, 미검토 포함 전체) · 화면 09
+  // BE는 person/common만 ZIP 대상 — 특수 앨범은 ALBUM404(2026-07-20 실서버 채집).
+  // zip 실체는 share.ts의 /mock-zip 핸들러(빈 ZIP)를 재사용한다.
+  http.get(api('/albums/:id/download'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const album = accessibleAlbum(user, toId(params.id))
+    if (!album || (album.type !== 'person' && album.type !== 'common')) return albumNotFound()
+
+    const response: AlbumDownloadResponse = {
+      downloadUrl: `${window.location.origin}/mock-zip/${album.eventId}_${album.id}-all.zip`,
+      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+    }
+    return ok(response)
   }),
 
   // GET /albums/:id/move-suggestions?photoIds=… — 이동 추천(bare 배열) · 화면 09-1
