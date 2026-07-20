@@ -90,13 +90,24 @@ export function MovePhotosSheet({
                 onClick={() => handleMove(s)}
                 className="flex w-16 flex-none flex-col items-center gap-1.5 transition active:scale-[0.97] disabled:opacity-50"
               >
-                <span
-                  className={cx(
-                    'cheese-dots h-16 w-16 rounded-full bg-photo',
-                    isCommon ? 'border-2 border-border' : 'border-2 border-primary',
-                  )}
-                  aria-hidden="true"
-                />
+                {s.thumbnailUrl ? (
+                  <img
+                    src={s.thumbnailUrl}
+                    alt=""
+                    className={cx(
+                      'h-16 w-16 rounded-full object-cover',
+                      isCommon ? 'border-2 border-border' : 'border-2 border-primary',
+                    )}
+                  />
+                ) : (
+                  <span
+                    className={cx(
+                      'cheese-dots h-16 w-16 rounded-full bg-photo',
+                      isCommon ? 'border-2 border-border' : 'border-2 border-primary',
+                    )}
+                    aria-hidden="true"
+                  />
+                )}
                 <span className="max-w-full truncate text-xs font-bold text-text">{s.name}</span>
                 <span
                   className={cx('text-[11px]', isCommon ? 'text-muted' : 'font-bold text-accent')}

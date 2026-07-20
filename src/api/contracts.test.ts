@@ -298,8 +298,13 @@ describe('앨범 · 사진', () => {
 
     expect(calls[0].url).toBe('/api/v1/albums/11/move-suggestions?photoIds=101,102')
     expect(suggestions).toEqual([
-      { albumId: 12, name: '서준', similarity: 0.82 },
-      { albumId: 13, name: '공통', similarity: null },
+      {
+        albumId: 12,
+        name: '서준',
+        similarity: 0.82,
+        thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/105.jpg',
+      },
+      { albumId: 13, name: '공통', similarity: null, thumbnailUrl: null },
     ])
   })
 
