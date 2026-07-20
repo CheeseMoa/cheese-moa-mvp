@@ -174,7 +174,6 @@ export interface ReviewSummary {
   /** 검토는 사진 단위 — 검토 완료된 사진 수 / 전체 사진 수 */
   reviewedPhotoCount: number
   totalPhotoCount: number
-  uncertainCount: number
   /**
    * 학부모 뷰 프리뷰용 앨범(파생값 — BE albums[]에 뷰어 노출 규칙 적용).
    * person/common 앨범 중 검토 완료 사진이 있는 것만 — 공개 시 학부모 목록(15)에 보일 앨범과 동일.

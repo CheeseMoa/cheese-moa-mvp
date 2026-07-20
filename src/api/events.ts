@@ -57,6 +57,7 @@ export function listEventAlbums(eventId: ID | string, signal?: AbortSignal): Pro
 /** BE ReviewSummaryResponse — 프리뷰 썸네일 대신 앨범 요약 배열이 온다 */
 interface RawReviewSummary {
   reviewedPhotoCount: number
+  /** BE는 계속 주지만 14가 더는 보여주지 않아 매핑하지 않는다(CHMO-347) */
   uncertainCount: number
   totalPhotos: number
   totalAlbums: number
@@ -81,7 +82,6 @@ export function getReviewSummary(
       albumCount: raw.totalAlbums,
       reviewedPhotoCount: raw.reviewedPhotoCount,
       totalPhotoCount: raw.totalPhotos,
-      uncertainCount: raw.uncertainCount,
       previewAlbums: albums.filter(
         (a) => a.visibleToViewer && a.photoCount - (a.unreviewedPhotoCount ?? 0) > 0,
       ),

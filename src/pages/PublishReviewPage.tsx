@@ -10,7 +10,7 @@ import { cx } from '../lib/cx'
 
 /**
  * 14. 공개 전 검수 · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
- * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토완료/분류애매) + 학부모 뷰 프리뷰(08과 같은 앨범 카드 그리드 — CHMO-346) + [공개하기].
+ * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토완료 — 분류 애매는 공개와 무관해 비노출, CHMO-347) + 학부모 뷰 프리뷰(08과 같은 앨범 카드 그리드 — CHMO-346) + [공개하기].
  * 공개는 되돌리기 어려운 외부 노출이라 항상 확인 다이얼로그로 받는다 — 미검토 사진이 있으면
  * 경고 문구 + ?force=true로 공개(미검토 사진은 공개 후에도 뷰어 비노출). 성공 시 05 모임 상세로 복귀
  * (거기서 '공개 완료' 배지·학부모 공유 진입이 보인다). 이벤트명은 부제용으로 /events/:id에서 함께 읽는다.
@@ -79,7 +79,7 @@ export function PublishReviewPage() {
                 {event.name} · 공개 직전 최종 확인
               </p>
 
-              <div className="mt-4 grid grid-cols-4 gap-2">
+              <div className="mt-4 grid grid-cols-3 gap-2">
                 <StatCard value={String(summary.photoCount)} label="사진" />
                 <StatCard value={String(summary.albumCount)} label="앨범" />
                 <StatCard
@@ -87,7 +87,6 @@ export function PublishReviewPage() {
                   label="검토완료"
                   warn={hasUnreviewed}
                 />
-                <StatCard value={String(summary.uncertainCount)} label="분류 애매" />
               </div>
 
               {hasUnreviewed && (

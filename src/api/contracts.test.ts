@@ -362,7 +362,6 @@ describe('공개 전 검수 요약 (14)', () => {
       albumCount: 3,
       reviewedPhotoCount: 5,
       totalPhotoCount: 19,
-      uncertainCount: 2,
     })
     // person·common만 — 특수 앨범(eyes_closed)은 뷰어 비노출이라 빠진다.
     // 앨범 카드가 쓰는 이름·검토 수치·커버까지 매핑돼 온다
