@@ -51,6 +51,28 @@ function nicknameConflict() {
   return errorResponse(409, 'NICKNAME_TAKEN', '이미 사용 중인 닉네임입니다.')
 }
 
+/** 소셜 로그인 목 계정 닉네임 — provider별 1개 고정 (CHMO-359) */
+const SOCIAL_MOCK_NICKNAMES: Record<string, string> = {
+  kakao: '카카오테스트',
+  google: '구글테스트',
+  naver: '네이버테스트',
+  apple: '애플테스트',
+}
+
+const SOCIAL_CODE_PREFIX = 'mock-social-'
+
+/**
+ * 이미 교환된 일회용 코드 — 실 BE가 코드를 1회 소진하는 계약을 목도 지킨다.
+ * 이걸 안 지키면 콜백 화면의 StrictMode 이중 교환 가드가 깨져도 로컬에서는 멀쩡해 보인다.
+ */
+const spentSocialCodes = new Set<string>()
+
+/** `mock-social-<provider>-<uuid>`에서 provider만 떼어낸다(provider명에는 '-'가 없다) */
+function providerFromMockCode(code: string): string | null {
+  if (!code.startsWith(SOCIAL_CODE_PREFIX)) return null
+  return code.slice(SOCIAL_CODE_PREFIX.length).split('-')[0] || null
+}
+
 /** BE AuthResponse — user 객체 없이 평면 필드. 새 accessToken·refreshToken 쌍(회전) 발급 */
 function authResponse(user: DbUser) {
   return {
@@ -87,6 +109,29 @@ export const authHandlers = [
       nickname && pin ? db.users.find((u) => u.nickname === nickname && u.pin === pin) : undefined
     // BE AUTH401(로그인 실패) — 토큰 무효(COMMON401)와 구분된다
     if (!user) return errorResponse(401, 'AUTH401', '닉네임 또는 PIN이 일치하지 않습니다.')
+    return ok(authResponse(user))
+  }),
+
+  // POST /auth/social/exchange — 소셜 콜백 일회용 코드 → 토큰 쌍 (CHMO-359)
+  // 목 모드의 코드는 socialLoginStartUrl이 만든 `mock-social-<provider>` — 프로바이더별 고정
+  // 계정을 find-or-create 한다(실 BE의 "소셜 신원으로 가입 또는 로그인"과 같은 의미).
+  http.post(api('/auth/social/exchange'), async ({ request }) => {
+    const body = await readJson<{ code?: unknown }>(request)
+    const code = requiredString(body?.code)
+    const provider = code ? providerFromMockCode(code) : null
+    const nickname = provider ? SOCIAL_MOCK_NICKNAMES[provider] : undefined
+    // BE OAUTH401 — 무효 코드와 이미 쓴 코드를 같은 실패로 다룬다(ExchangeSocialCodeUseCase와 동일)
+    if (!nickname || !code || spentSocialCodes.has(code)) {
+      return errorResponse(401, 'OAUTH401', '소셜 로그인에 실패했습니다. 다시 시도해 주세요.')
+    }
+    spentSocialCodes.add(code)
+    let user = db.users.find((u) => u.nickname === nickname)
+    if (!user) {
+      // 소셜 계정은 PIN이 없다 — 빈 문자열은 PIN_RE에 걸려 닉네임+PIN 로그인으로는 진입 불가
+      user = { id: nextId('usr'), nickname, pin: '', createdAt: nowIso() }
+      db.users.push(user)
+      persistUser(user) // 새로고침(재시드) 후에도 발급된 토큰의 주인이 남게
+    }
     return ok(authResponse(user))
   }),
 

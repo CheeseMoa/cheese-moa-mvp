@@ -81,3 +81,28 @@ export function clearAuthTokens(): void {
 export function isAuthenticated(): boolean {
   return getAccessToken() !== null
 }
+
+// ── 소셜 로그인 복귀 목적지 (CHMO-359) ────────────────────────
+// 소셜 로그인은 외부 리다이렉트로 페이지를 떠나므로 router state로 returnTo를 전달할 수 없다 —
+// 떠나기 전 sessionStorage에 맡겼다가 콜백(/auth/callback)에서 꺼낸다. 새 로그인 흐름이 이전
+// 값에 오염되지 않게 읽는 쪽에서 소비(삭제)한다.
+
+const SOCIAL_RETURN_TO_KEY = 'cheesemoa.socialReturnTo'
+
+export function setSocialReturnTo(returnTo: string): void {
+  try {
+    sessionStorage.setItem(SOCIAL_RETURN_TO_KEY, returnTo)
+  } catch {
+    /* sessionStorage 접근 불가 — returnTo 없이 홈으로 복귀(로그인 자체는 진행) */
+  }
+}
+
+export function consumeSocialReturnTo(): string | null {
+  try {
+    const value = sessionStorage.getItem(SOCIAL_RETURN_TO_KEY)
+    sessionStorage.removeItem(SOCIAL_RETURN_TO_KEY)
+    return value
+  } catch {
+    return null
+  }
+}

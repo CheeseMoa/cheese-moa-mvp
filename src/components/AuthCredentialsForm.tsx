@@ -5,6 +5,7 @@ import { useMutation } from '../hooks/useMutation'
 import { login, signup } from '../api/auth'
 import { setAuthTokens } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
+import { SocialLoginButtons } from './SocialLoginButtons'
 import { Button, PinField, TextField } from './ui'
 
 /** 로그인에 가로막힌 화면(초대 링크 JoinPage 등)이 넘기는 복귀 목적지 */
@@ -128,6 +129,13 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
           <Button type="submit" fullWidth disabled={!canSubmit}>
             {submitting ? `${submitLabel} 중…` : submitLabel}
           </Button>
+          {/* 소셜 로그인(CHMO-359) — 가입/로그인 겸용이라 두 모드 모두 노출, PIN 폼과 병행 */}
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted">또는 소셜 계정으로 계속하기</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <SocialLoginButtons returnTo={returnTo} />
         </div>
       </form>
     </section>
