@@ -9,6 +9,7 @@ import {
   Button,
   ConfirmDialog,
   Header,
+  IconDownload,
   IconFolderMove,
   IconTrash,
   LoadState,
@@ -17,21 +18,27 @@ import {
   useToast,
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useAlive } from '../hooks/useAlive'
 import { useMutation } from '../hooks/useMutation'
-import { toErrorMessage } from '../api/client'
+import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import {
   deletePhotos,
   getAlbumWithPhotos,
+  getAlbumZip,
   markAlbumReviewed,
   renamePersonAlbum,
 } from '../api/albums'
+import { runWithConcurrency } from '../lib/concurrency'
+import { downloadViaBlob } from '../lib/download'
 import { cx } from '../lib/cx'
 import type { ID } from '../types/api'
 
 /**
  * 09. 앨범 상세 · node 211:1685 · GET /albums/:id · DELETE /photos · PATCH /albums/:id
- * 사진 그리드 + 선택 모드 → [삭제](현재 앨범 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트) ·
- * [검토 완료](앨범 내 전 사진 일괄 reviewed). 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파).
+ * 사진 그리드 + 선택 모드 → [저장](선택 사진 개별 저장 — 전체 선택이면 ZIP 한 번) · [삭제](현재 앨범
+ * 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트) · [검토 완료](앨범 내 전 사진 일괄
+ * reviewed). 일반 모드 하단 [다운로드] = 앨범 전체 ZIP(GET /albums/:id/download, CHMO-349 —
+ * person/common만, 특수 앨범은 BE ZIP 미제공). 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파).
  * 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시하고, 선택모드의 검토 완료는 앨범 전체가 대상임을 확인받는다.
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
@@ -63,6 +70,9 @@ export function AlbumDetailPage() {
   const [renameOpen, setRenameOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  // 다운로드는 데이터를 바꾸지 않아 busy(그리드 잠금)와 분리 — 다운로드 버튼만 잠근다
+  const [downloading, setDownloading] = useState(false)
+  const alive = useAlive()
 
   const album = albumApi.data?.album
   const photos = albumApi.data?.photos ?? []
@@ -162,6 +172,55 @@ export function AlbumDetailPage() {
         setBusy(false)
       },
     })
+  }
+
+  // BE 멤버 ZIP은 person/common만 대상 — 특수 앨범은 ALBUM404라 진입로를 숨긴다(getAlbumZip 주석)
+  const zipEligible = album?.type === 'person' || album?.type === 'common'
+
+  // 앨범 전체 ZIP 저장(미검토 포함) — 뷰어 16과 같은 흐름(URL 발급 → blob 저장)
+  const downloadAlbumZip = async () => {
+    const res = await getAlbumZip(albumId)
+    if (!alive.current) return
+    const ok = await downloadViaBlob(res.downloadUrl, `${album?.name ?? 'album'}.zip`)
+    if (!alive.current) return
+    toast.show(ok ? '🧀 다운로드를 시작했어요' : '다운로드하지 못했어요. 다시 시도해 주세요.')
+  }
+
+  // 선택 사진 개별 저장 — 원본을 한 장씩 blob 저장(커넥션 고갈 방지로 동시 3장 제한)
+  const downloadSelectedPhotos = async (ids: ID[]) => {
+    const targets = photos.filter((p) => ids.includes(p.id))
+    let failed = 0
+    await runWithConcurrency(targets, 3, async (photo) => {
+      const ok = await downloadViaBlob(photo.downloadUrl ?? photo.url, `${photo.id}.jpg`)
+      if (!ok) failed += 1
+    })
+    if (!alive.current) return
+    toast.show(
+      failed === 0
+        ? `🧀 ${targets.length}장 저장을 시작했어요`
+        : `${failed}장은 저장하지 못했어요. 다시 시도해 주세요.`,
+    )
+  }
+
+  const handleDownload = async () => {
+    if (downloading) return
+    setDownloading(true)
+    try {
+      // 전체 선택은 개별 N회 저장 대신 ZIP 한 번(브라우저 다중 다운로드 확인창 회피).
+      // 특수 앨범은 ZIP이 없어 전체 선택이어도 개별 저장으로 간다.
+      if (selectMode && !(allSelected && zipEligible)) {
+        await downloadSelectedPhotos([...selected])
+      } else {
+        await downloadAlbumZip()
+      }
+      if (!alive.current) return
+      setDownloading(false)
+    } catch (err) {
+      if (!alive.current) return
+      if (redirectIfUnauthorized(err, navigate, { to: '/login' })) return
+      toast.show(toErrorMessage(err))
+      setDownloading(false)
+    }
   }
 
   // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐)
@@ -290,28 +349,39 @@ export function AlbumDetailPage() {
         {album && hasPhotos && (
           <div className="flex gap-2.5 px-5 pb-9 pt-4">
             {selectMode ? (
+              // 4버튼이라 390px에 15px 라벨이 안 들어간다 — 13px로 줄여 한 줄 유지
               <>
+                {/* 저장(다운로드) — 라이트박스 [저장]과 같은 라벨. 전체 선택이면 ZIP 한 번(handleDownload) */}
+                <Button
+                  variant="secondary"
+                  className="flex-1 gap-1 whitespace-nowrap !px-1.5 !text-[13px]"
+                  disabled={selected.size === 0 || locked || downloading}
+                  onClick={handleDownload}
+                >
+                  <IconDownload size={17} />
+                  {downloading ? '저장 중…' : '저장'}
+                </Button>
                 <Button
                   variant="warn"
-                  className="flex-1 gap-1.5 !px-2"
+                  className="flex-1 gap-1 whitespace-nowrap !px-1.5 !text-[13px]"
                   disabled={selected.size === 0 || locked}
                   onClick={() => setPendingDelete([...selected])}
                 >
-                  <IconTrash size={18} />
+                  <IconTrash size={17} />
                   삭제
                 </Button>
                 <Button
                   variant="accent"
-                  className="flex-1 gap-1.5 !px-2"
+                  className="flex-1 gap-1 whitespace-nowrap !px-1.5 !text-[13px]"
                   disabled={selected.size === 0 || locked}
                   onClick={() => setPendingMove([...selected])}
                 >
-                  <IconFolderMove size={18} />
+                  <IconFolderMove size={17} />
                   옮기기
                 </Button>
                 {/* 검토 완료는 선택과 무관하게 앨범 전체 대상 — 선택 옆에 있어 오해 소지가 있어 확인받는다 */}
                 <Button
-                  className="flex-1 !px-2"
+                  className="flex-1 whitespace-nowrap !px-1.5 !text-[13px]"
                   disabled={locked || allReviewed}
                   onClick={() => setReviewConfirmOpen(true)}
                 >
@@ -319,9 +389,33 @@ export function AlbumDetailPage() {
                 </Button>
               </>
             ) : (
-              <Button fullWidth disabled={locked || allReviewed} onClick={handleReview}>
-                {allReviewed ? '검토 완료됨' : '검토 완료'}
-              </Button>
+              <>
+                {/* 앨범 전체 ZIP — 특수 앨범(uncertain·눈감음·흔들림)은 BE에 ZIP이 없어 숨긴다 */}
+                {zipEligible && (
+                  <Button
+                    variant="secondary"
+                    className="flex-1 gap-1.5 !px-2"
+                    disabled={downloading}
+                    onClick={handleDownload}
+                  >
+                    {downloading ? (
+                      '준비 중…'
+                    ) : (
+                      <>
+                        <IconDownload size={18} />
+                        다운로드
+                      </>
+                    )}
+                  </Button>
+                )}
+                <Button
+                  className="flex-1 !px-2"
+                  disabled={locked || allReviewed}
+                  onClick={handleReview}
+                >
+                  {allReviewed ? '검토 완료됨' : '검토 완료'}
+                </Button>
+              </>
             )}
           </div>
         )}

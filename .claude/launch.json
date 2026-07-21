@@ -4,44 +4,22 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--",
-        "--port",
-        "5198"
-      ],
+      "runtimeArgs": ["run", "dev", "--", "--port", "5198"],
       "port": 5198
     },
     {
       "name": "dev-msw",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--",
-        "--port",
-        "5199"
-      ],
+      "runtimeArgs": ["run", "dev", "--", "--port", "5199"],
       "port": 5199,
-      "env": {
-        "VITE_ENABLE_MSW": "true"
-      }
+      "env": { "VITE_ENABLE_MSW": "true" }
     },
     {
-      "name": "dev-msw-b",
+      "name": "dev-msw-alt",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--",
-        "--port",
-        "5196"
-      ],
-      "port": 5196,
-      "env": {
-        "VITE_ENABLE_MSW": "true"
-      }
+      "runtimeArgs": ["run", "dev", "--", "--port", "5197"],
+      "port": 5197,
+      "env": { "VITE_ENABLE_MSW": "true" }
     }
   ]
 }

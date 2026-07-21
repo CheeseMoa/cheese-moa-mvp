@@ -94,6 +94,8 @@ export function PhotoTile({
           src={src}
           alt={alt}
           draggable={false}
+          loading="lazy"
+          decoding="async"
           className={cx('h-full w-full object-cover', onLongPress && 'pointer-events-none')}
         />
       )}

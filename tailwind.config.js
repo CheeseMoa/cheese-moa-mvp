@@ -32,6 +32,8 @@ export default {
       backgroundImage: {
         'gradient-cheddar': 'linear-gradient(135deg, #F7C948 0%, #F5B82E 50%, #E8890C 100%)',
         'gradient-primary': 'linear-gradient(135deg, #FFE7A3 0%, #FBD46A 100%)',
+        // 치즈 심볼(Cheddar) 타일 배경 — 노란 심볼이 노란 타일에 묻히지 않게 딥 브라운으로 대비(CHMO-351)
+        'gradient-emblem': 'linear-gradient(135deg, #6B4B20 0%, #4A3415 55%, #35240D 100%)',
       },
       boxShadow: {
         card: '0 8px 30px rgba(58, 49, 40, 0.12)',

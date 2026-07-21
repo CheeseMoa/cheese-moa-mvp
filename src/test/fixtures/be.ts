@@ -256,6 +256,17 @@ export const BE_ALBUM_DETAIL = {
   photos: [BE_PHOTO_IN_ALBUM],
 }
 
+/**
+ * GET /albums/:id/download — 멤버용 앨범 ZIP (2026-07-20 실서버 채집, CHMO-338).
+ * 뷰어 ZIP과 같은 {downloadUrl, expiresAt} 꼴. 실서버 관찰: 미검토 포함 전체가 zip에 담기고
+ * ("-all" 키), person/common 외 특수 앨범은 ALBUM404. expiresAt은 Z가 붙어 온다(보정 무해).
+ */
+export const BE_MEMBER_ZIP = {
+  downloadUrl:
+    'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/zips/albums/279-all.zip?response-content-disposition=attachment',
+  expiresAt: '2026-07-20T07:11:37.636027303Z',
+}
+
 /** GET /albums/:id/move-suggestions — MoveSuggestionResponse[] (스키마 기준 + thumbnailUrl은 CHMO-232 티켓 기준 — 스웨거 잠김) */
 export const BE_MOVE_SUGGESTION_PERSON = {
   albumId: 12,
