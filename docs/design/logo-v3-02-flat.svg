@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="gY" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD45E"/>
+      <stop offset="1" stop-color="#F0AE2A"/>
+    </linearGradient>
+    <linearGradient id="gYd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6BE3C"/>
+      <stop offset="1" stop-color="#E09A1E"/>
+    </linearGradient>
+    <linearGradient id="gHole" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A86E12"/>
+      <stop offset="1" stop-color="#E8AC34"/>
+    </linearGradient>
+    <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFBEF"/>
+      <stop offset="1" stop-color="#FFEFCC"/>
+    </linearGradient>
+    <radialGradient id="gGlass" cx="38%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#86612C"/>
+      <stop offset="0.55" stop-color="#4A3415"/>
+      <stop offset="1" stop-color="#291B0A"/>
+    </radialGradient>
+    <linearGradient id="gShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.5" stop-color="#3a2710" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3a2710" stop-opacity="0.16"/>
+    </linearGradient>
+    <symbol id="lens" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="49" fill="#E09A1E"/>
+      <circle cx="50" cy="50" r="41" fill="#FFF4D6"/>
+      <circle cx="50" cy="50" r="34" fill="#D99421"/>
+      <circle cx="50" cy="50" r="28" fill="url(#gGlass)"/>
+      <circle cx="50" cy="50" r="14" fill="#1f1407" opacity="0.55"/>
+      <ellipse cx="38" cy="35" rx="13" ry="8" fill="#ffffff" opacity="0.4"/>
+      <circle cx="62" cy="64" r="4.5" fill="#A9D6ED" opacity="0.5"/>
+    </symbol>
+  </defs>
+  <rect width="240" height="240" rx="58" fill="url(#gC)"/>
+  <rect x="102" y="54" width="24" height="22" rx="8" fill="url(#gYd)"/>
+  <ellipse cx="114" cy="56" rx="12" ry="4" fill="#FFD66A"/>
+  <rect x="150" y="62" width="24" height="16" rx="5" fill="#E0991C"/>
+  <rect x="153" y="64" width="18" height="12" rx="3" fill="#FFF1CE"/>
+  <rect x="44" y="74" width="152" height="122" rx="26" fill="url(#gY)"/>
+  <ellipse cx="70" cy="108" rx="9" ry="8" fill="url(#gHole)"/>
+  <ellipse cx="170" cy="118" rx="8" ry="8" fill="url(#gHole)"/>
+  <ellipse cx="74" cy="170" rx="7" ry="7" fill="url(#gHole)"/>
+  <ellipse cx="166" cy="172" rx="9" ry="8" fill="url(#gHole)"/>
+  <ellipse cx="120" cy="90" rx="6" ry="6" fill="url(#gHole)"/>
+  <use href="#lens" x="86" y="102" width="68" height="68"/>
+  <rect width="240" height="240" rx="58" fill="url(#gShade)"/>
+</svg>

@@ -5,6 +5,7 @@ import { CreatorGuard, GuestGuard, ViewerGuard } from './guards/RouteGuards'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
+import { SocialCallbackPage } from './pages/SocialCallbackPage'
 import { JoinPage } from './pages/JoinPage'
 import { HomePage } from './pages/HomePage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/join/:joinKey', element: <JoinPage /> }, // 02-1 모임 참여(초대 링크 진입) — 로그인 제작자도 사용하므로 GuestGuard 밖
+  { path: '/auth/callback', element: <SocialCallbackPage /> }, // 01-C 소셜 로그인 콜백(CHMO-359) — BE 리다이렉트 착지라 가드 밖
 
   // ── 제작자(로그인) ──────────────────────────────────
   {

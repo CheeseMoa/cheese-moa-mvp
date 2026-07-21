@@ -16,6 +16,12 @@ describe('toFeErrorCode', () => {
     expect(toFeErrorCode(BE_ERRORS.ALBUM404.payload.code)).toBe('NOT_FOUND')
   })
 
+  it('소셜 로그인 실패는 셋을 구분한다 — 다른 방법 안내·재시도·잠시 후 재시도 (CHMO-359)', () => {
+    expect(toFeErrorCode('OAUTH400')).toBe('UNSUPPORTED_SOCIAL_PROVIDER')
+    expect(toFeErrorCode('OAUTH401')).toBe('SOCIAL_AUTH_FAILED')
+    expect(toFeErrorCode('OAUTH502')).toBe('SOCIAL_PROVIDER_ERROR')
+  })
+
   it('매핑에 없는 코드는 그대로 통과시킨다 — 화면은 status로 분기하고 BE message는 이미 한국어다', () => {
     expect(toFeErrorCode(BE_ERRORS.VALID400.payload.code)).toBe('VALID400')
     expect(toFeErrorCode(BE_ERRORS.PHOTO400.payload.code)).toBe('PHOTO400')
