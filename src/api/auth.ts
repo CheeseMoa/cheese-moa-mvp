@@ -27,10 +27,12 @@ export type SocialProvider = 'kakao' | 'google' | 'naver' | 'apple'
  * 문서 이동은 CORS가 없어 프록시가 불필요하고, 오리진을 바꾸면 BE의 state 쿠키가 콜백에서 유실된다.
  * MSW 목 모드: 서비스워커는 문서 내비게이션 요청을 가로채지 못하므로 외부 왕복(프로바이더·BE 콜백)을
  * 건너뛰고 콜백 라우트로 직행한다 — exchange 계약은 목 핸들러가 검증한다.
+ * 목 코드에 매번 다른 꼬리를 붙이는 이유: 실 BE의 코드는 1회 소진이라 목도 그렇게 흉내 내는데,
+ * 고정 문자열이면 두 번째 로그인이 "재사용"으로 막힌다.
  */
 export function socialLoginStartUrl(provider: SocialProvider): string {
   if (import.meta.env.VITE_ENABLE_MSW === 'true') {
-    return `/auth/callback?code=mock-social-${provider}`
+    return `/auth/callback?code=mock-social-${provider}-${crypto.randomUUID()}`
   }
   const origin = import.meta.env.VITE_API_ORIGIN ?? 'https://api.cheese-moa.com'
   return `${origin}/auth/social/${provider}`

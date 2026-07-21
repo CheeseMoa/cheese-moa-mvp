@@ -59,6 +59,20 @@ const SOCIAL_MOCK_NICKNAMES: Record<string, string> = {
   apple: '애플테스트',
 }
 
+const SOCIAL_CODE_PREFIX = 'mock-social-'
+
+/**
+ * 이미 교환된 일회용 코드 — 실 BE가 코드를 1회 소진하는 계약을 목도 지킨다.
+ * 이걸 안 지키면 콜백 화면의 StrictMode 이중 교환 가드가 깨져도 로컬에서는 멀쩡해 보인다.
+ */
+const spentSocialCodes = new Set<string>()
+
+/** `mock-social-<provider>-<uuid>`에서 provider만 떼어낸다(provider명에는 '-'가 없다) */
+function providerFromMockCode(code: string): string | null {
+  if (!code.startsWith(SOCIAL_CODE_PREFIX)) return null
+  return code.slice(SOCIAL_CODE_PREFIX.length).split('-')[0] || null
+}
+
 /** BE AuthResponse — user 객체 없이 평면 필드. 새 accessToken·refreshToken 쌍(회전) 발급 */
 function authResponse(user: DbUser) {
   return {
@@ -104,12 +118,13 @@ export const authHandlers = [
   http.post(api('/auth/social/exchange'), async ({ request }) => {
     const body = await readJson<{ code?: unknown }>(request)
     const code = requiredString(body?.code)
-    const provider = code?.startsWith('mock-social-') ? code.slice('mock-social-'.length) : null
+    const provider = code ? providerFromMockCode(code) : null
     const nickname = provider ? SOCIAL_MOCK_NICKNAMES[provider] : undefined
-    if (!nickname) {
-      // 로컬 BE 스웨거 기준 OAUTH401(코드 무효/만료/재사용) — 실서버 미채집
+    // BE OAUTH401 — 무효 코드와 이미 쓴 코드를 같은 실패로 다룬다(ExchangeSocialCodeUseCase와 동일)
+    if (!nickname || !code || spentSocialCodes.has(code)) {
       return errorResponse(401, 'OAUTH401', '소셜 로그인에 실패했습니다. 다시 시도해 주세요.')
     }
+    spentSocialCodes.add(code)
     let user = db.users.find((u) => u.nickname === nickname)
     if (!user) {
       // 소셜 계정은 PIN이 없다 — 빈 문자열은 PIN_RE에 걸려 닉네임+PIN 로그인으로는 진입 불가
