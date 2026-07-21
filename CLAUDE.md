@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `docs/screen-spec.md` — 화면 명세(IA, 화면별 카드, 디자인 토큰, 26개 와이어프레임 매핑)
 - `docs/api-spec.md` — API 계약(리소스 스키마, 엔드포인트 req/res, 화면 매핑). **단, 실연동 단계에선 실 BE 스웨거가 우선**(`https://api.cheese-moa.com/v3/api-docs`) — 문서와 다르면 FE를 BE에 맞추고, 문서 갱신은 CHMO-196에서 한다
 - `docs/mvp-explanation.md` — 서비스 배경/취지
+- `docs/admin-spec.md` — **관리자(어드민) 페이지 명세**(CHMO-375 확정): 내부 운영자용 백오피스. 1차는 조회 전용(대시보드·모임 목록·모임 상세) · 같은 리포 `/admin` 라우트(+lazy) · 유저 role 인증(`/admin/*`에서만 검사, 기존 서비스 API는 role을 안 본다) · 인프라 지표는 Grafana 담당이라 제외. 나중에 별도 리포로 격리하기 위한 규칙 3개(관리자 코드는 `src/admin/`에만·공유는 바닥 인프라뿐·BE 경로 `/admin/*` 분리)를 구현 시 지킨다
 - `docs/design/screen-system.dc.html` — **디자인 시안(공용 컴포넌트 스펙)**: Header/Button/Badge/Toggle/카드류/PhotoTile/오버레이/Toast의 색·크기·규칙. 토큰 원천은 `tailwind.config.js`(충돌 시 코드가 이김) · `docs/design/logo-v3.dc.html` — 로고 시안(체다 심볼)
 
 ## 확정 MVP 모델 (코드로 추론 불가 — 반드시 준수)
