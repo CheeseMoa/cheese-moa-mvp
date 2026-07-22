@@ -60,6 +60,11 @@ export const BE_ERRORS = {
     status: 404,
     payload: errorEnvelope('PHOTO404', 'S3에 업로드되지 않은 사진이 있습니다.'),
   },
+  /** 공개 시 미검토 존재 — POST /events/:id/publish force 없이 (2026-07-22 CHMO-265 착수 중 채집) */
+  PUBLISH409: {
+    status: 409,
+    payload: errorEnvelope('PUBLISH409', '검토되지 않은 사진이 있습니다.'),
+  },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -187,6 +192,8 @@ export const BE_EVENT_PUBLISHED = {
   albumCount: 8,
   publishedAt: '2026-06-28T01:00:00Z',
   createdAt: '2026-06-27T00:41:00Z',
+  // 발행 대기 수(CHMO-324 재공개 게이트 — PR#91 EventDetailResponse 기준. 상세 전용, 목록엔 없다)
+  pendingPublishCount: 3,
 }
 
 // `GET /events/:id/analysis`(AnalysisStatusResponse)는 픽스처를 두지 않는다 —

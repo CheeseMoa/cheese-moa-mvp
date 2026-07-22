@@ -20,6 +20,8 @@ import {
   photosOfEvent,
   albumsOfEvent,
   personNameOf,
+  pendingPublishCountOf,
+  publishEventPhotos,
 } from './db'
 import { createFixtures } from './fixtures'
 import {
@@ -89,6 +91,9 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const detail = toEvent(toEventDetail(event))
     expect(detail).toMatchObject({ id: 2, groupId: 1, status: 'published' })
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
+    // 발행 대기(CHMO-324) — 상세 전용. 시드: 공개 후 추가·검토된 4장(217~220)
+    expect(detail.pendingPublishCount).toBe(4)
+    expect(summary.pendingPublishCount).toBeUndefined()
   })
 
   it('분석 진행률 — 분석중 상세에만 progress, 분석 아니면 null (CHMO-287)', () => {
@@ -198,22 +203,58 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toMoveSuggestion(toMoveSuggestionResponse(unnamed, null)).name).toBe('이름 없음')
   })
 
-  it('뷰어 — 검토 완료 기준 카운트/커버', () => {
-    const event = findEvent(2)! // published, 전 사진 검토 완료
+  it('뷰어 — 발행(published) 기준 카운트/커버 (CHMO-324)', () => {
+    const event = findEvent(2)! // published, 발행 16장 + 발행 대기 4장(217~220)
     const viewerEvent = toViewerEvent(toViewerEventSummary(event))
     expect(viewerEvent).toMatchObject({ id: 2, name: '봄 소풍', date: '2026-05-12' })
-    expect(viewerEvent.photoCount).toBe(16)
+    expect(viewerEvent.photoCount).toBe(16) // 발행 대기 4장은 발행 전이라 제외
     expect(viewerEvent.albumCount).toBe(4)
     expect(viewerEvent.coverThumbnailUrl).toContain('picsum')
     expect(viewerEvent.publishedAt).toBeNull() // 목록 응답엔 publishedAt이 없다
 
+    // 김민준 앨범(9)엔 발행 대기 4장이 붙어 있다 — 앨범 카운트·사진 목록도 발행분만
     const viewerAlbum = toViewerAlbum(toViewerAlbumSummary(findAlbum(9)!))
     expect(viewerAlbum).toMatchObject({ id: 9, type: 'person', name: '김민준' })
     expect(viewerAlbum.coverThumbnailUrl).toContain('picsum')
+    expect(viewerAlbum.photoCount).toBe(photosOfAlbum(9).filter((p) => p.published).length)
+    expect(toViewerAlbumPhotosResponse(findAlbum(9)!).photos).toHaveLength(viewerAlbum.photoCount)
 
     const viewerPhoto = toViewerPhoto(serializeViewerPhoto(photosOfAlbum(9)[0]))
     expect(viewerPhoto.url).toBe(viewerPhoto.downloadUrl)
     expect(viewerPhoto.thumbnailUrl).toContain('picsum')
+  })
+
+  it('재공개 흐름 — 공개 후 사진 추가는 검토 완료를 거쳐야 발행 대기가 된다 (CHMO-265)', () => {
+    // 공개된 봄 소풍(2)의 공통 앨범(12)에 새 사진 2장 추가 — 등록 직후 상태(미검토·미발행)
+    const base = photosOfAlbum(12)[0]
+    db.photos.push(
+      { ...base, id: 9001, albumIds: [12], reviewed: false, published: false },
+      { ...base, id: 9002, albumIds: [12], reviewed: false, published: false },
+    )
+
+    // 검토 전: 미검토가 생긴 앨범은 게이트에 잠겨 대기에 안 잡힌다 — 시드의 김민준 앨범 4장만
+    expect(pendingPublishCountOf(2)).toBe(4)
+
+    // 앨범 [검토 완료](일괄 — PATCH /albums/:id 핸들러와 같은 변이) → 새 2장이 대기로 합류
+    for (const photo of photosOfAlbum(12)) photo.reviewed = true
+    expect(pendingPublishCountOf(2)).toBe(6)
+
+    // [공개하기] 재호출 → 대기 전량 발행·소진(14 버튼이 다시 잠기는 상태)
+    expect(publishEventPhotos(2)).toBe(6)
+    expect(pendingPublishCountOf(2)).toBe(0)
+  })
+
+  it('재공개 게이트 — 발행 액션으로 발행 대기가 0이 되고 뷰어에 노출된다 (CHMO-324·265)', () => {
+    // 발행 전: 상세엔 발행 대기 4장, 뷰어는 16장(재공개 버튼이 열리는 상태)
+    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(4)
+    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(16)
+
+    // [공개하기] 재호출 — 전 사진 검토 완료된 인물·공통 앨범(김민준)의 대기분이 발행된다
+    expect(publishEventPhotos(2)).toBe(4)
+
+    // 발행 후: 대기 0(버튼 다시 잠김), 뷰어에 20장 노출
+    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(0)
+    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(20)
   })
 
   it('검수 중 이벤트 — 앨범 1만 검토 완료(부분 검수 상태)', () => {

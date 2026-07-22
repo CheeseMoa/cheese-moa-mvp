@@ -4,8 +4,9 @@
  *
  * 서버 필터링 책임(FE는 받은 대로 렌더):
  * - published 이벤트만 목록 노출
- * - person/common 앨범만, 그중 검토 완료 사진이 있는 앨범만
- * - 사진은 reviewed: true만 (공개 후 추가된 미검토 사진 비노출)
+ * - person/common 앨범만, 그중 노출 사진이 있는 앨범만
+ * - 사진은 reviewed && published만 (재공개 게이트 CHMO-324 — 공개 후 추가·검토한 사진도
+ *   [공개하기] 재발행 전까지 비노출, 검토 해제된 앨범은 발행분도 숨김 CHMO-395)
  */
 import { http, HttpResponse } from 'msw'
 import type { AlbumDownloadResponse } from '../../types/api'

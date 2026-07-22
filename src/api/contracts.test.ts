@@ -200,6 +200,8 @@ describe('이벤트', () => {
       coverPhotoId: null,
       // progress 필드가 없던 채집분 — 매퍼가 null로 채운다(CHMO-287 전 BE와의 호환)
       progress: null,
+      // pendingPublishCount도 없던 채집분(CHMO-324 전) — 매퍼가 undefined로 통과시킨다
+      pendingPublishCount: undefined,
     })
   })
 
@@ -216,6 +218,8 @@ describe('이벤트', () => {
     const event = await getEvent(7)
     expect(event.status).toBe('published')
     expect(event.coverPhotoId).toBe(101)
+    // 발행 대기(CHMO-324 재공개 게이트)가 그대로 통과한다 — 14 재공개 버튼·08 배지의 분기 기준
+    expect(event.pendingPublishCount).toBe(3)
   })
 
   it('BE 생성 응답의 오프셋 없는 createdAt에 Z가 붙는다 (CHMO-205 전 FE 보정)', async () => {

@@ -69,6 +69,12 @@ export interface EventItem {
    * 분석 job 진행 중에만 non-null(완료 직후 잠시 100을 유지하다 null로 돌아간다 — 실서버 관찰).
    */
   progress?: AnalysisProgress | null
+  /**
+   * 발행 대기 수(재공개 게이트 CHMO-324) — 검토됐지만 아직 발행되지 않은 사진.
+   * **상세 응답에만** 있고 목록엔 없다(05 카드 배지가 불가한 이유 — 목록 필드는 BE 후속).
+   * published 이벤트에서 0보다 크면 [공개하기] 재진입(08 배지·14 버튼)의 근거가 된다(CHMO-265).
+   */
+  pendingPublishCount?: number
 }
 
 /** AI 분석 진행률 — GET /events/:id의 `progress`(BE가 percent까지 계산해 준다) */
