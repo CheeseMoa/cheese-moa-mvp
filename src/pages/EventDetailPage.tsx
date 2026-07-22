@@ -15,8 +15,9 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
+import { renamePersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
-import type { AnalysisProgress, EventItem } from '../types/api'
+import type { Album, AnalysisProgress, EventItem } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
@@ -202,7 +203,7 @@ interface EventAlbumGridProps {
  * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
  * [+ 사진 추가]→06-U · [요약 보기]→14. 앨범 탭 → 09 앨범 상세.
- * (인물 앨범 이름수정은 09 앨범 상세 헤더 ✎ — 08 그리드엔 진입점 없음)
+ * 인물 앨범 이름수정은 카드 이름 줄 탭(CHMO-400 — 09 진입 없이 바로) + 09 앨범 상세 헤더 ✎ 병행.
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
@@ -210,6 +211,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
     listEventAlbums(event.id, signal),
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 08에서 바로 이름 수정할 인물 앨범(CHMO-400) — 열릴 때만 모달 마운트(카드마다 대상이 달라 stale 방지)
+  const [renameTarget, setRenameTarget] = useState<Album | null>(null)
 
   const base = `/groups/${groupId}/events/${event.id}`
 
@@ -252,6 +255,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                     album={album}
                     coverUrl={album.coverThumbnailUrl ?? undefined}
                     onClick={() => navigate(`${base}/albums/${album.id}`)}
+                    // 인물 앨범만 ✎ — 특수 앨범(공통·분류어려움·품질)은 고정 라벨이라 이름 수정 없음
+                    onRename={album.type === 'person' ? () => setRenameTarget(album) : undefined}
                   />
                 ))}
               </div>
@@ -303,6 +308,23 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         onClose={() => setSettingsOpen(false)}
         onEventUpdated={onEventUpdated}
       />
+
+      {/* 인물 앨범 이름 수정(CHMO-400) — 09와 같은 모달·API·이름전파 계약(모임 단위 personId).
+          이 화면은 앨범 목록만 refetch — 다른 이벤트의 같은 인물 앨범은 다음 진입 시 갱신된 이름으로 조회 */}
+      {renameTarget && (
+        <RenameModal
+          open
+          onClose={() => setRenameTarget(null)}
+          title="아이 이름 수정"
+          label="아이 이름"
+          placeholder="예) 김민준"
+          initialName={renameTarget.name}
+          submit={(name) => renamePersonAlbum(renameTarget.id, name)}
+          successMessage="🧀 아이 이름을 바꿨어요"
+          onRenamed={albumsApi.refetch}
+          note="이 이름은 같은 모임의 모든 이벤트에 함께 반영돼요."
+        />
+      )}
     </PhoneShell>
   )
 }
