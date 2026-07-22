@@ -3,6 +3,7 @@ import { PhoneShell } from '../../components/PhoneShell'
 import { Badge, Header, LoadState } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { getViewerAlbums } from '../../api/viewer'
+import { sortAlbumsForDisplay } from '../../lib/albumSort'
 
 /**
  * 15. 공개 이벤트 앨범 (뷰어, 무로그인) · node 211:1754/211:1789 · GET /share/:token/events/:eventId
@@ -16,7 +17,8 @@ export function ViewerAlbumsPage() {
     getViewerAlbums(token, eventId, signal),
   )
 
-  const albums = api.data?.albums ?? []
+  // 표시 정렬은 FE 소유(CHMO-411) — 08 그리드와 같은 순서(인물 가나다 → 공통)
+  const albums = sortAlbumsForDisplay(api.data?.albums ?? [])
 
   return (
     <PhoneShell>
