@@ -14,6 +14,8 @@ describe('toFeErrorCode', () => {
     expect(toFeErrorCode(BE_ERRORS.SPACE404.payload.code)).toBe('NOT_FOUND')
     expect(toFeErrorCode('MOMENT404')).toBe('NOT_FOUND')
     expect(toFeErrorCode(BE_ERRORS.ALBUM404.payload.code)).toBe('NOT_FOUND')
+    // 14의 force 재시도 분기 근거(CHMO-324·265) — 2026-07-22 실서버 채집
+    expect(toFeErrorCode(BE_ERRORS.PUBLISH409.payload.code)).toBe('HAS_UNREVIEWED_PHOTOS')
   })
 
   it('소셜 로그인 실패는 셋을 구분한다 — 다른 방법 안내·재시도·잠시 후 재시도 (CHMO-359)', () => {

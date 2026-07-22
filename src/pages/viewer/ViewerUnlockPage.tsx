@@ -53,7 +53,7 @@ export function ViewerUnlockPage() {
   return (
     <PhoneShell>
       <BrandHero />
-      <section className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <section className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h2 className="text-[15px] font-bold text-text">우리 아이 사진 보기</h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
           선생님께 받은 비밀번호를 입력하면 공개된 이벤트 사진을 볼 수 있어요.

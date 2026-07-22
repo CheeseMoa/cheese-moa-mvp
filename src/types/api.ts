@@ -69,6 +69,12 @@ export interface EventItem {
    * 분석 job 진행 중에만 non-null(완료 직후 잠시 100을 유지하다 null로 돌아간다 — 실서버 관찰).
    */
   progress?: AnalysisProgress | null
+  /**
+   * 발행 대기 수(재공개 게이트 CHMO-324) — 검토됐지만 아직 발행되지 않은 사진.
+   * **상세 응답에만** 있고 목록엔 없다(05 카드 배지가 불가한 이유 — 목록 필드는 BE 후속).
+   * published 이벤트에서 0보다 크면 [공개하기] 재진입(08 배지·14 버튼)의 근거가 된다(CHMO-265).
+   */
+  pendingPublishCount?: number
 }
 
 /** AI 분석 진행률 — GET /events/:id의 `progress`(BE가 percent까지 계산해 준다) */
@@ -167,7 +173,7 @@ export interface RegisterPhotosResult {
   registeredCount: number
 }
 
-// ── 공개 전 검수 요약 ────────────────────────────────────────
+// ── 공개 요약(14) ────────────────────────────────────────────
 export interface ReviewSummary {
   photoCount: number
   albumCount: number
@@ -190,7 +196,9 @@ export interface ReviewSummary {
 export interface MoveSuggestion {
   albumId: ID
   name: string
-  /** 대표 벡터 기반 유사도(0~1). '공통'은 null */
+  /** 공통 사진첩 여부 — BE type(PERSON/COMMON)에서 파생. similarity 유무로 판정하지 않는다(CHMO-399) */
+  isCommon: boolean
+  /** 대표 벡터 기반 유사도(0~1) — 실 BE는 인물 앨범에도 null을 줄 수 있다(미계산, 2026-07-22 관찰) */
   similarity: number | null
   /** 대표 사진 썸네일 URL(CHMO-232) — 커버 없는 앨범은 null(플레이스홀더 폴백) */
   thumbnailUrl: string | null

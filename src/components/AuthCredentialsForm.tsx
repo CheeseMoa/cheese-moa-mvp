@@ -79,7 +79,7 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
   }
 
   return (
-    <section className="flex flex-1 flex-col px-5 pb-9 pt-5">
+    <section className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
       <h2 className="text-[15px] font-bold text-text">{heading}</h2>
       {returnTo?.startsWith('/join/') && (
         <p className="mt-3 rounded-xl bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-text">

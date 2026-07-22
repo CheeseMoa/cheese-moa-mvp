@@ -151,7 +151,7 @@ export const albumHandlers = [
       return invalidRequest('선택한 사진이 이 앨범에 없습니다.')
 
     // 같은 이벤트의 다른 인물 앨범(목 유사도 내림차순) + 공통 앨범(고정 옵션, similarity null)
-    // BE MoveSuggestionResponse는 표시명이 아니라 personName을 준다(공통 앨범은 null).
+    // BE MoveSuggestionResponse는 type을 주고 공통 앨범 personName은 '공통'이다(2026-07-22 관찰, CHMO-399).
     const siblings = albumsOfEventSorted(album.eventId).filter((a) => a.id !== album.id)
     const suggestions = siblings
       .filter((a) => a.type === 'person')

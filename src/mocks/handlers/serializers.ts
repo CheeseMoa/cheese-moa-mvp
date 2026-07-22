@@ -3,12 +3,14 @@
  *
  * 함수 이름은 BE DTO를 따른다(GroupSummaryResponse → toGroupSummary …). 목록/상세가
  * 서로 다른 필드를 주는 것까지 BE 그대로다 — 예: 이벤트 목록엔 thumbnailUrl이 있고
- * groupId·publishedAt이 없다. 표시명('공통' 등)·flags 객체 같은 FE 계약 형태는 만들지 않는다.
+ * groupId·publishedAt이 없다. 표시명('공통' 등)·flags 객체 같은 FE 계약 형태는 만들지 않는다
+ * (예외: MoveSuggestionResponse는 실 BE가 personName에 '공통'을 직접 준다 — CHMO-399 관찰).
  * 변환은 `src/api/mappers.ts`가 한다.
  *
  * pin·모임 비밀번호·학부모 비밀번호 평문은 여기서 절대 노출하지 않는다
  * (평문은 invite/share 전용 핸들러만 반환).
  */
+import { SPECIAL_ALBUM_LABELS } from '../../lib/albumLabels'
 import type { AlbumType } from '../../types/api'
 import {
   albumCountOf,
@@ -16,14 +18,15 @@ import {
   eventCountOf,
   findPhoto,
   memberCountOf,
+  pendingPublishCountOf,
   personNameOf,
   photoCountOfAlbum,
   photoCountOfEvent,
   photosOfAlbum,
   photosOfEvent,
   progressOf,
-  reviewedPhotosOfAlbum,
   unreviewedCountOfAlbum,
+  viewerPhotosOfAlbum,
   type DbAlbum,
   type DbEvent,
   type DbGroup,
@@ -126,6 +129,18 @@ export function toEventDetail(event: DbEvent) {
     createdAt: event.createdAt,
     // AI 분석 진행률(CHMO-287) — 상세 전용, 분석 중에만 non-null(목록엔 BE도 안 준다)
     progress: progressOf(event.id),
+    // 발행 대기(CHMO-324 재공개 게이트) — 상세 전용(목록 EventSummaryResponse엔 BE도 없다)
+    pendingPublishCount: pendingPublishCountOf(event.id),
+  }
+}
+
+/** BE PublishEventResponse — 발행 결과. 재호출이면 publishedPhotoCount가 0일 수 있다(CHMO-324) */
+export function toPublishEventResponse(event: DbEvent, publishedPhotoCount: number) {
+  return {
+    eventId: event.id,
+    status: event.status.toUpperCase(),
+    publishedAt: event.publishedAt,
+    publishedPhotoCount,
   }
 }
 
@@ -214,10 +229,10 @@ export function toAlbumDetail(album: DbAlbum) {
   }
 }
 
-// ── 검수 요약 (화면 14) ──────────────────────────────────────
+// ── 공개 요약 (화면 14) ──────────────────────────────────────
 
 /**
- * BE ReviewSummaryResponse — 공개 전 검수 요약. 미리보기 전용 필드는 없다
+ * BE ReviewSummaryResponse — 공개 요약(14). 미리보기 전용 필드는 없다
  * (미리보기 앨범은 화면이 albums[]에서 파생 — CHMO-346). 앨범 검토 상태는 사진 단위 reviewed의 파생값
  * (빈 앨범은 미검토). 호출부는 settleAnalysis를 마친 event를 넘긴다.
  */
@@ -243,12 +258,17 @@ export function toReviewSummaryResponse(event: DbEvent) {
 
 // ── 사진 이동/제거 응답 (화면 09·09-1) ───────────────────────
 
-/** BE MoveSuggestionResponse 항목 — 공통 앨범은 이름·유사도 없이 온다(personName·similarity null). thumbnailUrl은 CHMO-232 */
+/**
+ * BE MoveSuggestionResponse 항목 — 앨범 목록 DTO와 달리 type이 실재하고 공통 앨범은
+ * personName을 '공통'으로 채워 준다(2026-07-22 실서버 관찰, CHMO-399). thumbnailUrl은 CHMO-232
+ */
 export function toMoveSuggestionResponse(album: DbAlbum, similarity: number | null) {
   const cover = album.coverPhotoId ? findPhoto(album.coverPhotoId) : undefined
   return {
     albumId: album.id,
-    personName: personNameOf(album),
+    type: album.type.toUpperCase(),
+    personName:
+      personNameOf(album) ?? (album.type === 'common' ? SPECIAL_ALBUM_LABELS.common : null),
     similarity,
     thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
   }
@@ -271,32 +291,33 @@ export function toDeletePhotosResponse(photoIds: number[]) {
   }
 }
 
-// ── 뷰어 직렬화 (서버 필터링 책임 — 검토 완료 사진만 반영) ────
+// ── 뷰어 직렬화 (서버 필터링 책임 — 발행된 사진만 반영, CHMO-324) ────
 
 /**
- * 뷰어에 노출되는 앨범 = person/common 이면서 검토 완료 사진이 1장 이상.
- * (공개 후 추가된 미검토 사진뿐인 앨범은 빈 카드가 되므로 목록에서 제외)
+ * 뷰어에 노출되는 앨범 = person/common 이면서 노출 사진(reviewed && published)이 1장 이상.
+ * 발행 대기·미검토 사진뿐인 앨범은 빈 카드가 되므로 목록에서 제외. 검토 해제된 앨범은
+ * published가 남아 있어도 숨는다(CHMO-395 — 노출을 줄이는 방향만 즉시 반영).
  */
 export function viewerAlbumsOfEvent(eventId: number): DbAlbum[] {
   return albumsOfEventSorted(eventId).filter(
-    (a) => isViewerVisibleType(a) && reviewedPhotosOfAlbum(a.id).length > 0,
+    (a) => isViewerVisibleType(a) && viewerPhotosOfAlbum(a.id).length > 0,
   )
 }
 
 /**
  * 뷰어 앨범 — BE는 제작자와 같은 AlbumSummaryResponse를 쓴다.
- * 카운트·커버는 검토 완료 사진 기준(커버가 미검토면 첫 검토 사진으로 대체).
+ * 카운트·커버는 노출 사진 기준(커버가 미발행이면 첫 노출 사진으로 대체).
  */
 export function toViewerAlbumSummary(album: DbAlbum) {
-  const reviewed = reviewedPhotosOfAlbum(album.id)
-  const cover = reviewed.find((p) => p.id === album.coverPhotoId) ?? reviewed[0] ?? null
+  const visible = viewerPhotosOfAlbum(album.id)
+  const cover = visible.find((p) => p.id === album.coverPhotoId) ?? visible[0] ?? null
   return {
     albumId: album.id,
     type: album.type.toUpperCase(),
     personName: personNameOf(album),
     personId: album.personId,
-    photoCount: reviewed.length,
-    // 뷰어엔 검토 완료 사진만 내려간다 — 미검토는 존재 자체가 노출되지 않는다
+    photoCount: visible.length,
+    // 뷰어엔 노출 사진만 내려간다 — 미검토·발행 대기는 존재 자체가 노출되지 않는다
     unreviewedPhotoCount: 0,
     thumbnailPhotoId: cover?.id ?? null,
     thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
@@ -332,16 +353,16 @@ export function toViewerAlbumPhotosResponse(album: DbAlbum) {
   return {
     albumId: album.id,
     personName: personNameOf(album),
-    photos: reviewedPhotosOfAlbum(album.id).map(toViewerPhoto),
+    photos: viewerPhotosOfAlbum(album.id).map(toViewerPhoto),
   }
 }
 
-/** 뷰어 이벤트 목록 — BE는 제작자와 같은 EventSummaryResponse를 쓴다(카운트·커버만 검토 완료 기준) */
+/** 뷰어 이벤트 목록 — BE는 제작자와 같은 EventSummaryResponse를 쓴다(카운트·커버만 노출 사진 기준) */
 export function toViewerEventSummary(event: DbEvent) {
   const albums = viewerAlbumsOfEvent(event.id)
   const photoIds = new Set<number>()
   for (const album of albums) {
-    for (const photo of reviewedPhotosOfAlbum(album.id)) photoIds.add(photo.id)
+    for (const photo of viewerPhotosOfAlbum(album.id)) photoIds.add(photo.id)
   }
   const cover = albums[0] ? toViewerAlbumSummary(albums[0]) : null
   return {

@@ -55,6 +55,7 @@ import {
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
   BE_MOVE_SUGGESTION_PERSON,
+  BE_MOVE_SUGGESTION_UNNAMED_PERSON,
   BE_PRESIGN_UPLOAD,
   BE_REGISTER_PHOTOS,
   BE_REVIEW_SUMMARY,
@@ -199,6 +200,8 @@ describe('이벤트', () => {
       coverPhotoId: null,
       // progress 필드가 없던 채집분 — 매퍼가 null로 채운다(CHMO-287 전 BE와의 호환)
       progress: null,
+      // pendingPublishCount도 없던 채집분(CHMO-324 전) — 매퍼가 undefined로 통과시킨다
+      pendingPublishCount: undefined,
     })
   })
 
@@ -215,6 +218,8 @@ describe('이벤트', () => {
     const event = await getEvent(7)
     expect(event.status).toBe('published')
     expect(event.coverPhotoId).toBe(101)
+    // 발행 대기(CHMO-324 재공개 게이트)가 그대로 통과한다 — 14 재공개 버튼·08 배지의 분기 기준
+    expect(event.pendingPublishCount).toBe(3)
   })
 
   it('BE 생성 응답의 오프셋 없는 createdAt에 Z가 붙는다 (CHMO-205 전 FE 보정)', async () => {
@@ -305,8 +310,10 @@ describe('앨범 · 사진', () => {
     expect(bodyOf(calls[0])).toEqual({ reviewStatus: 'REVIEWED' })
   })
 
-  it('BE 이동 추천 — 이름 없는 추천은 공통 앨범이다', async () => {
-    const calls = serve(envelope([BE_MOVE_SUGGESTION_PERSON, BE_MOVE_SUGGESTION_COMMON]))
+  it('BE 이동 추천 — 공통 판정은 type(이름·유사도 없는 인물이 공통으로 새지 않는다, CHMO-399)', async () => {
+    const calls = serve(
+      envelope([BE_MOVE_SUGGESTION_PERSON, BE_MOVE_SUGGESTION_UNNAMED_PERSON, BE_MOVE_SUGGESTION_COMMON]),
+    )
 
     const suggestions = await getMoveSuggestions(11, [101, 102])
 
@@ -315,10 +322,18 @@ describe('앨범 · 사진', () => {
       {
         albumId: 12,
         name: '서준',
+        isCommon: false,
         similarity: 0.82,
         thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/105.jpg',
       },
-      { albumId: 13, name: '공통', similarity: null, thumbnailUrl: null },
+      {
+        albumId: 14,
+        name: '이름 없음',
+        isCommon: false,
+        similarity: null,
+        thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/106.jpg',
+      },
+      { albumId: 13, name: '공통', isCommon: true, similarity: null, thumbnailUrl: null },
     ])
   })
 
@@ -351,7 +366,7 @@ describe('앨범 · 사진', () => {
   })
 })
 
-describe('공개 전 검수 요약 (14)', () => {
+describe('공개 요약 (14)', () => {
   it('미리보기 앨범은 BE albums[]에서 파생한다 — 뷰어 노출(person/common)만 (CHMO-346)', async () => {
     serve(envelope(BE_REVIEW_SUMMARY))
 

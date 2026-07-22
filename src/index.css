@@ -15,6 +15,13 @@
     height: 100%;
   }
 
+  /* 셸이 뷰포트에 딱 맞아(h-dvh) 문서 스크롤이 없다 — 당겨서 새로고침·고무줄 바운스로
+     프레임 전체가 움직이지 않게 차단. 화면 내부 스크롤 영역은 영향 없음(CHMO-396) */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
   body {
     @apply bg-cream font-sans text-text antialiased;
     /* iOS 고무줄 스크롤 시 프레임 밖 배경색 */

@@ -47,7 +47,7 @@ type Phase = 'idle' | 'uploading' | 'registering'
 
 /**
  * 06-U. 사진 업로드 · node 211:1584
- * 다중 선택(파일 피커) → 썸네일 그리드에서 선택 조정 → [AI 분석] 한 번으로
+ * 다중 선택(파일 피커) → 썸네일 그리드에서 선택 조정 → [사진 분류하기] 한 번으로
  * ① presign(POST /events/:id/photos/presign) ② presigned URL로 S3 직접 PUT
  * ③ 등록(POST /events/:id/photos — 제외 토글 함께 전송) → 이벤트 상세(분석중)로 복귀.
  * **등록이 곧 분석 시작**이라 analyze는 부르지 않는다(CHMO-194 — 부르면 같은 사진이 두 job으로 발행된다).
@@ -222,7 +222,7 @@ export function PhotoUploadPage() {
       setPhotos((prev) =>
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
       )
-      toast.show('🧀 AI 분석을 시작했어요')
+      toast.show('🧀 사진 분류를 시작했어요')
       navigate(eventPath)
     } catch (err) {
       controller.abort()
@@ -241,7 +241,7 @@ export function PhotoUploadPage() {
   return (
     <PhoneShell>
       <Header backTo={eventPath} backLabel={event?.name ?? '이벤트 상세'} backDisabled={busy} />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h1 className="text-xl font-bold text-text">사진 업로드</h1>
 
         {!event ? (
@@ -262,9 +262,9 @@ export function PhotoUploadPage() {
                 🤖
               </span>
               <p className="mt-3 text-sm text-muted">
-                지금은 AI가 분석하고 있어요.
+                지금은 사진을 분류하고 있어요.
                 <br />
-                분석이 끝나면 사진을 추가할 수 있어요.
+                분류가 끝나면 사진을 추가할 수 있어요.
               </p>
             </div>
             <div className="mt-auto pt-6">
@@ -327,9 +327,10 @@ export function PhotoUploadPage() {
               ))}
             </PhotoGrid>
 
-            {/* CTA는 하단 sticky — 경고·에러도 버튼과 함께 항상 보인다. -mb-9가 main의 pb-9를
-                상쇄하고 자체 pb-9를 채워, 스크롤 중에도 버튼 아래가 크림색으로 차 있다(CHMO-369) */}
-            <div className="sticky bottom-0 z-10 -mx-5 -mb-9 mt-auto bg-cream px-5 pb-9 pt-3">
+            {/* CTA는 하단 sticky — 경고·에러도 버튼과 함께 항상 보인다. -mb-safe-9가 main의
+                pb-safe-9를 상쇄하고 자체 pb-safe-9를 채워, 스크롤 중에도 버튼 아래가 크림색으로
+                차 있다(CHMO-369·396) */}
+            <div className="sticky bottom-0 z-10 -mx-5 -mb-safe-9 mt-auto bg-cream px-5 pb-safe-9 pt-3">
               {overBatchLimit ? (
                 <p role="alert" className="mb-2.5 text-sm text-warn">
                   한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}
@@ -351,8 +352,8 @@ export function PhotoUploadPage() {
                 {phase === 'uploading'
                   ? `업로드 중… ${uploadedCount}/${uploadTotal}`
                   : phase === 'registering'
-                    ? '분석 시작 중…'
-                    : 'AI 분석'}
+                    ? '분류 시작 중…'
+                    : '사진 분류하기'}
               </Button>
             </div>
           </>

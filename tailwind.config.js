@@ -60,6 +60,13 @@ export default {
       maxWidth: {
         phone: '390px',
       },
+      // 하단 고정 요소(액션바·시트·툴바·토스트)용 safe-area 합성 간격 — 기존 간격 + 홈 인디케이터
+      // 여백(env). 인셋이 없는 환경(데스크톱·안드로이드 버튼 내비)에선 기존 값과 동일(CHMO-396)
+      spacing: {
+        'safe-6': 'calc(1.5rem + env(safe-area-inset-bottom, 0px))',
+        'safe-7': 'calc(1.75rem + env(safe-area-inset-bottom, 0px))',
+        'safe-9': 'calc(2.25rem + env(safe-area-inset-bottom, 0px))',
+      },
     },
   },
   plugins: [],

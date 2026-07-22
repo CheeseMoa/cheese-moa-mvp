@@ -8,6 +8,7 @@
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
  * - 검토는 사진 단위(reviewed) — 이벤트 1은 앨범 1 사진만, 이벤트 2는 전 사진 검토 완료
+ * - 이벤트 2에 발행 대기 4장(217~220, reviewed·미발행) — 재공개 게이트 시연(CHMO-324·265)
  *
  * ID는 BE(int64)와 동일하게 숫자 — 리소스 종류별 대역으로 가독성 유지:
  * 유저·모임·이벤트·인물 1~, 앨범 1~12, 사진은 이벤트별 100 단위(101~·201~·301~).
@@ -35,6 +36,7 @@ function makePhotos(idBase: number, eventId: number, count: number, baseTime: st
       height: landscape ? 1200 : 1600,
       flags: { eyesClosed: i % 9 === 8, blurry: i % 13 === 12 },
       reviewed: false,
+      published: false,
       createdAt: baseTime,
     }
   })
@@ -135,15 +137,27 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
     // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
   })
   assignCovers(picnicAlbums, picnicPhotos)
-  // 공개된 이벤트 — 전 사진 검토 완료(뷰어에 모두 노출)
-  for (const photo of picnicPhotos) photo.reviewed = true
+  // 공개된 이벤트 — 전 사진 검토 + 발행 완료(공개 시점 발행분 — BE published 백필 대응, CHMO-324)
+  for (const photo of picnicPhotos) {
+    photo.reviewed = true
+    photo.published = true
+  }
+
+  // 공개 후 추가 → 검토까지 마친 **발행 대기분**(재공개 게이트 CHMO-324·265 시연):
+  // 김민준 앨범(9)에 4장 — reviewed지만 published=false. 08 배지·14 [공개하기] 재활성이
+  // 시드만으로 보이고, 발행 전까지 뷰어(학부모)에는 이 4장이 안 보인다.
+  const picnicPendingPhotos = makePhotos(216, 2, 4, '2026-07-20T10:00:00+09:00')
+  for (const photo of picnicPendingPhotos) {
+    photo.albumIds.push(picnicAlbums[0].id)
+    photo.reviewed = true
+  }
 
   // 이벤트 3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
   const poolPhotos = makePhotos(300, 3, 20, '2026-06-27T10:00:00+09:00')
 
   return {
     albums: [...sportsAlbums, ...picnicAlbums],
-    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
+    photos: [...sportsPhotos, ...picnicPhotos, ...picnicPendingPhotos, ...poolPhotos],
   }
 }
 

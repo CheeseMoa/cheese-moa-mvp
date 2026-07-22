@@ -17,6 +17,7 @@ import {
   nowIso,
   photoCountOfEvent,
   photosOfEvent,
+  publishEventPhotos,
   settleAnalysis,
   startAnalysis,
   todayIsoDate,
@@ -47,6 +48,7 @@ import {
   toAnalysisStatusResponse,
   toEventDetail,
   toEventSummary,
+  toPublishEventResponse,
   toReviewSummaryResponse,
 } from './serializers'
 import {
@@ -230,6 +232,7 @@ export const eventHandlers = [
         // 픽스처와 동일한 결정적 플래그 규칙(9번째마다 눈감음, 13번째마다 흔들림)
         flags: { eyesClosed: idx % 9 === 8, blurry: idx % 13 === 12 },
         reviewed: false,
+        published: false,
         createdAt: nowIso(),
       }
       db.photos.push(photo)
@@ -276,7 +279,7 @@ export const eventHandlers = [
     return ok(toAnalysisStatusResponse(event))
   }),
 
-  // GET /events/:id/review-summary — 공개 전 검수 요약 · 화면 14
+  // GET /events/:id/review-summary — 공개 요약 · 화면 14
   // BE ReviewSummaryResponse엔 미리보기 전용 필드가 없다 — 화면이 쓰는 미리보기 앨범은
   // api/events.ts가 albums[](뷰어 노출 앨범)에서 파생한다(CHMO-346).
   http.get(api('/events/:id/review-summary'), ({ request, params }) => {
@@ -288,9 +291,10 @@ export const eventHandlers = [
     return ok(toReviewSummaryResponse(event))
   }),
 
-  // POST /events/:id/publish — 공개하기(→published, 모임 학부모 공유 목록에 노출) · 화면 14
-  // 경고 정책(스펙 "구현 시 확정"): 미검토 사진 존재 시 ?force=true 없으면 409 반환.
-  // force 공개해도 미검토 사진은 뷰어 비노출(사진 단위 필터)이라 안전하다.
+  // POST /events/:id/publish — 발행 액션(재공개 게이트 CHMO-324) · 화면 14
+  // 발행 = 전 사진 검토 완료된 인물·공통 앨범의 사진을 published로 전환. **published 재호출도
+  // 그 시점 발행 가능분을 발행한다**(재공개 — CHMO-265). 미검토 존재 시 ?force=true 없으면 409 —
+  // force는 경고 우회일 뿐, 미검토 사진은 발행되지 않는다(앨범 단위 게이트).
   http.post(api('/events/:id/publish'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
@@ -298,23 +302,26 @@ export const eventHandlers = [
     if (!event) return eventNotFound()
     settleAnalysis(event.id)
 
-    if (event.status === 'published') return invalidRequest('이미 공개된 이벤트입니다.')
-    if (event.status !== 'review' && event.status !== 'ready')
-      return invalidRequest('검수 단계의 이벤트만 공개할 수 있습니다.')
+    // BE PUBLISH400 — 공개 불가 상태(EMPTY/ANALYZING). published는 재발행이라 허용(CHMO-324)
+    if (event.status !== 'review' && event.status !== 'ready' && event.status !== 'published')
+      return errorResponse(400, 'PUBLISH400', '공개할 수 없는 상태의 이벤트입니다.')
     const photos = photosOfEvent(event.id)
-    if (photos.length === 0) return invalidRequest('공개할 사진이 없습니다.')
+    if (photos.length === 0) return errorResponse(400, 'PUBLISH400', '공개할 사진이 없습니다.')
 
     const force = new URL(request.url).searchParams.get('force') === 'true'
     const unreviewedCount = photos.filter((p) => !p.reviewed).length
-    // BE 코드 미확인 — 14 화면이 이 코드로 경고 다이얼로그를 띄운다(PublishReviewPage)
+    // BE PUBLISH409(2026-07-22 실서버 채집 — CHMO-265) — errors.ts가
+    // HAS_UNREVIEWED_PHOTOS로 정규화해 14가 경고 다이얼로그·force 재시도를 분기한다
     if (unreviewedCount > 0 && !force)
       return errorResponse(
         409,
-        'HAS_UNREVIEWED_PHOTOS',
+        'PUBLISH409',
         `미검토 사진 ${unreviewedCount}장이 있습니다. 그대로 공개하면 해당 사진은 학부모에게 보이지 않습니다.`,
       )
 
-    transitionEvent(event.id, 'published')
-    return ok(toEventDetail(event))
+    const publishedPhotoCount = publishEventPhotos(event.id)
+    // 첫 공개만 상태 전이(publishedAt 기록) — 재발행은 최초 공개 시각을 덮어쓰지 않는다(BE 동일)
+    if (event.status !== 'published') transitionEvent(event.id, 'published')
+    return ok(toPublishEventResponse(event, publishedPhotoCount))
   }),
 ]

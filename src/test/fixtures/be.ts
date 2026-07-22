@@ -60,6 +60,11 @@ export const BE_ERRORS = {
     status: 404,
     payload: errorEnvelope('PHOTO404', 'S3에 업로드되지 않은 사진이 있습니다.'),
   },
+  /** 공개 시 미검토 존재 — POST /events/:id/publish force 없이 (2026-07-22 CHMO-265 착수 중 채집) */
+  PUBLISH409: {
+    status: 409,
+    payload: errorEnvelope('PUBLISH409', '검토되지 않은 사진이 있습니다.'),
+  },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -187,6 +192,8 @@ export const BE_EVENT_PUBLISHED = {
   albumCount: 8,
   publishedAt: '2026-06-28T01:00:00Z',
   createdAt: '2026-06-27T00:41:00Z',
+  // 발행 대기 수(CHMO-324 재공개 게이트 — PR#91 EventDetailResponse 기준. 상세 전용, 목록엔 없다)
+  pendingPublishCount: 3,
 }
 
 // `GET /events/:id/analysis`(AnalysisStatusResponse)는 픽스처를 두지 않는다 —
@@ -267,19 +274,34 @@ export const BE_MEMBER_ZIP = {
   expiresAt: '2026-07-20T07:11:37.636027303Z',
 }
 
-/** GET /albums/:id/move-suggestions — MoveSuggestionResponse[] (스키마 기준 + thumbnailUrl은 CHMO-232 티켓 기준 — 스웨거 잠김) */
+/**
+ * GET /albums/:id/move-suggestions — MoveSuggestionResponse[] (2026-07-22 실서버 관찰, CHMO-399).
+ * 스웨거 스키마와 달리 type(PERSON/COMMON)이 실재하고, 공통 앨범은 personName이 null이 아니라
+ * '공통'으로 채워져 오며, similarity는 인물 앨범에도 null일 수 있다(관찰분은 전원 null —
+ * 값이 오는 케이스는 스키마 기준 유지). thumbnailUrl은 CHMO-232 추가분.
+ */
 export const BE_MOVE_SUGGESTION_PERSON = {
   albumId: 12,
+  type: 'PERSON',
   personName: '서준',
   similarity: 0.82,
   thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/105.jpg',
 }
-/** 공통 앨범 추천엔 이름도 유사도도 없다 — 커버 없으면 thumbnailUrl도 null */
+/** 공통 앨범 추천 — personName '공통'(실관찰)·similarity null. 커버 없으면 thumbnailUrl도 null */
 export const BE_MOVE_SUGGESTION_COMMON = {
   albumId: 13,
-  personName: null,
+  type: 'COMMON',
+  personName: '공통',
   similarity: null,
   thumbnailUrl: null,
+}
+/** 이름 없는 인물 앨범 추천 — personName·similarity가 null이어도 type이 PERSON이면 인물이다(CHMO-399) */
+export const BE_MOVE_SUGGESTION_UNNAMED_PERSON = {
+  albumId: 14,
+  type: 'PERSON',
+  personName: null,
+  similarity: null,
+  thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/106.jpg',
 }
 
 /** DELETE /photos — DeletePhotosResponse (스키마 기준) */
@@ -288,7 +310,7 @@ export const BE_DELETE_PHOTOS = { detachedCount: 2, deletedPhotoCount: 1 }
 /** POST /photos/move — MovePhotosResponse (스키마 기준) */
 export const BE_MOVE_PHOTOS = { movedCount: 3 }
 
-// ── 공개 전 검수 ─────────────────────────────────────────────
+// ── 공개 요약(14) ────────────────────────────────────────────
 
 /**
  * GET /events/:id/review-summary — ReviewSummaryResponse.

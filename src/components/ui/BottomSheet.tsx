@@ -132,7 +132,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children }: Bottom
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
           style={{ touchAction: 'pan-x' }}
-          className="select-none rounded-t-[24px] bg-cream px-5 pb-6 pt-3"
+          className="select-none rounded-t-[24px] bg-cream px-5 pb-safe-6 pt-3"
         >
           <div className="mx-auto h-1 w-11 rounded-full bg-border" aria-hidden="true" />
           {title && <h2 className="mt-4 text-base font-bold text-text">{title}</h2>}

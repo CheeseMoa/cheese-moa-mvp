@@ -347,7 +347,7 @@ export function AlbumDetailPage() {
         </div>
 
         {album && hasPhotos && (
-          <div className="flex gap-2.5 px-5 pb-9 pt-4">
+          <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             {selectMode ? (
               // 4버튼이라 390px에 15px 라벨이 안 들어간다 — 13px로 줄여 한 줄 유지
               <>
@@ -482,7 +482,8 @@ export function AlbumDetailPage() {
         busy={busy}
         busyLabel="처리 중…"
         title="앨범 전체를 검토 완료할까요?"
-        description={`선택과 상관없이 이 앨범의 사진 ${photos.length}장이 모두 검토 완료로 표시되고, 검토된 사진은 학부모에게 공개돼요.`}
+        // 검토 완료는 표시일 뿐 노출이 아니다(재공개 게이트 CHMO-324) — 이벤트 상태와 무관하게 참인 문구(CHMO-265)
+        description={`선택과 상관없이 이 앨범의 사진 ${photos.length}장이 모두 검토 완료로 표시돼요. 학부모에게 보이려면 이벤트를 [공개하기]로 공개해야 해요.`}
         confirmLabel="전체 검토 완료"
         onConfirm={handleReview}
         onClose={() => setReviewConfirmOpen(false)}

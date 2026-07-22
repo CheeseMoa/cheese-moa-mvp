@@ -43,7 +43,11 @@ export function GroupCreatePage() {
     <PhoneShell>
       {/* 제출 중 이탈하면 모임은 생성되는데 이동·토스트가 없어 중복 생성을 유발 — 뒤로가기 차단 */}
       <Header backTo="/home" backLabel="홈" title="모임 만들기" backDisabled={submitting} />
-      <form onSubmit={handleSubmit} noValidate className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5"
+      >
         <span className="self-start rounded-full bg-primary/20 px-[11px] py-1.5 text-xs font-bold text-accent">
           무료 · 용량 차면 업그레이드
         </span>

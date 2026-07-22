@@ -15,8 +15,9 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
+import { renamePersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
-import type { AnalysisProgress, EventItem } from '../types/api'
+import type { Album, AnalysisProgress, EventItem } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
@@ -66,7 +67,7 @@ export function EventDetailPage() {
         backLabel={groupApi.data?.name ?? '모임 상세'}
         right={event && <EventSettingsButton onClick={() => setSettingsOpen(true)} />}
       />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         {event ? (
           <>
             <div className="flex items-center justify-between gap-2.5">
@@ -138,7 +139,7 @@ export function EventDetailPage() {
 }
 
 /**
- * AI 분석 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
+ * 사진 분류 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
  * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
  * progress가 아직 null이면(등록 직후 등) 쥐가 트랙 위를 왕복하는 인디터미넌트로 폴백.
  * 쥐 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
@@ -151,7 +152,7 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
   return (
     <div
       role="progressbar"
-      aria-label="AI 분석 진행률"
+      aria-label="사진 분류 진행률"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
@@ -201,8 +202,8 @@ interface EventAlbumGridProps {
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
  * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
- * [+ 사진 추가]→06-U · [공개 전 검수]→14. 앨범 탭 → 09 앨범 상세.
- * (인물 앨범 이름수정은 09 앨범 상세 헤더 ✎ — 08 그리드엔 진입점 없음)
+ * [+ 사진 추가]→06-U · [요약 보기]→14. 앨범 탭 → 09 앨범 상세.
+ * 인물 앨범 이름수정은 카드 이름 줄 탭(CHMO-400 — 09 진입 없이 바로) + 09 앨범 상세 헤더 ✎ 병행.
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
@@ -210,6 +211,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
     listEventAlbums(event.id, signal),
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 08에서 바로 이름 수정할 인물 앨범(CHMO-400) — 열릴 때만 모달 마운트(카드마다 대상이 달라 stale 방지)
+  const [renameTarget, setRenameTarget] = useState<Album | null>(null)
 
   const base = `/groups/${groupId}/events/${event.id}`
 
@@ -252,6 +255,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                     album={album}
                     coverUrl={album.coverThumbnailUrl ?? undefined}
                     onClick={() => navigate(`${base}/albums/${album.id}`)}
+                    // 인물 앨범만 ✎ — 특수 앨범(공통·분류어려움·품질)은 고정 라벨이라 이름 수정 없음
+                    onRename={album.type === 'person' ? () => setRenameTarget(album) : undefined}
                   />
                 ))}
               </div>
@@ -273,18 +278,25 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
               )}
 
               <p className="mt-4 text-[11px] text-muted">
-                테두리: 갈색=검토완료 · 회색 점선=미검토
+                테두리: 회색 점선=미검토 · 갈색=검토완료
               </p>
             </>
           )}
         </div>
 
-        <div className="flex flex-col gap-3 px-5 pb-9 pt-4">
+        <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
+          {/* 재공개 게이트(CHMO-324·265): 공개 후 검토를 마친 사진은 [공개하기]를 다시 눌러야
+              학부모에게 나간다 — 발행 대기가 있으면 아래 [요약 보기](→14 공개 요약)로 유도한다 */}
+          {event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
+            <p className="text-center text-xs font-bold text-warn">
+              발행 대기 {event.pendingPublishCount}장 — 요약 보기에서 공개할 수 있어요
+            </p>
+          )}
           <Button variant="secondary" fullWidth onClick={() => navigate(`${base}/upload`)}>
             ＋ 사진 추가
           </Button>
           <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
-            공개 전 검수
+            요약 보기
           </Button>
         </div>
       </main>
@@ -296,6 +308,23 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         onClose={() => setSettingsOpen(false)}
         onEventUpdated={onEventUpdated}
       />
+
+      {/* 인물 앨범 이름 수정(CHMO-400) — 09와 같은 모달·API·이름전파 계약(모임 단위 personId).
+          이 화면은 앨범 목록만 refetch — 다른 이벤트의 같은 인물 앨범은 다음 진입 시 갱신된 이름으로 조회 */}
+      {renameTarget && (
+        <RenameModal
+          open
+          onClose={() => setRenameTarget(null)}
+          title="아이 이름 수정"
+          label="아이 이름"
+          placeholder="예) 김민준"
+          initialName={renameTarget.name}
+          submit={(name) => renamePersonAlbum(renameTarget.id, name)}
+          successMessage="🧀 아이 이름을 바꿨어요"
+          onRenamed={albumsApi.refetch}
+          note="이 이름은 같은 모임의 모든 이벤트에 함께 반영돼요."
+        />
+      )}
     </PhoneShell>
   )
 }
