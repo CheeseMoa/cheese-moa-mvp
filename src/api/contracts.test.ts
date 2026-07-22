@@ -55,6 +55,7 @@ import {
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
   BE_MOVE_SUGGESTION_PERSON,
+  BE_MOVE_SUGGESTION_UNNAMED_PERSON,
   BE_PRESIGN_UPLOAD,
   BE_REGISTER_PHOTOS,
   BE_REVIEW_SUMMARY,
@@ -305,8 +306,10 @@ describe('앨범 · 사진', () => {
     expect(bodyOf(calls[0])).toEqual({ reviewStatus: 'REVIEWED' })
   })
 
-  it('BE 이동 추천 — 이름 없는 추천은 공통 앨범이다', async () => {
-    const calls = serve(envelope([BE_MOVE_SUGGESTION_PERSON, BE_MOVE_SUGGESTION_COMMON]))
+  it('BE 이동 추천 — 공통 판정은 type(이름·유사도 없는 인물이 공통으로 새지 않는다, CHMO-399)', async () => {
+    const calls = serve(
+      envelope([BE_MOVE_SUGGESTION_PERSON, BE_MOVE_SUGGESTION_UNNAMED_PERSON, BE_MOVE_SUGGESTION_COMMON]),
+    )
 
     const suggestions = await getMoveSuggestions(11, [101, 102])
 
@@ -315,10 +318,18 @@ describe('앨범 · 사진', () => {
       {
         albumId: 12,
         name: '서준',
+        isCommon: false,
         similarity: 0.82,
         thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/105.jpg',
       },
-      { albumId: 13, name: '공통', similarity: null, thumbnailUrl: null },
+      {
+        albumId: 14,
+        name: '이름 없음',
+        isCommon: false,
+        similarity: null,
+        thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/106.jpg',
+      },
+      { albumId: 13, name: '공통', isCommon: true, similarity: null, thumbnailUrl: null },
     ])
   })
 

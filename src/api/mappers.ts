@@ -234,18 +234,28 @@ export function toViewerPhoto(raw: RawViewerPhoto): ViewerPhoto {
 
 // ── 이동 추천 ────────────────────────────────────────────────
 
-/** BE MoveSuggestionResponse — 공통 앨범은 이름도 유사도도 없이 온다. thumbnailUrl은 CHMO-232 추가분 */
+/**
+ * BE MoveSuggestionResponse — 2026-07-22 실서버 관찰(CHMO-399): type이 실재하고,
+ * 공통 앨범은 personName을 '공통'으로 채워 주며(앨범 목록 DTO와 달리), similarity는
+ * 인물 앨범에도 null로 올 수 있다. thumbnailUrl은 CHMO-232 추가분.
+ */
 export interface RawMoveSuggestion {
   albumId: ID
+  /** 대문자 enum(PERSON/COMMON) */
+  type: string
   personName: string | null
   similarity: number | null
   thumbnailUrl: string | null
 }
 
 export function toMoveSuggestion(raw: RawMoveSuggestion): MoveSuggestion {
+  // 공통 판정은 type — similarity는 실 BE가 인물 앨범에도 null을 줘 판별자가 못 되고,
+  // personName 부재로 '공통'을 주면 이름 없는 인물 앨범이 공통 라벨을 얻는다(CHMO-399)
+  const isCommon = raw.type.toLowerCase() === 'common'
   return {
     albumId: raw.albumId,
-    name: raw.personName ?? SPECIAL_ALBUM_LABELS.common,
+    name: raw.personName ?? (isCommon ? SPECIAL_ALBUM_LABELS.common : UNNAMED_PERSON_LABEL),
+    isCommon,
     similarity: raw.similarity,
     thumbnailUrl: raw.thumbnailUrl,
   }

@@ -172,7 +172,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     })
   })
 
-  it('이동 추천 — 핸들러 항목 직렬화가 매퍼와 맞는다(personName null이면 공통)', () => {
+  it('이동 추천 — 핸들러 항목 직렬화가 매퍼와 맞는다(공통 판정은 type, CHMO-399)', () => {
     // 핸들러가 인라인으로 조립하던 항목을 toMoveSuggestionResponse로 승격(CHMO-227)
     // 썸네일은 검수 그리드(AlbumSummary)와 같은 커버 규약(CHMO-232) — 커버가 실재하는지도 확인
     const person = findAlbum(2)!
@@ -181,6 +181,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toMoveSuggestion(toMoveSuggestionResponse(person, 0.9))).toEqual({
       albumId: 2,
       name: '이서연',
+      isCommon: false,
       similarity: 0.9,
       thumbnailUrl: personCover,
     })
@@ -188,9 +189,13 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toMoveSuggestion(toMoveSuggestionResponse(common, null))).toEqual({
       albumId: 5,
       name: '공통',
+      isCommon: true,
       similarity: null,
       thumbnailUrl: toAlbumSummary(common).thumbnailUrl,
     })
+    // 이름 없는 인물(persons에 미등록) — personName·similarity가 null이어도 '이름 없음'(CHMO-399)
+    const unnamed = { ...person, personId: 9999 }
+    expect(toMoveSuggestion(toMoveSuggestionResponse(unnamed, null)).name).toBe('이름 없음')
   })
 
   it('뷰어 — 검토 완료 기준 카운트/커버', () => {

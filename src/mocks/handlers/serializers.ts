@@ -3,12 +3,14 @@
  *
  * 함수 이름은 BE DTO를 따른다(GroupSummaryResponse → toGroupSummary …). 목록/상세가
  * 서로 다른 필드를 주는 것까지 BE 그대로다 — 예: 이벤트 목록엔 thumbnailUrl이 있고
- * groupId·publishedAt이 없다. 표시명('공통' 등)·flags 객체 같은 FE 계약 형태는 만들지 않는다.
+ * groupId·publishedAt이 없다. 표시명('공통' 등)·flags 객체 같은 FE 계약 형태는 만들지 않는다
+ * (예외: MoveSuggestionResponse는 실 BE가 personName에 '공통'을 직접 준다 — CHMO-399 관찰).
  * 변환은 `src/api/mappers.ts`가 한다.
  *
  * pin·모임 비밀번호·학부모 비밀번호 평문은 여기서 절대 노출하지 않는다
  * (평문은 invite/share 전용 핸들러만 반환).
  */
+import { SPECIAL_ALBUM_LABELS } from '../../lib/albumLabels'
 import type { AlbumType } from '../../types/api'
 import {
   albumCountOf,
@@ -243,12 +245,17 @@ export function toReviewSummaryResponse(event: DbEvent) {
 
 // ── 사진 이동/제거 응답 (화면 09·09-1) ───────────────────────
 
-/** BE MoveSuggestionResponse 항목 — 공통 앨범은 이름·유사도 없이 온다(personName·similarity null). thumbnailUrl은 CHMO-232 */
+/**
+ * BE MoveSuggestionResponse 항목 — 앨범 목록 DTO와 달리 type이 실재하고 공통 앨범은
+ * personName을 '공통'으로 채워 준다(2026-07-22 실서버 관찰, CHMO-399). thumbnailUrl은 CHMO-232
+ */
 export function toMoveSuggestionResponse(album: DbAlbum, similarity: number | null) {
   const cover = album.coverPhotoId ? findPhoto(album.coverPhotoId) : undefined
   return {
     albumId: album.id,
-    personName: personNameOf(album),
+    type: album.type.toUpperCase(),
+    personName:
+      personNameOf(album) ?? (album.type === 'common' ? SPECIAL_ALBUM_LABELS.common : null),
     similarity,
     thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
   }
