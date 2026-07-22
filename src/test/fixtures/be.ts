@@ -310,7 +310,7 @@ export const BE_DELETE_PHOTOS = { detachedCount: 2, deletedPhotoCount: 1 }
 /** POST /photos/move — MovePhotosResponse (스키마 기준) */
 export const BE_MOVE_PHOTOS = { movedCount: 3 }
 
-// ── 공개 전 검수 ─────────────────────────────────────────────
+// ── 공개 요약(14) ────────────────────────────────────────────
 
 /**
  * GET /events/:id/review-summary — ReviewSummaryResponse.

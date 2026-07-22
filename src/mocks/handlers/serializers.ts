@@ -229,10 +229,10 @@ export function toAlbumDetail(album: DbAlbum) {
   }
 }
 
-// ── 검수 요약 (화면 14) ──────────────────────────────────────
+// ── 공개 요약 (화면 14) ──────────────────────────────────────
 
 /**
- * BE ReviewSummaryResponse — 공개 전 검수 요약. 미리보기 전용 필드는 없다
+ * BE ReviewSummaryResponse — 공개 요약(14). 미리보기 전용 필드는 없다
  * (미리보기 앨범은 화면이 albums[]에서 파생 — CHMO-346). 앨범 검토 상태는 사진 단위 reviewed의 파생값
  * (빈 앨범은 미검토). 호출부는 settleAnalysis를 마친 event를 넘긴다.
  */

@@ -366,7 +366,7 @@ describe('앨범 · 사진', () => {
   })
 })
 
-describe('공개 전 검수 요약 (14)', () => {
+describe('공개 요약 (14)', () => {
   it('미리보기 앨범은 BE albums[]에서 파생한다 — 뷰어 노출(person/common)만 (CHMO-346)', async () => {
     serve(envelope(BE_REVIEW_SUMMARY))
 

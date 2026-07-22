@@ -9,7 +9,7 @@ import { getEvent, getReviewSummary, publishEvent } from '../api/events'
 import { cx } from '../lib/cx'
 
 /**
- * 14. 공개 전 검수 · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
+ * 14. 공개 요약(구 '공개 전 검수' — CHMO-398) · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
  * 공개 직전 최종 확인: 요약 통계(사진/앨범/검토한 앨범 — 분류 애매는 공개와 무관해 비노출(CHMO-347),
  * 검토 진척은 검토 행위 단위인 앨범으로 정산(CHMO-357)) + 학부모 뷰 프리뷰(08과 같은 앨범 카드 그리드 — CHMO-346) + [공개하기].
  * 공개는 되돌리기 어려운 외부 노출이라 항상 확인 다이얼로그로 받는다 — 미검토 앨범이 있으면
@@ -85,7 +85,7 @@ export function PublishReviewPage() {
         <div className="flex-1 overflow-y-auto px-5 pb-4 pt-5">
           {summary && event ? (
             <>
-              <h1 className="text-xl font-bold text-heading">공개 전 검수</h1>
+              <h1 className="text-xl font-bold text-heading">공개 요약</h1>
               <p className="mt-1 truncate text-[13px] text-muted">
                 {event.name} · 공개 직전 최종 확인
               </p>
@@ -121,7 +121,7 @@ export function PublishReviewPage() {
                     ))}
                   </div>
                   <p className="mt-2 text-[11px] text-muted">
-                    테두리: 갈색=검토완료 · 회색 점선=미검토
+                    테두리: 회색 점선=미검토 · 갈색=검토완료
                   </p>
                 </>
               ) : (

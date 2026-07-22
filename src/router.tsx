@@ -55,7 +55,7 @@ export const router = createBrowserRouter([
         path: '/groups/:groupId/events/:eventId/albums/:albumId',
         element: <AlbumDetailPage />,
       }, // 09 앨범 상세
-      { path: '/groups/:groupId/events/:eventId/publish', element: <PublishReviewPage /> }, // 14 공개 전 검수
+      { path: '/groups/:groupId/events/:eventId/publish', element: <PublishReviewPage /> }, // 14 공개 요약
     ],
   },
 

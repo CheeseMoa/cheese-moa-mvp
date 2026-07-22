@@ -4,7 +4,7 @@ import { cx } from '../../lib/cx'
 
 export type BadgeVariant =
   | 'new' // 이벤트: 사진 0장 신규
-  | 'analyzing' // 이벤트: AI 분석중
+  | 'analyzing' // 이벤트: 사진 분류중
   | 'ready' // 이벤트: 공개 준비(검토완료)
   | 'published' // 이벤트: 공개 완료 (뷰어 '공개됨'은 children으로 라벨 교체)
   | 'reviewed' // 앨범: 검토완료 — 유일한 solid
@@ -14,7 +14,7 @@ export type BadgeVariant =
 const variantConfig: Record<BadgeVariant, { label: string; className: string; dot?: boolean }> = {
   new: { label: 'NEW', className: 'bg-status-empty/[.14] text-status-empty', dot: true },
   analyzing: {
-    label: '분석중',
+    label: '분류중',
     className: 'bg-status-analyzing/[.13] text-status-analyzing',
     dot: true,
   },

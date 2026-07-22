@@ -173,7 +173,7 @@ export interface RegisterPhotosResult {
   registeredCount: number
 }
 
-// ── 공개 전 검수 요약 ────────────────────────────────────────
+// ── 공개 요약(14) ────────────────────────────────────────────
 export interface ReviewSummary {
   photoCount: number
   albumCount: number
