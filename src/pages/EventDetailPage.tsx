@@ -17,6 +17,7 @@ import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
 import { renamePersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
+import { sortAlbumsForDisplay } from '../lib/albumSort'
 import type { Album, AnalysisProgress, EventItem } from '../types/api'
 
 /**
@@ -216,7 +217,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
 
   const base = `/groups/${groupId}/events/${event.id}`
 
-  const albums = albumsApi.data ?? []
+  // 표시 정렬은 FE 소유(CHMO-411) — 서버 순서(미검토 우선)는 검토할 때마다 튄다
+  const albums = sortAlbumsForDisplay(albumsApi.data ?? [])
   // 스펙 08: ① 인물/공통/분류어려움 메인 그리드 · ② 품질 제외(눈감음/흔들림) 하단 별도 섹션
   const mainAlbums = albums.filter((a) => a.type !== 'eyes_closed' && a.type !== 'blurry')
   const qualityAlbums = albums.filter((a) => a.type === 'eyes_closed' || a.type === 'blurry')

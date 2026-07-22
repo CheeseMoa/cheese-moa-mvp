@@ -6,6 +6,7 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { getEvent, getReviewSummary, publishEvent } from '../api/events'
+import { sortAlbumsForDisplay } from '../lib/albumSort'
 import { cx } from '../lib/cx'
 
 /**
@@ -112,7 +113,7 @@ export function PublishReviewPage() {
                 <>
                   {/* 08과 같은 앨범 카드(앨범명·검토 테두리) — onClick 없이 순수 프리뷰(CHMO-346) */}
                   <div className="mt-2 grid grid-cols-3 gap-2.5">
-                    {summary.previewAlbums.map((album) => (
+                    {sortAlbumsForDisplay(summary.previewAlbums).map((album) => (
                       <AlbumCard
                         key={album.id}
                         album={album}
