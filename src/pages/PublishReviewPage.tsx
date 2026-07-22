@@ -113,7 +113,7 @@ export function PublishReviewPage() {
                     ))}
                   </div>
                   <p className="mt-2 text-[11px] text-muted">
-                    테두리: 갈색=검토완료 · 회색 점선=미검토
+                    테두리: 회색 점선=미검토 · 갈색=검토완료
                   </p>
                 </>
               ) : (
