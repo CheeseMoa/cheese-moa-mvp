@@ -58,23 +58,26 @@ export function SocialCallbackPage() {
 
   return (
     <PhoneShell>
-      <div className="flex flex-1 flex-col justify-center">
-        <BrandHero />
-        <div className="px-5 text-center">
-          {errorMessage ? (
-            <>
-              <p role="alert" className="text-sm text-warn">
-                {errorMessage}
-              </p>
-              <div className="mt-6">
-                <ButtonLink to="/login" fullWidth>
-                  다시 로그인
-                </ButtonLink>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted">로그인 처리 중…</p>
-          )}
+      {/* justify-center 대신 my-auto — 고정 높이 셸에서 넘칠 때 위가 잘리지 않게(CHMO-396) */}
+      <div className="flex flex-1 flex-col overflow-y-auto py-5">
+        <div className="my-auto">
+          <BrandHero />
+          <div className="px-5 text-center">
+            {errorMessage ? (
+              <>
+                <p role="alert" className="text-sm text-warn">
+                  {errorMessage}
+                </p>
+                <div className="mt-6">
+                  <ButtonLink to="/login" fullWidth>
+                    다시 로그인
+                  </ButtonLink>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted">로그인 처리 중…</p>
+            )}
+          </div>
         </div>
       </div>
     </PhoneShell>

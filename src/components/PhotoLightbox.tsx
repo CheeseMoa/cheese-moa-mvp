@@ -162,7 +162,7 @@ export function PhotoLightbox<T extends LightboxPhoto>({
         {/* 하단 아이콘 툴바 — iOS 사진 앱처럼 균등 배치(저장 · 호출부 액션들) */}
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute inset-x-0 bottom-0 flex items-start justify-around border-t border-border/70 bg-white/[.88] px-4 pb-7 pt-2.5 backdrop-blur"
+          className="absolute inset-x-0 bottom-0 flex items-start justify-around border-t border-border/70 bg-white/[.88] px-4 pb-safe-7 pt-2.5 backdrop-blur"
         >
           <LightboxToolbarButton
             icon={<IconDownload />}

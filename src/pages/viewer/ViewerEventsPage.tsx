@@ -29,7 +29,7 @@ export function ViewerEventsPage() {
   return (
     <PhoneShell>
       <Header />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         {api.data ? (
           <>
             {/* 모임명은 unlock 때 캐시된 값 — 캐시가 비면(구버전 해제 등) 일반 제목으로 */}

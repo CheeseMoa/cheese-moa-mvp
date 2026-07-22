@@ -347,7 +347,7 @@ export function AlbumDetailPage() {
         </div>
 
         {album && hasPhotos && (
-          <div className="flex gap-2.5 px-5 pb-9 pt-4">
+          <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             {selectMode ? (
               // 4버튼이라 390px에 15px 라벨이 안 들어간다 — 13px로 줄여 한 줄 유지
               <>

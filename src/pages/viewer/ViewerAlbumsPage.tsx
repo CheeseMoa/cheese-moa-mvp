@@ -21,7 +21,7 @@ export function ViewerAlbumsPage() {
   return (
     <PhoneShell>
       <Header backTo={`/share/${token}/events`} backLabel="공개 이벤트" title="공개 이벤트 앨범" />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         {api.data ? (
           <>
             <div className="flex items-center gap-2.5">

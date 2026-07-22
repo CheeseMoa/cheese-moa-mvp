@@ -241,7 +241,7 @@ export function PhotoUploadPage() {
   return (
     <PhoneShell>
       <Header backTo={eventPath} backLabel={event?.name ?? '이벤트 상세'} backDisabled={busy} />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h1 className="text-xl font-bold text-text">사진 업로드</h1>
 
         {!event ? (
@@ -327,9 +327,10 @@ export function PhotoUploadPage() {
               ))}
             </PhotoGrid>
 
-            {/* CTA는 하단 sticky — 경고·에러도 버튼과 함께 항상 보인다. -mb-9가 main의 pb-9를
-                상쇄하고 자체 pb-9를 채워, 스크롤 중에도 버튼 아래가 크림색으로 차 있다(CHMO-369) */}
-            <div className="sticky bottom-0 z-10 -mx-5 -mb-9 mt-auto bg-cream px-5 pb-9 pt-3">
+            {/* CTA는 하단 sticky — 경고·에러도 버튼과 함께 항상 보인다. -mb-safe-9가 main의
+                pb-safe-9를 상쇄하고 자체 pb-safe-9를 채워, 스크롤 중에도 버튼 아래가 크림색으로
+                차 있다(CHMO-369·396) */}
+            <div className="sticky bottom-0 z-10 -mx-5 -mb-safe-9 mt-auto bg-cream px-5 pb-safe-9 pt-3">
               {overBatchLimit ? (
                 <p role="alert" className="mb-2.5 text-sm text-warn">
                   한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}

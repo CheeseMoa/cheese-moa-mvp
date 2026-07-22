@@ -118,7 +118,7 @@ export function ViewerAlbumDetailPage() {
         </div>
 
         {album && hasPhotos && (
-          <div className="flex gap-2.5 px-5 pb-9 pt-4">
+          <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             <Button className="flex-1 gap-1.5 !px-2" disabled={downloading} onClick={handleDownload}>
               {downloading ? (
                 '준비 중…'

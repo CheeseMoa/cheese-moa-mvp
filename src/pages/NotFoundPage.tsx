@@ -5,12 +5,15 @@ import { ButtonLink, EmptyState } from '../components/ui'
 export function NotFoundPage() {
   return (
     <PhoneShell>
-      <main className="flex flex-1 flex-col justify-center">
-        <EmptyState
-          title="페이지를 찾을 수 없어요"
-          description="주소가 잘못됐거나 삭제된 페이지예요."
-          action={<ButtonLink to="/">홈으로 가기</ButtonLink>}
-        />
+      <main className="flex flex-1 flex-col overflow-y-auto py-5">
+        {/* justify-center 대신 my-auto — 고정 높이 셸에서 넘칠 때 위가 잘리지 않게(CHMO-396) */}
+        <div className="my-auto">
+          <EmptyState
+            title="페이지를 찾을 수 없어요"
+            description="주소가 잘못됐거나 삭제된 페이지예요."
+            action={<ButtonLink to="/">홈으로 가기</ButtonLink>}
+          />
+        </div>
       </main>
     </PhoneShell>
   )

@@ -82,7 +82,7 @@ export function SettingsPage() {
     <PhoneShell>
       {/* 와이어프레임의 '‹ 설정'은 별도 설정 목록 화면 전제 — MVP IA에선 이 화면이 설정 전체라 기존 서브형 헤더 관례(‹ 상위화면 + 타이틀)로 맞춘다 */}
       <Header backTo="/home" backLabel="홈" title="설정" backDisabled={submitting || loggingOut} />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h2 className="text-xl font-bold text-text">프로필 편집</h2>
         {loading || loadError ? (
           <LoadState
