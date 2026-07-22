@@ -201,7 +201,7 @@ interface EventAlbumGridProps {
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
  * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
- * [+ 사진 추가]→06-U · [공개 전 검수]→14. 앨범 탭 → 09 앨범 상세.
+ * [+ 사진 추가]→06-U · [요약 보기]→14. 앨범 탭 → 09 앨범 상세.
  * (인물 앨범 이름수정은 09 앨범 상세 헤더 ✎ — 08 그리드엔 진입점 없음)
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
@@ -284,7 +284,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
             ＋ 사진 추가
           </Button>
           <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
-            공개 전 검수
+            요약 보기
           </Button>
         </div>
       </main>
