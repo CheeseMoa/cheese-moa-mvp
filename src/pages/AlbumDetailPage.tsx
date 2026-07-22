@@ -38,7 +38,8 @@ import type { ID } from '../types/api'
  * 사진 그리드 + 선택 모드 → [저장](선택 사진 개별 저장 — 전체 선택이면 ZIP 한 번) · [삭제](현재 앨범
  * 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트). 일반 모드 하단 [다운로드] = 앨범
  * 전체 ZIP(GET /albums/:id/download, CHMO-349 — person/common만, 특수 앨범은 BE ZIP 미제공) ·
- * [검토 완료] = 앨범 내 전 사진 일괄 reviewed(앨범 전체 대상이라 선택모드와 이질적이던 버튼은 제거, CHMO-413).
+ * [검토 완료] = 앨범 내 전 사진 일괄 reviewed, 성공 시 08 앨범 그리드로 복귀(CHMO-414 — 검토는 앨범
+ * 단위 진행이라 완료하면 다음 앨범으로 이어가게. 앨범 전체 대상이라 선택모드와 이질적이던 버튼은 제거, CHMO-413).
  * 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파). 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시한다.
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
@@ -160,8 +161,9 @@ export function AlbumDetailPage() {
     await mutate(() => markAlbumReviewed(albumId), {
       onSuccess: () => {
         toast.show('🧀 검토 완료로 표시했어요')
-        albumApi.refetch()
-        setBusy(false)
+        // 검토는 앨범 단위 진행이라 완료하면 08로 복귀해 다음 앨범으로 이어가게 한다(CHMO-414).
+        // 앨범이 그대로 있어 뒤로가기로 돌아와도 무해하므로 CHMO-289와 달리 replace가 아닌 push.
+        navigate(eventPath)
       },
       onError: (msg) => {
         toast.show(msg)
