@@ -94,7 +94,7 @@ export function GroupDetailPage() {
           )
         }
       />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         {/* 데이터가 있으면 재조회(이름 수정 refetch) 중에도 유지 — 로딩/에러로 화면을 교체하지 않는다 */}
         {group ? (
           <>

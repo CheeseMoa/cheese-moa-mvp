@@ -26,7 +26,7 @@ export function HomePage() {
           </Link>
         }
       />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h2 className="text-xl font-bold text-text">내 모임</h2>
         <p className="mt-1 text-[13px] text-muted">참여 중인 모임을 확인하세요</p>
 

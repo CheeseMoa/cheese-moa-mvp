@@ -61,7 +61,7 @@ export function ComponentGalleryPage() {
         title="공용 컴포넌트"
         right={<span className="text-base text-muted">⚙</span>}
       />
-      <main className="flex flex-1 flex-col gap-7 p-5 pb-10">
+      <main className="flex flex-1 flex-col gap-7 overflow-y-auto p-5 pb-10">
         <Section title="01 · Header — 홈형 (서브형은 이 화면 상단)">
           <div className="overflow-hidden rounded-xl border border-border">
             <Header

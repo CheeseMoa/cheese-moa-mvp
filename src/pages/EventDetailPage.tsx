@@ -66,7 +66,7 @@ export function EventDetailPage() {
         backLabel={groupApi.data?.name ?? '모임 상세'}
         right={event && <EventSettingsButton onClick={() => setSettingsOpen(true)} />}
       />
-      <main className="flex flex-1 flex-col px-5 pb-9 pt-5">
+      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         {event ? (
           <>
             <div className="flex items-center justify-between gap-2.5">
@@ -279,7 +279,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
           )}
         </div>
 
-        <div className="flex flex-col gap-3 px-5 pb-9 pt-4">
+        <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
           <Button variant="secondary" fullWidth onClick={() => navigate(`${base}/upload`)}>
             ＋ 사진 추가
           </Button>

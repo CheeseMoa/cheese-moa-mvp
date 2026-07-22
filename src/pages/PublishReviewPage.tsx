@@ -150,7 +150,7 @@ export function PublishReviewPage() {
         </div>
 
         {summary && event && (
-          <div className="px-5 pb-9 pt-4">
+          <div className="px-5 pb-safe-9 pt-4">
             <Button fullWidth disabled={!canPublish} onClick={() => setConfirmOpen(true)}>
               {published ? '공개 완료됨' : '공개하기'}
             </Button>
