@@ -11,7 +11,6 @@
  * (평문은 invite/share 전용 핸들러만 반환).
  */
 import { SPECIAL_ALBUM_LABELS } from '../../lib/albumLabels'
-import type { AlbumType } from '../../types/api'
 import {
   albumCountOf,
   albumsOfEvent,
@@ -173,19 +172,19 @@ export function toPhotoInAlbum(photo: DbPhoto) {
 
 // ── 앨범 ─────────────────────────────────────────────────────
 
-/** 그리드 표시 순서: 인물 → 공통 → 분류어려움 → 눈감음 → 흔들림 (같은 타입은 생성 순 유지) */
-const ALBUM_TYPE_ORDER: Record<AlbumType, number> = {
-  person: 0,
-  common: 1,
-  uncertain: 2,
-  eyes_closed: 3,
-  blurry: 4,
-}
-
+/**
+ * 실 BE 정렬(CHMO-336): 미검토 사진 보유 앨범 먼저, 그 안에서는 albumId 고정.
+ * 타입 구분 없이 섞여 내려온다 — 표시 순서는 FE가 소유한다(lib/albumSort, CHMO-411).
+ * 목이 타입순으로 예쁘게 주면 FE 정렬 회귀가 로컬에서 안 드러나 실 BE 규칙을 흉내 낸다.
+ */
 export function albumsOfEventSorted(eventId: number): DbAlbum[] {
   return albumsOfEvent(eventId)
     .slice()
-    .sort((a, b) => ALBUM_TYPE_ORDER[a.type] - ALBUM_TYPE_ORDER[b.type])
+    .sort((a, b) => {
+      const aUnreviewed = unreviewedCountOfAlbum(a.id) > 0 ? 0 : 1
+      const bUnreviewed = unreviewedCountOfAlbum(b.id) > 0 ? 0 : 1
+      return aUnreviewed - bUnreviewed || a.id - b.id
+    })
 }
 
 /** 학부모 뷰어 노출 대상 타입(person/common) — 특수 앨범은 제작자 화면 전용 */

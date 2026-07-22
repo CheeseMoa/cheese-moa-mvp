@@ -36,10 +36,11 @@ import type { ID } from '../types/api'
 /**
  * 09. 앨범 상세 · node 211:1685 · GET /albums/:id · DELETE /photos · PATCH /albums/:id
  * 사진 그리드 + 선택 모드 → [저장](선택 사진 개별 저장 — 전체 선택이면 ZIP 한 번) · [삭제](현재 앨범
- * 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트) · [검토 완료](앨범 내 전 사진 일괄
- * reviewed). 일반 모드 하단 [다운로드] = 앨범 전체 ZIP(GET /albums/:id/download, CHMO-349 —
- * person/common만, 특수 앨범은 BE ZIP 미제공). 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파).
- * 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시하고, 선택모드의 검토 완료는 앨범 전체가 대상임을 확인받는다.
+ * 연결만 해제, 마지막 연결이면 완전 삭제) · [옮기기](09-1 이동 시트). 일반 모드 하단 [다운로드] = 앨범
+ * 전체 ZIP(GET /albums/:id/download, CHMO-349 — person/common만, 특수 앨범은 BE ZIP 미제공) ·
+ * [검토 완료] = 앨범 내 전 사진 일괄 reviewed, 성공 시 08 앨범 그리드로 복귀(CHMO-414 — 검토는 앨범
+ * 단위 진행이라 완료하면 다음 앨범으로 이어가게. 앨범 전체 대상이라 선택모드와 이질적이던 버튼은 제거, CHMO-413).
+ * 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파). 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시한다.
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
  * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
@@ -66,7 +67,6 @@ export function AlbumDetailPage() {
   // 삭제/이동 대상 사진(null=닫힘) — 선택모드(선택 사진들)와 라이트박스(현재 1장)가 공유
   const [pendingDelete, setPendingDelete] = useState<ID[] | null>(null)
   const [pendingMove, setPendingMove] = useState<ID[] | null>(null)
-  const [reviewConfirmOpen, setReviewConfirmOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -160,14 +160,12 @@ export function AlbumDetailPage() {
     setBusy(true)
     await mutate(() => markAlbumReviewed(albumId), {
       onSuccess: () => {
-        setReviewConfirmOpen(false)
-        exitSelect()
         toast.show('🧀 검토 완료로 표시했어요')
-        albumApi.refetch()
-        setBusy(false)
+        // 검토는 앨범 단위 진행이라 완료하면 08로 복귀해 다음 앨범으로 이어가게 한다(CHMO-414).
+        // 앨범이 그대로 있어 뒤로가기로 돌아와도 무해하므로 CHMO-289와 달리 replace가 아닌 push.
+        navigate(eventPath)
       },
       onError: (msg) => {
-        setReviewConfirmOpen(false)
         toast.show(msg)
         setBusy(false)
       },
@@ -349,43 +347,34 @@ export function AlbumDetailPage() {
         {album && hasPhotos && (
           <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             {selectMode ? (
-              // 4버튼이라 390px에 15px 라벨이 안 들어간다 — 13px로 줄여 한 줄 유지
               <>
                 {/* 저장(다운로드) — 라이트박스 [저장]과 같은 라벨. 전체 선택이면 ZIP 한 번(handleDownload) */}
                 <Button
                   variant="secondary"
-                  className="flex-1 gap-1 whitespace-nowrap !px-1.5 !text-[13px]"
+                  className="flex-1 gap-1.5 whitespace-nowrap !px-2"
                   disabled={selected.size === 0 || locked || downloading}
                   onClick={handleDownload}
                 >
-                  <IconDownload size={17} />
+                  <IconDownload size={18} />
                   {downloading ? '저장 중…' : '저장'}
                 </Button>
                 <Button
                   variant="warn"
-                  className="flex-1 gap-1 whitespace-nowrap !px-1.5 !text-[13px]"
+                  className="flex-1 gap-1.5 whitespace-nowrap !px-2"
                   disabled={selected.size === 0 || locked}
                   onClick={() => setPendingDelete([...selected])}
                 >
-                  <IconTrash size={17} />
+                  <IconTrash size={18} />
                   삭제
                 </Button>
                 <Button
                   variant="accent"
-                  className="flex-1 gap-1 whitespace-nowrap !px-1.5 !text-[13px]"
+                  className="flex-1 gap-1.5 whitespace-nowrap !px-2"
                   disabled={selected.size === 0 || locked}
                   onClick={() => setPendingMove([...selected])}
                 >
-                  <IconFolderMove size={17} />
+                  <IconFolderMove size={18} />
                   옮기기
-                </Button>
-                {/* 검토 완료는 선택과 무관하게 앨범 전체 대상 — 선택 옆에 있어 오해 소지가 있어 확인받는다 */}
-                <Button
-                  className="flex-1 whitespace-nowrap !px-1.5 !text-[13px]"
-                  disabled={locked || allReviewed}
-                  onClick={() => setReviewConfirmOpen(true)}
-                >
-                  검토 완료
                 </Button>
               </>
             ) : (
@@ -475,18 +464,6 @@ export function AlbumDetailPage() {
         confirmLabel="삭제"
         onConfirm={handleDelete}
         onClose={() => setPendingDelete(null)}
-      />
-
-      <ConfirmDialog
-        open={reviewConfirmOpen}
-        busy={busy}
-        busyLabel="처리 중…"
-        title="앨범 전체를 검토 완료할까요?"
-        // 검토 완료는 표시일 뿐 노출이 아니다(재공개 게이트 CHMO-324) — 이벤트 상태와 무관하게 참인 문구(CHMO-265)
-        description={`선택과 상관없이 이 앨범의 사진 ${photos.length}장이 모두 검토 완료로 표시돼요. 학부모에게 보이려면 이벤트를 [공개하기]로 공개해야 해요.`}
-        confirmLabel="전체 검토 완료"
-        onConfirm={handleReview}
-        onClose={() => setReviewConfirmOpen(false)}
       />
 
       {/* 09-1 옮기기 시트 — 대상 사진(선택모드 선택분 또는 라이트박스 현재 1장)을 유사도 추천/공통 앨범으로
