@@ -96,7 +96,7 @@ export function PhotoUploadPage() {
     if (files.length === 0) return
     // BE는 확장자로 Content-Type을 정하고, 화이트리스트 밖이거나 20MB를 넘는 파일이 하나라도 섞이면
     // presign 배치 전체를 400으로 거절한다 — 한 장 때문에 전부 실패하지 않게 입구에서 거른다.
-    // accept="image/*"는 피커 힌트일 뿐이라 여기서 다시 확인한다.
+    // accept는 피커 힌트일 뿐이라 여기서 다시 확인한다.
     const supported = files.filter((f) => uploadContentTypeOf(f.name))
     const accepted = supported.filter((f) => isUploadableSize(f.size))
     const notices: string[] = []
@@ -362,7 +362,11 @@ export function PhotoUploadPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          // .heic 명시가 없으면 iOS가 피커 안에서 HEIC→JPEG 변환을 돌려, 수십 장이면 수십 초간
+          // 피커가 멈춘 듯 보인다(CHMO-370). 원본 HEIC를 그대로 받는 대신 미리보기 타일은
+          // Safari 계열에서만 렌더된다 — HEIC를 고르는 기기는 사실상 아이폰뿐이라 실영향 작음.
+          // .heif는 넣지 않는다: FE·BE 화이트리스트(src/lib/upload.ts)가 heic만 받는다.
+          accept="image/*,.heic"
           multiple
           hidden
           onChange={handlePick}
