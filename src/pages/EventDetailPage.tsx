@@ -138,7 +138,7 @@ export function EventDetailPage() {
 }
 
 /**
- * AI 분석 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
+ * 사진 분류 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
  * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
  * progress가 아직 null이면(등록 직후 등) 쥐가 트랙 위를 왕복하는 인디터미넌트로 폴백.
  * 쥐 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
@@ -151,7 +151,7 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
   return (
     <div
       role="progressbar"
-      aria-label="AI 분석 진행률"
+      aria-label="사진 분류 진행률"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
