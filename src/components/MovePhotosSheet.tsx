@@ -83,7 +83,9 @@ export function MovePhotosSheet({
         // 추천 5개가 프레임 너비를 넘을 수 있어 가로 스크롤 — 마우스는 끌어서(CHMO-345)
         <div {...dragScroll} className="mt-2 flex select-none gap-3 overflow-x-auto pb-1">
           {suggestions.map((s) => {
-            const isCommon = s.similarity === null
+            // 공통 판정은 매퍼가 BE type에서 파생한 isCommon — similarity는 실 BE가
+            // 인물 앨범에도 null을 줘 판별자로 못 쓴다(CHMO-399)
+            const isCommon = s.isCommon
             return (
               <button
                 key={s.albumId}
@@ -113,11 +115,14 @@ export function MovePhotosSheet({
                   />
                 )}
                 <span className="max-w-full truncate text-xs font-bold text-text">{s.name}</span>
-                <span
-                  className={cx('text-[11px]', isCommon ? 'text-muted' : 'font-bold text-accent')}
-                >
-                  {isCommon ? '사진첩' : `${Math.round((s.similarity ?? 0) * 100)}%`}
-                </span>
+                {/* 유사도 미계산(null) 인물은 %를 숨긴다 — 0%로 지어내지 않는다(CHMO-399) */}
+                {isCommon ? (
+                  <span className="text-[11px] text-muted">사진첩</span>
+                ) : s.similarity !== null ? (
+                  <span className="text-[11px] font-bold text-accent">
+                    {Math.round(s.similarity * 100)}%
+                  </span>
+                ) : null}
               </button>
             )
           })}
