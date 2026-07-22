@@ -138,7 +138,7 @@ export function EventDetailPage() {
 }
 
 /**
- * AI 분석 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
+ * 사진 분류 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
  * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
  * progress가 아직 null이면(등록 직후 등) 쥐가 트랙 위를 왕복하는 인디터미넌트로 폴백.
  * 쥐 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
@@ -151,7 +151,7 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
   return (
     <div
       role="progressbar"
-      aria-label="AI 분석 진행률"
+      aria-label="사진 분류 진행률"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
@@ -201,7 +201,7 @@ interface EventAlbumGridProps {
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
  * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
- * [+ 사진 추가]→06-U · [공개 전 검수]→14. 앨범 탭 → 09 앨범 상세.
+ * [+ 사진 추가]→06-U · [요약 보기]→14. 앨범 탭 → 09 앨범 상세.
  * (인물 앨범 이름수정은 09 앨범 상세 헤더 ✎ — 08 그리드엔 진입점 없음)
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
@@ -273,7 +273,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
               )}
 
               <p className="mt-4 text-[11px] text-muted">
-                테두리: 갈색=검토완료 · 회색 점선=미검토
+                테두리: 회색 점선=미검토 · 갈색=검토완료
               </p>
             </>
           )}
@@ -284,7 +284,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
             ＋ 사진 추가
           </Button>
           <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
-            공개 전 검수
+            요약 보기
           </Button>
         </div>
       </main>

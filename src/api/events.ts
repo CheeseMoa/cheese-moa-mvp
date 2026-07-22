@@ -1,5 +1,5 @@
 /**
- * 이벤트 엔드포인트 (CHMO-192) — 05 이벤트 목록·06 생성/업로드/분석·08 앨범 그리드·14 공개 전 검수.
+ * 이벤트 엔드포인트 (CHMO-192) — 05 이벤트 목록·06 생성/업로드/분석·08 앨범 그리드·14 공개 요약.
  * BE enum(EMPTY/ANALYZING/…)·eventDate·thumbnailUrl 차이는 mappers.ts가 흡수한다.
  */
 import { ApiRequestError, apiFetch } from './client'
@@ -69,7 +69,7 @@ interface RawReviewSummary {
 }
 
 /**
- * GET /events/:id/review-summary — 공개 전 검수 요약(14).
+ * GET /events/:id/review-summary — 공개 요약(14).
  * 미리보기는 albums[]에서 파생한다 — 뷰어 노출 규칙(person/common)에
  * **검토 완료 사진이 있는** 앨범만(공개 시 학부모 목록(15)에 보일 앨범과 동일, CHMO-346).
  * 전부 미검토면 빈 미리보기가 정직한 응답이다(미검토 사진은 뷰어 비노출 —
