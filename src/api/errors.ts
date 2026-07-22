@@ -9,7 +9,8 @@
  * 근거: 2026-07-09 실서버 curl 대조(AUTH400·AUTH401·COMMON401) + CHMO-191 스토리
  * (JOIN403·MOMENT404·ALBUM404) + 2026-07-16 참여 실패 채집(SPACE404 — CHMO-285)
  * + 2026-07-21 실서버 채집(OAUTH400 — 애플 미배포 시점의 `/auth/social/apple`) 및 BE ErrorStatus
- * 대조(OAUTH401·OAUTH502 — 콜백이 `?error=`로, exchange가 응답 code로 싣는다).
+ * 대조(OAUTH401·OAUTH502 — 콜백이 `?error=`로, exchange가 응답 code로 싣는다)
+ * + 2026-07-22 실서버 채집(PUBLISH409 — CHMO-265 착수 중, 재공개 게이트 CHMO-324).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -27,6 +28,8 @@ const BE_CODE_MAP: Record<string, string> = {
   MOMENT404: 'NOT_FOUND',
   /** 앨범 없음(404) */
   ALBUM404: 'NOT_FOUND',
+  /** 공개 시 미검토 사진 존재(409) — 14가 이 코드로 force 재시도를 분기한다(CHMO-324) */
+  PUBLISH409: 'HAS_UNREVIEWED_PHOTOS',
   /** 지원하지 않는 소셜 프로바이더(400) — 경로 변수가 BE 미구현 값 (CHMO-359) */
   OAUTH400: 'UNSUPPORTED_SOCIAL_PROVIDER',
   /** 소셜 인가 실패(401) — 사용자 동의 취소·일회용 코드 무효/만료/재사용 */

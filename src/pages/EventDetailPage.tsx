@@ -280,6 +280,13 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         </div>
 
         <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
+          {/* 재공개 게이트(CHMO-324·265): 공개 후 검토를 마친 사진은 [공개하기]를 다시 눌러야
+              학부모에게 나간다 — 발행 대기가 있으면 아래 [공개 전 검수](→14)로 유도한다 */}
+          {event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
+            <p className="text-center text-xs font-bold text-warn">
+              발행 대기 {event.pendingPublishCount}장 — 공개 전 검수에서 공개할 수 있어요
+            </p>
+          )}
           <Button variant="secondary" fullWidth onClick={() => navigate(`${base}/upload`)}>
             ＋ 사진 추가
           </Button>

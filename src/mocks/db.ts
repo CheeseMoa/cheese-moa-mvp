@@ -85,8 +85,14 @@ export interface DbPhoto {
   width: number
   height: number
   flags: PhotoFlags
-  /** 검토 여부(사진 단위) — 미검토 사진은 뷰어 응답에서 제외. 앨범 [검토 완료] = 일괄 처리 */
+  /** 검토 여부(사진 단위) — 앨범 [검토 완료] = 일괄 처리. 실 BE는 매핑(AlbumPhoto) 단위(CHMO-395 — 목은 사진 단위 근사) */
   reviewed: boolean
+  /**
+   * 발행 여부(재공개 게이트 CHMO-324) — [공개하기] 발행 액션으로만 켜진다(검토 완료는 표시일 뿐).
+   * 뷰어 노출 게이트 = reviewed && published: 검토 해제는 published를 되돌리지 않고
+   * 그 앨범 노출만 숨긴다(CHMO-395 — 노출을 줄이는 방향만 즉시 반영).
+   */
+  published: boolean
   createdAt: ISODateTime
 }
 
@@ -318,9 +324,57 @@ export function unreviewedCountOfAlbum(albumId: number): number {
   return photosOfAlbum(albumId).filter((p) => !p.reviewed).length
 }
 
-/** 검토 완료 사진만 — 뷰어 응답·뷰어용 카운트/커버 파생의 기준 */
-export function reviewedPhotosOfAlbum(albumId: number): DbPhoto[] {
-  return photosOfAlbum(albumId).filter((p) => p.reviewed)
+/** 뷰어 노출 사진 = 검토 완료 && 발행됨(CHMO-324·395) — 뷰어 응답·뷰어용 카운트/커버 파생의 기준 */
+export function viewerPhotosOfAlbum(albumId: number): DbPhoto[] {
+  return photosOfAlbum(albumId).filter((p) => p.reviewed && p.published)
+}
+
+// ── 발행 (재공개 게이트 CHMO-324) ────────────────────────────
+
+/**
+ * 발행 게이트 대상 = **전 사진이 검토 완료된 인물·공통 앨범**(BE PublishMomentUseCase).
+ * 검수하다 만 앨범은 검토된 사진까지 통째로 대기하고, 특수 앨범은 발행 대상이 아니다
+ * (published를 켜두면 나중에 인물 앨범으로 옮겼을 때 발행 없이 즉시 노출된다).
+ */
+function publishableAlbumsOf(eventId: number): DbAlbum[] {
+  return albumsOfEvent(eventId).filter(
+    (a) =>
+      (a.type === 'person' || a.type === 'common') &&
+      photoCountOfAlbum(a.id) > 0 &&
+      unreviewedCountOfAlbum(a.id) === 0,
+  )
+}
+
+/**
+ * 발행 액션(POST /publish — 재호출 포함): 게이트 통과 앨범의 사진을 published로 전환하고
+ * **이번에 새로 발행된 장수**를 반환한다(BE publishedPhotoCount — 재호출이면 0일 수 있다).
+ */
+export function publishEventPhotos(eventId: number): number {
+  let publishedCount = 0
+  for (const album of publishableAlbumsOf(eventId)) {
+    for (const photo of photosOfAlbum(album.id)) {
+      if (!photo.published) {
+        photo.published = true
+        publishedCount += 1
+      }
+    }
+  }
+  return publishedCount
+}
+
+/**
+ * 발행 대기 수(BE pendingPublishCount) — 지금 [공개하기]를 누르면 새로 나갈 사진 수.
+ * 게이트 기준으로 세므로 "대기 > 0 ⇔ 발행이 실제로 뭔가 한다"가 항상 성립한다
+ * (게이트에 걸린 앨범의 검토분을 세면 눌러도 안 빠지는 유령 대기가 생긴다).
+ */
+export function pendingPublishCountOf(eventId: number): number {
+  const pending = new Set<number>()
+  for (const album of publishableAlbumsOf(eventId)) {
+    for (const photo of photosOfAlbum(album.id)) {
+      if (!photo.published) pending.add(photo.id)
+    }
+  }
+  return pending.size
 }
 
 // ── 인물 이름 (personId 단위 공유 — 이름전파) ────────────────
@@ -443,7 +497,8 @@ const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장)
   review: ['ready', 'analyzing', 'published', 'empty'],
   ready: ['review', 'published', 'analyzing', 'empty'], // 검토 해제 시 review, 재분석 시 analyzing
-  published: [], // 공개 후 편집은 상태 전이 없이 진행(뷰어 비노출은 사진 reviewed로 제어)
+  // 공개 후 편집·재발행은 상태 전이 없이 진행 — 뷰어 노출은 사진 reviewed && published로 제어(CHMO-324)
+  published: [],
 }
 
 /** 허용된 전이만 적용, 성공 여부 반환 */

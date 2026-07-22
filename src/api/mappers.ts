@@ -91,6 +91,8 @@ export interface RawEvent {
   createdAt?: ISODateTime
   /** 상세에만(CHMO-287) — 분석 job 진행 중에만 non-null. 필드명·형태가 FE와 같아 그대로 통과 */
   progress?: AnalysisProgress | null
+  /** 상세에만(CHMO-324 재공개 게이트) — 검토됐지만 미발행인 사진 수("발행 대기") */
+  pendingPublishCount?: number
 }
 
 export function toEvent(raw: RawEvent): EventItem {
@@ -106,6 +108,7 @@ export function toEvent(raw: RawEvent): EventItem {
     publishedAt: raw.publishedAt ?? null,
     coverPhotoId: raw.thumbnailPhotoId ?? null,
     progress: raw.progress ?? null,
+    pendingPublishCount: raw.pendingPublishCount,
   }
 }
 
