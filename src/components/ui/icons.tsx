@@ -53,6 +53,16 @@ export function IconTrash({ size = 24 }: IconProps) {
   )
 }
 
+/** 이름 수정 — 연필(촉 왼쪽 아래·대각선 45°, 표준 편집 아이콘 방향) — 08 앨범 카드 이름 힌트(CHMO-400) */
+export function IconPencil({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M16.7 4.1a2.05 2.05 0 0 1 2.9 2.9L8 18.6l-3.9 1 1-3.9z" />
+      <path d="M14.8 6l2.9 2.9" />
+    </svg>
+  )
+}
+
 /** 옮기기 — 폴더 + 안쪽 오른 화살표 */
 export function IconFolderMove({ size = 24 }: IconProps) {
   return (
