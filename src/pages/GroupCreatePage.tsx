@@ -8,7 +8,7 @@ import { createGroup } from '../api/groups'
 
 /**
  * 03. 모임 만들기 · node 211:1411 · POST /groups → 모임 상세(05).
- * 업그레이드/결제는 MVP 미구현 — 배지·안내 카피만 표시(screen-spec 03).
+ * 가격/요금 워딩은 노출하지 않는다(CHMO-424 — screen-spec 03의 무료 배지·업그레이드 카피 제거).
  */
 export function GroupCreatePage() {
   const navigate = useNavigate()
@@ -48,10 +48,7 @@ export function GroupCreatePage() {
         noValidate
         className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5"
       >
-        <span className="self-start rounded-full bg-primary/20 px-[11px] py-1.5 text-xs font-bold text-accent">
-          무료 · 용량 차면 업그레이드
-        </span>
-        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
+        <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
           <TextField
             label="모임 이름"
             placeholder="예) 햇살반 학부모"
@@ -68,9 +65,6 @@ export function GroupCreatePage() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        <p className="mt-3 text-xs leading-relaxed text-muted">
-          요금제 선택 없이 무료로 시작해요. 저장 용량이 차면 업그레이드할 수 있어요.
-        </p>
         {error ? (
           <p role="alert" className="mt-3 text-sm text-warn">
             {error}
