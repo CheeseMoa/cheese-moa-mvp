@@ -122,6 +122,14 @@ export interface PhotoFlags {
   blurry: boolean
 }
 
+/** '분류가 어려워요' 사진에서 분류를 어렵게 한(애매한) 얼굴 하나의 bbox — 원본 이미지 px, 좌상단 x·y (CHMO-412) */
+export interface FaceBbox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface Photo {
   id: ID
   /** 앨범과 다대다 — 여러 앨범에 속할 수 있음 */
@@ -133,6 +141,10 @@ export interface Photo {
   /** 검토 여부(사진 단위) — 미검토 사진은 뷰어 응답에서 제외 */
   reviewed: boolean
   downloadUrl?: string
+  /** 분류를 어렵게 한 얼굴들의 bbox — uncertain으로 분류된 사진에만 값이 있다(그 외 빈 배열, CHMO-412) */
+  faceBboxes: FaceBbox[]
+  /** 분류가 어려웠던 이유 코드(AI 고정 계약) — 문구 변환은 lib/uncertainCauses.ts가 소유 */
+  causes: string[]
 }
 
 // ── 인증 응답 ────────────────────────────────────────────────
