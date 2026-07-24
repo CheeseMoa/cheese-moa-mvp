@@ -16,7 +16,7 @@ export function PhoneShell({ children }: PhoneShellProps) {
   return (
     <div className="cheese-dots flex min-h-dvh w-full justify-center bg-surface">
       {/* overflow-clip(≠hidden): 라운드 코너 밖만 자르고 스크롤 컨테이너를 만들지 않는다 —
-          hidden이면 페이지 내 sticky(06-U)가 셸 기준으로 갇힌다(CHMO-369) */}
+          hidden이면 페이지 내 sticky(Modal·BottomSheet·라이트박스 앵커)가 셸 기준으로 갇힌다(CHMO-369) */}
       <div className="relative flex h-dvh w-full max-w-phone flex-col bg-cream shadow-card sm:my-6 sm:h-[844px] sm:overflow-clip sm:rounded-4xl">
         {children}
       </div>
