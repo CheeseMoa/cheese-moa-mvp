@@ -264,6 +264,38 @@ export const BE_ALBUM_DETAIL = {
 }
 
 /**
+ * '분류가 어려워요' 사진 — faceBboxes(애매 얼굴들, 원본 px)·causes(사유 코드) 포함
+ * (소스 대조 — BE PR #107(CHMO-393)·CHMO-410, 미채집). 비면 키 자체가 생략된다(@JsonInclude NON_EMPTY).
+ * 실서버 채집은 백필이 없어 새 업로드로만 가능 — 배포 확인 시 채집분으로 교체한다(CHMO-412).
+ */
+export const BE_PHOTO_IN_ALBUM_UNCERTAIN = {
+  photoId: 309,
+  s3Key: 'originals/events/4/7c1b2f7e-1b3a-4b8e-9a1f-2d4c5e6f7a8b.jpg',
+  thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/309.jpg',
+  downloadUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/originals/309.jpg',
+  blurry: false,
+  eyesClosed: false,
+  reviewed: false,
+  albumIds: [15],
+  faceBboxes: [
+    { x: 120, y: 48, w: 260, h: 300 },
+    { x: 500, y: 60, w: 180, h: 210 },
+  ],
+  causes: ['low_resolution', 'small_faces'],
+}
+
+/** GET /albums/:id — uncertain 앨범 상세 (소스 대조). 특수 앨범이라 personName·personId가 null */
+export const BE_ALBUM_DETAIL_UNCERTAIN = {
+  albumId: 15,
+  type: 'UNCERTAIN',
+  personName: null,
+  personId: null,
+  photoCount: 1,
+  reviewStatus: 'UNREVIEWED',
+  photos: [BE_PHOTO_IN_ALBUM_UNCERTAIN],
+}
+
+/**
  * GET /albums/:id/download — 멤버용 앨범 ZIP (2026-07-20 실서버 채집, CHMO-338).
  * 뷰어 ZIP과 같은 {downloadUrl, expiresAt} 꼴. 실서버 관찰: 미검토 포함 전체가 zip에 담기고
  * ("-all" 키), person/common 외 특수 앨범은 ALBUM404. expiresAt은 Z가 붙어 온다(보정 무해).

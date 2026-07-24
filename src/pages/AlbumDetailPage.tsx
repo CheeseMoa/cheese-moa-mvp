@@ -31,6 +31,7 @@ import {
 import { runWithConcurrency } from '../lib/concurrency'
 import { downloadViaBlob } from '../lib/download'
 import { cx } from '../lib/cx'
+import { uncertainCauseMessages } from '../lib/uncertainCauses'
 import type { ID } from '../types/api'
 
 /**
@@ -44,6 +45,8 @@ import type { ID } from '../types/api'
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
  * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
+ * uncertain(분류가 어려워요) 앨범은 검토 UI(라이트박스 배지·[검토 완료])를 노출하지 않는다 — 검토·발행
+ * 대상이 인물·공통뿐이라(CHMO-357, 08 카드 규칙과 동일) 대신 분류 사유·애매 얼굴 bbox를 보여준다(CHMO-412).
  */
 export function AlbumDetailPage() {
   const {
@@ -344,7 +347,9 @@ export function AlbumDetailPage() {
           )}
         </div>
 
-        {album && hasPhotos && (
+        {/* uncertain 앨범은 검토·발행 대상이 아니라(인물·공통만 — CHMO-357) 일반 모드 하단 바가
+            통째로 비므로 숨긴다([다운로드]도 특수 앨범엔 없음). 선택모드 바(저장·삭제·옮기기)는 유지 */}
+        {album && hasPhotos && (selectMode || album.type !== 'uncertain') && (
           <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             {selectMode ? (
               <>
@@ -420,7 +425,10 @@ export function AlbumDetailPage() {
           disabled={locked || pendingDelete !== null || pendingMove !== null}
           info={(photo) => (
             <>
-              <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />
+              {/* uncertain은 검토 대상이 아니라 배지 대신 분류 사유가 주인공이다(08 카드도 배지 없음) */}
+              {album?.type !== 'uncertain' && (
+                <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />
+              )}
               {photo.flags?.eyesClosed && (
                 <span className="rounded-full bg-warn px-[11px] py-1.5 text-xs font-bold text-white">
                   눈감음
@@ -431,8 +439,22 @@ export function AlbumDetailPage() {
                   흔들림
                 </span>
               )}
+              {/* 분류가 어려웠던 이유 — uncertain 앨범에서만, 표시된 bbox(애매 얼굴)와 세트(CHMO-412) */}
+              {album?.type === 'uncertain' &&
+                uncertainCauseMessages(photo.causes).map((message) => (
+                  <span
+                    key={message}
+                    className="rounded-xl bg-surface/95 px-3 py-1.5 text-center text-xs font-medium text-text"
+                  >
+                    {message}
+                  </span>
+                ))}
             </>
           )}
+          faceBboxes={
+            // 애매 얼굴 bbox는 uncertain 앨범에서만 — 인물 앨범으로 옮긴 뒤엔 사유가 더는 유효하지 않다
+            album?.type === 'uncertain' ? (photo) => photo.faceBboxes : undefined
+          }
           actions={(photo) => (
             <>
               <LightboxToolbarButton
