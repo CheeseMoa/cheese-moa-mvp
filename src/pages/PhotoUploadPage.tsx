@@ -86,6 +86,8 @@ export function PhotoUploadPage() {
 
   const event = eventApi.data
   const eventPath = `/groups/${groupId}/events/${eventId}`
+  // 피커 분기(스크롤 밖 하단 CTA 액션바가 있는 상태) — 이때는 main이 아니라 바가 바닥 여백을 소유한다
+  const showPicker = !!event && event.status !== 'analyzing'
   const selectedCount = photos.filter((p) => p.selected).length
   const overBatchLimit = selectedCount > MAX_UPLOAD_BATCH
   const busy = phase !== 'idle'
@@ -241,7 +243,10 @@ export function PhotoUploadPage() {
   return (
     <PhoneShell>
       <Header backTo={eventPath} backLabel={event?.name ?? '이벤트 상세'} backDisabled={busy} />
-      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
+      {/* 바닥 여백 소유가 분기별로 다르다 — 피커 분기는 스크롤 밖 하단 액션바가 pb-safe-9를 갖는다 */}
+      <main
+        className={`flex flex-1 flex-col overflow-y-auto px-5 pt-5 ${showPicker ? '' : 'pb-safe-9'}`}
+      >
         <h1 className="text-xl font-bold text-text">사진 업로드</h1>
 
         {!event ? (
@@ -275,8 +280,9 @@ export function PhotoUploadPage() {
           </>
         ) : (
           <>
-            {/* 카운트·품질 토글은 그리드 위 sticky — 사진이 쌓여 화면이 길어져도 항상 보인다(CHMO-369) */}
-            <div className="sticky top-0 z-10 -mx-5 bg-cream px-5 pb-3 pt-3">
+            {/* 카운트·품질 토글 — 업로드 전 설정이라 스크롤을 따라올 필요가 없어 일반 흐름에 둔다.
+                CHMO-369의 상단 sticky는 철회: 실기기 WebKit에서 하단 CTA처럼 떠서 사진이 비쳤다(CHMO-424) */}
+            <div className="pb-3 pt-3">
               <p>
                 <span className="inline-flex items-center rounded-full bg-primary/[.15] px-3 py-1 text-xs font-bold text-heading">
                   선택됨 {selectedCount}장
@@ -327,35 +333,6 @@ export function PhotoUploadPage() {
               ))}
             </PhotoGrid>
 
-            {/* CTA는 하단 sticky — 경고·에러도 버튼과 함께 항상 보인다. -mb-safe-9가 main의
-                pb-safe-9를 상쇄하고 자체 pb-safe-9를 채워, 스크롤 중에도 버튼 아래가 크림색으로
-                차 있다(CHMO-369·396) */}
-            <div className="sticky bottom-0 z-10 -mx-5 -mb-safe-9 mt-auto bg-cream px-5 pb-safe-9 pt-3">
-              {overBatchLimit ? (
-                <p role="alert" className="mb-2.5 text-sm text-warn">
-                  한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}
-                  {selectedCount - MAX_UPLOAD_BATCH}장을 선택 해제해 주세요.
-                </p>
-              ) : null}
-
-              {error ? (
-                <p role="alert" className="mb-2.5 text-sm text-warn">
-                  {error}
-                </p>
-              ) : null}
-
-              <Button
-                fullWidth
-                disabled={selectedCount === 0 || overBatchLimit || busy}
-                onClick={handleAnalyze}
-              >
-                {phase === 'uploading'
-                  ? `업로드 중… ${uploadedCount}/${uploadTotal}`
-                  : phase === 'registering'
-                    ? '분류 시작 중…'
-                    : '사진 분류하기'}
-              </Button>
-            </div>
           </>
         )}
 
@@ -368,6 +345,38 @@ export function PhotoUploadPage() {
           onChange={handlePick}
         />
       </main>
+
+      {/* 하단 CTA는 스크롤 컨테이너 밖 고정 영역 — 셸이 h-dvh라 항상 보이고, 경고·에러도 버튼과
+          함께 뜬다. 화면 안 sticky는 실기기 WebKit에서 상·하단 모두 떠서 사진이 비쳐 걷어냈다
+          (CHMO-369의 sticky 철회, CHMO-424) */}
+      {showPicker ? (
+        <div className="px-5 pb-safe-9 pt-3">
+          {overBatchLimit ? (
+            <p role="alert" className="mb-2.5 text-sm text-warn">
+              한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}
+              {selectedCount - MAX_UPLOAD_BATCH}장을 선택 해제해 주세요.
+            </p>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="mb-2.5 text-sm text-warn">
+              {error}
+            </p>
+          ) : null}
+
+          <Button
+            fullWidth
+            disabled={selectedCount === 0 || overBatchLimit || busy}
+            onClick={handleAnalyze}
+          >
+            {phase === 'uploading'
+              ? `업로드 중… ${uploadedCount}/${uploadTotal}`
+              : phase === 'registering'
+                ? '분류 시작 중…'
+                : '사진 분류하기'}
+          </Button>
+        </div>
+      ) : null}
     </PhoneShell>
   )
 }
