@@ -42,6 +42,17 @@ export function IconDownload({ size = 24 }: IconProps) {
   )
 }
 
+/** 공유 — 위 화살표 + 받침 트레이(square.and.arrow.up) — 초대/학부모 공유 시트 */
+export function IconShare({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M12 14V4" />
+      <path d="M8.5 7.5L12 4l3.5 3.5" />
+      <path d="M5 11v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+  )
+}
+
 /** 삭제 — 휴지통 */
 export function IconTrash({ size = 24 }: IconProps) {
   return (
