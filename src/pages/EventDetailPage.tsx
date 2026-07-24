@@ -23,7 +23,8 @@ import type { Album, AnalysisProgress, EventItem } from '../types/api'
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
  * - empty → 06-E 빈 이벤트(node 211:1572): 📷 빈 상태 + [사진 업로드]→06-U
- * - analyzing → 분석중: 2초 간격 자동 폴링(BE 요청 주기) — 진행률(progress)과 함께 갱신되고,
+ * - analyzing 또는 분석 job 진행 중(progress non-null — published 증분 분석 포함, CHMO-424)
+ *   → 분석중: 2초 간격 자동 폴링(BE 요청 주기) — 진행률(progress)과 함께 갱신되고,
  *   완료되면 앨범 그리드로 자연 전환
  * - review/ready/published → 08 앨범 그리드(EventAlbumGrid, node 211:1619)
  * 어느 상태든 헤더 ⚙ = 이벤트 설정(이름 수정 + 이벤트 삭제 — CHMO-278).
@@ -34,21 +35,24 @@ export function EventDetailPage() {
   const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
   const event = eventApi.data
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 분석 job 진행 중 — 상태만 보면 안 된다: published 이벤트는 사진을 추가해도 전이 없이
+  // 증분 분석되므로(공개 유지, CHMO-216·324) job 신호인 progress(job 중에만 non-null)로도
+  // 감지해야 추가 업로드 진행률이 보인다(CHMO-424)
+  const analysisRunning = !!event && (event.status === 'analyzing' || event.progress != null)
   // 뒤로가기 '‹ 모임명'은 빈/분석중 분기에서만 쓰인다(08 그리드는 '이벤트 목록' 고정).
   // 그리드 이벤트에선 group 요청을 아예 보내지 않는다 — 불필요한 라운드트립 제거
-  const needsGroupName = !!event && (event.status === 'empty' || event.status === 'analyzing')
+  const needsGroupName = !!event && (event.status === 'empty' || analysisRunning)
   const groupApi = useApi(needsGroupName ? `group:${groupId}` : null, (signal) =>
     getGroup(groupId, signal),
   )
 
   // 분석중 자동 폴링 — 2초마다 진행률·상태를 다시 확인하고(BE 요청 주기), 완료되면 앨범
   // 그리드로 자연 전환. 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
-  const analyzing = event?.status === 'analyzing'
   useEffect(() => {
-    if (!analyzing) return
+    if (!analysisRunning) return
     const timer = setInterval(eventApi.refetch, 2000)
     return () => clearInterval(timer)
-  }, [analyzing, eventApi.refetch])
+  }, [analysisRunning, eventApi.refetch])
 
   // 보조 fetch(모임명)의 401은 ErrorState를 거치지 않아 여기서 직접 복귀시킨다
   // (eventApi 401은 아래 ErrorState unauthorizedTo가 처리)
@@ -57,7 +61,7 @@ export function EventDetailPage() {
   const base = `/groups/${groupId}/events/${eventId}`
 
   // 08. 이벤트 상세 = 앨범 그리드(검수 허브) — 분석 완료 시 여기로 자연 전환
-  if (event && event.status !== 'empty' && event.status !== 'analyzing') {
+  if (event && event.status !== 'empty' && !analysisRunning) {
     return <EventAlbumGrid event={event} groupId={groupId} onEventUpdated={eventApi.refetch} />
   }
 
