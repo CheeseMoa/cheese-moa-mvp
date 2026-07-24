@@ -494,6 +494,7 @@ export function AlbumDetailPage() {
         <MovePhotosSheet
           onClose={() => setPendingMove(null)}
           sourceAlbumId={albumId}
+          sourceAlbumType={album.type}
           photoIds={pendingMove}
           onMoved={handleMoved}
         />
@@ -507,7 +508,9 @@ export function AlbumDetailPage() {
           onClose={() => setRenameOpen(false)}
           title="아이 이름 수정"
           label="아이 이름"
-          placeholder="예) 김민준"
+          // 현재 이름은 지우지 않아도 되게 회색 placeholder로만 — 입력은 비워서 연다(CHMO-429)
+          placeholder={album.name}
+          prefill={false}
           initialName={album.name}
           submit={(name) => renamePersonAlbum(albumId, name)}
           successMessage="🧀 아이 이름을 바꿨어요"
