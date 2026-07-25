@@ -17,7 +17,7 @@
  * createFixtures()는 **호출마다 모든 객체를 새로 만든다** — 재시드가 이전 세션의
  * 변형(사진 이동·검토 표시 등)을 물려받지 않게(테스트/리셋 안전).
  */
-import { uploadKeyPrefixOf, type Db, type DbAlbum, type DbPhoto } from './db'
+import { assignUncertainDetails, uploadKeyPrefixOf, type Db, type DbAlbum, type DbPhoto } from './db'
 
 // ── 생성 헬퍼 ────────────────────────────────────────────────
 
@@ -75,6 +75,8 @@ function distribute(photos: DbPhoto[], targets: DistributeTargets): void {
       return
     }
     if (targets.uncertain && i % 10 === 9) {
+      // uncertain 최초 분류 시 bbox·사유 부여(CHMO-412) — 분석 경로(completeAnalysis)와 동일 규칙
+      assignUncertainDetails(photo, i)
       photo.albumIds.push(targets.uncertain.id)
       return
     }

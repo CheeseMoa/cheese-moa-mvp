@@ -3,7 +3,7 @@ import { IconClose, IconDownload, useToast } from './ui'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { cx } from '../lib/cx'
 import { downloadViaBlob } from '../lib/download'
-import type { ID } from '../types/api'
+import type { FaceBbox, ID } from '../types/api'
 
 /** 라이트박스가 필요로 하는 최소 사진 형태 — Photo(제작자)·ViewerPhoto(뷰어) 공통부 */
 export interface LightboxPhoto {
@@ -24,6 +24,12 @@ interface PhotoLightboxProps<T extends LightboxPhoto> {
   info?: (photo: T) => ReactNode
   /** 하단 툴바의 [저장] 뒤에 붙는 추가 액션(09 옮기기/삭제) — LightboxToolbarButton으로 조합 */
   actions?: (photo: T) => ReactNode
+  /**
+   * 사진 위에 강조할 얼굴 bbox들(원본 px 좌표) — '분류가 어려워요' 사유 표시(CHMO-412).
+   * 노출 여부는 호출부가 소유한다(09가 uncertain 앨범에서만 넘긴다) — 뷰어(16)는 미사용.
+   * 좌표는 로드된 원본의 naturalWidth/Height 기준으로 화면 크기에 맞춰 환산해 그린다.
+   */
+  faceBboxes?: (photo: T) => FaceBbox[] | undefined
   /** 잠금 — 뮤테이션 진행 중이거나 위에 다른 오버레이(확인 다이얼로그·시트)가 떠 있을 때.
       ESC·배경 닫기와 이동(스와이프·화살표)까지 멈춰 아래 화면이 몰래 바뀌는 것을 막는다 */
   disabled?: boolean
@@ -45,6 +51,7 @@ export function PhotoLightbox<T extends LightboxPhoto>({
   onClose,
   info,
   actions,
+  faceBboxes,
   disabled = false,
 }: PhotoLightboxProps<T>) {
   const toast = useToast()
@@ -53,7 +60,37 @@ export function PhotoLightbox<T extends LightboxPhoto>({
 
   const photo = photos[index] as T | undefined
 
+  // bbox 환산 재료 — 원본 자연 크기(naturalWidth/Height)와 이미지가 그려지는 프레임 크기
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const frameRef = useRef<HTMLDivElement | null>(null)
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
+  const [frame, setFrame] = useState<{ w: number; h: number } | null>(null)
+  const bboxEnabled = faceBboxes != null
+
   useEscapeKey(!disabled, onClose)
+
+  // 사진 전환 시 자연 크기 갱신 — 캐시된 이미지는 onLoad 전에 이미 complete일 수 있어 직접 읽는다
+  useEffect(() => {
+    if (!bboxEnabled) return
+    const img = imgRef.current
+    if (img && img.complete && img.naturalWidth > 0) {
+      setNatural({ w: img.naturalWidth, h: img.naturalHeight })
+    } else {
+      setNatural(null)
+    }
+  }, [bboxEnabled, photo?.id])
+
+  // 프레임 크기 추적 — 데스크톱 창 리사이즈에도 bbox가 사진에 붙어 있게
+  useEffect(() => {
+    if (!bboxEnabled) return
+    const el = frameRef.current
+    if (!el) return
+    const update = () => setFrame({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [bboxEnabled])
 
   const go = (delta: number) => {
     const next = index + delta
@@ -105,6 +142,16 @@ export function PhotoLightbox<T extends LightboxPhoto>({
     if (!ok) toast.show('저장하지 못했어요. 다시 시도해 주세요.')
   }
 
+  // object-contain으로 그려진 실제 이미지 영역(레터박스 제외)을 프레임 안에서 역산한다
+  const boxes = faceBboxes?.(photo)
+  let paintedRect: { left: number; top: number; width: number; height: number } | null = null
+  if (boxes?.length && natural && frame && natural.w > 0 && natural.h > 0) {
+    const scale = Math.min(frame.w / natural.w, frame.h / natural.h)
+    const width = natural.w * scale
+    const height = natural.h * scale
+    paintedRect = { left: (frame.w - width) / 2, top: (frame.h - height) / 2, width, height }
+  }
+
   return (
     <div
       role="dialog"
@@ -119,13 +166,41 @@ export function PhotoLightbox<T extends LightboxPhoto>({
       <div className="sticky top-0 h-dvh max-h-full">
         {/* 사진 — 풀블리드 contain, 상/하단 바 높이만큼 패딩으로 비켜난다.
             key=사진 id — 이동 시 이전 원본이 그대로 보이는 잔상 방지(새 img로 교체) */}
-        <img
-          key={photo.id}
-          src={photo.url}
-          alt=""
-          onClick={(e) => e.stopPropagation()}
-          className="absolute inset-0 h-full w-full object-contain pb-24 pt-12"
-        />
+        <div onClick={(e) => e.stopPropagation()} className="absolute inset-0 pb-24 pt-12">
+          <div ref={frameRef} className="relative h-full w-full">
+            <img
+              key={photo.id}
+              ref={imgRef}
+              src={photo.url}
+              alt=""
+              onLoad={(e) =>
+                bboxEnabled &&
+                setNatural({
+                  w: e.currentTarget.naturalWidth,
+                  h: e.currentTarget.naturalHeight,
+                })
+              }
+              className="h-full w-full object-contain"
+            />
+            {/* 애매 얼굴 bbox 오버레이 — 원본 px → 그려진 이미지 영역 비율로 환산(CHMO-412) */}
+            {paintedRect && natural && boxes && (
+              <div aria-hidden className="pointer-events-none absolute overflow-hidden" style={paintedRect}>
+                {boxes.map((box, i) => (
+                  <div
+                    key={i}
+                    className="absolute rounded-md border-2 border-primary shadow-[0_0_0_1.5px_rgba(255,255,255,0.75)]"
+                    style={{
+                      left: `${(box.x / natural.w) * 100}%`,
+                      top: `${(box.y / natural.h) * 100}%`,
+                      width: `${(box.w / natural.w) * 100}%`,
+                      height: `${(box.h / natural.h) * 100}%`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* 상단 바 — ✕ · n/N 카운터 (반투명 blur + 헤어라인) */}
         <div

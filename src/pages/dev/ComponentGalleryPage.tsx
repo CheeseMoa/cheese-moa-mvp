@@ -18,6 +18,7 @@ import {
   IconClose,
   IconDownload,
   IconFolderMove,
+  IconShare,
   IconTrash,
   Modal,
   PhotoGrid,
@@ -99,6 +100,7 @@ export function ComponentGalleryPage() {
         <Section title="02-1 · Icons — SF Symbols풍 라인 아이콘 (CHMO-242 추가)">
           <div className="flex items-center gap-5 text-accent">
             <IconDownload />
+            <IconShare />
             <IconFolderMove />
             <span className="text-warn">
               <IconTrash />
@@ -106,7 +108,7 @@ export function ComponentGalleryPage() {
             <span className="text-text">
               <IconClose />
             </span>
-            <span className="text-xs text-muted">저장 · 옮기기 · 삭제 · 닫기 (currentColor)</span>
+            <span className="text-xs text-muted">저장 · 공유 · 옮기기 · 삭제 · 닫기 (currentColor)</span>
           </div>
           <div className="flex gap-2.5">
             <Button variant="warn" className="flex-1 gap-1.5 !px-2">

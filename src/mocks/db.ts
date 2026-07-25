@@ -11,6 +11,7 @@ import type {
   AlbumType,
   AnalysisStatus,
   EventStatus,
+  FaceBbox,
   ISODate,
   ISODateTime,
   PhotoFlags,
@@ -93,6 +94,12 @@ export interface DbPhoto {
    * 그 앨범 노출만 숨긴다(CHMO-395 — 노출을 줄이는 방향만 즉시 반영).
    */
   published: boolean
+  /**
+   * '분류가 어려워요' 분류 사유(CHMO-393·410) — BE처럼 uncertain 최초 분류 시에만 채우고
+   * 이후 이동·재분석에도 사진에 남는다. 그 외 사진은 undefined(응답에서 키 생략).
+   */
+  faceBboxes?: FaceBbox[]
+  causes?: string[]
   createdAt: ISODateTime
 }
 
@@ -579,6 +586,36 @@ export function settleAnalysis(eventId: number): DbAnalysisJob | undefined {
 const PERSON_NAME_POOL = ['김민준', '이서연', '박하린', '최지우', '정도윤', '한소율']
 
 /**
+ * '분류가 어려워요' 사유 조합 풀 — AI 고정 계약 코드(CHMO-410)를 결정적으로 순회한다.
+ * 빈 배열(품질·데이터 문제 아님 — 범용 문구 경로)까지 포함해 화면의 네 경로를 모두 시연한다.
+ */
+const UNCERTAIN_CAUSE_COMBOS: string[][] = [
+  ['small_faces'],
+  ['low_resolution', 'small_faces'],
+  ['single_appearance'],
+  [],
+]
+
+/**
+ * uncertain 분류 사진에 애매 얼굴 bbox·사유를 부여(CHMO-412) — BE가 사진 최초 생성 시에만
+ * 저장하는 것처럼(CHMO-393) 최초 분류 시 한 번만 부른다. bbox는 원본 px(사진 치수 기준 비율로
+ * 결정적 산출), seed가 3의 배수인 사진은 얼굴 2개로 배열 계약을 시연한다.
+ */
+export function assignUncertainDetails(photo: DbPhoto, seed: number): void {
+  const face = (fx: number, fy: number, fw: number): FaceBbox => ({
+    x: Math.round(photo.width * fx),
+    y: Math.round(photo.height * fy),
+    w: Math.round(photo.width * fw),
+    h: Math.round(photo.width * fw * 1.25),
+  })
+  photo.faceBboxes =
+    seed % 3 === 0
+      ? [face(0.16, 0.14, 0.2), face(0.58, 0.24, 0.16)]
+      : [face(0.36, 0.18, 0.24)]
+  photo.causes = UNCERTAIN_CAUSE_COMBOS[seed % UNCERTAIN_CAUSE_COMBOS.length]
+}
+
+/**
  * 목 AI 분류(증분): **아직 어떤 앨범에도 속하지 않은 사진만** 분류한다.
  * - 재분석 시 기존 앨범·수동 배치·검토 상태(사진 단위)는 건드리지 않는다.
  * - 같은 모임 인물(personId) 재사용 → 이벤트가 달라도 동일 인물이 이어진다.
@@ -629,6 +666,8 @@ export function completeAnalysis(eventId: number): void {
         return
       }
       if (i % 10 === 9) {
+        // BE는 uncertain 최초 생성 시에만 bbox·사유를 저장(CHMO-393·410) — pending(미분류)만 오므로 최초가 보장된다
+        assignUncertainDetails(photo, i)
         linkPhotoToAlbum(photo.id, specialAlbum('uncertain').id)
         return
       }

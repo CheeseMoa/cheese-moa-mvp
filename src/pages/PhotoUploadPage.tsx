@@ -47,6 +47,9 @@ type Phase = 'idle' | 'uploading' | 'registering'
 
 /**
  * 06-U. 사진 업로드 · node 211:1584
+ * 선택은 MAX_UPLOAD_BATCH(50장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
+ * 해제 강요 제거, CHMO-397). 실 BE 상한 50 실측(2026-07-24, VALID400) — 당분간 50장
+ * 유지 결정(상향 요청 CHMO-430은 철회, 200~300장 요구가 생기면 재오픈).
  * 다중 선택(파일 피커) → 썸네일 그리드에서 선택 조정 → [사진 분류하기] 한 번으로
  * ① presign(POST /events/:id/photos/presign) ② presigned URL로 S3 직접 PUT
  * ③ 등록(POST /events/:id/photos — 제외 토글 함께 전송) → 이벤트 상세(분석중)로 복귀.
@@ -108,20 +111,28 @@ export function PhotoUploadPage() {
       notices.push(
         `${MAX_UPLOAD_FILE_LABEL}가 넘는 사진 ${supported.length - accepted.length}개는 제외했어요`,
       )
-    if (notices.length > 0) toast.show(notices.join(' · '))
-    if (accepted.length === 0) return
+    if (accepted.length === 0) {
+      if (notices.length > 0) toast.show(notices.join(' · '))
+      return
+    }
     const seen = new Set(photos.map((p) => p.key))
+    // 상한 캡(CHMO-397) — 남은 슬롯까지만 선택 상태로 담고 초과분은 해제 상태로 추가한다.
+    // 사용자가 타일을 직접 해제하지 않아도 바로 진행할 수 있고, 원하면 바꿔 담을 수 있다.
+    const remainingSlots = Math.max(0, MAX_UPLOAD_BATCH - selectedCount)
     const added = accepted
       .map((file) => ({ key: `${file.name}:${file.size}:${file.lastModified}`, file }))
       .filter(({ key }) => !seen.has(key))
-      .map(({ key, file }) => ({
+      .map(({ key, file }, i) => ({
         key,
         file,
         previewUrl: URL.createObjectURL(file),
-        selected: true,
+        selected: i < remainingSlots,
         s3Key: null,
         registered: false,
       }))
+    if (added.length > remainingSlots)
+      notices.push(`한 번에 ${MAX_UPLOAD_BATCH}장까지 올릴 수 있어요`)
+    if (notices.length > 0) toast.show(notices.join(' · '))
     if (added.length === 0) return
     setPhotos((prev) => [...prev, ...added])
     void shrinkPreviews(added)
@@ -145,8 +156,17 @@ export function PhotoUploadPage() {
     })
   }
 
-  const toggleSelected = (key: string) =>
+  const toggleSelected = (key: string) => {
+    const target = photos.find((p) => p.key === key)
+    if (!target) return
+    // 캡 도달 상태에서 새로 선택하려는 탭 — 상한을 넘기지 말고 안내만(CHMO-397).
+    // 여기서 막아야 CTA가 '초과로 비활성' 상태로 되돌아갈 일이 없다.
+    if (!target.selected && selectedCount >= MAX_UPLOAD_BATCH) {
+      toast.show(`한 번에 ${MAX_UPLOAD_BATCH}장까지 올릴 수 있어요`)
+      return
+    }
     setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, selected: !p.selected } : p)))
+  }
 
   const handleAnalyze = async () => {
     const selected = photos.filter((p) => p.selected)
@@ -283,11 +303,21 @@ export function PhotoUploadPage() {
             {/* 카운트·품질 토글 — 업로드 전 설정이라 스크롤을 따라올 필요가 없어 일반 흐름에 둔다.
                 CHMO-369의 상단 sticky는 철회: 실기기 WebKit에서 하단 CTA처럼 떠서 사진이 비쳤다(CHMO-424) */}
             <div className="pb-3 pt-3">
-              <p>
+              <p className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center rounded-full bg-primary/[.15] px-3 py-1 text-xs font-bold text-heading">
                   선택됨 {selectedCount}장
                 </span>
+                {/* 상한 사전 고지 — 선택 전부터 상시 보인다(CHMO-397) */}
+                <span className="text-xs text-muted">한 번에 최대 {MAX_UPLOAD_BATCH}장</span>
               </p>
+              {/* 캡으로 해제 상태 사진이 남았을 때만 — 이어 올릴 동선 안내(등록=분석 시작이라
+                  분할 업로드 불가, 상한은 50장 유지 결정 — CHMO-430 철회) */}
+              {selectedCount >= MAX_UPLOAD_BATCH && photos.some((p) => !p.selected) && (
+                <p className="mt-2 text-xs leading-relaxed text-muted">
+                  선택되지 않은 사진은 이번에 올라가지 않아요 — 분류가 끝난 뒤 다시 들어와
+                  이어서 올릴 수 있어요
+                </p>
+              )}
 
               <div className="mt-3 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3">
@@ -351,6 +381,8 @@ export function PhotoUploadPage() {
           (CHMO-369의 sticky 철회, CHMO-424) */}
       {showPicker ? (
         <div className="px-5 pb-safe-9 pt-3">
+          {/* 정상 경로에선 도달 불가 — 선택이 상한에서 캡된다(CHMO-397). BE가 배치 전체를
+              400으로 거절하는 하드 제약이라 회귀 대비 방어선으로만 남긴다 */}
           {overBatchLimit ? (
             <p role="alert" className="mb-2.5 text-sm text-warn">
               한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}

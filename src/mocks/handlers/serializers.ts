@@ -156,7 +156,11 @@ export function toAnalysisStatusResponse(event: DbEvent) {
 
 // ── 사진 ─────────────────────────────────────────────────────
 
-/** BE PhotoInAlbumResponse — 원본 url·치수 없이 downloadUrl, 플래그는 평면 필드 */
+/**
+ * BE PhotoInAlbumResponse — 원본 url·치수 없이 downloadUrl, 플래그는 평면 필드.
+ * faceBboxes·causes는 uncertain 분류 사진에만 있고 비면 키 자체를 생략한다
+ * (BE @JsonInclude(NON_EMPTY) — CHMO-393·410).
+ */
 export function toPhotoInAlbum(photo: DbPhoto) {
   return {
     photoId: photo.id,
@@ -167,6 +171,8 @@ export function toPhotoInAlbum(photo: DbPhoto) {
     eyesClosed: photo.flags.eyesClosed,
     reviewed: photo.reviewed,
     albumIds: [...photo.albumIds],
+    ...(photo.faceBboxes?.length ? { faceBboxes: photo.faceBboxes.map((b) => ({ ...b })) } : {}),
+    ...(photo.causes?.length ? { causes: [...photo.causes] } : {}),
   }
 }
 

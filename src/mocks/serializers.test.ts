@@ -177,6 +177,22 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     })
   })
 
+  it("'분류가 어려워요' 사진 — faceBboxes·causes가 왕복하고, 그 외 사진은 키 생략 → 빈 배열(CHMO-412)", () => {
+    // 시드 uncertain 앨범(6)의 사진은 bbox·사유를 갖는다(fixtures가 assignUncertainDetails로 부여)
+    const uncertainPhoto = photosOfAlbum(6)[0]
+    const raw = toPhotoInAlbum(uncertainPhoto)
+    const mapped = toPhoto(raw)
+    expect(mapped.faceBboxes).toEqual(uncertainPhoto.faceBboxes)
+    expect(mapped.faceBboxes.length).toBeGreaterThan(0)
+    expect(mapped.causes).toEqual(uncertainPhoto.causes)
+
+    // 일반 사진은 BE @JsonInclude(NON_EMPTY)처럼 키 자체가 없어야 한다 — 매퍼가 빈 배열로 정규화
+    const normalRaw = toPhotoInAlbum(photosOfAlbum(1)[0])
+    expect('faceBboxes' in normalRaw).toBe(false)
+    expect('causes' in normalRaw).toBe(false)
+    expect(toPhoto(normalRaw)).toMatchObject({ faceBboxes: [], causes: [] })
+  })
+
   it('이동 추천 — 핸들러 항목 직렬화가 매퍼와 맞는다(공통 판정은 type, CHMO-399)', () => {
     // 핸들러가 인라인으로 조립하던 항목을 toMoveSuggestionResponse로 승격(CHMO-227)
     // 썸네일은 검수 그리드(AlbumSummary)와 같은 커버 규약(CHMO-232) — 커버가 실재하는지도 확인

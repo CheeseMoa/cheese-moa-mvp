@@ -236,7 +236,9 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         <div className="flex-1 overflow-y-auto px-5 pb-4 pt-5">
           <h1 className="min-w-0 truncate text-xl font-bold text-heading">{event.name}</h1>
 
-          {albumsApi.loading || albumsApi.error ? (
+          {/* 데이터가 있으면 refetch 중에도 그리드를 유지한다(09와 동일 구조) — 이름 저장 등
+              성공 직후 갱신 때 화면이 로딩으로 갈아끼워져 새로고침처럼 깜빡이지 않게(CHMO-429) */}
+          {albumsApi.data === null ? (
             <LoadState
               loading={albumsApi.loading}
               error={albumsApi.error}
@@ -250,6 +252,12 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
             <p className="py-11 text-center text-sm text-muted">앨범이 아직 없어요.</p>
           ) : (
             <>
+              {/* stale 그리드 위에서 refetch가 실패해도 보이게 — 화면은 유지하고 알림만(09와 동일) */}
+              {albumsApi.error && (
+                <p role="alert" className="mt-3 text-sm text-warn">
+                  {toErrorMessage(albumsApi.error)}
+                </p>
+              )}
               <div className="mt-4 grid grid-cols-3 gap-2.5">
                 {mainAlbums.map((album) => (
                   <AlbumCard
@@ -319,7 +327,9 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
           onClose={() => setRenameTarget(null)}
           title="아이 이름 수정"
           label="아이 이름"
-          placeholder="예) 김민준"
+          // 현재 이름은 지우지 않아도 되게 회색 placeholder로만 — 입력은 비워서 연다(CHMO-429)
+          placeholder={renameTarget.name}
+          prefill={false}
           initialName={renameTarget.name}
           submit={(name) => renamePersonAlbum(renameTarget.id, name)}
           successMessage="🧀 아이 이름을 바꿨어요"

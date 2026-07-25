@@ -39,6 +39,7 @@ import { setViewerGroupName, setViewerToken } from '../lib/viewer'
 import {
   BE_ALBUM_COMMON,
   BE_ALBUM_DETAIL,
+  BE_ALBUM_DETAIL_UNCERTAIN,
   BE_ALBUM_EYES_CLOSED,
   BE_ALBUM_PERSON,
   BE_AUTH,
@@ -285,7 +286,24 @@ describe('앨범 · 사진', () => {
       downloadUrl: BE_ALBUM_DETAIL.photos[0].downloadUrl,
       flags: { eyesClosed: true, blurry: false },
       reviewed: false,
+      // faceBboxes·causes는 키 생략이 기본(NON_EMPTY) — 매퍼가 빈 배열로 정규화한다(CHMO-412)
+      faceBboxes: [],
+      causes: [],
     })
+  })
+
+  it("BE '분류가 어려워요' 앨범 상세 — 사진의 faceBboxes(배열)·causes가 그대로 전달된다(CHMO-393·410)", async () => {
+    serve(envelope(BE_ALBUM_DETAIL_UNCERTAIN))
+
+    const { album, photos } = await getAlbumWithPhotos(15)
+
+    // 특수 앨범 표시명 파생은 기존 규칙 그대로(회귀 없음)
+    expect(album).toMatchObject({ id: 15, type: 'uncertain', personId: null })
+    expect(photos[0].faceBboxes).toEqual([
+      { x: 120, y: 48, w: 260, h: 300 },
+      { x: 500, y: 60, w: 180, h: 210 },
+    ])
+    expect(photos[0].causes).toEqual(['low_resolution', 'small_faces'])
   })
 
   it('멤버 zip 다운로드 — 경로는 평면 /albums/:id/download, 멤버 토큰을 쓴다(CHMO-338)', async () => {

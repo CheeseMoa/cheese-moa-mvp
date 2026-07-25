@@ -4,13 +4,15 @@ import { useDragScrollX } from '../hooks/useDragScrollX'
 import { useMutation } from '../hooks/useMutation'
 import { getMoveSuggestions, movePhotos } from '../api/albums'
 import { cx } from '../lib/cx'
-import type { ID, MoveSuggestion } from '../types/api'
+import type { AlbumType, ID, MoveSuggestion } from '../types/api'
 import { BottomSheet, LoadState, useToast } from './ui'
 
 interface MovePhotosSheetProps {
   onClose: () => void
   /** 원본(현재) 앨범 — 이동 시 연결이 해제된다 */
   sourceAlbumId: ID
+  /** 원본 앨범 type — 인물이 아니면(분류가 어려워요·공통) 유사도 부제를 숨긴다(CHMO-429) */
+  sourceAlbumType: AlbumType
   /** 이동할 선택 사진 — 시트를 여는 시점의 선택으로 고정 */
   photoIds: ID[]
   /** 이동 성공 — 부모가 시트를 닫고(언마운트) 선택 해제 + 상세 refetch */
@@ -27,6 +29,7 @@ interface MovePhotosSheetProps {
 export function MovePhotosSheet({
   onClose,
   sourceAlbumId,
+  sourceAlbumType,
   photoIds,
   onMoved,
 }: MovePhotosSheetProps) {
@@ -67,7 +70,9 @@ export function MovePhotosSheet({
         if (!busy) onClose()
       }}
       title="다른 사진첩으로 옮기기"
-      subtitle="유사도가 높은 순으로 추천해요"
+      // 유사도 부제는 인물 원본에서만 — 분류가 어려워요·공통에선 유사도가 미계산(null)일 수 있어
+      // %도 없이 문구만 남아 어긋난다(CHMO-429, 피드백 스코프 그대로)
+      subtitle={sourceAlbumType === 'person' ? '유사도가 높은 순으로 추천해요' : undefined}
     >
       {loading || error ? (
         <LoadState

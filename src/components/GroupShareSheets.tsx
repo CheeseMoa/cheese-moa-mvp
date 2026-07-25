@@ -2,7 +2,8 @@ import { useApi } from '../hooks/useApi'
 import type { ApiRequestError } from '../api/client'
 import { getInviteInfo, getShareInfo } from '../api/groups'
 import { copyToClipboard } from '../lib/clipboard'
-import { BottomSheet, Button, ErrorState, useToast } from './ui'
+import { shareOrCopy } from '../lib/share'
+import { BottomSheet, Button, ErrorState, IconShare, useToast } from './ui'
 
 interface SheetProps {
   groupId: string
@@ -28,16 +29,19 @@ interface ShareInfoContentProps {
   url: string
   /** 링크 복사 성공 토스트 문구 */
   copyDoneMessage: string
+  /** 네이티브 공유 본문(링크 제외 — shareOrCopy가 url을 따로 싣는다) */
+  shareText: string
   /** 카드 아래 보조 안내(학부모 시트의 공개 범위 등) */
   footnote?: string
 }
 
-/** 시트 본문 공통(와이어프레임 211:1556): 비밀번호 카드 + [⧉ 링크복사] + URL + 카카오톡 공유(목) */
+/** 시트 본문 공통(와이어프레임 211:1556): 비밀번호 카드 + [⧉ 링크복사] + URL + 네이티브 공유 */
 function ShareInfoContent({
   passwordLabel,
   password,
   url,
   copyDoneMessage,
+  shareText,
   footnote,
 }: ShareInfoContentProps) {
   const toast = useToast()
@@ -45,6 +49,17 @@ function ShareInfoContent({
   const copy = async (text: string, doneMessage: string) => {
     const ok = await copyToClipboard(text)
     toast.show(ok ? doneMessage : '복사하지 못했어요. 다시 시도해 주세요.')
+  }
+
+  // OS 공유 시트(카카오톡·라인·문자 등) — 미지원 환경은 전체 메시지 복사로 폴백
+  const handleShare = async () => {
+    const outcome = await shareOrCopy({ text: shareText, url })
+    if (outcome === 'shared' || outcome === 'canceled') return
+    toast.show(
+      outcome === 'copied'
+        ? '🧀 링크와 비밀번호를 복사했어요'
+        : '공유하지 못했어요. 다시 시도해 주세요.',
+    )
   }
 
   return (
@@ -72,14 +87,18 @@ function ShareInfoContent({
         <p className="mt-1.5 truncate text-xs text-muted">{displayUrl(url)}</p>
       </div>
       {footnote && <p className="mt-3 text-xs leading-relaxed text-muted">{footnote}</p>}
-      {/* 카카오톡 공유는 목(실 연동 없음) — MSW 목 개발 단계 */}
       <button
         type="button"
-        onClick={() => toast.show('카카오톡 공유는 준비 중이에요')}
+        onClick={() => void handleShare()}
         className="mt-5 flex flex-col items-center gap-1.5"
       >
-        <span className="h-[52px] w-[52px] rounded-full bg-accent" aria-hidden="true" />
-        <span className="text-[11px] font-medium text-text">카카오톡 공유</span>
+        <span
+          className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-accent text-text"
+          aria-hidden="true"
+        >
+          <IconShare />
+        </span>
+        <span className="text-[11px] font-medium text-text">공유하기</span>
       </button>
     </>
   )
@@ -103,6 +122,7 @@ export function InviteSheet({ groupId, open, onClose }: SheetProps) {
           password={data.password}
           url={data.joinUrl}
           copyDoneMessage="🧀 참여 링크를 복사했어요"
+          shareText={`🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${data.password}`}
         />
       ) : (
         <SheetPending error={error} onRetry={refetch} />
@@ -133,6 +153,7 @@ export function ParentShareSheet({ groupId, open, onClose }: SheetProps) {
           password={data.password}
           url={data.url}
           copyDoneMessage="🧀 공유 링크를 복사했어요"
+          shareText={`🧀 치즈모아에서 아이들 사진을 만나보세요!\n아래 링크로 들어와 비밀번호를 입력하면 공개된 앨범을 볼 수 있어요.\n비밀번호: ${data.password}`}
           footnote="학부모님은 이 링크와 비밀번호로 공개된 이벤트만 볼 수 있어요."
         />
       ) : (

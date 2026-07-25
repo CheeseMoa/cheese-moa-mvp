@@ -22,6 +22,7 @@ import type {
   AnalysisStatus,
   EventItem,
   EventStatus,
+  FaceBbox,
   Group,
   ID,
   ISODate,
@@ -205,6 +206,9 @@ export interface RawPhoto {
   blurry?: boolean
   reviewed?: boolean
   albumIds?: ID[]
+  /** uncertain 사진에만 — 비면 BE가 키 자체를 생략한다(@JsonInclude NON_EMPTY, CHMO-393·410) */
+  faceBboxes?: FaceBbox[]
+  causes?: string[]
 }
 
 export function toPhoto(raw: RawPhoto): Photo {
@@ -216,6 +220,8 @@ export function toPhoto(raw: RawPhoto): Photo {
     flags: { eyesClosed: raw.eyesClosed ?? false, blurry: raw.blurry ?? false },
     reviewed: raw.reviewed ?? false,
     downloadUrl: raw.downloadUrl,
+    faceBboxes: raw.faceBboxes ?? [],
+    causes: raw.causes ?? [],
   }
 }
 

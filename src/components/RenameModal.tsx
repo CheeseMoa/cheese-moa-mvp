@@ -11,6 +11,9 @@ interface RenameModalProps {
   placeholder?: string
   /** 서버의 현재 이름 — 열릴 때 입력 초기값 */
   initialName: string
+  /** false면 입력을 비워서 열고 현재 이름은 placeholder(회색)로만 보여준다 — 이름을 통째로
+      새로 입력하는 인물 앨범용(지우는 동작 제거, CHMO-429). 부분 편집(이벤트명 등)은 기본 프리필 */
+  prefill?: boolean
   /** 이름 저장(PATCH 등) — 성공 시 resolve, 실패 시 throw */
   submit: (name: string) => Promise<unknown>
   /** 저장 성공 토스트 문구 */
@@ -38,6 +41,7 @@ export function RenameModal({
   label,
   placeholder,
   initialName,
+  prefill = true,
   submit,
   successMessage,
   onRenamed,
@@ -47,7 +51,7 @@ export function RenameModal({
 }: RenameModalProps) {
   const toast = useToast()
   const mutate = useMutation()
-  const [name, setName] = useState(initialName)
+  const [name, setName] = useState(prefill ? initialName : '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,10 +66,10 @@ export function RenameModal({
   // 닫힘→열림 전환에만 현재 이름으로 초기화(이전 입력·에러가 남지 않게)
   useEffect(() => {
     if (!open) return
-    setName(initialNameRef.current)
+    setName(prefill ? initialNameRef.current : '')
     setSubmitting(false)
     setError(null)
-  }, [open])
+  }, [open, prefill])
 
   const canSubmit = name.trim().length > 0 && !submitting
 
