@@ -213,7 +213,7 @@ export function ComponentGalleryPage() {
             ))}
           </PhotoGrid>
           <p className="text-[11px] text-muted">
-            좌상단 점선 칩=미검토(09 검수 그리드, 검토완료는 무표시) — 선택 체크와 공존
+            좌상단 점=미검토(09 검수 그리드, 검토완료는 무표시) — 선택 체크와 공존
           </p>
         </Section>
 

@@ -9,8 +9,9 @@ interface PhotoTileProps {
   selectable?: boolean
   selected?: boolean
   /**
-   * 미검토 표시(CHMO-438) — 좌상단 점선 '미검토' 칩(Badge unreviewed·08 카드 '점선=미완료' 문법).
-   * 검토완료는 무표시. 우상단 선택 체크서클과 자리가 달라 선택모드와 공존한다.
+   * 미검토 표시(CHMO-438) — 좌상단 작은 점 도트(치즈 옐로우+흰 테두리, 글자 없음).
+   * 글자 칩은 사진을 가려 기각(디자인 피드백) — 검토완료는 무표시, 미검토만 점으로 집힌다.
+   * 우상단 선택 체크서클과 자리가 달라 선택모드와 공존한다.
    */
   unreviewed?: boolean
   onClick?: () => void
@@ -106,8 +107,9 @@ export function PhotoTile({
         />
       )}
       {unreviewed && (
-        <span className="absolute left-1.5 top-1.5 rounded-full border border-dashed border-[#C9C2B4] bg-white/[.85] px-1.5 py-[3px] text-[10px] font-bold leading-none text-muted">
-          미검토
+        // 흰 링은 밝은/어두운 사진 양쪽에서 점이 묻히지 않게 하는 대비 테두리
+        <span className="absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-white/90">
+          <span className="sr-only">미검토</span>
         </span>
       )}
       {selected ? (
