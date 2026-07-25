@@ -83,6 +83,15 @@ export function IconPlus({ size = 24 }: IconProps) {
   )
 }
 
+/** 체크 — 검토 토글(09 라이트박스 [검토]/[검토 해제], CHMO-438) */
+export function IconCheck({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  )
+}
+
 /** 옮기기 — 폴더 + 안쪽 오른 화살표 */
 export function IconFolderMove({ size = 24 }: IconProps) {
   return (

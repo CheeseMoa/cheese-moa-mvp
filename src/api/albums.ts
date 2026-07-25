@@ -20,6 +20,7 @@ import type {
   MovePhotosResponse,
   MoveSuggestion,
   Photo,
+  ReviewPhotosResponse,
 } from '../types/api'
 
 export interface AlbumWithPhotos {
@@ -119,6 +120,26 @@ export function movePhotos(input: {
   return apiFetch<{ movedCount: number }>('/photos/move', { method: 'POST', body: input }).then(
     (raw) => ({ movedCount: raw.movedCount }),
   )
+}
+
+/**
+ * PATCH /photos — 선택 사진 검토/해제(사진 단위, CHMO-438) · 09 라이트박스 [검토] 토글.
+ * BE 미도입이라 목 선행(CHMO-277·278 선례) — 계약은 DELETE /photos와 대칭인 FE 제안형이고,
+ * 검토가 (앨범,사진) 매핑 단위(CHMO-395)라 albumId를 포함한다. // BE 계약 미확인
+ */
+export function setPhotosReviewed(input: {
+  albumId: ID
+  photoIds: ID[]
+  reviewed: boolean
+}): Promise<ReviewPhotosResponse> {
+  return apiFetch<ReviewPhotosResponse>('/photos', {
+    method: 'PATCH',
+    body: {
+      albumId: input.albumId,
+      photoIds: input.photoIds,
+      reviewStatus: input.reviewed ? 'REVIEWED' : 'UNREVIEWED',
+    },
+  }).then((raw) => ({ updatedCount: raw.updatedCount }))
 }
 
 /** DELETE /photos — 현재 앨범 연결 해제(마지막 연결이면 완전 삭제) */

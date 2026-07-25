@@ -8,6 +8,11 @@ interface PhotoTileProps {
   /** 선택 모드 — 미선택 타일에 빈 체크서클 노출 (dc.html §07) */
   selectable?: boolean
   selected?: boolean
+  /**
+   * 미검토 표시(CHMO-438) — 좌상단 점선 '미검토' 칩(Badge unreviewed·08 카드 '점선=미완료' 문법).
+   * 검토완료는 무표시. 우상단 선택 체크서클과 자리가 달라 선택모드와 공존한다.
+   */
+  unreviewed?: boolean
   onClick?: () => void
   /**
    * 롱프레스(꾹 누르기) — 모바일 사진 앱 관용 제스처(CHMO-243). 지정 시 길게 누르면 발화하고,
@@ -26,6 +31,7 @@ export function PhotoTile({
   alt = '',
   selectable,
   selected,
+  unreviewed,
   onClick,
   onLongPress,
 }: PhotoTileProps) {
@@ -98,6 +104,11 @@ export function PhotoTile({
           decoding="async"
           className={cx('h-full w-full object-cover', onLongPress && 'pointer-events-none')}
         />
+      )}
+      {unreviewed && (
+        <span className="absolute left-1.5 top-1.5 rounded-full border border-dashed border-[#C9C2B4] bg-white/[.85] px-1.5 py-[3px] text-[10px] font-bold leading-none text-muted">
+          미검토
+        </span>
       )}
       {selected ? (
         <span className="absolute right-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary text-[13px] font-bold text-heading">

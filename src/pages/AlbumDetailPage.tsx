@@ -9,6 +9,7 @@ import {
   Button,
   ConfirmDialog,
   Header,
+  IconCheck,
   IconDownload,
   IconFolderMove,
   IconTrash,
@@ -28,12 +29,13 @@ import {
   getAlbumZip,
   markAlbumReviewed,
   renamePersonAlbum,
+  setPhotosReviewed,
 } from '../api/albums'
 import { runWithConcurrency } from '../lib/concurrency'
 import { downloadViaBlob } from '../lib/download'
 import { cx } from '../lib/cx'
 import { uncertainCauseMessages } from '../lib/uncertainCauses'
-import type { ID } from '../types/api'
+import type { ID, Photo } from '../types/api'
 
 /**
  * 09. 앨범 상세 · node 211:1685 · GET /albums/:id · DELETE /photos · PATCH /albums/:id
@@ -48,7 +50,9 @@ import type { ID } from '../types/api'
  * 자동 삭제 폐지, CHMO-289 복귀 동작 반전): 잔류 + refetch로 빈 상태를 보여주고 삭제는 수동뿐.
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
- * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
+ * 사진 단위 검토/해제(CHMO-438): 라이트박스 [검토]/[검토 해제] 토글(PATCH /photos — BE 미도입, 목 선행)
+ * + 그리드 미검토 타일 좌상단 점선 '미검토' 칩(검토완료는 무표시 — 08 카드 '점선=미완료' 문법). 둘 다
+ * 검토·발행 대상인 인물·공통 앨범만(CHMO-357) — 라이트박스 검수 배지도 같은 게이트로 정렬했다.
  * uncertain(분류가 어려워요) 앨범은 검토 UI(라이트박스 배지·[검토 완료])를 노출하지 않는다 — 검토·발행
  * 대상이 인물·공통뿐이라(CHMO-357, 08 카드 규칙과 동일) 대신 분류 사유·애매 얼굴 bbox를 보여준다(CHMO-412).
  */
@@ -88,6 +92,8 @@ export function AlbumDetailPage() {
   // 검토 상태는 손에 있는 사진 목록으로 직접 판정 — 계약상 optional인 unreviewedPhotoCount에 의존하지 않고
   // 0장 앨범이 공허하게 '완료'로 잡히는 것도 막는다
   const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
+  // 검토 UI(그리드 미검토 칩·라이트박스 배지/[검토] 토글)는 검토·발행 대상인 인물·공통만(CHMO-357·438)
+  const reviewable = album?.type === 'person' || album?.type === 'common'
   // 뮤테이션 진행 중(busy) + 성공 후 재조회 진행 중(loading) 동안 stale 그리드 조작을 잠근다
   // (재조회 전 setBusy(false)로 풀린 화면에서 이미 지운 사진을 다시 조작해 400 나는 것 방지)
   const locked = busy || albumApi.loading
@@ -199,6 +205,27 @@ export function AlbumDetailPage() {
         setBusy(false)
       },
     })
+  }
+
+  // 사진 단위 검토/해제(CHMO-438) — 라이트박스 [검토] 토글. refetch로 배지·그리드 칩·
+  // [검토 완료] 버튼(allReviewed 파생)이 함께 갱신된다. 해제해도 발행(published)은 유지(CHMO-395).
+  const handleToggleReview = async (photo: Photo) => {
+    if (busy) return
+    setBusy(true)
+    await mutate(
+      () => setPhotosReviewed({ albumId, photoIds: [photo.id], reviewed: !photo.reviewed }),
+      {
+        onSuccess: () => {
+          toast.show(photo.reviewed ? '미검토로 되돌렸어요' : '🧀 검토 완료로 표시했어요')
+          albumApi.refetch()
+          setBusy(false)
+        },
+        onError: (msg) => {
+          toast.show(msg)
+          setBusy(false)
+        },
+      },
+    )
   }
 
   // BE 멤버 ZIP은 person/common만 대상 — 특수 앨범은 ALBUM404라 진입로를 숨긴다(getAlbumZip 주석)
@@ -361,6 +388,8 @@ export function AlbumDetailPage() {
                         src={photo.thumbnailUrl}
                         selectable={selectMode}
                         selected={selected.has(photo.id)}
+                        // 미검토만 표시(CHMO-438) — 검토완료는 무표시. 인물·공통 앨범만(reviewable)
+                        unreviewed={reviewable && !photo.reviewed}
                         // 탭: 선택모드=선택 토글 · 일반 모드=라이트박스 크게 보기(CHMO-242).
                         onClick={
                           locked
@@ -495,10 +524,9 @@ export function AlbumDetailPage() {
           disabled={locked || pendingDelete !== null || pendingMove !== null}
           info={(photo) => (
             <>
-              {/* uncertain은 검토 대상이 아니라 배지 대신 분류 사유가 주인공이다(08 카드도 배지 없음) */}
-              {album?.type !== 'uncertain' && (
-                <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />
-              )}
+              {/* 검토 배지는 검토 대상(인물·공통)만 — uncertain은 분류 사유가 주인공이고(08 카드도
+                  배지 없음), 눈감음/흔들림도 검토·발행 대상이 아니다(CHMO-357 — [검토] 토글과 동일 게이트) */}
+              {reviewable && <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />}
               {photo.flags?.eyesClosed && (
                 <span className="rounded-full bg-warn px-[11px] py-1.5 text-xs font-bold text-white">
                   눈감음
@@ -527,6 +555,15 @@ export function AlbumDetailPage() {
           }
           actions={(photo) => (
             <>
+              {/* 사진 단위 검토/해제(CHMO-438) — 인물·공통만(배지와 동일 게이트) */}
+              {reviewable && (
+                <LightboxToolbarButton
+                  icon={<IconCheck />}
+                  label={photo.reviewed ? '검토 해제' : '검토'}
+                  disabled={locked}
+                  onClick={() => handleToggleReview(photo)}
+                />
+              )}
               <LightboxToolbarButton
                 icon={<IconFolderMove />}
                 label="옮기기"
