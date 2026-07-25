@@ -92,7 +92,8 @@ export function AlbumDetailPage() {
   // 검토 상태는 손에 있는 사진 목록으로 직접 판정 — 계약상 optional인 unreviewedPhotoCount에 의존하지 않고
   // 0장 앨범이 공허하게 '완료'로 잡히는 것도 막는다
   const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
-  // 검토 UI(그리드 미검토 칩·라이트박스 배지/[검토] 토글)는 검토·발행 대상인 인물·공통만(CHMO-357·438)
+  const unreviewedCount = photos.filter((p) => !p.reviewed).length
+  // 검토 UI(그리드 미검토 도트·라이트박스 배지/[검토] 토글)는 검토·발행 대상인 인물·공통만(CHMO-357·438)
   const reviewable = album?.type === 'person' || album?.type === 'common'
   // 뮤테이션 진행 중(busy) + 성공 후 재조회 진행 중(loading) 동안 stale 그리드 조작을 잠근다
   // (재조회 전 setBusy(false)로 풀린 화면에서 이미 지운 사진을 다시 조작해 400 나는 것 방지)
@@ -381,6 +382,17 @@ export function AlbumDetailPage() {
 
               {hasPhotos ? (
                 <div className="mt-4">
+                  {/* 도트 범례(디자인 피드백 2차) — 점만으론 의미가 안 읽혀 뜻과 잔량을 그리드 위에서
+                      알려준다(08·14 검토 범례 선례). 미검토 0이면 점도 없으니 범례도 함께 숨긴다 */}
+                  {reviewable && unreviewedCount > 0 && (
+                    <p className="mb-2.5 flex items-center gap-2 text-xs font-medium text-muted">
+                      <span
+                        aria-hidden
+                        className="h-2.5 w-2.5 flex-none rounded-full bg-primary shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                      />
+                      노란 점이 붙은 사진 {unreviewedCount}장이 아직 미검토예요
+                    </p>
+                  )}
                   <PhotoGrid>
                     {photos.map((photo, i) => (
                       <PhotoTile
