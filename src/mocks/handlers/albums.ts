@@ -4,6 +4,8 @@
  */
 import { http } from 'msw'
 import {
+  createPersonAlbumFromPhotos,
+  deleteAlbumCascade,
   findAlbum,
   movePhotoBetweenAlbums,
   photosOfAlbum,
@@ -18,6 +20,8 @@ import {
   accessibleEvent,
   albumNotFound,
   api,
+  created,
+  errorResponse,
   eventNotFound,
   invalidBody,
   invalidRequest,
@@ -33,6 +37,7 @@ import {
   albumsOfEventSorted,
   toAlbumDetail,
   toAlbumSummary,
+  toCreateAlbumResponse,
   toDeletePhotosResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
@@ -66,6 +71,39 @@ export const albumHandlers = [
     // 재진입 시점에 분석 완료 여부 판정 — 완료됐으면 앨범이 생성돼 함께 반환된다
     settleAnalysis(event.id)
     return ok(albumsOfEventSorted(event.id).map(toAlbumSummary))
+  }),
+
+  // POST /events/:id/albums — 선택 사진으로 새 인물 앨범 생성(CHMO-416, 이동 겸함) · 화면 09-1
+  // 검증 순서는 BE Bean Validation처럼 바디부터 — 이벤트·앨범 조회 전에 VALID400이 나간다.
+  http.post(api('/events/:id/albums'), async ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    const body = await readJson<{ name?: unknown; sourceAlbumId?: unknown; photoIds?: unknown }>(
+      request,
+    )
+    if (!body) return invalidBody()
+    const sourceAlbumId = toId(body.sourceAlbumId)
+    // 실서버 실측 문구(2026-07-25 프로브)
+    if (!sourceAlbumId) return invalidRequest('원본 앨범은 필수입니다.')
+    const name = requiredString(body.name)
+    if (!name || name.length > 20) return invalidRequest('이름은 1~20자로 입력해 주세요.')
+    const photoIds = requiredIdArray(body.photoIds)
+    if (!photoIds || photoIds.length > 100)
+      return invalidRequest('사진은 1~100장 선택해 주세요.')
+
+    const event = accessibleEvent(user, toId(params.id))
+    if (!event) return eventNotFound()
+    const source = accessibleAlbum(user, sourceAlbumId)
+    if (!source) return albumNotFound()
+    if (source.eventId !== event.id)
+      return invalidRequest('원본 앨범이 이 이벤트의 앨범이 아닙니다.')
+    if (!allPhotosInAlbum(photoIds, source.id))
+      // BE 스펙(CHMO-416 AC-5): 원본 앨범에 없는 사진이 섞이면 PHOTO404
+      return errorResponse(404, 'PHOTO404', '원본 앨범에 없는 사진이 있습니다.')
+
+    const album = createPersonAlbumFromPhotos(event.id, event.groupId, name, source.id, photoIds)
+    return created(toCreateAlbumResponse(album))
   }),
 
   // GET /albums/:id — 앨범 상세(사진 내장, 미검토 포함 — 제작자 화면) · 화면 09
@@ -119,6 +157,19 @@ export const albumHandlers = [
     }
 
     return ok(toAlbumSummary(album))
+  }),
+
+  // DELETE /albums/:id — 앨범 삭제(CHMO-271) — 전 타입 허용, 이 앨범에만 속한 사진은 영구 삭제 · 화면 09
+  http.delete(api('/albums/:id'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const album = accessibleAlbum(user, toId(params.id))
+    if (!album) return albumNotFound()
+
+    deleteAlbumCascade(album.id)
+    // 미검토 사진이 앨범째 사라졌으면 ready로, 이벤트 사진이 전부 사라졌으면 empty로 재계산
+    recomputeEventReadiness(album.eventId)
+    return ok(null)
   }),
 
   // GET /albums/:id/download — 멤버용 앨범 ZIP URL 발급(CHMO-338, 미검토 포함 전체) · 화면 09

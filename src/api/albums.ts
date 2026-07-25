@@ -66,6 +66,38 @@ export function getAlbumZip(albumId: ID | string): Promise<AlbumDownloadResponse
   return apiFetch<AlbumDownloadResponse>(`/albums/${albumId}/download`)
 }
 
+/** BE CreateAlbumResponse(CHMO-416) — 최소형(썸네일 없음 — 호출부가 그리드/상세 재조회로 얻는다) */
+interface RawCreateAlbumResponse {
+  albumId: ID
+  type: string
+  personId: ID | null
+  personName: string | null
+  photoCount: number
+}
+
+/**
+ * POST /events/:id/albums — 선택 사진으로 새 인물 앨범 생성(CHMO-416).
+ * 생성이 곧 이동이다: 서버가 새 PERSON 앨범을 만들고 선택 사진을 소스 앨범에서 옮긴다
+ * (별도 /photos/move 호출 불필요). name은 필수 1~20자(BE blank 거부 — 이름 없는 생성은 없다).
+ */
+export function createPersonAlbum(
+  eventId: ID | string,
+  input: { name: string; sourceAlbumId: ID; photoIds: ID[] },
+): Promise<{ albumId: ID; photoCount: number }> {
+  return apiFetch<RawCreateAlbumResponse>(`/events/${eventId}/albums`, {
+    method: 'POST',
+    body: input,
+  }).then((raw) => ({ albumId: raw.albumId, photoCount: raw.photoCount }))
+}
+
+/**
+ * DELETE /albums/:id — 앨범 삭제(CHMO-271·435, 전 타입). 사진이 있어도 삭제되며
+ * **이 앨범에만 속한 사진은 함께 영구 삭제**된다(다른 앨범에도 연결된 사진은 유지 — N:M).
+ */
+export function deleteAlbum(albumId: ID | string): Promise<void> {
+  return apiFetch<unknown>(`/albums/${albumId}`, { method: 'DELETE' }).then(() => undefined)
+}
+
 /** GET /albums/:id/move-suggestions — 선택 사진 기준 이동 추천(유사도순 + 공통, bare 배열) */
 export function getMoveSuggestions(
   albumId: ID | string,

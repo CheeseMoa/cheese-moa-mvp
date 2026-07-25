@@ -420,15 +420,11 @@ export function unlinkPhotoFromAlbum(photoId: number, albumId: number): void {
   const photo = db.photos.find((p) => p.id === photoId)
   if (!photo) return
   photo.albumIds = photo.albumIds.filter((id) => id !== albumId)
-  // 이동·삭제로 0장이 된 앨범은 BE가 자동 삭제한다(CHMO-231) — 인물(persons)은 모임 스코프라 보존
-  if (photosOfAlbum(albumId).length === 0) {
-    db.albums = db.albums.filter((a) => a.id !== albumId)
-    return
-  }
-  // 빠진 사진이 커버였다면 남은 첫 사진으로 교체
+  // 0장이 돼도 앨범은 남긴다(CHMO-418 — 자동 삭제 폐지, 삭제는 수동 DELETE /albums/:id뿐).
+  // 빠진 사진이 커버였다면 남은 첫 사진으로, 앨범이 비면 null(유령 커버 방지)
   const album = findAlbum(albumId)
   if (album?.coverPhotoId === photoId) {
-    album.coverPhotoId = photosOfAlbum(albumId)[0]!.id
+    album.coverPhotoId = photosOfAlbum(albumId)[0]?.id ?? null
   }
 }
 
@@ -453,6 +449,45 @@ export function removePhotoFromAlbum(photoId: number, albumId: number): void {
   if (photo && photo.albumIds.length === 0) {
     db.photos = db.photos.filter((p) => p.id !== photoId)
   }
+}
+
+/**
+ * 검수 새 인물 앨범 생성(CHMO-416) — BE CreateAlbumFromPhotosUseCase의 목 대응물:
+ * 수동 인물(얼굴 벡터 없음 — 목엔 벡터 개념이 없어 이름만) + 앨범 생성 후 소스에서 사진 이동.
+ * 소스가 비어도 앨범은 남는다(CHMO-418 — unlinkPhotoFromAlbum이 커버만 비운다).
+ */
+export function createPersonAlbumFromPhotos(
+  eventId: number,
+  groupId: number,
+  name: string,
+  sourceAlbumId: number,
+  photoIds: number[],
+): DbAlbum {
+  const person: DbPerson = { id: nextId('psn'), groupId, name }
+  db.persons.push(person)
+  const album: DbAlbum = {
+    id: nextId('alb'),
+    eventId,
+    type: 'person',
+    personId: person.id,
+    coverPhotoId: null,
+  }
+  db.albums.push(album)
+  for (const photoId of photoIds) movePhotoBetweenAlbums(photoId, sourceAlbumId, album.id)
+  return album
+}
+
+/**
+ * 앨범 삭제(CHMO-271) — 링크를 걷어내고 **이 앨범에만 남은 사진은 레코드째 폐기**한다
+ * (BE: 다른 앨범 연결이 없는 사진만 Photo 삭제 + S3 원본·ZIP purge — 목엔 저장소가 없어 레코드만).
+ * 인물(persons)은 모임 스코프라 보존 — 같은 personId를 다른 이벤트의 인물 앨범이 쓴다.
+ */
+export function deleteAlbumCascade(albumId: number): void {
+  for (const photo of photosOfAlbum(albumId)) {
+    photo.albumIds = photo.albumIds.filter((id) => id !== albumId)
+    if (photo.albumIds.length === 0) db.photos = db.photos.filter((p) => p.id !== photo.id)
+  }
+  db.albums = db.albums.filter((a) => a.id !== albumId)
 }
 
 // ── 모임·이벤트 삭제 (연쇄) ──────────────────────────────────
