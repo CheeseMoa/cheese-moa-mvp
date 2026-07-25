@@ -51,8 +51,9 @@ import type { ID, Photo } from '../types/api'
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
  * 사진 단위 검토/해제(CHMO-438): 라이트박스 [검토]/[검토 해제] 토글(PATCH /photos — BE 미도입, 목 선행)
- * + 그리드 미검토 타일 좌상단 점 도트(글자 없음 — 글자 칩은 사진을 가려 기각, 검토완료는 무표시). 둘 다
- * 검토·발행 대상인 인물·공통 앨범만(CHMO-357) — 라이트박스 검수 배지도 같은 게이트로 정렬했다.
+ * + 그리드 미검토 타일 점선 테두리(08 카드 '점선=미검토'와 동일 문법, 검토완료는 무표시 — 글자 칩·점
+ * 도트는 디자인 피드백으로 기각). 둘 다 검토·발행 대상인 인물·공통 앨범만(CHMO-357) — 라이트박스
+ * 검수 배지도 같은 게이트로 정렬했다.
  * uncertain(분류가 어려워요) 앨범은 검토 UI(라이트박스 배지·[검토 완료])를 노출하지 않는다 — 검토·발행
  * 대상이 인물·공통뿐이라(CHMO-357, 08 카드 규칙과 동일) 대신 분류 사유·애매 얼굴 bbox를 보여준다(CHMO-412).
  */
@@ -92,8 +93,7 @@ export function AlbumDetailPage() {
   // 검토 상태는 손에 있는 사진 목록으로 직접 판정 — 계약상 optional인 unreviewedPhotoCount에 의존하지 않고
   // 0장 앨범이 공허하게 '완료'로 잡히는 것도 막는다
   const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
-  const unreviewedCount = photos.filter((p) => !p.reviewed).length
-  // 검토 UI(그리드 미검토 도트·라이트박스 배지/[검토] 토글)는 검토·발행 대상인 인물·공통만(CHMO-357·438)
+  // 검토 UI(그리드 미검토 점선 테두리·라이트박스 배지/[검토] 토글)는 검토·발행 대상인 인물·공통만(CHMO-357·438)
   const reviewable = album?.type === 'person' || album?.type === 'common'
   // 뮤테이션 진행 중(busy) + 성공 후 재조회 진행 중(loading) 동안 stale 그리드 조작을 잠근다
   // (재조회 전 setBusy(false)로 풀린 화면에서 이미 지운 사진을 다시 조작해 400 나는 것 방지)
@@ -382,17 +382,6 @@ export function AlbumDetailPage() {
 
               {hasPhotos ? (
                 <div className="mt-4">
-                  {/* 도트 범례(디자인 피드백 2차) — 점만으론 의미가 안 읽혀 뜻과 잔량을 그리드 위에서
-                      알려준다(08·14 검토 범례 선례). 미검토 0이면 점도 없으니 범례도 함께 숨긴다 */}
-                  {reviewable && unreviewedCount > 0 && (
-                    <p className="mb-2.5 flex items-center gap-2 text-xs font-medium text-muted">
-                      <span
-                        aria-hidden
-                        className="h-2.5 w-2.5 flex-none rounded-full bg-primary shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
-                      />
-                      노란 점이 붙은 사진 {unreviewedCount}장이 아직 미검토예요
-                    </p>
-                  )}
                   <PhotoGrid>
                     {photos.map((photo, i) => (
                       <PhotoTile

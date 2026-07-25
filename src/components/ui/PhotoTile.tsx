@@ -9,9 +9,10 @@ interface PhotoTileProps {
   selectable?: boolean
   selected?: boolean
   /**
-   * 미검토 표시(CHMO-438) — 좌상단 작은 점 도트(치즈 옐로우+흰 테두리, 글자 없음).
-   * 글자 칩은 사진을 가려 기각(디자인 피드백) — 검토완료는 무표시, 미검토만 점으로 집힌다.
-   * 우상단 선택 체크서클과 자리가 달라 선택모드와 공존한다.
+   * 미검토 표시(CHMO-438) — 타일 점선 테두리(08 AlbumCard '점선=미검토'와 동일 문법이라
+   * 따로 배울 필요가 없다). 검토완료는 무표시. 사진 위에 아무것도 얹지 않는 게 요점 —
+   * 글자 칩·점 도트는 사진을 가리거나 의미가 안 읽혀 기각(디자인 피드백 3회).
+   * 선택 테두리(primary 실선)가 뜨면 그쪽이 우선한다.
    */
   unreviewed?: boolean
   onClick?: () => void
@@ -90,7 +91,10 @@ export function PhotoTile({
       className={cx(
         'cheese-dots relative aspect-square w-full select-none overflow-hidden rounded-xl bg-photo',
         onLongPress && '[-webkit-touch-callout:none]',
-        selected && 'border-[3px] border-primary',
+        // 선택(primary 실선)이 미검토 점선보다 우선 — 선택모드에서 두 상태가 겹칠 때
+        selected
+          ? 'border-[3px] border-primary'
+          : unreviewed && 'border-2 border-dashed border-[#C9C2B4]',
       )}
     >
       {/* 롱프레스 대상일 땐 이미지를 이벤트 대상에서 뺀다(pointer-events-none) — 안드로이드 크롬이
@@ -106,12 +110,7 @@ export function PhotoTile({
           className={cx('h-full w-full object-cover', onLongPress && 'pointer-events-none')}
         />
       )}
-      {unreviewed && (
-        // 흰 링은 밝은/어두운 사진 양쪽에서 점이 묻히지 않게 하는 대비 테두리
-        <span className="absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-white/90">
-          <span className="sr-only">미검토</span>
-        </span>
-      )}
+      {unreviewed && <span className="sr-only">미검토</span>}
       {selected ? (
         <span className="absolute right-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary text-[13px] font-bold text-heading">
           ✓
