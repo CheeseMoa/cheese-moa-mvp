@@ -41,6 +41,7 @@ import {
   toMovePhotosResponse,
   toMoveSuggestionResponse,
   toPhotoInAlbum,
+  toReviewPhotosResponse,
   toReviewSummaryResponse,
   toUser as serializeUser,
   toViewerAlbumPhotosResponse,
@@ -284,6 +285,18 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(albums.find((a) => a.id === 2)!.unreviewedPhotoCount).toBeGreaterThan(0)
   })
 
+  it('사진 단위 검토 해제 — 앨범 파생 reviewStatus·unreviewedPhotoCount가 따라간다 (CHMO-438)', () => {
+    // 앨범 1은 시드에서 전 사진 검토 완료 — 한 장만 해제하면 파생값들이 미검토로 뒤집힌다
+    // (09 그리드 칩·08 카드 배지·[검토 완료] 버튼 재활성이 이 파생값·photos.reviewed에 기댄다)
+    const photo = photosOfAlbum(1)[0]
+    photo.reviewed = false
+    expect(toAlbumSummary(findAlbum(1)!)).toMatchObject({
+      reviewStatus: 'UNREVIEWED',
+      unreviewedPhotoCount: 1,
+    })
+    expect(toPhoto(toPhotoInAlbum(photo)).reviewed).toBe(false)
+  })
+
   it('빈 앨범 — 마지막 사진이 빠져도 앨범이 남고 커버 null·REVIEWED (CHMO-418)', () => {
     const album = findAlbum(1)!
     for (const photo of photosOfAlbum(1)) unlinkPhotoFromAlbum(photo.id, 1)
@@ -369,6 +382,10 @@ describe('인라인 조립 응답 → 소비처 필드명 이음매 (CHMO-227)',
 
   it('사진 이동 응답 — movedCount 필드명', () => {
     expect(toMovePhotosResponse([101, 102, 103])).toEqual({ movedCount: 3 })
+  })
+
+  it('사진 검토/해제 응답 — updatedCount 필드명 (CHMO-438, 목 선행 계약)', () => {
+    expect(toReviewPhotosResponse([101, 102])).toEqual({ updatedCount: 2 })
   })
 
   it('사진 제거 응답 — detached(연결 해제)/deleted(폐기) 구분 필드명', () => {

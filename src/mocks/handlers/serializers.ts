@@ -310,6 +310,14 @@ export function toDeletePhotosResponse(photoIds: number[]) {
   }
 }
 
+/**
+ * 사진 검토/해제 응답(CHMO-438) — 갱신 건수. BE 미도입이라 목 선행 계약
+ * (setPhotosReviewed가 읽는 필드명 — // BE 계약 미확인, CHMO-395 배포 시 정렬).
+ */
+export function toReviewPhotosResponse(photoIds: number[]) {
+  return { updatedCount: photoIds.length }
+}
+
 // ── 뷰어 직렬화 (서버 필터링 책임 — 발행된 사진만 반영, CHMO-324) ────
 
 /**

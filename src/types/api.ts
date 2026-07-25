@@ -230,6 +230,14 @@ export interface DeletePhotosResponse {
   deletedPhotoCount: number
 }
 
+/**
+ * 사진 검토/해제 응답(CHMO-438) — BE 미도입이라 목 선행 계약(DELETE /photos와 대칭).
+ * // BE 계약 미확인 — CHMO-395(매핑 단위 검토) 배포 시 실 계약에 맞춘다.
+ */
+export interface ReviewPhotosResponse {
+  updatedCount: number
+}
+
 // ── 뷰어(학부모 무로그인) ────────────────────────────────────
 // 뷰어 응답은 서버 필터링 결과만 담는다: published 이벤트 · person/common 앨범 ·
 // 검토 완료(reviewed) 사진. 카운트/커버도 필터링된 사진 기준 파생값.

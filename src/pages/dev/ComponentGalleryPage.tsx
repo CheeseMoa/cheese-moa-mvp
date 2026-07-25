@@ -207,10 +207,14 @@ export function ComponentGalleryPage() {
                 key={i}
                 selectable={selectMode}
                 selected={selectMode && selected.includes(i)}
+                unreviewed={i < 2}
                 onClick={() => selectMode && toggleTile(i)}
               />
             ))}
           </PhotoGrid>
+          <p className="text-[11px] text-muted">
+            점선 테두리=미검토(09 검수 그리드, 08 카드와 같은 문법 — 검토완료는 무표시)
+          </p>
         </Section>
 
         <Section title="08 · EmptyState">

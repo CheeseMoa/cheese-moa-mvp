@@ -41,6 +41,7 @@ import {
   toDeletePhotosResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
+  toReviewPhotosResponse,
 } from './serializers'
 import type { AlbumDownloadResponse } from '../../types/api'
 
@@ -267,5 +268,40 @@ export const albumHandlers = [
     recomputeEventReadiness(album.eventId)
 
     return ok(toDeletePhotosResponse(photoIds))
+  }),
+
+  // PATCH /photos — 선택 사진 검토/해제(CHMO-438) · 화면 09 라이트박스 [검토] 토글
+  // BE 미도입 — 목 선행(FE 제안 계약: DELETE /photos와 대칭 + reviewStatus enum). BE 계약 미확인.
+  // 목은 사진 단위 근사(photo.reviewed — PATCH /albums/:id 일괄과 동일)라 N:M 공유 사진은
+  // 다른 앨범의 파생 검토 상태도 함께 바뀐다 — 매핑(AlbumPhoto) 단위 정합은 CHMO-395 배포 후.
+  http.patch(api('/photos'), async ({ request }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    const body = await readJson<{ albumId?: unknown; photoIds?: unknown; reviewStatus?: unknown }>(
+      request,
+    )
+    if (!body) return invalidBody()
+
+    const albumId = toId(body.albumId)
+    const photoIds = requiredIdArray(body.photoIds)
+    if (!albumId || !photoIds) return invalidRequest('검토할 사진과 앨범을 지정해 주세요.')
+    if (body.reviewStatus !== 'REVIEWED' && body.reviewStatus !== 'UNREVIEWED')
+      return invalidRequest('reviewStatus는 REVIEWED 또는 UNREVIEWED여야 합니다.')
+
+    const album = accessibleAlbum(user, albumId)
+    if (!album) return albumNotFound()
+    if (!allPhotosInAlbum(photoIds, album.id))
+      return invalidRequest('선택한 사진이 이 앨범에 없습니다.')
+
+    const reviewed = body.reviewStatus === 'REVIEWED'
+    const targets = new Set(photoIds)
+    for (const photo of photosOfAlbum(album.id)) {
+      if (targets.has(photo.id)) photo.reviewed = reviewed
+    }
+    // 검토 상태 변화로 이벤트가 ready↔review로 뒤집힐 수 있다(published는 유지)
+    recomputeEventReadiness(album.eventId)
+
+    return ok(toReviewPhotosResponse(photoIds))
   }),
 ]

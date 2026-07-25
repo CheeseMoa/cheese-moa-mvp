@@ -8,6 +8,13 @@ interface PhotoTileProps {
   /** 선택 모드 — 미선택 타일에 빈 체크서클 노출 (dc.html §07) */
   selectable?: boolean
   selected?: boolean
+  /**
+   * 미검토 표시(CHMO-438) — 타일 점선 테두리(08 AlbumCard '점선=미검토'와 동일 문법이라
+   * 따로 배울 필요가 없다). 검토완료는 무표시. 사진 위에 아무것도 얹지 않는 게 요점 —
+   * 글자 칩·점 도트는 사진을 가리거나 의미가 안 읽혀 기각(디자인 피드백 3회).
+   * 선택 테두리(primary 실선)가 뜨면 그쪽이 우선한다.
+   */
+  unreviewed?: boolean
   onClick?: () => void
   /**
    * 롱프레스(꾹 누르기) — 모바일 사진 앱 관용 제스처(CHMO-243). 지정 시 길게 누르면 발화하고,
@@ -26,6 +33,7 @@ export function PhotoTile({
   alt = '',
   selectable,
   selected,
+  unreviewed,
   onClick,
   onLongPress,
 }: PhotoTileProps) {
@@ -83,7 +91,10 @@ export function PhotoTile({
       className={cx(
         'cheese-dots relative aspect-square w-full select-none overflow-hidden rounded-xl bg-photo',
         onLongPress && '[-webkit-touch-callout:none]',
-        selected && 'border-[3px] border-primary',
+        // 선택(primary 실선)이 미검토 점선보다 우선 — 선택모드에서 두 상태가 겹칠 때
+        selected
+          ? 'border-[3px] border-primary'
+          : unreviewed && 'border-2 border-dashed border-[#C9C2B4]',
       )}
     >
       {/* 롱프레스 대상일 땐 이미지를 이벤트 대상에서 뺀다(pointer-events-none) — 안드로이드 크롬이
@@ -99,6 +110,7 @@ export function PhotoTile({
           className={cx('h-full w-full object-cover', onLongPress && 'pointer-events-none')}
         />
       )}
+      {unreviewed && <span className="sr-only">미검토</span>}
       {selected ? (
         <span className="absolute right-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-primary text-[13px] font-bold text-heading">
           ✓
