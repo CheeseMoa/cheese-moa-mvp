@@ -22,6 +22,7 @@ import { useAlive } from '../hooks/useAlive'
 import { useMutation } from '../hooks/useMutation'
 import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
 import {
+  deleteAlbum,
   deletePhotos,
   getAlbumWithPhotos,
   getAlbumZip,
@@ -42,6 +43,9 @@ import type { ID } from '../types/api'
  * [검토 완료] = 앨범 내 전 사진 일괄 reviewed, 성공 시 08 앨범 그리드로 복귀(CHMO-414 — 검토는 앨범
  * 단위 진행이라 완료하면 다음 앨범으로 이어가게. 앨범 전체 대상이라 선택모드와 이질적이던 버튼은 제거, CHMO-413).
  * 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파). 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시한다.
+ * 앨범 삭제(CHMO-435 — 전 타입): 앨범명 줄 🗑 → 확인 다이얼로그(이 앨범에만 있는 사진은 영구 삭제 경고) →
+ * DELETE /albums/:id → 08 복귀(replace). 사진 전량 삭제·이동으로 앨범이 비어도 앨범은 남는다(CHMO-418 —
+ * 자동 삭제 폐지, CHMO-289 복귀 동작 반전): 잔류 + refetch로 빈 상태를 보여주고 삭제는 수동뿐.
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
  * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
@@ -70,6 +74,7 @@ export function AlbumDetailPage() {
   // 삭제/이동 대상 사진(null=닫힘) — 선택모드(선택 사진들)와 라이트박스(현재 1장)가 공유
   const [pendingDelete, setPendingDelete] = useState<ID[] | null>(null)
   const [pendingMove, setPendingMove] = useState<ID[] | null>(null)
+  const [deleteAlbumOpen, setDeleteAlbumOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -128,15 +133,8 @@ export function AlbumDetailPage() {
     setSelected(new Set())
   }
 
-  // 사진이 0장이 되면 BE가 앨범을 자동 삭제한다(CHMO-231) — refetch하면 404(ErrorState)를
-  // 마주하므로, 남는 사진이 없을 땐 재조회 대신 이벤트 앨범 그리드(08)로 나간다(CHMO-289).
-  // replace: 뒤로가기로 사라진 앨범에 되돌아오지 않게 한다.
-  const exitToEventIfEmptied = (removedCount: number): boolean => {
-    if (removedCount < photos.length) return false
-    navigate(eventPath, { replace: true })
-    return true
-  }
-
+  // 사진이 0장이 돼도 앨범은 남는다(CHMO-418 — 자동 삭제 폐지, CHMO-289 복귀 동작 반전):
+  // 나가지 않고 refetch로 빈 상태를 보여준다. 앨범을 없애는 건 수동 삭제(아래 handleDeleteAlbum)뿐.
   const handleDelete = async () => {
     const ids = pendingDelete ?? []
     if (ids.length === 0 || busy) return
@@ -146,7 +144,6 @@ export function AlbumDetailPage() {
         setPendingDelete(null)
         if (selectMode) exitSelect()
         toast.show(`🧀 ${ids.length}장을 앨범에서 제거했어요`)
-        if (exitToEventIfEmptied(ids.length)) return
         albumApi.refetch()
         setBusy(false)
       },
@@ -157,6 +154,35 @@ export function AlbumDetailPage() {
       },
     })
   }
+
+  // 앨범 삭제(CHMO-435 — 전 타입 허용): 이 앨범에만 속한 사진은 함께 영구 삭제된다(CHMO-271).
+  // 성공 시 앨범이 사라졌으니 08로 복귀(replace — 뒤로가기로 죽은 앨범에 되돌아오지 않게, CHMO-289 선례).
+  const handleDeleteAlbum = async () => {
+    if (busy) return
+    setBusy(true)
+    await mutate(() => deleteAlbum(albumId), {
+      onSuccess: () => {
+        toast.show(`🧀 '${album?.name ?? '앨범'}'을 삭제했어요`)
+        navigate(eventPath, { replace: true })
+      },
+      onError: (msg) => {
+        setDeleteAlbumOpen(false)
+        toast.show(msg)
+        setBusy(false)
+      },
+    })
+  }
+
+  // 앨범 삭제 시 완전 삭제될 사진 수 — 이 앨범에만 연결된 사진(다른 앨범 사본은 남는다)
+  const albumOrphanCount = photos.filter((p) => p.albumIds.length <= 1).length
+  const deleteAlbumDescription =
+    photos.length === 0
+      ? '비어 있는 앨범이에요. 삭제해도 다른 사진에는 영향이 없어요.'
+      : albumOrphanCount === 0
+        ? `사진 ${photos.length}장이 이 앨범에서 제거돼요. 모두 다른 앨범에도 있어 사진은 남아요.`
+        : albumOrphanCount === photos.length
+          ? `사진 ${photos.length}장이 함께 완전히 삭제돼요. 되돌릴 수 없어요.`
+          : `사진 ${photos.length}장 중 ${albumOrphanCount}장은 다른 앨범에 없어 완전히 삭제돼요(되돌릴 수 없음).`
 
   const handleReview = async () => {
     if (busy) return
@@ -224,12 +250,20 @@ export function AlbumDetailPage() {
     }
   }
 
-  // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐)
+  // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐).
+  // 전량 이동으로 앨범이 비어도 남는다(CHMO-418) — refetch가 빈 상태를 보여준다.
   const handleMoved = (movedCount: number, targetName: string) => {
     setPendingMove(null)
     if (selectMode) exitSelect()
     toast.show(`🧀 ${movedCount}장을 '${targetName}'(으)로 옮겼어요`)
-    if (exitToEventIfEmptied(movedCount)) return
+    albumApi.refetch()
+  }
+
+  // 새 앨범 생성(09-1 "새 앨범", CHMO-435) 성공 — 생성이 곧 이동이라 후속은 handleMoved와 동일
+  const handleCreated = (albumName: string, movedCount: number) => {
+    setPendingMove(null)
+    if (selectMode) exitSelect()
+    toast.show(`🧀 '${albumName}' 앨범을 만들고 ${movedCount}장을 옮겼어요`)
     albumApi.refetch()
   }
 
@@ -284,17 +318,31 @@ export function AlbumDetailPage() {
                       {allSelected ? '전체 해제' : '전체 선택'}
                     </button>
                   </div>
-                ) : album.type === 'person' ? (
-                  // 인물 앨범만 이름 변경(모임 전체 이름전파). 특수 앨범은 고정 라벨이라 미노출
-                  <button
-                    type="button"
-                    disabled={locked}
-                    onClick={() => setRenameOpen(true)}
-                    className="inline-flex flex-none items-center gap-1 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50"
-                  >
-                    ✎ 이름
-                  </button>
-                ) : null}
+                ) : (
+                  <div className="flex flex-none items-center gap-2">
+                    {/* 인물 앨범만 이름 변경(모임 전체 이름전파). 특수 앨범은 고정 라벨이라 미노출 */}
+                    {album.type === 'person' && (
+                      <button
+                        type="button"
+                        disabled={locked}
+                        onClick={() => setRenameOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50"
+                      >
+                        ✎ 이름
+                      </button>
+                    )}
+                    {/* 앨범 삭제(CHMO-435) — 전 타입. 빈 앨범도 여기(+ 하단 CTA)로 지운다 */}
+                    <button
+                      type="button"
+                      aria-label="앨범 삭제"
+                      disabled={locked}
+                      onClick={() => setDeleteAlbumOpen(true)}
+                      className="inline-flex items-center rounded-full border border-border bg-white px-2.5 py-1.5 text-warn disabled:opacity-50"
+                    >
+                      <IconTrash size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* stale 데이터 위에서 refetch가 실패해도 보이게(성공 토스트와 화면 모순 방지) */}
@@ -331,7 +379,13 @@ export function AlbumDetailPage() {
                   </PhotoGrid>
                 </div>
               ) : (
-                <p className="py-11 text-center text-sm text-muted">이 앨범에 사진이 없어요.</p>
+                // 빈 앨범(CHMO-418 — 0장이어도 남는다): 옮겨 채우거나 아래 CTA로 수동 삭제
+                <div className="py-11 text-center">
+                  <p className="text-sm text-muted">이 앨범에 사진이 없어요.</p>
+                  <p className="mt-1.5 text-xs text-muted">
+                    다른 앨범에서 사진을 옮겨 오면 다시 채워져요.
+                  </p>
+                </div>
               )}
             </>
           ) : (
@@ -346,6 +400,22 @@ export function AlbumDetailPage() {
             />
           )}
         </div>
+
+        {/* 빈 앨범 하단 CTA — 검토·다운로드가 모두 무의미하니 삭제만(앨범명 줄 🗑과 같은 다이얼로그) */}
+        {album && !hasPhotos && (
+          <div className="px-5 pb-safe-9 pt-4">
+            <Button
+              variant="warn"
+              fullWidth
+              className="gap-1.5"
+              disabled={locked}
+              onClick={() => setDeleteAlbumOpen(true)}
+            >
+              <IconTrash size={18} />
+              앨범 삭제
+            </Button>
+          </div>
+        )}
 
         {/* uncertain 앨범은 검토·발행 대상이 아니라(인물·공통만 — CHMO-357) 일반 모드 하단 바가
             통째로 비므로 숨긴다([다운로드]도 특수 앨범엔 없음). 선택모드 바(저장·삭제·옮기기)는 유지 */}
@@ -488,15 +558,30 @@ export function AlbumDetailPage() {
         onClose={() => setPendingDelete(null)}
       />
 
+      {/* 앨범 삭제 확인(CHMO-435) — 사진이 있으면 함께 삭제됨(N:M 사본 제외)을 명시한다 */}
+      <ConfirmDialog
+        open={deleteAlbumOpen}
+        danger
+        busy={busy}
+        busyLabel="삭제 중…"
+        title={`'${album?.name ?? '앨범'}'을 삭제할까요?`}
+        description={deleteAlbumDescription}
+        confirmLabel="삭제"
+        onConfirm={handleDeleteAlbum}
+        onClose={() => setDeleteAlbumOpen(false)}
+      />
+
       {/* 09-1 옮기기 시트 — 대상 사진(선택모드 선택분 또는 라이트박스 현재 1장)을 유사도 추천/공통 앨범으로
           이동(연결 교체). 열려 있을 때만 마운트해 매 오픈이 새 대상 기준으로 추천을 다시 받게 한다(stale 방지). */}
       {album && pendingMove && (
         <MovePhotosSheet
           onClose={() => setPendingMove(null)}
+          eventId={Number(eventId)}
           sourceAlbumId={albumId}
           sourceAlbumType={album.type}
           photoIds={pendingMove}
           onMoved={handleMoved}
+          onCreated={handleCreated}
         />
       )}
 

@@ -74,6 +74,15 @@ export function IconPencil({ size = 24 }: IconProps) {
   )
 }
 
+/** 추가 — 플러스(iOS '새 앨범'과 같은 문법) — 09-1 이동 시트 "새 앨범" 타일(CHMO-435) */
+export function IconPlus({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
 /** 옮기기 — 폴더 + 안쪽 오른 화살표 */
 export function IconFolderMove({ size = 24 }: IconProps) {
   return (
