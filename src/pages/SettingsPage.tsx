@@ -95,9 +95,10 @@ export function SettingsPage() {
         ) : (
           <form id="profile-form" onSubmit={handleSubmit} noValidate className="mt-4">
             <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
+              {/* 라벨만 '이름'(소셜 표시명 이름 전환, CHMO-440) — 데이터 필드는 BE 계약 그대로 nickname */}
               <TextField
-                label="닉네임"
-                placeholder="닉네임 입력"
+                label="이름"
+                placeholder="이름 입력"
                 autoComplete="username"
                 value={nickname}
                 disabled={submitting}
