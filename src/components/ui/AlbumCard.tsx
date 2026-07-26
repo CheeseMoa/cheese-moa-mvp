@@ -50,7 +50,9 @@ export function AlbumCard({ album, coverUrl, onClick, onRename }: AlbumCardProps
   const metaRow = (
     <span className="mt-0.5 flex items-end justify-between gap-1">
       <span className="text-[11px] text-muted">{meta}</span>
-      {reviewable && album.unreviewedPhotoCount !== undefined && (
+      {/* 0장 앨범(CHMO-418 — 비어도 남는다)은 검토할 사진이 없어 배지를 숨긴다(BE reviewStatus는
+          REVIEWED지만 공허한 '검토완료'도 '미검토'도 오표시 — 테두리는 점선(미완료 결) 유지) */}
+      {reviewable && album.photoCount > 0 && album.unreviewedPhotoCount !== undefined && (
         <Badge variant={reviewed ? 'reviewed' : 'unreviewed'} size="sm" />
       )}
     </span>

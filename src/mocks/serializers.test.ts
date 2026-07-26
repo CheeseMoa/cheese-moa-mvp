@@ -15,18 +15,23 @@ import {
   findAlbum,
   findEvent,
   findGroup,
+  findPhoto,
   db,
+  createPersonAlbumFromPhotos,
+  deleteAlbumCascade,
   photosOfAlbum,
   photosOfEvent,
   albumsOfEvent,
   personNameOf,
   pendingPublishCountOf,
   publishEventPhotos,
+  unlinkPhotoFromAlbum,
 } from './db'
 import { createFixtures } from './fixtures'
 import {
   toAlbumDetail,
   toAlbumSummary,
+  toCreateAlbumResponse,
   toAnalysisStatusResponse,
   toDeletePhotosResponse,
   toEventDetail,
@@ -277,6 +282,64 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const albums = db.albums.filter((a) => a.eventId === 1).map((a) => toAlbum(toAlbumSummary(a)))
     expect(albums.find((a) => a.id === 1)!.unreviewedPhotoCount).toBe(0)
     expect(albums.find((a) => a.id === 2)!.unreviewedPhotoCount).toBeGreaterThan(0)
+  })
+
+  it('빈 앨범 — 마지막 사진이 빠져도 앨범이 남고 커버 null·REVIEWED (CHMO-418)', () => {
+    const album = findAlbum(1)!
+    for (const photo of photosOfAlbum(1)) unlinkPhotoFromAlbum(photo.id, 1)
+
+    // 자동 삭제 폐지 — 앨범 행이 남고 커버만 비운다(유령 커버 방지)
+    expect(findAlbum(1)).toBeDefined()
+    expect(findAlbum(1)!.coverPhotoId).toBeNull()
+
+    // BE CHMO-418 계약: photoCount 0 · 썸네일 null · reviewStatus REVIEWED(미검토 0이므로)
+    const raw = toAlbumSummary(album)
+    expect(raw).toMatchObject({
+      photoCount: 0,
+      unreviewedPhotoCount: 0,
+      thumbnailPhotoId: null,
+      thumbnailUrl: null,
+      reviewStatus: 'REVIEWED',
+    })
+    // 매퍼가 null 썸네일을 그대로 통과시켜 08이 0장 카드(플레이스홀더)를 그린다
+    expect(toAlbum(raw)).toMatchObject({ photoCount: 0, coverThumbnailUrl: null })
+  })
+
+  it('새 인물 앨범 생성 — 생성이 곧 이동, 소스가 비어도 남는다 (CHMO-416·418)', () => {
+    const photoIds = photosOfAlbum(1).map((p) => p.id)
+    expect(photoIds.length).toBeGreaterThan(0)
+    const album = createPersonAlbumFromPhotos(1, 1, '김치즈', 1, photoIds)
+
+    // FE createPersonAlbum이 읽는 응답 필드명(albumId·photoCount) + 인물 이름 실재
+    expect(toCreateAlbumResponse(album)).toMatchObject({
+      albumId: album.id,
+      type: 'PERSON',
+      personName: '김치즈',
+      photoCount: photoIds.length,
+    })
+    // 이동(복사 아님): 소스에서 빠지고 새 앨범에 연결, 커버는 첫 이동 사진
+    expect(photosOfAlbum(1)).toHaveLength(0)
+    expect(photosOfAlbum(album.id)).toHaveLength(photoIds.length)
+    expect(album.coverPhotoId).toBe(photoIds[0])
+    // 전량 이동으로 빈 소스도 남는다(CHMO-418)
+    expect(findAlbum(1)).toBeDefined()
+    expect(findAlbum(1)!.coverPhotoId).toBeNull()
+  })
+
+  it('앨범 삭제 — 이 앨범에만 속한 사진은 폐기, 다른 앨범 사본은 유지 (CHMO-271·435)', () => {
+    const photos = photosOfAlbum(1)
+    expect(photos.length).toBeGreaterThan(0)
+    const shared = photos.filter((p) => p.albumIds.length > 1)
+    const orphans = photos.filter((p) => p.albumIds.length === 1)
+
+    deleteAlbumCascade(1)
+
+    expect(findAlbum(1)).toBeUndefined()
+    for (const p of orphans) expect(findPhoto(p.id)).toBeUndefined()
+    for (const p of shared) {
+      expect(findPhoto(p.id)).toBeDefined()
+      expect(findPhoto(p.id)!.albumIds).not.toContain(1)
+    }
   })
 })
 

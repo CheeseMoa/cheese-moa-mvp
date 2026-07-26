@@ -198,25 +198,28 @@ export function isViewerVisibleType(album: DbAlbum): boolean {
   return album.type === 'person' || album.type === 'common'
 }
 
-/** BE reviewStatus — 앨범엔 검토 상태가 없다(사진 단위 reviewed의 파생값). 빈 앨범은 미검토 */
-function reviewStatusOf(albumId: number, photoCount: number): 'REVIEWED' | 'UNREVIEWED' {
-  return photoCount > 0 && unreviewedCountOfAlbum(albumId) === 0 ? 'REVIEWED' : 'UNREVIEWED'
+/**
+ * BE reviewStatus — 앨범엔 검토 상태가 없다(사진 단위 reviewed의 파생값).
+ * 빈 앨범은 REVIEWED다(CHMO-418 — 미검토 사진이 0이므로 자연히 그렇게 계산된다.
+ * "사진 있을 때만 완료" 규칙은 FE가 소유한다 — 08 카드·14 통계).
+ */
+function reviewStatusOf(albumId: number): 'REVIEWED' | 'UNREVIEWED' {
+  return unreviewedCountOfAlbum(albumId) === 0 ? 'REVIEWED' : 'UNREVIEWED'
 }
 
 /** BE AlbumSummaryResponse — 대문자 type, 표시명 대신 personName(특수 앨범은 null) */
 export function toAlbumSummary(album: DbAlbum) {
   const cover = album.coverPhotoId ? findPhoto(album.coverPhotoId) : undefined
-  const photoCount = photoCountOfAlbum(album.id)
   return {
     albumId: album.id,
     type: album.type.toUpperCase(),
     personName: personNameOf(album),
     personId: album.personId,
-    photoCount,
+    photoCount: photoCountOfAlbum(album.id),
     unreviewedPhotoCount: unreviewedCountOfAlbum(album.id),
     thumbnailPhotoId: cover?.id ?? null,
     thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
-    reviewStatus: reviewStatusOf(album.id, photoCount),
+    reviewStatus: reviewStatusOf(album.id),
   }
 }
 
@@ -229,8 +232,19 @@ export function toAlbumDetail(album: DbAlbum) {
     personName: personNameOf(album),
     personId: album.personId,
     photoCount: photos.length,
-    reviewStatus: reviewStatusOf(album.id, photos.length),
+    reviewStatus: reviewStatusOf(album.id),
     photos: photos.map(toPhotoInAlbum),
+  }
+}
+
+/** BE CreateAlbumResponse(CHMO-416) — 최소형: 썸네일 없음(FE가 그리드 재조회로 얻는다) */
+export function toCreateAlbumResponse(album: DbAlbum) {
+  return {
+    albumId: album.id,
+    type: album.type.toUpperCase(),
+    personId: album.personId,
+    personName: personNameOf(album),
+    photoCount: photoCountOfAlbum(album.id),
   }
 }
 
