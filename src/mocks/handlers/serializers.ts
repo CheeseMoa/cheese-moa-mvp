@@ -20,6 +20,7 @@ import {
   mappedPersonsOf,
   memberCountOf,
   parentCountOf,
+  parentVisibleAlbumsOfEvent,
   parentVisiblePhotosOfEvent,
   pendingPublishCountOf,
   personNameOf,
@@ -84,13 +85,16 @@ export function toGroupSummary(group: DbGroup, membership: DbMembership) {
 
 /**
  * BE GroupDetailResponse — 상세엔 **eventCount가 없다**(화면이 이벤트 목록 길이로 파생).
- * 카운트 분리(§7-3) — memberCount는 과도기 병행. PARENT 호출엔 멤버 관련 필드 전부 생략.
+ * 카운트 분리(§7-3) — memberCount는 과도기 병행. 멤버 정보는 **ACTIVE TEACHER에게만** —
+ * 게이트 조건을 toGroupSummary와 동일하게 두어 §7-3 규칙이 한 형태로 유지된다
+ * (지금은 핸들러가 PENDING을 먼저 403으로 막지만, 직렬화기 단독으로도 새지 않게).
  */
 export function toGroupDetail(group: DbGroup, membership: DbMembership) {
+  const isActiveTeacher = membership.status === 'active' && membership.role === 'teacher'
   return {
     groupId: group.id,
     name: group.name,
-    ...(membership.role === 'teacher'
+    ...(isActiveTeacher
       ? {
           memberCount: memberCountOf(group.id),
           teacherCount: teacherCountOf(group.id),
@@ -199,6 +203,28 @@ export function toEventDetail(event: DbEvent) {
     progress: progressOf(event.id),
     // 발행 대기(CHMO-324 재공개 게이트) — 상세 전용(목록 EventSummaryResponse엔 BE도 없다)
     pendingPublishCount: pendingPublishCountOf(event.id),
+  }
+}
+
+/**
+ * 학부모용 이벤트 목록 항목(학부모 전환 Q4 — 뷰어 필터 이관) — BE는 제작자와 같은
+ * EventSummaryResponse 형태를 쓰되 **카운트·커버를 그 학부모의 노출 사진 기준으로 파생**한다
+ * (매핑 인물+공통 · reviewed && published). 제작자용 toEventSummary를 그대로 쓰면
+ * 미발행 사진 수·썸네일이 학부모에게 샌다 — 뷰어의 toViewerEventSummary(CHMO-324)와 같은 결.
+ */
+export function toParentEventSummary(event: DbEvent, userId: number) {
+  const visible = parentVisiblePhotosOfEvent(event.id, userId)
+  const cover = visible[0] ?? null
+  return {
+    eventId: event.id,
+    name: event.name,
+    status: event.status.toUpperCase(),
+    eventDate: event.date,
+    thumbnailPhotoId: cover?.id ?? null,
+    thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+    photoCount: visible.length,
+    albumCount: parentVisibleAlbumsOfEvent(event.id, userId).length,
+    createdAt: event.createdAt,
   }
 }
 

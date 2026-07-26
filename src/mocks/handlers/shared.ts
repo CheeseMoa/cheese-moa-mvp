@@ -8,10 +8,10 @@
 import { HttpResponse } from 'msw'
 import {
   findEvent,
-  isActiveMember,
   membershipOf,
   resolveUser,
   type DbEvent,
+  type DbMemberRole,
   type DbUser,
 } from '../db'
 
@@ -99,33 +99,30 @@ export function userFrom(request: Request): DbUser | null {
 }
 
 /**
- * 멤버 전용 리소스 접근 가능 여부 — **ACTIVE 멤버**(role 무관). 승인 전(PENDING) 신청자는
- * 비멤버와 동일하게 404 은닉(§7-2 deny-by-default — PENDING에게 여는 API는 목록뿐).
+ * role 전용 액션 관문(§6 — 학부모 차단은 서버 403 강제, FE 버튼 숨김은 보조).
+ * null이면 통과. 비멤버·PENDING은 존재 은닉(hide — §7-2 deny-by-default),
+ * ACTIVE지만 role이 다르면 ROLE403(Q5). 선생님·학부모 양쪽 관문이 이 한 구현을 쓴다 —
+ * 승인 상태 규칙이 바뀌어도 두 API의 403/404 계약이 함께 움직인다.
  */
-export function canAccessGroup(user: DbUser, groupId: number): boolean {
-  return isActiveMember(user.id, groupId)
+export function membershipRoleError(
+  user: DbUser,
+  groupId: number,
+  role: DbMemberRole,
+  hide: () => Response = groupNotFound,
+): Response | null {
+  const membership = membershipOf(user.id, groupId)
+  if (membership?.status !== 'active') return hide()
+  if (membership.role !== role) return roleForbidden()
+  return null
 }
 
-/**
- * 제작자(TEACHER) 전용 액션 관문(§6 — 학부모 차단은 서버 403 강제, FE 버튼 숨김은 보조).
- * null이면 통과. 비멤버·PENDING은 존재 은닉(404), ACTIVE PARENT는 ROLE403(Q5).
- */
+/** 제작자(TEACHER) 전용 액션 관문 — 업로드·검수·공개·설정·초대·매핑 전부(§6) */
 export function teacherOnlyError(
   user: DbUser,
   groupId: number,
   hide: () => Response = groupNotFound,
 ): Response | null {
-  const membership = membershipOf(user.id, groupId)
-  if (membership?.status !== 'active') return hide()
-  if (membership.role !== 'teacher') return roleForbidden()
-  return null
-}
-
-/** 멤버가 접근 가능한 이벤트 조회(없거나 비멤버·PENDING이면 null → 404) */
-export function accessibleEvent(user: DbUser, eventId: number | null): DbEvent | null {
-  const event = findEvent(eventId)
-  if (!event || !canAccessGroup(user, event.groupId)) return null
-  return event
+  return membershipRoleError(user, groupId, 'teacher', hide)
 }
 
 /**

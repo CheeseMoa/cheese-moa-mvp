@@ -300,11 +300,6 @@ export function membershipOf(userId: number, groupId: number): DbMembership | un
   return db.memberships.find((m) => m.userId === userId && m.groupId === groupId)
 }
 
-/** ACTIVE 멤버(role 무관) — 승인 전(PENDING) 신청자는 모임 콘텐츠에 접근할 수 없다(§1) */
-export function isActiveMember(userId: number, groupId: number): boolean {
-  return membershipOf(userId, groupId)?.status === 'active'
-}
-
 /** 제작자 액션(업로드·검수·공개·설정·초대·매핑)의 관문 — 학부모 차단은 서버 강제(§6) */
 export function isActiveTeacher(userId: number, groupId: number): boolean {
   const membership = membershipOf(userId, groupId)
@@ -380,21 +375,29 @@ export function mappedPersonsOf(userId: number, groupId: number): DbPerson[] {
 }
 
 /**
- * 학부모 노출 사진(§5 — 뷰어 노출 규칙 이관): 매핑된 인물 앨범 + 공통 앨범의
- * 노출 사진(reviewed && published — CHMO-324 게이트 그대로). 다대다라 중복 제거.
- * 매핑 0건(미연결)이면 공통만 — 빈 배열 가능(승인 후 미연결이 기본 경로).
+ * 학부모에게 보이는 앨범(§5 스코프) = 매핑된 인물 앨범 + 공통 앨범, 노출 사진
+ * (reviewed && published — CHMO-324 게이트 그대로)이 1장 이상인 것.
+ * 학부모 화면엔 앨범 계층이 없지만(§3 플랫) 이벤트 목록의 카운트·커버 파생 기준이 된다.
  */
-export function parentVisiblePhotosOfEvent(eventId: number, userId: number): DbPhoto[] {
+export function parentVisibleAlbumsOfEvent(eventId: number, userId: number): DbAlbum[] {
   const event = findEvent(eventId)
   if (!event) return []
   const mappedIds = new Set(mappedPersonsOf(userId, event.groupId).map((p) => p.id))
-  const visibleAlbums = albumsOfEvent(eventId).filter(
+  return albumsOfEvent(eventId).filter(
     (a) =>
-      a.type === 'common' ||
-      (a.type === 'person' && a.personId !== null && mappedIds.has(a.personId)),
+      (a.type === 'common' ||
+        (a.type === 'person' && a.personId !== null && mappedIds.has(a.personId))) &&
+      viewerPhotosOfAlbum(a.id).length > 0,
   )
+}
+
+/**
+ * 학부모 노출 사진(§5 — 뷰어 노출 규칙 이관): 위 앨범들의 노출 사진. 다대다라 중복 제거.
+ * 매핑 0건(미연결)이면 공통만 — 빈 배열 가능(승인 후 미연결이 기본 경로).
+ */
+export function parentVisiblePhotosOfEvent(eventId: number, userId: number): DbPhoto[] {
   const photos = new Map<number, DbPhoto>()
-  for (const album of visibleAlbums) {
+  for (const album of parentVisibleAlbumsOfEvent(eventId, userId)) {
     for (const photo of viewerPhotosOfAlbum(album.id)) photos.set(photo.id, photo)
   }
   return [...photos.values()]

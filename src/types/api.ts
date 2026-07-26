@@ -70,10 +70,14 @@ export interface GroupInviteChannel {
   joinUrl: string
 }
 
-/** 초대 정보 2종(Q6 — 링크가 role을 정한다) */
+/**
+ * 초대 정보 2종(Q6 — 링크가 role을 정한다).
+ * parent는 **구계약 공존 구간엔 null** — 현재 배포된 실 BE는 선생님 채널(평면 응답)만 준다.
+ * 소비 화면은 null이면 학부모 초대 UI를 숨긴다(BE 초안 배포 후 non-null 보장되면 좁힌다).
+ */
 export interface GroupInviteInfo {
   teacher: GroupInviteChannel
-  parent: GroupInviteChannel
+  parent: GroupInviteChannel | null
 }
 
 export interface GroupShareInfo extends GroupShare {

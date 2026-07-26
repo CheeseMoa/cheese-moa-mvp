@@ -48,6 +48,7 @@ import {
   toAnalysisStatusResponse,
   toEventDetail,
   toEventSummary,
+  toParentEventSummary,
   toPublishEventResponse,
   toReviewSummaryResponse,
 } from './serializers'
@@ -73,11 +74,18 @@ export const eventHandlers = [
     const membership = membershipOf(user.id, group.id)
     if (membership?.status !== 'active') return groupNotFound()
 
-    let events = db.events.filter((e) => e.groupId === group.id)
+    const events = db.events.filter((e) => e.groupId === group.id)
     // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
     for (const event of events) settleAnalysis(event.id)
-    if (membership.role === 'parent') events = events.filter((e) => e.status === 'published')
     events.sort(byEventRecency)
+    // PARENT는 published 필터에 더해 **카운트·커버도 노출 사진 기준** 직렬화(미발행 누출 방지)
+    if (membership.role === 'parent') {
+      return ok(
+        events
+          .filter((e) => e.status === 'published')
+          .map((e) => toParentEventSummary(e, user.id)),
+      )
+    }
     return ok(events.map(toEventSummary))
   }),
 

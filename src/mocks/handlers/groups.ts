@@ -158,14 +158,8 @@ export const groupHandlers = [
     const expected = role === 'teacher' ? group.password : group.share.password
     if (expected !== password) return errorResponse(403, 'JOIN403', '비밀번호가 일치하지 않습니다.')
 
-    // 학부모 신청은 자녀 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지 않는다(§2)
-    let childNames: string[] = []
-    if (role === 'parent') {
-      const raw = Array.isArray(body?.childNames) ? body.childNames : []
-      childNames = raw.map(requiredString).filter((name): name is string => name !== null)
-      if (childNames.length === 0) return invalidRequest('아이 이름을 입력해 주세요.')
-    }
-
+    // 중복 신청/합류(409)를 childNames 검증(400)보다 먼저 — 뒤에 두면 이미 신청한 학부모의
+    // 재시도가 '아이 이름을 입력해 주세요'로 응답돼 자신이 신청 중이라는 사실을 알 수 없다.
     // BE 코드 미확인 — 이미 멤버/신청 중 409는 채집되지 않았다
     const existing = membershipOf(user.id, group.id)
     if (existing)
@@ -174,6 +168,14 @@ export const groupHandlers = [
         'ALREADY_MEMBER',
         existing.status === 'active' ? '이미 참여 중인 모임입니다.' : '이미 참여 신청한 모임입니다.',
       )
+
+    // 학부모 신청은 자녀 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지 않는다(§2)
+    let childNames: string[] = []
+    if (role === 'parent') {
+      const raw = Array.isArray(body?.childNames) ? body.childNames : []
+      childNames = raw.map(requiredString).filter((name): name is string => name !== null)
+      if (childNames.length === 0) return invalidRequest('아이 이름을 입력해 주세요.')
+    }
 
     const membership = createMembership({
       userId: user.id,

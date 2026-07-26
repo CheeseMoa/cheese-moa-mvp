@@ -26,7 +26,7 @@ import {
   registerPhotos,
   uploadToPresignedUrl,
 } from './events'
-import { findMyGroupByJoinKey, getGroup, getInviteInfo, listGroups } from './groups'
+import { findMyGroupByJoinKey, getGroup, getInviteInfo, joinGroup, listGroups } from './groups'
 import {
   getViewerAlbumPhotos,
   getViewerAlbums,
@@ -153,10 +153,53 @@ describe('모임', () => {
     )
     const invite = await getInviteInfo(6)
     expect(invite.teacher.joinKey).toBe('Fh1TDIk81EPP')
-    expect(invite.parent.password).toBe('7421')
+    expect(invite.parent?.password).toBe('7421')
     // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다
     expect(invite.teacher.joinUrl).toBe('/join/Fh1TDIk81EPP')
-    expect(invite.parent.joinUrl).toBe('/join/Pk3xYz92QwEr')
+    expect(invite.parent?.joinUrl).toBe('/join/Pk3xYz92QwEr')
+  })
+
+  it('초대 구계약 공존 — 평면 응답(현행 실 BE)은 teacher로 흡수하고 parent는 null', async () => {
+    // 2026-07-16 실채집 형태 — joinUrl(쿼리형)은 버린다(CHMO-237)
+    serve(
+      envelope({
+        joinKey: 'Fh1TDIk81EPP',
+        password: '<group-password>',
+        joinUrl: 'https://cheese-moa-mvp.vercel.app/join?joinKey=Fh1TDIk81EPP',
+      }),
+    )
+    const invite = await getInviteInfo(6)
+    expect(invite.teacher).toEqual({
+      joinKey: 'Fh1TDIk81EPP',
+      password: '<group-password>',
+      joinUrl: '/join/Fh1TDIk81EPP',
+    })
+    expect(invite.parent).toBeNull()
+  })
+
+  it('참여 구계약 공존 — 즉시 합류(GroupDetail 형태) 응답을 active/teacher로 흡수한다', async () => {
+    // 현행 실 BE: 참여 즉시 합류 + 상세 형태 응답(role·status·groupName 없음).
+    // 매퍼가 던지면 서버는 이미 합류를 끝냈는데 화면은 실패로 오인한다 — 반드시 성공으로 흡수.
+    serve(envelope(BE_GROUP_DETAIL))
+    const result = await joinGroup({ joinKey: 'K', password: 'p' })
+    expect(result.status).toBe('active')
+    expect(result.role).toBe('teacher')
+    expect(result.groupId).toBe(6)
+    // 구계약의 name 필드가 groupName으로 온다 — 토스트가 'undefined'를 그리지 않게
+    expect(result.groupName).not.toBe('')
+  })
+
+  it('참여 초안 계약 — role·status 대문자 enum을 소문자로 옮긴다 (CHMO-444)', async () => {
+    // BE 미배포 — parent-model-api-draft §3 초안 기대값. 배포 후 실채집 픽스처로 교체한다.
+    serve(
+      envelope({ groupId: 9, groupName: '햇살반', role: 'PARENT', status: 'PENDING' }),
+    )
+    await expect(joinGroup({ joinKey: 'P', password: '7421', childNames: ['김민준'] })).resolves.toEqual({
+      groupId: 9,
+      groupName: '햇살반',
+      role: 'parent',
+      status: 'pending',
+    })
   })
 })
 
@@ -226,6 +269,21 @@ describe('findMyGroupByJoinKey', () => {
   it('재시도도 실패하면 null로 폴백한다 — 참여 자체를 막지는 않는다', async () => {
     stubInvites({ 6: serverError, 5: serverError })
     await expect(findMyGroupByJoinKey('K6')).resolves.toBeNull()
+  })
+
+  it('결정적 실패(ROLE403 학부모 멤버십·404 은닉)는 재시도하지 않는다', async () => {
+    // 학부모 role 모임의 초대 조회는 항상 ROLE403 — 재시도해도 같은 답이라 헛요청만 는다
+    let attempts = 0
+    stubInvites({
+      6: () => {
+        attempts += 1
+        return jsonResponse(errorEnvelope('ROLE403', '권한이 없습니다.'), 403)
+      },
+      5: () => jsonResponse(inviteOf('K5')),
+    })
+
+    await expect(findMyGroupByJoinKey('K6')).resolves.toBeNull()
+    expect(attempts).toBe(1)
   })
 })
 

@@ -3,7 +3,7 @@
  * BE는 목록을 bare 배열로 주고(GroupSummaryResponse[]), 시크릿(joinKey 등)은
  * 목록에서 의도적으로 노출하지 않는다 — joinKey가 필요하면 GET /groups/:id/invite.
  */
-import { apiFetch } from './client'
+import { ApiRequestError, apiFetch } from './client'
 import {
   toGroup,
   toGroupMember,
@@ -68,10 +68,16 @@ export function joinGroup(input: {
   )
 }
 
-/** BE GroupInviteResponse(초안 §2) — 2종 채널. joinUrl은 응답에 없다(FE가 경로형 파생 — CHMO-237) */
+/**
+ * BE GroupInviteResponse(초안 §2 — 2종 채널) ∪ 구계약(평면 — 현재 배포된 실 BE).
+ * joinUrl은 신형 응답에 없다(FE가 경로형 파생 — CHMO-237); 구계약의 쿼리형 joinUrl은 버린다.
+ */
 interface RawGroupInvite {
-  teacher: { joinKey: string; password: string }
-  parent: { joinKey: string; password: string }
+  teacher?: { joinKey: string; password: string }
+  parent?: { joinKey: string; password: string }
+  /** 구계약 평면 필드(2026-07-16 채집) — 선생님 채널만 존재하던 시절 */
+  joinKey?: string
+  password?: string
 }
 
 function toInviteChannel(raw: { joinKey: string; password: string }): GroupInviteChannel {
@@ -88,12 +94,24 @@ function toInviteChannel(raw: { joinKey: string; password: string }): GroupInvit
  * GET /groups/:id/invite — 초대 정보 2종(TEACHER 전용 — PARENT는 ROLE403, Q3).
  * 학부모 비밀번호는 기존 sharePassword 재사용(Q2). 참여 링크는 BE joinUrl을 신뢰하지 않고
  * joinKey로 **FE 오리진 기준 경로형**(`/join/:joinKey`)을 파생한다(CHMO-237).
+ *
+ * **구계약 공존**(listGroups의 myMembership 흡수와 같은 결): 현재 배포된 실 BE는 평면
+ * `{joinKey, password, joinUrl}`(선생님 채널만)을 준다 — teacher로 흡수하고 parent는 null
+ * (화면이 학부모 초대 UI를 숨긴다). BE가 초안을 배포하면 폴백을 걷는다.
  */
 export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promise<GroupInviteInfo> {
-  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then((raw) => ({
-    teacher: toInviteChannel(raw.teacher),
-    parent: toInviteChannel(raw.parent),
-  }))
+  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then((raw) => {
+    if (raw.teacher) {
+      return {
+        teacher: toInviteChannel(raw.teacher),
+        parent: raw.parent ? toInviteChannel(raw.parent) : null,
+      }
+    }
+    return {
+      teacher: toInviteChannel({ joinKey: raw.joinKey ?? '', password: raw.password ?? '' }),
+      parent: null,
+    }
+  })
 }
 
 // ── 합류 신청·멤버·인물 매핑 (학부모 전환 §3~4 — TEACHER 전용) ──
@@ -171,19 +189,25 @@ export async function findMyGroupByJoinKey(
 
   // joinKey 2종(선생님/학부모 — Q6) 어느 쪽이든 이 모임의 초대 링크다
   const matches = (invite: GroupInviteInfo) =>
-    invite.teacher.joinKey === joinKey || invite.parent.joinKey === joinKey
+    invite.teacher.joinKey === joinKey || invite.parent?.joinKey === joinKey
 
-  // 초대 조회는 TEACHER 전용(Q3) — PARENT 멤버십 모임은 ROLE403으로 실패하지만, 그 모임에
-  // '이미 멤버'인 것도 사실이므로 판정 불가(null)로 흘려 모달 폴백(참여 시도 시 서버가 409)한다.
-  // 모임별 조회 — 성공하면 매치 여부, 실패(일시 오류·권한 등)하면 null(판정 불가)
+  // 초대 조회는 TEACHER 전용(Q3) — 학부모 멤버십 모임(ROLE403)·대기 신청 모임(404 은닉)은
+  // 재시도해도 항상 같은 답이라 **결정적 실패(false)** 로 분류해 재시도에서 뺀다.
+  // 판정 못 한 모임이 남으면 모달 폴백(참여 시도 시 서버가 409로 안내)이므로 안전 방향이다.
+  const deterministicFailure = (e: unknown) =>
+    e instanceof ApiRequestError && (e.code === 'FORBIDDEN_ROLE' || e.code === 'NOT_FOUND')
+
+  // 모임별 조회 — 성공하면 매치 여부, 일시 오류(서버 5xx·네트워크)면 null(판정 불가)
   const hits = await Promise.all(
-    groups.map((g) => getInviteInfo(g.id, signal).then(matches, () => null)),
+    groups.map((g) =>
+      getInviteInfo(g.id, signal).then(matches, (e) => (deterministicFailure(e) ? false : null)),
+    ),
   )
   const hit = groups.find((_, i) => hits[i] === true)
   if (hit) return hit
 
-  // 전부 성공했는데 매치가 없으면 확실한 비멤버 → 재시도 없이 null.
-  // 실패한 모임이 있으면 그 안에 대상이 있을 수 있어 실패분만 한 번 더 확인한다.
+  // 매치가 없으면: 일시 오류로 판정 못 한 모임만 한 번 더 확인한다 — 실패를 '비멤버'로
+  // 단정하면 이미 멤버인데 비번 모달을 다시 띄우는 오판이 난다.
   const unresolved = groups.filter((_, i) => hits[i] === null)
   for (const group of unresolved) {
     if (signal?.aborted) break

@@ -108,22 +108,31 @@ export function toGroup(raw: RawGroup): Group {
   }
 }
 
-/** BE JoinGroupResponse(초안 §3) — 즉시 합류가 아니라 신청(PENDING) 생성 결과 */
+/**
+ * BE JoinGroupResponse(초안 §3) — 즉시 합류가 아니라 신청(PENDING) 생성 결과.
+ * **구계약 공존**: 현재 배포된 실 BE는 즉시 합류 + GroupDetail 형태({groupId, name,
+ * memberCount, createdAt} — role·status·groupName 없음)를 준다. 매퍼가 그 응답도
+ * "선생님으로 즉시 합류(active)"로 흡수한다 — 서버는 이미 합류를 끝낸 뒤라 여기서 던지면
+ * 성공이 실패로 오인된다. BE가 초안을 배포하면 폴백 없이 신형만 남긴다.
+ */
 export interface RawJoinGroupResult {
   groupId: ID
-  groupName: string
-  /** 대문자 enum(TEACHER/PARENT) — joinKey 종류에서 서버가 파생(Q6) */
-  role: string
-  /** 대문자 enum(PENDING/ACTIVE) */
-  status: string
+  groupName?: string
+  /** 구계약(GroupDetail 형태)의 모임 이름 필드 */
+  name?: string
+  /** 대문자 enum(TEACHER/PARENT) — joinKey 종류에서 서버가 파생(Q6). 구계약엔 없다 */
+  role?: string
+  /** 대문자 enum(PENDING/ACTIVE) — 구계약엔 없다(즉시 합류 = active) */
+  status?: string
 }
 
 export function toJoinGroupResult(raw: RawJoinGroupResult): JoinGroupResult {
   return {
     groupId: raw.groupId,
-    groupName: raw.groupName,
-    role: raw.role.toLowerCase() as GroupRole,
-    status: raw.status.toLowerCase() as MembershipStatus,
+    groupName: raw.groupName ?? raw.name ?? '',
+    // 구계약 = 선생님 초대 수락뿐이라 teacher/active가 사실과 일치한다
+    role: (raw.role?.toLowerCase() as GroupRole | undefined) ?? 'teacher',
+    status: (raw.status?.toLowerCase() as MembershipStatus | undefined) ?? 'active',
   }
 }
 
@@ -184,18 +193,22 @@ export interface RawParentPhoto {
   url: string
 }
 
-/** BE ParentEventPhotosResponse(초안 §5) — 플랫 배열(앨범 계층 없음) */
+/**
+ * BE ParentEventPhotosResponse(초안 §5) — 플랫 배열(앨범 계층 없음).
+ * photos는 옵셔널 — BE @JsonInclude(NON_EMPTY) 관례상 0장이면 키가 생략될 수 있고(faceBboxes·
+ * causes에서 실측), 미연결 학부모의 빈 목록은 예외가 아니라 기본 경로다(§2).
+ */
 export interface RawParentEventPhotos {
   eventId: ID
   eventName: string
-  photos: RawParentPhoto[]
+  photos?: RawParentPhoto[]
 }
 
 export function toParentEventPhotos(raw: RawParentEventPhotos): ParentEventPhotos {
   return {
     eventId: raw.eventId,
     eventName: raw.eventName,
-    photos: raw.photos.map((p) => ({
+    photos: (raw.photos ?? []).map((p) => ({
       id: p.photoId,
       url: p.url,
       thumbnailUrl: p.thumbnailUrl,

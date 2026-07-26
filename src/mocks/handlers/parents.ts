@@ -11,6 +11,7 @@ import {
   findGroup,
   findMembershipById,
   hasPersonParent,
+  isActiveTeacher,
   linkPersonParent,
   membershipOf,
   pendingRequestsOfGroup,
@@ -25,11 +26,11 @@ import {
   groupNotFound,
   invalidBody,
   invalidRequest,
+  membershipRoleError,
   notFound,
   ok,
   readJson,
   requiredString,
-  roleForbidden,
   teacherOnlyError,
   toId,
   unauthorized,
@@ -52,16 +53,17 @@ async function readPersonParentBody(
   return { userId, personId }
 }
 
-/** 학부모 사진 조회 관문(§5) — 이벤트 존재 + published + 호출자가 그 모임의 ACTIVE PARENT */
+/**
+ * 학부모 사진 조회 관문(§5) — 이벤트 존재 + published + 호출자가 그 모임의 ACTIVE PARENT.
+ * 멤버십 판정은 선생님 관문과 같은 membershipRoleError 한 구현을 role만 바꿔 쓴다
+ * (비멤버·PENDING 은닉 → role 불일치 ROLE403 — TEACHER는 제작자 API를 쓴다).
+ */
 function parentPhotosGate(user: DbUser, eventId: number | null) {
   const event = findEvent(eventId)
   if (!event) return { error: eventNotFound() }
   settleAnalysis(event.id)
-  const membership = membershipOf(user.id, event.groupId)
-  // 비멤버·PENDING은 존재 은닉(deny-by-default §7-2)
-  if (membership?.status !== 'active') return { error: eventNotFound() }
-  // 학부모 전용 응답 — TEACHER는 제작자 API를 쓴다(초안 §5 조건: ACTIVE PARENT)
-  if (membership.role !== 'parent') return { error: roleForbidden() }
+  const denied = membershipRoleError(user, event.groupId, 'parent', eventNotFound)
+  if (denied) return { error: denied }
   // PARENT에겐 published 이벤트만 존재한다(Q4 서버 필터와 정합 — 미공개는 은닉)
   if (event.status !== 'published') return { error: eventNotFound() }
   return { event }
@@ -95,11 +97,15 @@ export const parentHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     const membership = findMembershipById(toId(params.id))
+    // 신청 부재·비멤버·타 role 전부 **같은 404로 수렴** — 응답이 갈리면 id 열거로 남의 모임
+    // 신청 존재가 노출된다(§7-2 deny-by-default). 경로에 모임 id가 없어 ROLE403도 정보가 된다.
     // BE 코드 미확인 — 신청 없음 404는 채집되지 않았다
-    if (!membership || membership.status !== 'pending')
+    if (
+      !membership ||
+      membership.status !== 'pending' ||
+      !isActiveTeacher(user.id, membership.groupId)
+    )
       return notFound('처리할 신청을 찾을 수 없습니다.')
-    const denied = teacherOnlyError(user, membership.groupId)
-    if (denied) return denied
 
     const body = await readJson<{ status?: unknown }>(request)
     if (!body) return invalidBody()
@@ -161,6 +167,8 @@ export const parentHandlers = [
 
   // DELETE /groups/:id/person-parents — 매핑 해제(TEACHER 전용) · 화면 20
   // 해제는 미연결(매핑 0건)로 회귀할 뿐 새 상태를 만들지 않는다(§7-1).
+  // 스코프 검증은 생성(POST)과 대칭 — 인물·대상 학부모가 **이 모임**의 것이어야 한다.
+  // 아니면 타 모임 선생님이 경로만 자기 모임으로 바꿔 남의 매핑을 풀 수 있다.
   http.delete(api('/groups/:id/person-parents'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
@@ -171,8 +179,12 @@ export const parentHandlers = [
 
     const body = await readPersonParentBody(request)
     if (!body) return invalidRequest('userId와 personId를 보내 주세요.')
+    const target = membershipOf(body.userId, group.id)
+    if (target?.status !== 'active' || target.role !== 'parent')
+      return invalidRequest('이 모임의 학부모 멤버가 아닙니다.')
+    const person = db.persons.find((p) => p.id === body.personId && p.groupId === group.id)
     // BE 코드 미확인 — 없는 매핑 404는 채집되지 않았다
-    if (!hasPersonParent(body.userId, body.personId))
+    if (!person || !hasPersonParent(body.userId, body.personId))
       return notFound('해제할 연결을 찾을 수 없습니다.')
 
     unlinkPersonParent(body.userId, body.personId)

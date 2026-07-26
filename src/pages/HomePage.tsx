@@ -58,8 +58,9 @@ export function HomePage() {
                   <GroupCard
                     name={g.name}
                     memberCount={g.memberCount}
-                    // PENDING 신청 모임 항목엔 카운트가 없다(CHMO-444 §7-2) — 대기 카드 UI는 CHMO-445
-                    eventCount={g.eventCount ?? 0}
+                    // PENDING 신청 모임 항목엔 카운트가 없다(CHMO-444 §7-2 — 없는 값은 표기 생략,
+                    // 0으로 그리면 빈 모임처럼 보인다). 대기 카드 UI는 CHMO-445
+                    eventCount={g.eventCount}
                     onClick={() => navigate(`/groups/${g.id}`)}
                   />
                 </li>

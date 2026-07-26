@@ -45,6 +45,7 @@ import {
   toMovePhotosResponse,
   toMoveSuggestionResponse,
   toParentEventPhotosResponse,
+  toParentEventSummary,
   toPhotoInAlbum,
   toReviewSummaryResponse,
   toUser as serializeUser,
@@ -126,6 +127,28 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     })
     expect(pending.memberCount).toBeUndefined()
     expect(pending.eventCount).toBeUndefined()
+
+    // 승인 전(PENDING)이면 role이 teacher여도 상세 카운트를 주지 않는다 — 목록과 게이트 동일
+    const pendingTeacher = toGroupDetail(group, { ...membershipOf(1, 1)!, status: 'pending' })
+    expect('memberCount' in pendingTeacher).toBe(false)
+    expect('teacherCount' in pendingTeacher).toBe(false)
+  })
+
+  it('학부모 이벤트 목록 — 카운트·커버가 노출 사진 기준이다 (미발행 누출 방지, Q4)', () => {
+    const event = findEvent(2)! // 봄 소풍(published) — 발행 16장 + 발행 대기 4장
+    const raw = toParentEventSummary(event, 4) // 민준아빠 — 김민준(앨범 9) 매핑
+    const visibleCount = new Set(
+      [...photosOfAlbum(9), ...photosOfAlbum(12)]
+        .filter((p) => p.reviewed && p.published)
+        .map((p) => p.id),
+    ).size
+    expect(raw.photoCount).toBe(visibleCount) // 발행 대기 4장(217~220)은 세지 않는다
+    expect(raw.albumCount).toBe(2) // 김민준 + 공통 — 매핑 안 된 인물 앨범은 세지 않는다
+    // 커버는 노출 사진에서만 — 미발행 사진이 썸네일로 새면 안 된다
+    expect(raw.thumbnailUrl).toContain('picsum')
+    expect(findPhoto(raw.thumbnailPhotoId!)!.published).toBe(true)
+    // 제작자와 같은 EventSummaryResponse 형태 — 매퍼가 그대로 읽는다
+    expect(toEvent(raw)).toMatchObject({ id: 2, status: 'published', photoCount: visibleCount })
   })
 
   it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3)', () => {
