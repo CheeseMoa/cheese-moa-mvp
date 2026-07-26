@@ -237,7 +237,7 @@ export function PhotoUploadPage() {
       const s3Keys = pending.map((p) => freshKeys.get(p.key) ?? p.s3Key)
       if (s3Keys.some((key) => !key))
         throw new ApiRequestError(500, 'UPLOAD_FAILED', '업로드가 끝나지 않은 사진이 있어요.')
-      await registerPhotos(eventId, {
+      const registered = await registerPhotos(eventId, {
         s3Keys: s3Keys as string[],
         excludeEyesClosed,
         excludeBlurry,
@@ -248,7 +248,17 @@ export function PhotoUploadPage() {
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
       )
       toast.show('🧀 사진 분류를 시작했어요')
-      navigate(eventPath)
+      // published 이벤트는 등록 직후 progress가 아직 null(AI 첫 진행률 메시지 전)이라 상세의
+      // 단발 조회가 분석 시작을 놓친다 — '분석 시작' 킥을 상세로 넘겨 폴링을 켜게 한다(CHMO-443).
+      // expected는 완료 판정용: 사진은 분석 커밋 시점에야 photoCount에 반영된다(실서버 실측).
+      navigate(eventPath, {
+        state: {
+          analysisKick: {
+            eventId,
+            expected: (event?.photoCount ?? 0) + registered.registeredCount,
+          },
+        },
+      })
     } catch (err) {
       controller.abort()
       if (!alive.current) return
