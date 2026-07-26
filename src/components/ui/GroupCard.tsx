@@ -2,7 +2,8 @@ import { Cheddar } from './Cheddar'
 
 interface GroupCardProps {
   name: string
-  memberCount: number
+  /** 학부모 전환(CHMO-444) 후 PARENT·PENDING 목록 항목엔 멤버 수가 없다(§7-3 미노출) */
+  memberCount?: number
   eventCount: number
   onClick?: () => void
 }
@@ -21,7 +22,7 @@ export function GroupCard({ name, memberCount, eventCount, onClick }: GroupCardP
       <span className="min-w-0 flex-1">
         <span className="block truncate text-base font-bold text-text">{name}</span>
         <span className="mt-0.5 block text-xs text-muted">
-          멤버 {memberCount} · 이벤트 {eventCount}
+          {memberCount !== undefined ? `멤버 ${memberCount} · ` : ''}이벤트 {eventCount}
         </span>
       </span>
       <span className="text-lg text-[#C9C2B4]" aria-hidden="true">

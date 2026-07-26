@@ -108,6 +108,9 @@ function ShareInfoContent({
  * 초대(선생님 초대하기) 시트 · node 211:1556 · GET /groups/:id/invite (F2.3).
  * 05 위에 바텀시트로 뜬다(확정 — 별도 페이지 아님). 받은 사람은 참여 링크(/join/:joinKey)로
  * 진입해 모임 비밀번호를 입력해 합류(02-1). 학부모 공개와 별개 입구.
+ *
+ * 학부모 전환(CHMO-444)으로 초대 정보는 2종(선생님/학부모) 응답이 됐다 — 여기선 아직
+ * 선생님 채널만 소비하고, 탭 통합 시트(05-2)로의 개편은 CHMO-446에서 한다.
  */
 export function InviteSheet({ groupId, open, onClose }: SheetProps) {
   // 열릴 때만 조회 — 닫힌 시트가 비밀번호 평문을 미리 받아두지 않게
@@ -119,10 +122,10 @@ export function InviteSheet({ groupId, open, onClose }: SheetProps) {
       {data ? (
         <ShareInfoContent
           passwordLabel="비밀번호"
-          password={data.password}
-          url={data.joinUrl}
+          password={data.teacher.password}
+          url={data.teacher.joinUrl}
           copyDoneMessage="🧀 참여 링크를 복사했어요"
-          shareText={`🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${data.password}`}
+          shareText={`🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${data.teacher.password}`}
         />
       ) : (
         <SheetPending error={error} onRetry={refetch} />

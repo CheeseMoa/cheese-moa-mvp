@@ -4,8 +4,26 @@
  * 목록에서 의도적으로 노출하지 않는다 — joinKey가 필요하면 GET /groups/:id/invite.
  */
 import { apiFetch } from './client'
-import { toGroup, type RawGroup } from './mappers'
-import type { Group, GroupInviteInfo, GroupShareInfo, ID } from '../types/api'
+import {
+  toGroup,
+  toGroupMember,
+  toJoinGroupResult,
+  toJoinRequest,
+  type RawGroup,
+  type RawGroupMember,
+  type RawJoinGroupResult,
+  type RawJoinRequest,
+} from './mappers'
+import type {
+  Group,
+  GroupInviteChannel,
+  GroupInviteInfo,
+  GroupMember,
+  GroupShareInfo,
+  ID,
+  JoinGroupResult,
+  JoinRequest,
+} from '../types/api'
 
 /** GET /groups — 내 모임 목록(bare 배열) */
 export function listGroups(signal?: AbortSignal): Promise<Group[]> {
@@ -35,33 +53,99 @@ export function deleteGroup(groupId: ID | string): Promise<void> {
   return apiFetch<unknown>(`/groups/${groupId}`, { method: 'DELETE' }).then(() => undefined)
 }
 
-/** POST /groups/join — 참여 코드+모임 비밀번호로 합류 */
-export function joinGroup(input: { joinKey: string; password: string }): Promise<Group> {
-  return apiFetch<RawGroup>('/groups/join', { method: 'POST', body: input }).then(toGroup)
-}
-
-/** BE GroupInviteResponse — joinUrl이 쿼리형(`/join?joinKey=…`)이라 FE 라우트와 안 맞는다 */
-interface RawGroupInvite {
+/**
+ * POST /groups/join — 참여 코드+비밀번호로 **신청(PENDING) 생성**(학부모 전환 §1 승인제 —
+ * 즉시 합류가 아니다). role은 joinKey 종류에서 서버가 파생하고(Q6), 학부모 joinKey일 땐
+ * childNames(자녀 이름 자유 텍스트, 1개 이상)가 필수다.
+ */
+export function joinGroup(input: {
   joinKey: string
   password: string
-  joinUrl: string
+  childNames?: string[]
+}): Promise<JoinGroupResult> {
+  return apiFetch<RawJoinGroupResult>('/groups/join', { method: 'POST', body: input }).then(
+    toJoinGroupResult,
+  )
+}
+
+/** BE GroupInviteResponse(초안 §2) — 2종 채널. joinUrl은 응답에 없다(FE가 경로형 파생 — CHMO-237) */
+interface RawGroupInvite {
+  teacher: { joinKey: string; password: string }
+  parent: { joinKey: string; password: string }
+}
+
+function toInviteChannel(raw: { joinKey: string; password: string }): GroupInviteChannel {
+  // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
+  const origin = typeof window === 'undefined' ? '' : window.location.origin
+  return {
+    joinKey: raw.joinKey,
+    password: raw.password,
+    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
+  }
 }
 
 /**
- * GET /groups/:id/invite — 선생님 초대 정보(모임 비밀번호 평문 포함, 멤버 전용).
- * 참여 링크는 BE joinUrl을 신뢰하지 않고 joinKey로 **FE 오리진 기준 경로형**(`/join/:joinKey`)을
- * 파생한다(CHMO-237) — BE 것을 그대로 공유하면 받은 사람이 404로 떨어진다.
+ * GET /groups/:id/invite — 초대 정보 2종(TEACHER 전용 — PARENT는 ROLE403, Q3).
+ * 학부모 비밀번호는 기존 sharePassword 재사용(Q2). 참여 링크는 BE joinUrl을 신뢰하지 않고
+ * joinKey로 **FE 오리진 기준 경로형**(`/join/:joinKey`)을 파생한다(CHMO-237).
  */
 export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promise<GroupInviteInfo> {
-  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then((raw) => {
-    // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
-    const origin = typeof window === 'undefined' ? '' : window.location.origin
-    return {
-      joinKey: raw.joinKey,
-      password: raw.password,
-      joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
-    }
+  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then((raw) => ({
+    teacher: toInviteChannel(raw.teacher),
+    parent: toInviteChannel(raw.parent),
+  }))
+}
+
+// ── 합류 신청·멤버·인물 매핑 (학부모 전환 §3~4 — TEACHER 전용) ──
+
+/** GET /groups/:id/join-requests?status=PENDING — 대기 신청 목록(bare 배열) */
+export function listJoinRequests(
+  groupId: ID | string,
+  signal?: AbortSignal,
+): Promise<JoinRequest[]> {
+  return apiFetch<RawJoinRequest[]>(`/groups/${groupId}/join-requests?status=PENDING`, {
+    signal,
+  }).then((raw) => raw.map(toJoinRequest))
+}
+
+/**
+ * PATCH /join-requests/:id — 승인/거절. 승인은 **멤버 확정만** 하는 단순 액션이다
+ * (인물 연결은 승인 후 별도 — linkPersonParent, 승인·매핑 분리 확정 §1).
+ */
+export async function resolveJoinRequest(
+  joinRequestId: ID | string,
+  decision: 'approved' | 'rejected',
+): Promise<void> {
+  await apiFetch<unknown>(`/join-requests/${joinRequestId}`, {
+    method: 'PATCH',
+    body: { status: decision.toUpperCase() },
   })
+}
+
+/** GET /groups/:id/members — 멤버 목록(초대 관리 데이터 소스, bare 배열) */
+export function listGroupMembers(
+  groupId: ID | string,
+  signal?: AbortSignal,
+): Promise<GroupMember[]> {
+  return apiFetch<RawGroupMember[]>(`/groups/${groupId}/members`, { signal }).then((raw) =>
+    raw.map(toGroupMember),
+  )
+}
+
+/** POST /groups/:id/person-parents — 학부모↔인물 매핑 생성(다대다 — 다자녀·부모 2인 허용) */
+export async function linkPersonParent(
+  groupId: ID | string,
+  input: { userId: ID; personId: ID },
+): Promise<void> {
+  await apiFetch<unknown>(`/groups/${groupId}/person-parents`, { method: 'POST', body: input })
+}
+
+/** DELETE /groups/:id/person-parents — 매핑 해제(미연결로 회귀 — 새 상태 없음, §7-1) */
+export async function unlinkPersonParent(
+  groupId: ID | string,
+  input: { userId: ID; personId: ID },
+): Promise<void> {
+  await apiFetch<unknown>(`/groups/${groupId}/person-parents`, { method: 'DELETE', body: input })
 }
 
 /** GET /groups/:id/share — 학부모 공유 정보(학부모 전용 비밀번호 평문 포함, 멤버 전용) */
@@ -85,21 +169,26 @@ export async function findMyGroupByJoinKey(
 ): Promise<Group | null> {
   const groups = await listGroups(signal)
 
-  // 모임별 joinKey 조회 — 성공하면 joinKey 문자열, 실패(일시 오류 등)하면 null(판정 불가)
-  const keys = await Promise.all(
-    groups.map((g) => getInviteInfo(g.id, signal).then((invite) => invite.joinKey, () => null)),
+  // joinKey 2종(선생님/학부모 — Q6) 어느 쪽이든 이 모임의 초대 링크다
+  const matches = (invite: GroupInviteInfo) =>
+    invite.teacher.joinKey === joinKey || invite.parent.joinKey === joinKey
+
+  // 초대 조회는 TEACHER 전용(Q3) — PARENT 멤버십 모임은 ROLE403으로 실패하지만, 그 모임에
+  // '이미 멤버'인 것도 사실이므로 판정 불가(null)로 흘려 모달 폴백(참여 시도 시 서버가 409)한다.
+  // 모임별 조회 — 성공하면 매치 여부, 실패(일시 오류·권한 등)하면 null(판정 불가)
+  const hits = await Promise.all(
+    groups.map((g) => getInviteInfo(g.id, signal).then(matches, () => null)),
   )
-  const hit = groups.find((_, i) => keys[i] === joinKey)
+  const hit = groups.find((_, i) => hits[i] === true)
   if (hit) return hit
 
   // 전부 성공했는데 매치가 없으면 확실한 비멤버 → 재시도 없이 null.
   // 실패한 모임이 있으면 그 안에 대상이 있을 수 있어 실패분만 한 번 더 확인한다.
-  const unresolved = groups.filter((_, i) => keys[i] === null)
+  const unresolved = groups.filter((_, i) => hits[i] === null)
   for (const group of unresolved) {
     if (signal?.aborted) break
     try {
-      const invite = await getInviteInfo(group.id, signal)
-      if (invite.joinKey === joinKey) return group
+      if (matches(await getInviteInfo(group.id, signal))) return group
     } catch {
       // 재시도도 실패 — 이 모임은 판정 보류. 모달로 폴백한다.
     }

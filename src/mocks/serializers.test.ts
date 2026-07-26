@@ -19,6 +19,7 @@ import {
   db,
   createPersonAlbumFromPhotos,
   deleteAlbumCascade,
+  membershipOf,
   photosOfAlbum,
   photosOfEvent,
   albumsOfEvent,
@@ -37,9 +38,13 @@ import {
   toEventDetail,
   toEventSummary,
   toGroupDetail,
+  toGroupMemberResponse,
   toGroupSummary,
+  toJoinGroupResponse,
+  toJoinRequestResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
+  toParentEventPhotosResponse,
   toPhotoInAlbum,
   toReviewSummaryResponse,
   toUser as serializeUser,
@@ -55,7 +60,11 @@ import {
   toAnalysisJob,
   toEvent,
   toGroup,
+  toGroupMember,
+  toJoinGroupResult,
+  toJoinRequest,
   toMoveSuggestion,
+  toParentEventPhotos,
   toPhoto,
   toUser,
   toViewerAlbum,
@@ -74,16 +83,135 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     })
   })
 
-  it('모임 — 목록엔 eventCount, 상세엔 없다', () => {
+  it('모임 — 목록엔 eventCount, 상세엔 없다 (선생님 시점)', () => {
     const group = findGroup(1)!
-    expect(toGroup(toGroupSummary(group))).toMatchObject({
+    const teacher = membershipOf(1, 1)! // 이현정 — 햇살반 ACTIVE TEACHER
+    expect(toGroup(toGroupSummary(group, teacher))).toMatchObject({
       id: 1,
       name: '햇살반',
-      memberCount: 3,
+      // ACTIVE 멤버만(선생님 3 + 학부모 3) — 대기 신청(치즈냥이88)은 세지 않는다
+      memberCount: 6,
       eventCount: 4,
-      role: null,
+      myMembership: { role: 'teacher', status: 'active', claimedChildNames: [] },
     })
-    expect(toGroup(toGroupDetail(group)).eventCount).toBeUndefined()
+    const detail = toGroup(toGroupDetail(group, teacher))
+    expect(detail.eventCount).toBeUndefined()
+    // 카운트 분리(§7-3) — 상세는 teacherCount/parentCount를 준다(memberCount는 과도기 병행)
+    expect(detail).toMatchObject({ teacherCount: 3, parentCount: 3, memberCount: 6 })
+  })
+
+  it('모임 — PARENT·PENDING 응답엔 멤버 정보가 없다 (§7-3 미노출)', () => {
+    const group = findGroup(1)!
+
+    // ACTIVE PARENT(민준아빠) — 목록에 멤버 수 없음, eventCount는 published 수만(미공개 존재 은닉)
+    const parent = toGroup(toGroupSummary(group, membershipOf(4, 1)!))
+    expect(parent.myMembership).toEqual({
+      role: 'parent',
+      status: 'active',
+      claimedChildNames: ['김민준'],
+    })
+    expect(parent.memberCount).toBeUndefined()
+    expect(parent.eventCount).toBe(1) // 봄 소풍(published)뿐
+    // 상세도 멤버 관련 필드 전부 생략
+    const parentDetail = toGroup(toGroupDetail(group, membershipOf(4, 1)!))
+    expect(parentDetail.memberCount).toBeUndefined()
+    expect(parentDetail.teacherCount).toBeUndefined()
+
+    // PENDING(치즈냥이88) — 신청 원문만 실린다(홈 비활성 카드 §7-2)
+    const pending = toGroup(toGroupSummary(group, membershipOf(7, 1)!))
+    expect(pending.myMembership).toEqual({
+      role: 'parent',
+      status: 'pending',
+      claimedChildNames: ['김민준'],
+    })
+    expect(pending.memberCount).toBeUndefined()
+    expect(pending.eventCount).toBeUndefined()
+  })
+
+  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3)', () => {
+    const group = findGroup(1)!
+    const request = membershipOf(7, 1)! // 치즈냥이88 — PENDING 신청
+    expect(toJoinGroupResult(toJoinGroupResponse(group, request))).toEqual({
+      groupId: 1,
+      groupName: '햇살반',
+      role: 'parent',
+      status: 'pending',
+    })
+
+    const mapped = toJoinRequest(toJoinRequestResponse(request, db.users.find((u) => u.id === 7)!))
+    expect(mapped).toEqual({
+      id: 9,
+      userId: 7,
+      nickname: '치즈냥이88',
+      role: 'parent',
+      childNames: ['김민준'],
+      createdAt: '2026-07-25T09:10:00+09:00',
+    })
+
+    // 선생님 신청은 childNames 키 자체가 없다(초안 — 생략 가능) → 매퍼가 빈 배열로 정규화
+    const teacherRaw = toJoinRequestResponse(membershipOf(1, 1)!, db.users[0])
+    expect('childNames' in teacherRaw).toBe(false)
+    expect(toJoinRequest(teacherRaw).childNames).toEqual([])
+  })
+
+  it('멤버 목록 — 신청 원문 보존·매핑 포함이 매퍼와 맞는다 (초안 §4)', () => {
+    // 민준아빠(4) — 연결됨: mappings에 인물 이름이 실린다
+    const linked = toGroupMember(
+      toGroupMemberResponse(membershipOf(4, 1)!, db.users.find((u) => u.id === 4)!),
+    )
+    expect(linked).toEqual({
+      userId: 4,
+      nickname: '민준아빠',
+      role: 'parent',
+      childNames: ['김민준'],
+      mappings: [{ personId: 1, personName: '김민준' }],
+    })
+
+    // 지호네(6) — 승인됐지만 미연결(매핑 0건 = 기본 경로 §2): 신청 원문이 보존돼 있다
+    const unlinked = toGroupMember(
+      toGroupMemberResponse(membershipOf(6, 1)!, db.users.find((u) => u.id === 6)!),
+    )
+    expect(unlinked.childNames).toEqual(['박지호'])
+    expect(unlinked.mappings).toEqual([])
+
+    // 선생님 항목 — childNames·mappings 생략 → 빈 배열 정규화
+    const teacher = toGroupMember(toGroupMemberResponse(membershipOf(1, 1)!, db.users[0]))
+    expect(teacher).toEqual({
+      userId: 1,
+      nickname: '이현정',
+      role: 'teacher',
+      childNames: [],
+      mappings: [],
+    })
+  })
+
+  it('학부모 사진 — 매핑 인물+공통, 노출(reviewed && published)만, 미연결은 공통만 (초안 §5)', () => {
+    const event = findEvent(2)! // 봄 소풍(published) — 발행 16장 + 발행 대기 4장(김민준 앨범)
+
+    // 민준아빠(4) — 김민준(인물 1, 앨범 9) 매핑: 김민준 발행분 + 공통 발행분, 발행 대기 4장 제외
+    const raw = toParentEventPhotosResponse(event, 4)
+    expect(raw.eventId).toBe(2)
+    expect(raw.eventName).toBe('봄 소풍')
+    const expectedIds = new Set(
+      [...photosOfAlbum(9), ...photosOfAlbum(12)]
+        .filter((p) => p.reviewed && p.published)
+        .map((p) => p.id),
+    )
+    expect(new Set(raw.photos.map((p) => p.photoId))).toEqual(expectedIds)
+
+    // 매퍼 왕복 — url이 원본 겸 다운로드가 된다
+    const photos = toParentEventPhotos(raw).photos
+    expect(photos[0].url).toBe(photos[0].downloadUrl)
+    expect(photos[0].thumbnailUrl).toContain('picsum')
+
+    // 지호네(6) — 미연결(매핑 0건): 공통 앨범 발행분만
+    const commonOnly = toParentEventPhotosResponse(event, 6)
+    const commonIds = new Set(
+      photosOfAlbum(12)
+        .filter((p) => p.reviewed && p.published)
+        .map((p) => p.id),
+    )
+    expect(new Set(commonOnly.photos.map((p) => p.photoId))).toEqual(commonIds)
   })
 
   it('이벤트 — 대문자 enum이 소문자로, eventDate가 date로', () => {

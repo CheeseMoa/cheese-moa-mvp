@@ -25,28 +25,102 @@ export interface GroupShare {
   hasPassword: boolean
 }
 
+// 학부모 전환(CHMO-444 · docs/parent-model-api-draft.md) — role은 모임 멤버십 단위(user×group).
+// 계정 유형은 나누지 않고, 어느 초대 링크(joinKey 2종)로 합류했는지가 role을 정한다(Q6).
+export type GroupRole = 'teacher' | 'parent'
+/** 합류는 역할 무관 승인제(§1) — 신청(pending) 후 선생님 승인으로 active */
+export type MembershipStatus = 'pending' | 'active'
+
+/** 모임 목록 항목의 내 멤버십(§7-2) — PENDING 사용자는 이 값 하나로 끝(다른 모임 API 미호출) */
+export interface MyMembership {
+  role: GroupRole
+  status: MembershipStatus
+  /** 학부모 신청 원문(자유 텍스트) — 홈 카드 "신청: 김민준" 표기용. 선생님은 빈 배열 */
+  claimedChildNames: string[]
+}
+
 export interface Group {
   id: ID
   name: string
-  memberCount: number
+  /** 내 멤버십(role·승인 상태) — 실 BE 미배포 응답엔 없어 undefined(기존 제작자 동작 유지) */
+  myMembership?: MyMembership
+  /** ACTIVE 멤버 수 — PARENT·PENDING 응답엔 멤버 정보가 없다(§7-3 미노출) */
+  memberCount?: number
+  /** 상세 카운트 분리(§7-3 — "선생님 3 · 학부모 12") — memberCount는 과도기 병행 */
+  teacherCount?: number
+  parentCount?: number
   /** BE 상세(GroupDetailResponse)엔 없음 — 상세 화면은 이벤트 목록 길이로 파생(CHMO-192) */
   eventCount?: number
-  /** MVP에서 항상 null (권한 등급 없음) */
-  role: null
   createdAt: ISODateTime
 }
 
-// ── 초대 / 학부모 공유 (멤버 전용 — 평문 비밀번호 포함) ──────
-export interface GroupInviteInfo {
+/** POST /groups/join — 즉시 합류가 아니라 신청(PENDING) 생성이다(§1 승인제) */
+export interface JoinGroupResult {
+  groupId: ID
+  groupName: string
+  role: GroupRole
+  status: MembershipStatus
+}
+
+// ── 초대 (TEACHER 전용 — Q3 · 평문 비밀번호 포함) ────────────
+export interface GroupInviteChannel {
   joinKey: string
-  /** 제작자 합류용 모임 비밀번호 — 초대 화면 전용 노출 */
+  /** 합류 비밀번호 평문 — 선생님은 모임 비밀번호, 학부모는 기존 sharePassword 재사용(Q2) */
   password: string
   joinUrl: string
+}
+
+/** 초대 정보 2종(Q6 — 링크가 role을 정한다) */
+export interface GroupInviteInfo {
+  teacher: GroupInviteChannel
+  parent: GroupInviteChannel
 }
 
 export interface GroupShareInfo extends GroupShare {
   /** 학부모 전용 비밀번호(모임 비밀번호와 별개) — 공유 화면 전용 노출 */
   password: string
+}
+
+// ── 합류 신청·멤버·인물 매핑 (TEACHER 전용 — §2·§4) ──────────
+export interface JoinRequest {
+  id: ID
+  userId: ID
+  nickname: string
+  role: GroupRole
+  /** 학부모 신청 원문 — 승인 후 연결할 때 선생님이 참조(연결 전까지 보존) */
+  childNames: string[]
+  createdAt: ISODateTime
+}
+
+export interface PersonMapping {
+  personId: ID
+  /** 인물 이름 — 이름 없는 인물이면 null(표시 폴백은 화면 소유) */
+  personName: string | null
+}
+
+export interface GroupMember {
+  userId: ID
+  nickname: string
+  role: GroupRole
+  /** 신청 원문(학부모) — 선생님은 빈 배열 */
+  childNames: string[]
+  /** 학부모↔인물 매핑(다대다 — 다자녀·부모 2인 허용). 미연결 = 빈 배열(별도 상태 없음, §2) */
+  mappings: PersonMapping[]
+}
+
+// ── 학부모 사진 조회 (ACTIVE PARENT 전용 — §5, 뷰어 로직 이관) ──
+export interface ParentPhoto {
+  id: ID
+  url: string
+  thumbnailUrl: string
+  downloadUrl: string
+}
+
+/** GET /events/:id/parent-photos — 매핑된 인물 + 공통, published만, 플랫(앨범 계층 없음) */
+export interface ParentEventPhotos {
+  eventId: ID
+  eventName: string
+  photos: ParentPhoto[]
 }
 
 // ── Event (이벤트) ───────────────────────────────────────────

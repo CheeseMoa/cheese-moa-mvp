@@ -58,7 +58,7 @@ export function HomePage() {
                   <GroupCard
                     name={g.name}
                     memberCount={g.memberCount}
-                    // 목록 응답(BE·MSW 모두)엔 항상 있다 — 타입만 optional(상세 응답 결손)
+                    // PENDING 신청 모임 항목엔 카운트가 없다(CHMO-444 §7-2) — 대기 카드 UI는 CHMO-445
                     eventCount={g.eventCount ?? 0}
                     onClick={() => navigate(`/groups/${g.id}`)}
                   />
@@ -78,7 +78,15 @@ export function HomePage() {
         </div>
       </main>
 
-      <JoinGroupModal open={joinOpen} onClose={() => setJoinOpen(false)} />
+      <JoinGroupModal
+        open={joinOpen}
+        onClose={() => setJoinOpen(false)}
+        // 신청(PENDING) 생성 후 목록을 다시 불러 새 모임 카드가 바로 보이게(CHMO-444)
+        onJoined={() => {
+          setJoinOpen(false)
+          refetch()
+        }}
+      />
     </PhoneShell>
   )
 }

@@ -105,7 +105,11 @@ export function GroupDetailPage() {
               </Button>
             </div>
             <p className="mt-1 text-[13px] text-muted">
-              인원 {group.memberCount}명{eventCount !== null ? ` · 이벤트 ${eventCount}개` : ''}
+              {/* PARENT 응답엔 멤버 정보가 없다(CHMO-444 §7-3) — 카운트 분리 표기는 CHMO-446 */}
+              {group.memberCount !== undefined ? `인원 ${group.memberCount}명` : ''}
+              {eventCount !== null
+                ? `${group.memberCount !== undefined ? ' · ' : ''}이벤트 ${eventCount}개`
+                : ''}
             </p>
 
             <h3 className="mt-5 text-[13px] font-bold text-muted">이벤트</h3>

@@ -3,11 +3,20 @@
  * BE enum(EMPTY/ANALYZING/…)·eventDate·thumbnailUrl 차이는 mappers.ts가 흡수한다.
  */
 import { ApiRequestError, apiFetch } from './client'
-import { toAlbum, toEvent, type RawAlbum, type RawEvent } from './mappers'
+import {
+  toAlbum,
+  toEvent,
+  toParentEventPhotos,
+  type RawAlbum,
+  type RawEvent,
+  type RawParentEventPhotos,
+} from './mappers'
 import type {
   Album,
+  AlbumDownloadResponse,
   EventItem,
   ID,
+  ParentEventPhotos,
   PresignFileRequest,
   PresignUpload,
   RegisterPhotosRequest,
@@ -104,6 +113,27 @@ export async function publishEvent(
   await apiFetch<unknown>(`/events/${eventId}/publish${opts.force ? '?force=true' : ''}`, {
     method: 'POST',
   })
+}
+
+// ── 학부모 사진 조회 (학부모 전환 §5 — ACTIVE PARENT 전용) ───
+
+/**
+ * GET /events/:id/parent-photos — 이 이벤트에서 학부모가 볼 수 있는 사진 전체(플랫).
+ * 범위: 매핑된 인물 + 공통(Q1), published만(뷰어 노출 규칙 이관 — 특수 앨범 은닉).
+ * 매핑 0건(미연결)이면 공통만 — 빈 배열 가능(승인 후 미연결이 기본 경로, §2).
+ */
+export function getParentEventPhotos(
+  eventId: ID | string,
+  signal?: AbortSignal,
+): Promise<ParentEventPhotos> {
+  return apiFetch<RawParentEventPhotos>(`/events/${eventId}/parent-photos`, { signal }).then(
+    toParentEventPhotos,
+  )
+}
+
+/** GET /events/:id/parent-photos/download — 같은 범위의 이벤트 단위 zip(기존 앨범 zip 응답 재사용) */
+export function getParentPhotosZip(eventId: ID | string): Promise<AlbumDownloadResponse> {
+  return apiFetch<AlbumDownloadResponse>(`/events/${eventId}/parent-photos/download`)
 }
 
 // ── 업로드 3단계 (06-U · CHMO-194) ───────────────────────────

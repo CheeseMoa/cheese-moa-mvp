@@ -50,7 +50,6 @@ import {
   BE_EVENT_PUBLISHED,
   BE_EVENT_SUMMARY,
   BE_GROUP_DETAIL,
-  BE_GROUP_INVITE,
   BE_GROUP_SUMMARY,
   BE_MEMBER_ZIP,
   BE_MOVE_PHOTOS,
@@ -84,19 +83,53 @@ beforeEach(() => {
 })
 
 describe('모임', () => {
-  it('BE bare 배열 목록 — groupId를 id로 옮기고 role은 항상 null', async () => {
+  it('BE bare 배열 목록 — groupId를 id로 옮기고, myMembership 없는 구계약 응답도 통과한다', async () => {
     serve(envelope([BE_GROUP_SUMMARY]))
 
+    // 실 BE는 학부모 전환(CHMO-444) 미배포 — myMembership이 없어도 매퍼가 undefined로 흡수해
+    // 기존 제작자 화면이 그대로 동작해야 한다(배포 전후 스위치 양쪽 공존 구간).
     await expect(listGroups()).resolves.toEqual([
       {
         id: 6,
         name: 'CHMO-194 업로드검증',
         memberCount: 1,
         eventCount: 1,
-        role: null,
         createdAt: '2026-07-10T03:33:06.314638Z',
       },
     ])
+  })
+
+  it('학부모 전환 초안 — myMembership(대문자 enum·claimedChildNames 생략)을 FE 계약으로 옮긴다', async () => {
+    // BE 미배포 — parent-model-api-draft §1 초안 기대값. 배포 후 실채집 픽스처로 교체한다.
+    serve(
+      envelope([
+        {
+          groupId: 9,
+          name: '햇살반',
+          myMembership: { role: 'PARENT', status: 'PENDING', claimedChildNames: ['김민준'] },
+          createdAt: '2026-07-25T00:00:00Z',
+        },
+        {
+          groupId: 6,
+          name: 'CHMO-194 업로드검증',
+          memberCount: 1,
+          eventCount: 1,
+          myMembership: { role: 'TEACHER', status: 'ACTIVE' },
+          createdAt: '2026-07-10T03:33:06.314638Z',
+        },
+      ]),
+    )
+
+    const [pending, teacher] = await listGroups()
+    expect(pending.myMembership).toEqual({
+      role: 'parent',
+      status: 'pending',
+      claimedChildNames: ['김민준'],
+    })
+    // PENDING 항목엔 멤버 정보가 없다(§7-3) — 매퍼가 undefined로 통과시킨다
+    expect(pending.memberCount).toBeUndefined()
+    // TEACHER는 claimedChildNames를 생략할 수 있다(초안 §1) — 빈 배열로 정규화
+    expect(teacher.myMembership).toEqual({ role: 'teacher', status: 'active', claimedChildNames: [] })
   })
 
   it('BE 빈 목록도 빈 배열로 통과한다', async () => {
@@ -111,12 +144,19 @@ describe('모임', () => {
     expect(group.eventCount).toBeUndefined()
   })
 
-  it('초대 joinUrl은 BE 것(쿼리형)을 버리고 joinKey로 경로형을 파생한다 (CHMO-237)', async () => {
-    serve(envelope({ ...BE_GROUP_INVITE, joinKey: 'Fh1TDIk81EPP' }))
+  it('초대 2종(초안 §2) — 채널별 joinUrl을 joinKey로 경로형 파생한다 (CHMO-237·444)', async () => {
+    serve(
+      envelope({
+        teacher: { joinKey: 'Fh1TDIk81EPP', password: 'PW1' },
+        parent: { joinKey: 'Pk3xYz92QwEr', password: '7421' },
+      }),
+    )
     const invite = await getInviteInfo(6)
-    expect(invite.joinKey).toBe('Fh1TDIk81EPP')
+    expect(invite.teacher.joinKey).toBe('Fh1TDIk81EPP')
+    expect(invite.parent.password).toBe('7421')
     // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다
-    expect(invite.joinUrl).toBe('/join/Fh1TDIk81EPP')
+    expect(invite.teacher.joinUrl).toBe('/join/Fh1TDIk81EPP')
+    expect(invite.parent.joinUrl).toBe('/join/Pk3xYz92QwEr')
   })
 })
 
@@ -126,7 +166,12 @@ describe('모임', () => {
  * 비번 모달을 다시 띄우는" 오판을 막는 게 이 함수의 존재 이유다.
  */
 describe('findMyGroupByJoinKey', () => {
-  const inviteOf = (joinKey: string) => envelope({ ...BE_GROUP_INVITE, joinKey })
+  // 2종 채널(CHMO-444) — 대조는 선생님/학부모 어느 joinKey든 매치한다
+  const inviteOf = (joinKey: string) =>
+    envelope({
+      teacher: { joinKey, password: 'PW' },
+      parent: { joinKey: `P-${joinKey}`, password: '0000' },
+    })
   const serverError = () => jsonResponse(errorEnvelope('COMMON500', '서버 오류입니다.'), 500)
 
   /** 내 모임 2개(6·5)와 모임별 invite 응답을 라우팅한다 */

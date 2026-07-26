@@ -30,22 +30,43 @@ export interface DbUser {
 export interface DbGroup {
   id: number
   name: string
-  /** 제작자 합류용 모임 비밀번호(초대 화면 전용 노출) */
+  /** 선생님 합류용 모임 비밀번호(초대 화면 전용 노출) */
   password: string
+  /** 선생님용 참여 코드 — 어느 링크로 합류했는지가 role을 정한다(학부모 전환 Q6) */
   joinKey: string
-  /** 학부모 무로그인 공유(모임 단위) — 생성 시 자동 발급 */
+  /** 학부모용 참여 코드(joinKey 2종 — CHMO-444). 비밀번호는 share.password 재사용(Q2) */
+  parentJoinKey: string
+  /** 학부모 무로그인 공유(모임 단위) — 생성 시 자동 발급. 뷰어 폐기 전까지 유지 */
   share: {
     token: string
-    /** 학부모 전용 비밀번호(모임 비밀번호와 별개) */
+    /** 학부모 전용 비밀번호(모임 비밀번호와 별개) — 학부모 합류 비밀번호로 재사용(Q2) */
     password: string
   }
   createdAt: ISODateTime
 }
 
-/** 유저↔모임 멤버십 (N:M) */
+export type DbMemberRole = 'teacher' | 'parent'
+export type DbMembershipStatus = 'pending' | 'active'
+
+/**
+ * 유저↔모임 멤버십 (N:M) — 학부모 전환(CHMO-444)으로 role·승인 상태를 갖는다.
+ * PENDING 행이 곧 합류 신청이다(id = joinRequestId 겸용) — 거절은 행 삭제, 승인은 active 전이.
+ */
 export interface DbMembership {
+  id: number
   userId: number
   groupId: number
+  role: DbMemberRole
+  status: DbMembershipStatus
+  /** 학부모 신청 원문(자유 텍스트, §2) — 연결 전까지 보존해 선생님이 참조. 선생님은 빈 배열 */
+  childNames: string[]
+  createdAt: ISODateTime
+}
+
+/** 학부모↔인물 매핑(다대다 — 다자녀·부모 2인 허용, §2). 모임 스코프는 person이 안다 */
+export interface DbPersonParent {
+  userId: number
+  personId: number
 }
 
 export interface DbEvent {
@@ -117,6 +138,7 @@ export interface Db {
   users: DbUser[]
   groups: DbGroup[]
   memberships: DbMembership[]
+  personParents: DbPersonParent[]
   events: DbEvent[]
   persons: DbPerson[]
   albums: DbAlbum[]
@@ -130,6 +152,7 @@ export const db: Db = {
   users: [],
   groups: [],
   memberships: [],
+  personParents: [],
   events: [],
   persons: [],
   albums: [],
@@ -143,6 +166,7 @@ export function seedDb(data: Db): void {
   db.users = data.users
   db.groups = data.groups
   db.memberships = data.memberships
+  db.personParents = data.personParents
   db.events = data.events
   db.persons = data.persons
   db.albums = data.albums
@@ -270,17 +294,110 @@ export function findPhoto(photoId: number | null): DbPhoto | undefined {
   return db.photos.find((p) => p.id === photoId)
 }
 
-export function isMember(userId: number, groupId: number): boolean {
-  return db.memberships.some((m) => m.userId === userId && m.groupId === groupId)
+// ── 멤버십·신청 (학부모 전환 CHMO-444 — role·승인제) ─────────
+
+export function membershipOf(userId: number, groupId: number): DbMembership | undefined {
+  return db.memberships.find((m) => m.userId === userId && m.groupId === groupId)
 }
 
-export function addMembership(userId: number, groupId: number): void {
-  if (!isMember(userId, groupId)) db.memberships.push({ userId, groupId })
+/** ACTIVE 멤버(role 무관) — 승인 전(PENDING) 신청자는 모임 콘텐츠에 접근할 수 없다(§1) */
+export function isActiveMember(userId: number, groupId: number): boolean {
+  return membershipOf(userId, groupId)?.status === 'active'
 }
 
-export function groupsOfUser(userId: number): DbGroup[] {
-  const groupIds = new Set(db.memberships.filter((m) => m.userId === userId).map((m) => m.groupId))
-  return db.groups.filter((g) => groupIds.has(g.id))
+/** 제작자 액션(업로드·검수·공개·설정·초대·매핑)의 관문 — 학부모 차단은 서버 강제(§6) */
+export function isActiveTeacher(userId: number, groupId: number): boolean {
+  const membership = membershipOf(userId, groupId)
+  return membership?.status === 'active' && membership.role === 'teacher'
+}
+
+/**
+ * 멤버십 생성 — 모임 생성자는 active teacher로 즉시 확정, 참여(join)는 신청(pending)으로
+ * 생성돼 승인(approve) 시 active 전이. PENDING 행의 id가 joinRequestId다.
+ */
+export function createMembership(input: {
+  userId: number
+  groupId: number
+  role: DbMemberRole
+  status: DbMembershipStatus
+  childNames?: string[]
+}): DbMembership {
+  const membership: DbMembership = {
+    id: nextId('mbr'),
+    userId: input.userId,
+    groupId: input.groupId,
+    role: input.role,
+    status: input.status,
+    childNames: input.childNames ?? [],
+    createdAt: nowIso(),
+  }
+  db.memberships.push(membership)
+  return membership
+}
+
+export function findMembershipById(id: number | null): DbMembership | undefined {
+  return db.memberships.find((m) => m.id === id)
+}
+
+/** 내 멤버십 전체(PENDING 포함) — 홈 목록은 대기 신청 모임도 비활성 카드로 보여준다(§7-2) */
+export function membershipsOfUser(userId: number): DbMembership[] {
+  return db.memberships.filter((m) => m.userId === userId)
+}
+
+/** ACTIVE 멤버 목록(초대 관리 §4) — 대기 신청은 pendingRequestsOfGroup */
+export function activeMembersOfGroup(groupId: number): DbMembership[] {
+  return db.memberships.filter((m) => m.groupId === groupId && m.status === 'active')
+}
+
+/** 대기 중인 합류 신청(§3 — 역할 무관 승인제) */
+export function pendingRequestsOfGroup(groupId: number): DbMembership[] {
+  return db.memberships.filter((m) => m.groupId === groupId && m.status === 'pending')
+}
+
+// ── 학부모↔인물 매핑 (§2·§4 — 다대다) ────────────────────────
+
+export function hasPersonParent(userId: number, personId: number): boolean {
+  return db.personParents.some((pp) => pp.userId === userId && pp.personId === personId)
+}
+
+export function linkPersonParent(userId: number, personId: number): void {
+  if (!hasPersonParent(userId, personId)) db.personParents.push({ userId, personId })
+}
+
+/** 매핑 해제 — 미연결(매핑 0건)로 회귀할 뿐 새 상태는 없다(§7-1 안전망과 동일 결) */
+export function unlinkPersonParent(userId: number, personId: number): void {
+  db.personParents = db.personParents.filter(
+    (pp) => !(pp.userId === userId && pp.personId === personId),
+  )
+}
+
+/** 이 모임에서 학부모에게 매핑된 인물들 — 열람 권한의 실체(모임 단위라 이벤트를 관통, §2) */
+export function mappedPersonsOf(userId: number, groupId: number): DbPerson[] {
+  const personIds = new Set(
+    db.personParents.filter((pp) => pp.userId === userId).map((pp) => pp.personId),
+  )
+  return db.persons.filter((p) => p.groupId === groupId && personIds.has(p.id))
+}
+
+/**
+ * 학부모 노출 사진(§5 — 뷰어 노출 규칙 이관): 매핑된 인물 앨범 + 공통 앨범의
+ * 노출 사진(reviewed && published — CHMO-324 게이트 그대로). 다대다라 중복 제거.
+ * 매핑 0건(미연결)이면 공통만 — 빈 배열 가능(승인 후 미연결이 기본 경로).
+ */
+export function parentVisiblePhotosOfEvent(eventId: number, userId: number): DbPhoto[] {
+  const event = findEvent(eventId)
+  if (!event) return []
+  const mappedIds = new Set(mappedPersonsOf(userId, event.groupId).map((p) => p.id))
+  const visibleAlbums = albumsOfEvent(eventId).filter(
+    (a) =>
+      a.type === 'common' ||
+      (a.type === 'person' && a.personId !== null && mappedIds.has(a.personId)),
+  )
+  const photos = new Map<number, DbPhoto>()
+  for (const album of visibleAlbums) {
+    for (const photo of viewerPhotosOfAlbum(album.id)) photos.set(photo.id, photo)
+  }
+  return [...photos.values()]
 }
 
 export function eventsOfGroup(groupId: number): DbEvent[] {
@@ -307,8 +424,18 @@ export function photosOfAlbum(albumId: number): DbPhoto[] {
 
 // ── 파생 카운트 ──────────────────────────────────────────────
 
+/** ACTIVE 멤버 수(역할 합산 — 과도기 병행 필드, §7-3). 대기 신청은 세지 않는다 */
 export function memberCountOf(groupId: number): number {
-  return db.memberships.filter((m) => m.groupId === groupId).length
+  return activeMembersOfGroup(groupId).length
+}
+
+/** 카운트 분리(§7-3) — "선생님 3 · 학부모 12". 합산 memberCount는 선생님에게 무의미 */
+export function teacherCountOf(groupId: number): number {
+  return activeMembersOfGroup(groupId).filter((m) => m.role === 'teacher').length
+}
+
+export function parentCountOf(groupId: number): number {
+  return activeMembersOfGroup(groupId).filter((m) => m.role === 'parent').length
 }
 
 export function eventCountOf(groupId: number): number {
@@ -520,6 +647,11 @@ export function deleteGroupCascade(groupId: number): void {
   db.analysisJobs = db.analysisJobs.filter((j) => !eventIds.has(j.eventId))
   db.uploadedKeys = db.uploadedKeys.filter((key) => !keyPrefixes.some((pre) => key.startsWith(pre)))
   db.events = db.events.filter((e) => e.groupId !== groupId)
+  // 인물이 소멸하면 매핑은 자동 해제뿐(§7-1 안전망 — 자동 승계·재매핑 금지). persons 삭제 전에 수집
+  const personIds = new Set(
+    db.persons.filter((p) => p.groupId === groupId).map((p) => p.id),
+  )
+  db.personParents = db.personParents.filter((pp) => !personIds.has(pp.personId))
   db.persons = db.persons.filter((p) => p.groupId !== groupId)
   db.memberships = db.memberships.filter((m) => m.groupId !== groupId)
   db.groups = db.groups.filter((g) => g.id !== groupId)
