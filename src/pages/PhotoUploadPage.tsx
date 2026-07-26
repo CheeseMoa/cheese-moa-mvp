@@ -89,8 +89,11 @@ export function PhotoUploadPage() {
 
   const event = eventApi.data
   const eventPath = `/groups/${groupId}/events/${eventId}`
+  // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트의 사진 추가는 상태
+  // 전이 없는 증분 분석이라(CHMO-215·216) 상세 응답의 progress로만 진행을 알 수 있다(CHMO-442).
+  const analysisActive = !!event && (event.status === 'analyzing' || event.progress != null)
   // 피커 분기(스크롤 밖 하단 CTA 액션바가 있는 상태) — 이때는 main이 아니라 바가 바닥 여백을 소유한다
-  const showPicker = !!event && event.status !== 'analyzing'
+  const showPicker = !!event && !analysisActive
   const selectedCount = photos.filter((p) => p.selected).length
   const overBatchLimit = selectedCount > MAX_UPLOAD_BATCH
   const busy = phase !== 'idle'
@@ -279,8 +282,8 @@ export function PhotoUploadPage() {
             notFoundTo={`/groups/${groupId}`}
             notFoundLabel="모임 상세로"
           />
-        ) : event.status === 'analyzing' ? (
-          // 분석 중에는 업로드 불가 — 진입 자체를 안내로 막는다
+        ) : analysisActive ? (
+          // 분석 중에는 업로드 불가 — 진입 자체를 안내로 막는다(published 증분 분석 포함)
           <>
             <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-8 py-16 text-center">
               <span aria-hidden className="text-4xl">
