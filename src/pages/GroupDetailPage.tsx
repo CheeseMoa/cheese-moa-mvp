@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { InviteSheet, ParentShareSheet } from '../components/GroupShareSheets'
+import { GroupInviteSheet } from '../components/GroupInviteSheet'
 import {
   Button,
   ConfirmDialog,
@@ -16,7 +16,7 @@ import {
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { deleteGroup, getGroup, renameGroup } from '../api/groups'
+import { deleteGroup, getGroup, listJoinRequests, renameGroup } from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
 import type { Group } from '../types/api'
 
@@ -30,10 +30,12 @@ function formatEventDate(date: string): string {
 }
 
 /**
- * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 211:1432/211:1505(빈/신규)
+ * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 307:4(학부모 전환 수정안 — CHMO-446)
  * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정) ·
- * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277).
- * 초대·학부모 공유는 이 화면 위 시트(GroupShareSheets)로 뜬다(확정 — 별도 페이지 아님).
+ * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277) ·
+ * GET /groups/:id/join-requests(대기 신청 수 — [초대 관리] 뱃지).
+ * 초대는 이 화면 위 통합 시트(GroupInviteSheet, 05-2)로 뜬다(확정 — 별도 페이지 아님) —
+ * 학부모 공유도 시트의 학부모님 탭으로 흡수됐다(CHMO-446, 하단 공유 버튼 제거).
  * 카드 메타의 '인원'은 이벤트 API에 없어 날짜·사진만 표시(확정) ·
  * [+ 이벤트 생성]은 06-M 모달(CreateEventModal)로 뜬다.
  */
@@ -46,8 +48,12 @@ export function GroupDetailPage() {
   const eventsApi = useApi(`group-events:${groupId}`, (signal) =>
     listGroupEvents(groupId, signal),
   )
+  // 대기 신청 수([초대 관리] 뱃지) — TEACHER 전용 조회(Q3)라 실패할 수 있는데(구계약 실 BE
+  // 미구현 404 등) 뱃지만 생략하고 화면은 그대로 둔다. PARENT는 05 진입 자체가 없다(§7-3).
+  const requestsApi = useApi(`join-requests:${groupId}`, (signal) =>
+    listJoinRequests(groupId, signal),
+  )
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -74,6 +80,17 @@ export function GroupDetailPage() {
   // BE 상세 응답엔 eventCount가 없어 이벤트 목록 길이로 파생하는데(CHMO-192), 목록이 아직
   // 안 왔으면 length 0을 '이벤트 0개'로 단정하지 않는다 — 값이 확정될 때만 표시(깜빡임 방지).
   const eventCount = group?.eventCount ?? (eventsApi.data ? events.length : null)
+  // §7-3 카운트 분리 표기 — 구계약 상세(분리 필드 없음)는 기존 '인원 N명' 합산으로 폴백
+  const memberPart =
+    group?.teacherCount !== undefined && group?.parentCount !== undefined
+      ? `선생님 ${group.teacherCount} · 학부모 ${group.parentCount}`
+      : group?.memberCount !== undefined
+        ? `인원 ${group.memberCount}명`
+        : null
+  const metaText = [memberPart, eventCount !== null ? `이벤트 ${eventCount}개` : null]
+    .filter(Boolean)
+    .join(' · ')
+  const pendingRequestCount = requestsApi.data?.length ?? 0
 
   return (
     <PhoneShell>
@@ -101,16 +118,10 @@ export function GroupDetailPage() {
             <div className="flex items-center gap-2.5">
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-text">{group.name}</h2>
               <Button size="sm" onClick={() => setInviteOpen(true)}>
-                ＋ 선생님 초대
+                ＋ 초대하기
               </Button>
             </div>
-            <p className="mt-1 text-[13px] text-muted">
-              {/* PARENT 응답엔 멤버 정보가 없다(CHMO-444 §7-3) — 카운트 분리 표기는 CHMO-446 */}
-              {group.memberCount !== undefined ? `인원 ${group.memberCount}명` : ''}
-              {eventCount !== null
-                ? `${group.memberCount !== undefined ? ' · ' : ''}이벤트 ${eventCount}개`
-                : ''}
-            </p>
+            <p className="mt-1 text-[13px] text-muted">{metaText}</p>
 
             <h3 className="mt-5 text-[13px] font-bold text-muted">이벤트</h3>
             <div className="mt-2 flex flex-1 flex-col">
@@ -154,8 +165,13 @@ export function GroupDetailPage() {
                 <Button fullWidth onClick={() => setCreateOpen(true)}>
                   ＋ 이벤트 생성
                 </Button>
-                <Button variant="secondary" fullWidth onClick={() => setShareOpen(true)}>
-                  ⧉ 학부모님에게 공유
+                {/* 목적지 화면 20(초대 관리)은 CHMO-447 — 그 전까진 안내 토스트만(사용자 확정) */}
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => toast.show('초대 관리 화면을 준비 중이에요')}
+                >
+                  초대 관리{pendingRequestCount > 0 ? ` · 신청 ${pendingRequestCount}` : ''}
                 </Button>
               </div>
             </div>
@@ -173,8 +189,7 @@ export function GroupDetailPage() {
         )}
       </main>
 
-      <InviteSheet groupId={groupId} open={inviteOpen} onClose={() => setInviteOpen(false)} />
-      <ParentShareSheet groupId={groupId} open={shareOpen} onClose={() => setShareOpen(false)} />
+      <GroupInviteSheet groupId={groupId} open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <CreateEventModal open={createOpen} onClose={() => setCreateOpen(false)} groupId={groupId} />
       {group && (
         <RenameGroupModal
