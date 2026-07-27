@@ -112,6 +112,17 @@ export interface GroupMember {
   mappings: PersonMapping[]
 }
 
+/**
+ * 모임 인물(20-1 아이 연결 후보 — FE 파생, CHMO-447). 그룹 단위 인물 조회 엔드포인트가
+ * 계약 초안에 없어 이벤트별 앨범 목록에서 파생한다(listGroupPersons — photoCount는 전 이벤트 합산).
+ */
+export interface GroupPerson {
+  personId: ID
+  name: string
+  photoCount: number
+  coverThumbnailUrl: string | null
+}
+
 // ── 학부모 사진 조회 (ACTIVE PARENT 전용 — §5, 뷰어 로직 이관) ──
 export interface ParentPhoto {
   id: ID

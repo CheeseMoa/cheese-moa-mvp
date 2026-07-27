@@ -4,6 +4,7 @@
  * 목록에서 의도적으로 노출하지 않는다 — joinKey가 필요하면 GET /groups/:id/invite.
  */
 import { ApiRequestError, apiFetch } from './client'
+import { listEventAlbums, listGroupEvents } from './events'
 import {
   toGroup,
   toGroupMember,
@@ -14,11 +15,13 @@ import {
   type RawJoinGroupResult,
   type RawJoinRequest,
 } from './mappers'
+import { sortAlbumsForDisplay } from '../lib/albumSort'
 import type {
   Group,
   GroupInviteChannel,
   GroupInviteInfo,
   GroupMember,
+  GroupPerson,
   GroupRole,
   GroupShareInfo,
   ID,
@@ -171,6 +174,44 @@ export async function unlinkPersonParent(
   input: { userId: ID; personId: ID },
 ): Promise<void> {
   await apiFetch<unknown>(`/groups/${groupId}/person-parents`, { method: 'DELETE', body: input })
+}
+
+/**
+ * 모임 인물 목록(20-1 아이 연결 후보) — 그룹 단위 인물 엔드포인트가 계약 초안에 없어
+ * 이벤트별 앨범 목록에서 파생한다: 인물 앨범을 personId로 합치고 사진 수는 전 이벤트 합산.
+ * 이름은 모임 단위 전파(CHMO-115)라 어느 이벤트에서 읽어도 같다.
+ * 팬아웃(이벤트 수만큼 조회)이지만 모임당 이벤트 수가 작아 실무상 문제 없음 —
+ * findMyGroupByJoinKey와 같은 결. 전용 엔드포인트는 BE 후속 논의.
+ */
+export async function listGroupPersons(
+  groupId: ID | string,
+  signal?: AbortSignal,
+): Promise<GroupPerson[]> {
+  const events = await listGroupEvents(groupId, signal)
+  const albumLists = await Promise.all(events.map((e) => listEventAlbums(e.id, signal)))
+  const byPerson = new Map<ID, GroupPerson>()
+  for (const albums of albumLists) {
+    for (const album of albums) {
+      if (album.type !== 'person' || album.personId === null) continue
+      const prev = byPerson.get(album.personId)
+      if (prev) {
+        prev.photoCount += album.photoCount
+        prev.coverThumbnailUrl ??= album.coverThumbnailUrl ?? null
+      } else {
+        byPerson.set(album.personId, {
+          personId: album.personId,
+          name: album.name,
+          photoCount: album.photoCount,
+          coverThumbnailUrl: album.coverThumbnailUrl ?? null,
+        })
+      }
+    }
+  }
+  // 표시 순서는 앨범 정렬 규칙 재사용(이름 가나다 · '이름 없음' 뒤 — CHMO-411)
+  const order = sortAlbumsForDisplay(
+    [...byPerson.values()].map((p) => ({ id: p.personId, type: 'person' as const, name: p.name })),
+  )
+  return order.flatMap((o) => byPerson.get(o.id) ?? [])
 }
 
 /** GET /groups/:id/share — 학부모 공유 정보(학부모 전용 비밀번호 평문 포함, 멤버 전용) */
