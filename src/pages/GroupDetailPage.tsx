@@ -18,16 +18,8 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { deleteGroup, getGroup, listJoinRequests, renameGroup } from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
+import { formatEventDate } from '../lib/eventDate'
 import type { Group } from '../types/api'
-
-/** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */
-function formatEventDate(date: string): string {
-  const [, month = '', day = ''] = date.split('-')
-  const m = parseInt(month, 10)
-  const d = parseInt(day, 10)
-  if (!Number.isFinite(m) || !Number.isFinite(d)) return date
-  return `${m}월 ${d}일`
-}
 
 /**
  * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 307:4(학부모 전환 수정안 — CHMO-446)

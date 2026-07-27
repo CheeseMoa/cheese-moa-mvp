@@ -14,6 +14,7 @@ import {
   isActiveTeacher,
   linkPersonParent,
   membershipOf,
+  parentEventHasMappedChild,
   pendingRequestsOfGroup,
   settleAnalysis,
   unlinkPersonParent,
@@ -64,8 +65,10 @@ function parentPhotosGate(user: DbUser, eventId: number | null) {
   settleAnalysis(event.id)
   const denied = membershipRoleError(user, event.groupId, 'parent', eventNotFound)
   if (denied) return { error: denied }
-  // PARENT에겐 published 이벤트만 존재한다(Q4 서버 필터와 정합 — 미공개는 은닉)
-  if (event.status !== 'published') return { error: eventNotFound() }
+  // PARENT에겐 published이면서 **아이가 나온** 이벤트만 존재한다(목록 필터와 동일 판정 —
+  // CHMO-448 노출 강화, 딥링크로 사진만 조회해도 같은 404 은닉)
+  if (event.status !== 'published' || !parentEventHasMappedChild(event.id, user.id))
+    return { error: eventNotFound() }
   return { event }
 }
 

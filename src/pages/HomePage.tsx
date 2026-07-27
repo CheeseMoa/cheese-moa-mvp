@@ -90,6 +90,8 @@ export function HomePage() {
                         // PENDING은 모임 API를 추가 호출하지 않는다(§7-2 — 목록 응답 하나로
                         // 끝): 상세로 보내지 않고 안내 토스트만
                         if (pending) toast.show('선생님 승인을 기다리고 있어요')
+                        // ACTIVE PARENT는 학부모 모임 상세(18)로 — TEACHER·구계약(멤버십 없음)은 기존 05
+                        else if (membership?.role === 'parent') navigate(`/parent/groups/${g.id}`)
                         else navigate(`/groups/${g.id}`)
                       }}
                     />

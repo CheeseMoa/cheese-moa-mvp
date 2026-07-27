@@ -125,11 +125,17 @@ describe('모임', () => {
       role: 'parent',
       status: 'pending',
       claimedChildNames: ['김민준'],
+      linkedChildNames: [],
     })
     // PENDING 항목엔 멤버 정보가 없다(§7-3) — 매퍼가 undefined로 통과시킨다
     expect(pending.memberCount).toBeUndefined()
-    // TEACHER는 claimedChildNames를 생략할 수 있다(초안 §1) — 빈 배열로 정규화
-    expect(teacher.myMembership).toEqual({ role: 'teacher', status: 'active', claimedChildNames: [] })
+    // TEACHER는 claimedChildNames·linkedChildNames를 생략할 수 있다(초안 §1) — 빈 배열로 정규화
+    expect(teacher.myMembership).toEqual({
+      role: 'teacher',
+      status: 'active',
+      claimedChildNames: [],
+      linkedChildNames: [],
+    })
   })
 
   it('BE 빈 목록도 빈 배열로 통과한다', async () => {

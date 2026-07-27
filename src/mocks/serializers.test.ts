@@ -105,25 +105,32 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const group = findGroup(1)!
 
     // ACTIVE PARENT(민준아빠) — 목록에 멤버 수 없음, eventCount는 published 수만(미공개 존재 은닉)
+    // linkedChildNames는 §4 매핑 파생(CHMO-448) — 민준아빠는 인물 1(김민준)에 연결돼 있다
     const parent = toGroup(toGroupSummary(group, membershipOf(4, 1)!))
     expect(parent.myMembership).toEqual({
       role: 'parent',
       status: 'active',
       claimedChildNames: ['김민준'],
+      linkedChildNames: ['김민준'],
     })
     expect(parent.memberCount).toBeUndefined()
-    expect(parent.eventCount).toBe(1) // 봄 소풍(published)뿐
+    expect(parent.eventCount).toBe(1) // 봄 소풍(published + 김민준 등장)뿐
     // 상세도 멤버 관련 필드 전부 생략
     const parentDetail = toGroup(toGroupDetail(group, membershipOf(4, 1)!))
     expect(parentDetail.memberCount).toBeUndefined()
     expect(parentDetail.teacherCount).toBeUndefined()
 
-    // PENDING(치즈냥이88) — 신청 원문만 실린다(홈 비활성 카드 §7-2)
+    // 미연결(지호네) — 아이 등장 이벤트만 세므로(CHMO-448 노출 강화) published가 있어도 0
+    const unlinked = toGroup(toGroupSummary(group, membershipOf(6, 1)!))
+    expect(unlinked.eventCount).toBe(0)
+
+    // PENDING(치즈냥이88) — 신청 원문만 실린다(홈 비활성 카드 §7-2). 승인 전엔 매핑이 없어 연결도 빈 배열
     const pending = toGroup(toGroupSummary(group, membershipOf(7, 1)!))
     expect(pending.myMembership).toEqual({
       role: 'parent',
       status: 'pending',
       claimedChildNames: ['김민준'],
+      linkedChildNames: [],
     })
     expect(pending.memberCount).toBeUndefined()
     expect(pending.eventCount).toBeUndefined()

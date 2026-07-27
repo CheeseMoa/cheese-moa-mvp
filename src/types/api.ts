@@ -37,6 +37,12 @@ export interface MyMembership {
   status: MembershipStatus
   /** 학부모 신청 원문(자유 텍스트) — 홈 카드 "신청: 김민준" 표기용. 선생님은 빈 배열 */
   claimedChildNames: string[]
+  /**
+   * 승인 후 선생님이 연결(§4 매핑)한 인물 이름 — 18·19 헤더 "학부모 · {자녀명}" 원천.
+   * 매핑 조회(/members)가 TEACHER 전용이라 학부모 화면은 이 값으로만 연결 이름을 안다.
+   * CHMO-448 초안 확장(BE 미협의 제안) — 미연결·선생님은 빈 배열.
+   */
+  linkedChildNames: string[]
 }
 
 export interface Group {

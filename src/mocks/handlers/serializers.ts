@@ -20,6 +20,7 @@ import {
   mappedPersonsOf,
   memberCountOf,
   parentCountOf,
+  parentEventHasMappedChild,
   parentVisibleAlbumsOfEvent,
   parentVisiblePhotosOfEvent,
   pendingPublishCountOf,
@@ -52,12 +53,23 @@ export function shareUrlOf(group: DbGroup): string {
 // ── 모임 (학부모 전환 CHMO-444 — role별 필드 분기 §7-3) ──────
 // joinKey·비밀번호·공유 토큰은 응답에 없다 — 시크릿은 invite/share 전용 핸들러만 반환한다.
 
-/** BE MyMembershipResponse(초안 §1) — TEACHER는 claimedChildNames 생략(초안 명시) */
+/**
+ * BE MyMembershipResponse(초안 §1) — TEACHER는 claimedChildNames·linkedChildNames 생략(초안 명시).
+ * linkedChildNames(CHMO-448 초안 확장 — BE 미협의)는 §4 매핑에서 파생한 연결 인물 이름 —
+ * 매핑 조회(/members)가 TEACHER 전용이라 학부모 화면(18·19)의 유일한 연결 이름 원천이다.
+ */
 export function toMyMembership(membership: DbMembership) {
   return {
     role: membership.role.toUpperCase(),
     status: membership.status.toUpperCase(),
-    ...(membership.role === 'parent' ? { claimedChildNames: [...membership.childNames] } : {}),
+    ...(membership.role === 'parent'
+      ? {
+          claimedChildNames: [...membership.childNames],
+          linkedChildNames: mappedPersonsOf(membership.userId, membership.groupId).map(
+            (p) => p.name,
+          ),
+        }
+      : {}),
   }
 }
 
@@ -77,7 +89,13 @@ export function toGroupSummary(group: DbGroup, membership: DbMembership) {
       ? { memberCount: memberCountOf(group.id), eventCount: eventCountOf(group.id) }
       : {}),
     ...(isActiveParent
-      ? { eventCount: eventsOfGroup(group.id).filter((e) => e.status === 'published').length }
+      ? {
+          // 학부모에게 존재하는 이벤트 수 = 이벤트 목록 필터와 동일 판정(CHMO-448 노출 강화)
+          eventCount: eventsOfGroup(group.id).filter(
+            (e) =>
+              e.status === 'published' && parentEventHasMappedChild(e.id, membership.userId),
+          ).length,
+        }
       : {}),
     createdAt: group.createdAt,
   }

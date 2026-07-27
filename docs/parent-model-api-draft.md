@@ -27,20 +27,29 @@
   "groupId": 1,
   "name": "햇살반",
   "myMembership": {
-    "role": "PARENT",            // TEACHER | PARENT
-    "status": "PENDING",         // PENDING | ACTIVE
-    "claimedChildNames": ["김민준"] // 신청 원문 — 홈 카드 "신청: 김민준" 표기용. TEACHER는 생략 가능
+    "role": "PARENT",             // TEACHER | PARENT
+    "status": "PENDING",          // PENDING | ACTIVE
+    "claimedChildNames": ["김민준"], // 신청 원문 — 홈 카드 "신청: 김민준" 표기용. TEACHER는 생략 가능
+    "linkedChildNames": ["김민준"]  // ⚠ CHMO-448 FE 추가 제안(BE 미협의) — §4 매핑에서 파생한 연결 인물 이름
   }
 }
 ```
+
+- **`linkedChildNames`(CHMO-448 추가 제안 — §1~7 확정 밖, BE 협의 필요)**: 학부모 화면(18·19) 헤더의
+  "학부모 · {자녀명}" 원천. 매핑 조회(`/members`)가 TEACHER 전용(§4)이라 학부모 본인은 연결 인물명을
+  알 방법이 없어 목록 응답에 싣는다. 미연결·PENDING은 빈 배열, TEACHER는 생략 가능(FE 매퍼가 빈 배열 정규화).
 
 ### GET /groups/:id — ACTIVE 멤버 전용 · 카운트 분리 (§7-3)
 - `memberCount` 대신 **`teacherCount` / `parentCount` 분리**(과도기 병행 후 제거 제안). 헤더 표기: "선생님 3 · 학부모 12".
 - **PARENT 호출 시 멤버 관련 필드(카운트·명단)는 생략** — 학부모에게 멤버 정보 일절 미노출.
 - PENDING 접근은 거부(에러 코드는 BE 재량 — SPACE403 또는 ROLE403, FE는 미지 코드 통과).
 
-### GET /groups/:id/events — PARENT엔 published만 (Q4 확정)
-- PARENT 호출 시 **published 이벤트만 서버 필터**(뷰어 필터 로직 이관). TEACHER는 기존 그대로.
+### GET /groups/:id/events — PARENT엔 published + 아이 등장 이벤트만
+- PARENT 호출 시 **published 이벤트만 서버 필터**(뷰어 필터 로직 이관 — Q4 확정). TEACHER는 기존 그대로.
+- **⚠ CHMO-448 강화 제안(BE 미협의 — Q4 확정을 좁힘)**: published에 더해 **매핑된 인물의 노출 사진이
+  1장 이상인 이벤트만** 노출한다. 매핑은 인물 앨범 단위 권한이므로 아이가 안 나온 이벤트는
+  (공통 사진이 있어도) 통째로 은닉하고, **미연결(매핑 0건) 학부모에겐 이벤트가 0개**다.
+  이벤트 딥링크(parent-photos §5)도 같은 판정으로 404 은닉 — 목록·상세가 한 규칙을 탄다.
 
 ## 2. 초대 (변경 — Q2·Q3 확정)
 
@@ -105,10 +114,10 @@
 ## 5. 학부모 사진 조회 (신설, PARENT 전용 — §3·Q1 확정, 뷰어 로직 이관)
 
 ### GET /events/:id/parent-photos
-- 조건: 호출자가 해당 모임의 **ACTIVE PARENT**.
+- 조건: 호출자가 해당 모임의 **ACTIVE PARENT** + **아이 등장 이벤트**(⚠ §1 강화 제안과 동일 판정 —
+  published이면서 매핑 인물의 노출 사진 1장 이상, 아니면 404 은닉. 미연결이면 항상 404).
 - 범위: **매핑된 인물의 사진 + COMMON**(Q1), **published만**, UNCERTAIN 등 특수 앨범 제외. 플랫 배열(앨범 계층 없음).
 - 검토(reviewed)·발행 대기 등 제작자 필드는 응답에 싣지 않는다.
-- 매핑 0건(미연결)이면 COMMON published만 — 빈 배열 가능.
 ```jsonc
 { "eventId": 3, "eventName": "여름 운동회",
   "photos": [{ "photoId": 301, "thumbnailUrl": "...", "url": "..." }] }
