@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, IconCheck, TextField, useToast } from '../components/ui'
+import { Button, IconCheck, IconClose, TextField, useToast } from '../components/ui'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
@@ -62,15 +62,15 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
 
   const returnTo = `/join/${encodeURIComponent(joinKey)}?role=parent`
 
-  // 신청 성공 공통 후속 — 랜딩은 홈. 구계약 즉시 합류(status active)는 매퍼가 흡수하므로
-  // 링크 마커와 무관하게 서버가 확정한 결과(role·status)를 따른다
+  // 신청 성공 공통 후속 — 랜딩은 status·role 무관 **홈**(모임 카드). active여도 상세로 직행하지
+  // 않는다: 구계약(즉시 합류) 응답 형태로 승인제 BE가 응답하는 과도기에 상세 직행이 권한 오류로
+  // 터진 실측 반영(JoinGroupModal과 동일 정책). 토스트만 결과(참여/신청)를 구분한다.
   const finishJoined = (result: JoinGroupResult) => {
-    if (result.status === 'active') {
-      toast.show('🧀 모임에 참여했어요')
-      navigate(result.role === 'teacher' ? `/groups/${result.groupId}` : '/home', { replace: true })
-      return
-    }
-    toast.show(`🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`)
+    toast.show(
+      result.status === 'active'
+        ? '🧀 모임에 참여했어요'
+        : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`,
+    )
     navigate('/home', { replace: true })
   }
 
@@ -181,18 +181,36 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
             <h2 className="text-[22px] font-bold leading-snug text-text">아이 이름을 알려주세요</h2>
             <p className="mt-1.5 text-[13px] text-muted">선생님이 확인한 뒤 아이 앨범과 연결해 줘요</p>
             <div className="mt-5 flex flex-col gap-3">
-              {childNames.map((name, i) => (
-                <TextField
-                  key={i}
-                  label={i === 0 ? '아이 이름' : `아이 이름 ${i + 1}`}
-                  placeholder="예) 김민준"
-                  autoComplete="off"
-                  value={name}
-                  onChange={(e) =>
-                    setChildNames((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
-                  }
-                />
-              ))}
+              {childNames.map((name, i) => {
+                const label = i === 0 ? '아이 이름' : `아이 이름 ${i + 1}`
+                return (
+                  <div key={i} className="flex items-end gap-1">
+                    <TextField
+                      className="min-w-0 flex-1"
+                      label={label}
+                      placeholder="예) 김민준"
+                      autoComplete="off"
+                      value={name}
+                      onChange={(e) =>
+                        setChildNames((prev) =>
+                          prev.map((v, idx) => (idx === i ? e.target.value : v)),
+                        )
+                      }
+                    />
+                    {/* 잘못 추가한 행 삭제 — 마지막 한 행은 남긴다(제출 최소 1명·내용은 지우면 됨) */}
+                    {childNames.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label={`${label} 삭제`}
+                        onClick={() => setChildNames((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="flex h-12 w-10 shrink-0 items-center justify-center text-muted transition-colors active:text-text"
+                      >
+                        <IconClose size={16} />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
             <button
               type="button"

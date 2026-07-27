@@ -17,6 +17,10 @@ import { PhotoUploadPage } from './pages/PhotoUploadPage'
 import { AlbumDetailPage } from './pages/AlbumDetailPage'
 import { PublishReviewPage } from './pages/PublishReviewPage'
 
+// 학부모(로그인 멤버) 화면 — CHMO-448
+import { ParentGroupPage } from './pages/ParentGroupPage'
+import { ParentEventPhotosPage } from './pages/ParentEventPhotosPage'
+
 // 학부모(무로그인 뷰어) 화면
 import { ViewerUnlockPage } from './pages/viewer/ViewerUnlockPage'
 import { ViewerEventsPage } from './pages/viewer/ViewerEventsPage'
@@ -58,6 +62,9 @@ export const router = createBrowserRouter([
         element: <AlbumDetailPage />,
       }, // 09 앨범 상세
       { path: '/groups/:groupId/events/:eventId/publish', element: <PublishReviewPage /> }, // 14 공개 요약
+      // 학부모(ACTIVE PARENT) 조회 — 홈 카드가 role로 분기해 진입(CHMO-448)
+      { path: '/parent/groups/:groupId', element: <ParentGroupPage /> }, // 18 학부모 모임 상세
+      { path: '/parent/groups/:groupId/events/:eventId', element: <ParentEventPhotosPage /> }, // 19 학부모 사진 그리드
     ],
   },
 

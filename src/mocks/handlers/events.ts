@@ -16,6 +16,7 @@ import {
   membershipOf,
   nextId,
   nowIso,
+  parentEventHasMappedChild,
   photoCountOfEvent,
   photosOfEvent,
   publishEventPhotos,
@@ -78,11 +79,13 @@ export const eventHandlers = [
     // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
     for (const event of events) settleAnalysis(event.id)
     events.sort(byEventRecency)
-    // PARENT는 published 필터에 더해 **카운트·커버도 노출 사진 기준** 직렬화(미발행 누출 방지)
+    // PARENT는 published 중 **아이(매핑 인물)가 나온 이벤트만**(CHMO-448 노출 강화 — ⚠ BE
+    // 미협의 제안: 공통만 있는 이벤트는 통째로 은닉, 미연결이면 0개) + 카운트·커버도 노출
+    // 사진 기준 직렬화(미발행 누출 방지)
     if (membership.role === 'parent') {
       return ok(
         events
-          .filter((e) => e.status === 'published')
+          .filter((e) => e.status === 'published' && parentEventHasMappedChild(e.id, user.id))
           .map((e) => toParentEventSummary(e, user.id)),
       )
     }

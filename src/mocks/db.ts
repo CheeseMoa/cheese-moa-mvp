@@ -392,8 +392,26 @@ export function parentVisibleAlbumsOfEvent(eventId: number, userId: number): DbA
 }
 
 /**
+ * "아이가 나온 이벤트" 판정(CHMO-448 노출 강화 — ⚠ BE 미협의 제안) — 매핑된 인물 앨범에
+ * 노출 사진이 1장 이상. 학부모에겐 이 이벤트만 존재한다(목록 필터·사진 게이트 공용):
+ * 공통(단체)만 있는 이벤트는 통째로 숨고, 미연결(매핑 0건)이면 어떤 이벤트도 보이지 않는다.
+ */
+export function parentEventHasMappedChild(eventId: number, userId: number): boolean {
+  const event = findEvent(eventId)
+  if (!event) return false
+  const mappedIds = new Set(mappedPersonsOf(userId, event.groupId).map((p) => p.id))
+  return albumsOfEvent(eventId).some(
+    (a) =>
+      a.type === 'person' &&
+      a.personId !== null &&
+      mappedIds.has(a.personId) &&
+      viewerPhotosOfAlbum(a.id).length > 0,
+  )
+}
+
+/**
  * 학부모 노출 사진(§5 — 뷰어 노출 규칙 이관): 위 앨범들의 노출 사진. 다대다라 중복 제거.
- * 매핑 0건(미연결)이면 공통만 — 빈 배열 가능(승인 후 미연결이 기본 경로).
+ * 공통 포함 — 단, 이벤트 자체가 아이 등장(parentEventHasMappedChild)일 때만 조회된다.
  */
 export function parentVisiblePhotosOfEvent(eventId: number, userId: number): DbPhoto[] {
   const photos = new Map<number, DbPhoto>()

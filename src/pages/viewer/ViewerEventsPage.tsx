@@ -3,16 +3,8 @@ import { PhoneShell } from '../../components/PhoneShell'
 import { Button, EmptyState, ErrorState, Header } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { getViewerEvents } from '../../api/viewer'
+import { formatEventDate } from '../../lib/eventDate'
 import { clearViewerToken } from '../../lib/viewer'
-
-/** "2026-06-15" → "6월 15일" (이벤트 카드 메타) — YYYY-MM-DD가 아니면 원문 그대로 */
-function formatEventDate(date: string): string {
-  const [, month = '', day = ''] = date.split('-')
-  const m = parseInt(month, 10)
-  const d = parseInt(day, 10)
-  if (!Number.isFinite(m) || !Number.isFinite(d)) return date
-  return `${m}월 ${d}일`
-}
 
 /**
  * 15-L. 공개 이벤트 목록 (뷰어, 무로그인) · GET /share/:token

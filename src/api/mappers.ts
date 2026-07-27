@@ -67,6 +67,8 @@ export interface RawMyMembership {
   /** 대문자 enum(PENDING/ACTIVE) */
   status: string
   claimedChildNames?: string[]
+  /** 연결 인물 이름(CHMO-448 초안 확장 — BE 미협의) — 생략 가능, 매퍼가 빈 배열로 정규화 */
+  linkedChildNames?: string[]
 }
 
 function toMyMembership(raw: RawMyMembership): MyMembership {
@@ -74,6 +76,7 @@ function toMyMembership(raw: RawMyMembership): MyMembership {
     role: raw.role.toLowerCase() as GroupRole,
     status: raw.status.toLowerCase() as MembershipStatus,
     claimedChildNames: raw.claimedChildNames ?? [],
+    linkedChildNames: raw.linkedChildNames ?? [],
   }
 }
 
