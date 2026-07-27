@@ -19,6 +19,7 @@ import type {
   GroupInviteChannel,
   GroupInviteInfo,
   GroupMember,
+  GroupRole,
   GroupShareInfo,
   ID,
   JoinGroupResult,
@@ -80,13 +81,19 @@ interface RawGroupInvite {
   password?: string
 }
 
-function toInviteChannel(raw: { joinKey: string; password: string }): GroupInviteChannel {
+function toInviteChannel(
+  raw: { joinKey: string; password: string },
+  role: GroupRole = 'teacher',
+): GroupInviteChannel {
   // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
   const origin = typeof window === 'undefined' ? '' : window.location.origin
+  // 학부모 링크엔 role 마커를 싣는다 — joinKey는 불투명(대소문자 12자)이라 02-1 모달/02-2
+  // 3단계 분기의 유일한 근거가 URL이다(CHMO-445 — 시트 소비는 CHMO-446)
+  const marker = role === 'parent' ? '?role=parent' : ''
   return {
     joinKey: raw.joinKey,
     password: raw.password,
-    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
+    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}${marker}`,
   }
 }
 
@@ -104,7 +111,7 @@ export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promi
     if (raw.teacher) {
       return {
         teacher: toInviteChannel(raw.teacher),
-        parent: raw.parent ? toInviteChannel(raw.parent) : null,
+        parent: raw.parent ? toInviteChannel(raw.parent, 'parent') : null,
       }
     }
     return {

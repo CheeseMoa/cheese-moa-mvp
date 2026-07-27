@@ -74,6 +74,15 @@ export function IconPencil({ size = 24 }: IconProps) {
   )
 }
 
+/** 체크 — 02-2 동의 체크박스(CHMO-445). 소형(14px) 렌더가 기본이라 세트 표준(1.8)보다 굵게 */
+export function IconCheck({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)} strokeWidth={2.6}>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  )
+}
+
 /** 추가 — 플러스(iOS '새 앨범'과 같은 문법) — 09-1 이동 시트 "새 앨범" 타일(CHMO-435) */
 export function IconPlus({ size = 24 }: IconProps) {
   return (

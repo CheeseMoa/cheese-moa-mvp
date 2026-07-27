@@ -154,9 +154,10 @@ describe('모임', () => {
     const invite = await getInviteInfo(6)
     expect(invite.teacher.joinKey).toBe('Fh1TDIk81EPP')
     expect(invite.parent?.password).toBe('7421')
-    // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다
+    // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다.
+    // 학부모 링크는 role 마커 포함 — joinKey가 불투명이라 02-2 분기의 유일한 근거(CHMO-445)
     expect(invite.teacher.joinUrl).toBe('/join/Fh1TDIk81EPP')
-    expect(invite.parent?.joinUrl).toBe('/join/Pk3xYz92QwEr')
+    expect(invite.parent?.joinUrl).toBe('/join/Pk3xYz92QwEr?role=parent')
   })
 
   it('초대 구계약 공존 — 평면 응답(현행 실 BE)은 teacher로 흡수하고 parent는 null', async () => {
