@@ -24,10 +24,17 @@ import type {
   EventStatus,
   FaceBbox,
   Group,
+  GroupMember,
+  GroupRole,
   ID,
   ISODate,
   ISODateTime,
+  JoinGroupResult,
+  JoinRequest,
+  MembershipStatus,
   MoveSuggestion,
+  MyMembership,
+  ParentEventPhotos,
   Photo,
   User,
   ViewerAlbum,
@@ -50,13 +57,44 @@ export function toUser(raw: RawUser): User {
 
 // ── Group ────────────────────────────────────────────────────
 
-/** BE GroupSummaryResponse/GroupDetailResponse */
+/**
+ * BE MyMembershipResponse(학부모 전환 초안 §1 — CHMO-444).
+ * TEACHER는 claimedChildNames를 생략할 수 있다(초안 명시) — 매퍼가 빈 배열로 정규화.
+ */
+export interface RawMyMembership {
+  /** 대문자 enum(TEACHER/PARENT) */
+  role: string
+  /** 대문자 enum(PENDING/ACTIVE) */
+  status: string
+  claimedChildNames?: string[]
+  /** 연결 인물 이름(CHMO-448 초안 확장 — BE 미협의) — 생략 가능, 매퍼가 빈 배열로 정규화 */
+  linkedChildNames?: string[]
+}
+
+function toMyMembership(raw: RawMyMembership): MyMembership {
+  return {
+    role: raw.role.toLowerCase() as GroupRole,
+    status: raw.status.toLowerCase() as MembershipStatus,
+    claimedChildNames: raw.claimedChildNames ?? [],
+    linkedChildNames: raw.linkedChildNames ?? [],
+  }
+}
+
+/**
+ * BE GroupSummaryResponse/GroupDetailResponse.
+ * 학부모 전환(CHMO-444) 후 멤버 관련 카운트는 role별로 생략된다(§7-3 —
+ * PARENT·PENDING 응답엔 멤버 정보 미노출). myMembership은 실 BE 미배포 응답엔 없다.
+ */
 export interface RawGroup {
   groupId: ID
   name: string
-  memberCount: number
+  memberCount?: number
+  /** 상세 카운트 분리(§7-3) — 과도기엔 memberCount 병행 */
+  teacherCount?: number
+  parentCount?: number
   /** BE 상세(GroupDetailResponse)엔 없음 — 화면이 이벤트 목록 길이로 파생 */
   eventCount?: number
+  myMembership?: RawMyMembership
   createdAt: ISODateTime
 }
 
@@ -64,10 +102,121 @@ export function toGroup(raw: RawGroup): Group {
   return {
     id: raw.groupId,
     name: raw.name,
+    myMembership: raw.myMembership ? toMyMembership(raw.myMembership) : undefined,
     memberCount: raw.memberCount,
+    teacherCount: raw.teacherCount,
+    parentCount: raw.parentCount,
     eventCount: raw.eventCount,
-    role: null,
     createdAt: raw.createdAt,
+  }
+}
+
+/**
+ * BE JoinGroupResponse(초안 §3) — 즉시 합류가 아니라 신청(PENDING) 생성 결과.
+ * **구계약 공존**: 현재 배포된 실 BE는 즉시 합류 + GroupDetail 형태({groupId, name,
+ * memberCount, createdAt} — role·status·groupName 없음)를 준다. 매퍼가 그 응답도
+ * "선생님으로 즉시 합류(active)"로 흡수한다 — 서버는 이미 합류를 끝낸 뒤라 여기서 던지면
+ * 성공이 실패로 오인된다. BE가 초안을 배포하면 폴백 없이 신형만 남긴다.
+ */
+export interface RawJoinGroupResult {
+  groupId: ID
+  groupName?: string
+  /** 구계약(GroupDetail 형태)의 모임 이름 필드 */
+  name?: string
+  /** 대문자 enum(TEACHER/PARENT) — joinKey 종류에서 서버가 파생(Q6). 구계약엔 없다 */
+  role?: string
+  /** 대문자 enum(PENDING/ACTIVE) — 구계약엔 없다(즉시 합류 = active) */
+  status?: string
+}
+
+export function toJoinGroupResult(raw: RawJoinGroupResult): JoinGroupResult {
+  return {
+    groupId: raw.groupId,
+    groupName: raw.groupName ?? raw.name ?? '',
+    // 구계약 = 선생님 초대 수락뿐이라 teacher/active가 사실과 일치한다
+    role: (raw.role?.toLowerCase() as GroupRole | undefined) ?? 'teacher',
+    status: (raw.status?.toLowerCase() as MembershipStatus | undefined) ?? 'active',
+  }
+}
+
+// ── 합류 신청·멤버·인물 매핑 (초안 §3~4 — TEACHER 전용) ──────
+
+/** BE JoinRequestResponse(초안 §3) */
+export interface RawJoinRequest {
+  joinRequestId: ID
+  userId: ID
+  nickname: string
+  /** 대문자 enum(TEACHER/PARENT) */
+  role: string
+  /** 학부모 신청 원문 — TEACHER는 생략 가능 */
+  childNames?: string[]
+  createdAt: ISODateTime
+}
+
+export function toJoinRequest(raw: RawJoinRequest): JoinRequest {
+  return {
+    id: raw.joinRequestId,
+    userId: raw.userId,
+    nickname: raw.nickname,
+    role: raw.role.toLowerCase() as GroupRole,
+    childNames: raw.childNames ?? [],
+    createdAt: raw.createdAt,
+  }
+}
+
+/** BE GroupMemberResponse(초안 §4) — childNames·mappings는 TEACHER 항목에서 생략 가능 */
+export interface RawGroupMember {
+  userId: ID
+  nickname: string
+  /** 대문자 enum(TEACHER/PARENT) */
+  role: string
+  childNames?: string[]
+  mappings?: { personId: ID; personName: string | null }[]
+}
+
+export function toGroupMember(raw: RawGroupMember): GroupMember {
+  return {
+    userId: raw.userId,
+    nickname: raw.nickname,
+    role: raw.role.toLowerCase() as GroupRole,
+    childNames: raw.childNames ?? [],
+    mappings: (raw.mappings ?? []).map((m) => ({
+      personId: m.personId,
+      personName: m.personName ?? null,
+    })),
+  }
+}
+
+// ── 학부모 사진 조회 (초안 §5 — ACTIVE PARENT 전용) ──────────
+
+/** BE ParentPhotoResponse(초안 §5) — 뷰어와 달리 필드명이 url이다 */
+export interface RawParentPhoto {
+  photoId: ID
+  thumbnailUrl: string
+  url: string
+}
+
+/**
+ * BE ParentEventPhotosResponse(초안 §5) — 플랫 배열(앨범 계층 없음).
+ * photos는 옵셔널 — BE @JsonInclude(NON_EMPTY) 관례상 0장이면 키가 생략될 수 있고(faceBboxes·
+ * causes에서 실측), 미연결 학부모의 빈 목록은 예외가 아니라 기본 경로다(§2).
+ */
+export interface RawParentEventPhotos {
+  eventId: ID
+  eventName: string
+  photos?: RawParentPhoto[]
+}
+
+export function toParentEventPhotos(raw: RawParentEventPhotos): ParentEventPhotos {
+  return {
+    eventId: raw.eventId,
+    eventName: raw.eventName,
+    photos: (raw.photos ?? []).map((p) => ({
+      id: p.photoId,
+      url: p.url,
+      thumbnailUrl: p.thumbnailUrl,
+      downloadUrl: p.url,
+    })),
   }
 }
 

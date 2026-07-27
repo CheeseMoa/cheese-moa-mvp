@@ -2,22 +2,31 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
+import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface JoinGroupModalProps {
   open: boolean
-  /** 스크림·ESC로 닫을 때. 참여 성공 시에는 호출되지 않고 모임 상세(05)로 이동한다 */
+  /** 스크림·ESC로 닫을 때. 신청 성공 시에는 호출되지 않고 홈(02)으로 이동한다 */
   onClose: () => void
   /** 초대 링크(/join/:joinKey) 진입 시 참여 코드 고정 — 코드 입력 필드 대신 안내로 표시 */
   fixedJoinKey?: string
+  /** 홈 모달 진입의 신청 성공 후속(목록 refetch 등) — 미지정이면 onClose로 닫기만 한다 */
+  onJoined?: () => void
 }
 
 /**
  * 02-1. 모임 참여 모달 (node 211:1520 · POST /groups/join).
  * 홈의 [모임 참여하기](코드 직접 입력)와 초대 링크 진입(코드 고정) 공용.
+ *
+ * 학부모 전환(CHMO-444)으로 참여는 즉시 합류가 아니라 **신청(PENDING) 생성**이다 — 성공 시
+ * 모임 상세가 아니라 홈으로 간다(승인 전엔 모임 접근 불가). 단 구계약 실 BE(즉시 합류)가
+ * 아직 배포돼 있어, 응답 status가 active면 기존 UX(모임 상세 이동)를 유지한다(공존 구간).
+ * 학부모 코드를 마커 없이 넣으면(수동 입력 등) 서버 400(자녀 이름 필요)으로 감지해
+ * 02-2 3단계(ParentJoinPage)로 인계한다(CHMO-445).
  */
-export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalProps) {
+export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGroupModalProps) {
   const navigate = useNavigate()
   const toast = useToast()
   const mutate = useMutation()
@@ -45,18 +54,36 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     setSubmitting(true)
     setError(null)
     await mutate(() => joinGroup({ joinKey, password: password.trim() }), {
-      onSuccess: (group) => {
-        toast.show('🧀 모임에 참여했어요')
+      onSuccess: (result) => {
+        toast.show(
+          result.status === 'active'
+            ? '🧀 모임에 참여했어요'
+            : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`,
+        )
+        // 성공 후 랜딩은 status와 무관하게 **홈**(모임 카드) — active여도 상세로 직행하지 않는다.
+        // 구계약(즉시 합류) 응답 형태로 승인제 BE가 응답하는 과도기에 상세 직행이 권한 오류
+        // ("권한이 없는 스페이스")로 터진 실측 반영: 홈은 어느 계약에서도 안전하다.
         // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
-        // 홈 모달 진입은 push — 뒤로가기로 홈 복귀
-        navigate(`/groups/${group.id}`, { replace: fixedJoinKey !== undefined })
+        // 홈 모달 진입은 닫고 목록 갱신
+        if (fixedJoinKey !== undefined) navigate('/home', { replace: true })
+        else (onJoined ?? onClose)()
       },
       // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
       redirect: {
         state: fixedJoinKey !== undefined ? { returnTo: `/join/${fixedJoinKey}` } : undefined,
       },
       // WRONG_PASSWORD·NOT_FOUND·ALREADY_MEMBER 메시지는 사용자 노출 가능한 한국어
-      onError: (msg) => {
+      onError: (msg, err) => {
+        // 400 = 자녀 이름 필요 = 학부모 코드(코드·비밀번호는 채워 보냈으므로 다른 400 원인이
+        // 없다 — 목 VALID400 · BE 코드 미확인이라 status로 판별) → 02-2 3단계로 인계.
+        // 입력한 비밀번호는 state로 넘겨 1/3에 프리필한다(CHMO-445)
+        if (err instanceof ApiRequestError && err.status === 400) {
+          navigate(`/join/${encodeURIComponent(joinKey)}?role=parent`, {
+            replace: fixedJoinKey !== undefined,
+            state: { password: password.trim() },
+          })
+          return
+        }
         setError(msg)
         setSubmitting(false)
       },

@@ -2,8 +2,9 @@
  * MSW 시드 픽스처 (docs/api-spec.md §5 목 데이터 메모 기반).
  *
  * 구성:
- * - 유저 3(제작자 이현정 id 1 = 기본 로그인 계정, PIN 1234)
+ * - 유저 7(선생님 이현정 id 1 = 기본 로그인 계정, PIN 1234 · 학부모 시연 민준아빠 id 4, PIN 1111)
  * - 모임 3: 햇살반(이벤트 4종 상태 시연) · 달님반(빈 모임) · 별님반(미가입 → 참여 플로우용)
+ * - 멤버십은 role(teacher/parent)·승인 상태(pending/active)·신청 자녀 이름을 갖는다(CHMO-444)
  * - 이벤트 4(햇살반): review / published / analyzing / empty — 상태별 화면 시연
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
@@ -172,6 +173,11 @@ export function createFixtures(): Db {
       { id: 1, nickname: '이현정', pin: '1234', createdAt: '2026-06-01T10:00:00+09:00' },
       { id: 2, nickname: '김지은', pin: '2580', createdAt: '2026-06-01T10:05:00+09:00' },
       { id: 3, nickname: '박수민', pin: '4715', createdAt: '2026-06-02T09:00:00+09:00' },
+      // 학부모 전환(CHMO-444) 시연 계정 — 4는 학부모 화면(연결됨+대기), 6은 미연결 기본 경로(§2)
+      { id: 4, nickname: '민준아빠', pin: '1111', createdAt: '2026-07-01T10:00:00+09:00' },
+      { id: 5, nickname: '서연맘', pin: '2222', createdAt: '2026-07-01T10:05:00+09:00' },
+      { id: 6, nickname: '지호네', pin: '3333', createdAt: '2026-07-02T09:00:00+09:00' },
+      { id: 7, nickname: '치즈냥이88', pin: '4444', createdAt: '2026-07-25T09:00:00+09:00' },
     ],
     groups: [
       {
@@ -179,6 +185,7 @@ export function createFixtures(): Db {
         name: '햇살반',
         password: '482AVX',
         joinKey: 'Haetsal3Kx9q',
+        parentJoinKey: 'HaetsalP7d2m',
         share: { token: 'shr_grp1', password: '7421' },
         createdAt: '2026-05-01T09:00:00+09:00',
       },
@@ -187,6 +194,7 @@ export function createFixtures(): Db {
         name: '달님반',
         password: '913BQZ',
         joinKey: 'Dalnim7Qw2pz',
+        parentJoinKey: 'DalnimP4k8wq',
         share: { token: 'shr_grp2', password: '5830' },
         createdAt: '2026-06-10T09:00:00+09:00',
       },
@@ -197,16 +205,30 @@ export function createFixtures(): Db {
         name: '별님반',
         password: '274CKD',
         joinKey: 'ByeolJoin5x8',
+        parentJoinKey: 'ByeolP9s3xtw',
         share: { token: 'shr_grp3', password: '1946' },
         createdAt: '2026-06-20T09:00:00+09:00',
       },
     ],
+    // 학부모 전환(CHMO-444): role·승인 상태 보유. PENDING 행이 곧 합류 신청(id = joinRequestId).
+    // 햇살반: 선생님 3 + 학부모 active 3(지호네는 미연결) + 대기 신청 1(치즈냥이88) — 초대 관리(20) 시연.
+    // 민준아빠는 별님반에 대기 신청도 있다 — 학부모 홈의 active 카드+대기 카드 동시 시연(§7-2).
     memberships: [
-      { userId: 1, groupId: 1 },
-      { userId: 2, groupId: 1 },
-      { userId: 3, groupId: 1 },
-      { userId: 1, groupId: 2 },
-      { userId: 2, groupId: 3 },
+      { id: 1, userId: 1, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-01T09:00:00+09:00' },
+      { id: 2, userId: 2, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-02T09:00:00+09:00' },
+      { id: 3, userId: 3, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-03T09:00:00+09:00' },
+      { id: 4, userId: 1, groupId: 2, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-06-10T09:00:00+09:00' },
+      { id: 5, userId: 2, groupId: 3, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-06-20T09:00:00+09:00' },
+      { id: 6, userId: 4, groupId: 1, role: 'parent', status: 'active', childNames: ['김민준'], createdAt: '2026-07-01T10:10:00+09:00' },
+      { id: 7, userId: 5, groupId: 1, role: 'parent', status: 'active', childNames: ['이서연'], createdAt: '2026-07-01T11:00:00+09:00' },
+      { id: 8, userId: 6, groupId: 1, role: 'parent', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
+      { id: 9, userId: 7, groupId: 1, role: 'parent', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
+      { id: 10, userId: 4, groupId: 3, role: 'parent', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
+    ],
+    // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
+    personParents: [
+      { userId: 4, personId: 1 },
+      { userId: 5, personId: 2 },
     ],
     events: [
       {

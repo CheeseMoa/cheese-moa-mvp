@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
 import {
@@ -23,22 +23,49 @@ import type { Album, AnalysisProgress, EventItem } from '../types/api'
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
  * - empty → 06-E 빈 이벤트(node 211:1572): 📷 빈 상태 + [사진 업로드]→06-U
- * - 분석 진행(analyzing 상태 또는 progress non-null) → 분석중: 2초 간격 자동 폴링(BE 요청
- *   주기) — 진행률(progress)과 함께 갱신되고, 완료되면 앨범 그리드로 자연 전환.
- *   published 이벤트의 사진 추가는 상태 전이 없는 증분 분석이라(CHMO-215·216) progress로 판정.
+ * - 분석 진행(analyzing 상태, progress non-null, 또는 업로드 직후 킥) → 분석중: 2초 간격
+ *   자동 폴링(BE 요청 주기) — 진행률(progress)과 함께 갱신되고, 완료되면 앨범 그리드로 자연
+ *   전환. published 이벤트의 사진 추가는 상태 전이 없는 증분 분석이라(CHMO-215·216) progress로
+ *   판정하되, 등록 직후의 progress null 공백은 업로드 화면이 넘긴 킥이 메운다(CHMO-443).
  * - 그 외(review/ready/published) → 08 앨범 그리드(EventAlbumGrid, node 211:1619)
  * 어느 상태든 헤더 ⚙ = 이벤트 설정(이름 수정 + 이벤트 삭제 — CHMO-278).
  */
+/** 업로드 화면이 navigate state로 넘기는 '분석 시작' 킥(CHMO-443) */
+interface AnalysisKick {
+  eventId: string
+  expected: number
+}
+
 export function EventDetailPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
   const event = eventApi.data
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 업로드 직후 킥(CHMO-443) — 등록 직후엔 AI가 첫 진행률 메시지를 보내기 전이라 progress가
+  // 잠깐 null이고, published는 상태 전이도 없어(CHMO-215·216) 단발 조회로는 분석 시작을 알 수
+  // 없다. 업로드 화면이 넘긴 킥이 있으면 폴링을 켠다 — photoCount가 기대치에 닿으면 완료로
+  // 보고(사진은 분석 커밋 시점에야 반영된다 — 실서버 실측), progress가 먼저 켜지면 그 신호가
+  // 이어받는다. 전부 중복 업로드(registeredCount 0)는 기대치가 이미 충족돼 킥이 바로 꺼진다.
+  const [kick, setKick] = useState<AnalysisKick | null>(
+    () => (location.state as { analysisKick?: AnalysisKick } | null)?.analysisKick ?? null,
+  )
+  const kickActive =
+    kick != null && kick.eventId === eventId && !!event && event.photoCount < kick.expected
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트는 사진을 추가해도
   // 공개를 유지한 채 증분 분석이 돌아 상태가 안 바뀌고(CHMO-215·216), 상세 응답의 progress
   // (분석 job 중에만 non-null)로만 진행을 알 수 있다 — 로딩바·폴링은 두 경우 모두 켠다.
-  const analysisActive = !!event && (event.status === 'analyzing' || event.progress != null)
+  const analysisActive =
+    !!event && (event.status === 'analyzing' || event.progress != null || kickActive)
+
+  // 킥 안전 종료 — 분석이 실패하면 photoCount가 기대치에 영영 닿지 않으므로(CHMO-218 계열)
+  // 30초 뒤엔 킥을 내리고 그리드로 복귀시킨다. 정상 경로는 그 전에 progress가 이어받는다.
+  useEffect(() => {
+    if (!kick) return
+    const timer = setTimeout(() => setKick(null), 30_000)
+    return () => clearTimeout(timer)
+  }, [kick])
   // 뒤로가기 '‹ 모임명'은 빈/분석중 분기에서만 쓰인다(08 그리드는 '이벤트 목록' 고정).
   // 그리드 이벤트에선 group 요청을 아예 보내지 않는다 — 불필요한 라운드트립 제거
   const needsGroupName = !!event && (event.status === 'empty' || analysisActive)

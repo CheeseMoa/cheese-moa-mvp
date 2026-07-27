@@ -7,6 +7,7 @@ import {
   createPersonAlbumFromPhotos,
   deleteAlbumCascade,
   findAlbum,
+  findEvent,
   movePhotoBetweenAlbums,
   photosOfAlbum,
   recomputeEventReadiness,
@@ -17,18 +18,18 @@ import {
   type DbUser,
 } from '../db'
 import {
-  accessibleEvent,
   albumNotFound,
   api,
   created,
   errorResponse,
-  eventNotFound,
   invalidBody,
   invalidRequest,
   ok,
   readJson,
   requiredIdArray,
   requiredString,
+  teacherEvent,
+  teacherOnlyError,
   toId,
   unauthorized,
   userFrom,
@@ -44,11 +45,16 @@ import {
 } from './serializers'
 import type { AlbumDownloadResponse } from '../../types/api'
 
-/** 멤버가 접근 가능한 앨범 조회(소속 이벤트의 모임 멤버십 = accessibleEvent 재사용, 아니면 null → 404) */
-function accessibleAlbum(user: DbUser, albumId: number | null): DbAlbum | null {
+/**
+ * 제작자 전용 앨범 관문 — 검수 화면(08·09)은 전부 TEACHER 전용이다(학부모 전환 §6).
+ * 비멤버·PENDING은 ALBUM404 은닉, ACTIVE PARENT는 ROLE403(Q5). 반환이 Response면 그대로 응답.
+ */
+function teacherAlbum(user: DbUser, albumId: number | null): DbAlbum | Response {
   const album = findAlbum(albumId)
-  if (!album || !accessibleEvent(user, album.eventId)) return null
-  return album
+  if (!album) return albumNotFound()
+  const event = findEvent(album.eventId)
+  if (!event) return albumNotFound()
+  return teacherOnlyError(user, event.groupId, albumNotFound) ?? album
 }
 
 /** 선택 사진이 모두 해당 앨범에 연결돼 있는지 — 아니면 요청 자체가 잘못(400) */
@@ -65,8 +71,8 @@ export const albumHandlers = [
   http.get(api('/events/:id/albums'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
 
     // 재진입 시점에 분석 완료 여부 판정 — 완료됐으면 앨범이 생성돼 함께 반환된다
     settleAnalysis(event.id)
@@ -92,10 +98,10 @@ export const albumHandlers = [
     if (!photoIds || photoIds.length > 100)
       return invalidRequest('사진은 1~100장 선택해 주세요.')
 
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
-    const source = accessibleAlbum(user, sourceAlbumId)
-    if (!source) return albumNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
+    const source = teacherAlbum(user, sourceAlbumId)
+    if (source instanceof Response) return source
     if (source.eventId !== event.id)
       return invalidRequest('원본 앨범이 이 이벤트의 앨범이 아닙니다.')
     if (!allPhotosInAlbum(photoIds, source.id))
@@ -110,8 +116,8 @@ export const albumHandlers = [
   http.get(api('/albums/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, toId(params.id))
-    if (!album) return albumNotFound()
+    const album = teacherAlbum(user, toId(params.id))
+    if (album instanceof Response) return album
     // 딥링크/북마크로 이 상세에 바로 진입해도 증분 분석 완료가 반영되게(그리드와 동일 시점 판정)
     settleAnalysis(album.eventId)
 
@@ -123,8 +129,8 @@ export const albumHandlers = [
   http.patch(api('/albums/:id'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, toId(params.id))
-    if (!album) return albumNotFound()
+    const album = teacherAlbum(user, toId(params.id))
+    if (album instanceof Response) return album
 
     const body = await readJson<{ reviewStatus?: unknown; name?: unknown }>(request)
     if (!body) return invalidBody()
@@ -163,8 +169,8 @@ export const albumHandlers = [
   http.delete(api('/albums/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, toId(params.id))
-    if (!album) return albumNotFound()
+    const album = teacherAlbum(user, toId(params.id))
+    if (album instanceof Response) return album
 
     deleteAlbumCascade(album.id)
     // 미검토 사진이 앨범째 사라졌으면 ready로, 이벤트 사진이 전부 사라졌으면 empty로 재계산
@@ -178,8 +184,9 @@ export const albumHandlers = [
   http.get(api('/albums/:id/download'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, toId(params.id))
-    if (!album || (album.type !== 'person' && album.type !== 'common')) return albumNotFound()
+    const album = teacherAlbum(user, toId(params.id))
+    if (album instanceof Response) return album
+    if (album.type !== 'person' && album.type !== 'common') return albumNotFound()
 
     const response: AlbumDownloadResponse = {
       downloadUrl: `${window.location.origin}/mock-zip/${album.eventId}_${album.id}-all.zip`,
@@ -192,8 +199,8 @@ export const albumHandlers = [
   http.get(api('/albums/:id/move-suggestions'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const album = accessibleAlbum(user, toId(params.id))
-    if (!album) return albumNotFound()
+    const album = teacherAlbum(user, toId(params.id))
+    if (album instanceof Response) return album
 
     const photoIdsParam = new URL(request.url).searchParams.get('photoIds')
     const photoIds = requiredIdArray(photoIdsParam ? photoIdsParam.split(',') : undefined)
@@ -232,9 +239,10 @@ export const albumHandlers = [
       return invalidRequest('이동할 사진과 원본/대상 앨범을 지정해 주세요.')
     if (sourceAlbumId === targetAlbumId) return invalidRequest('원본과 대상 앨범이 같습니다.')
 
-    const source = accessibleAlbum(user, sourceAlbumId)
-    const target = accessibleAlbum(user, targetAlbumId)
-    if (!source || !target) return albumNotFound()
+    const source = teacherAlbum(user, sourceAlbumId)
+    if (source instanceof Response) return source
+    const target = teacherAlbum(user, targetAlbumId)
+    if (target instanceof Response) return target
     if (source.eventId !== target.eventId)
       return invalidRequest('다른 이벤트의 앨범으로는 이동할 수 없습니다.')
     if (!allPhotosInAlbum(photoIds, source.id))
@@ -257,8 +265,8 @@ export const albumHandlers = [
     const photoIds = requiredIdArray(body.photoIds)
     if (!albumId || !photoIds) return invalidRequest('제거할 사진과 앨범을 지정해 주세요.')
 
-    const album = accessibleAlbum(user, albumId)
-    if (!album) return albumNotFound()
+    const album = teacherAlbum(user, albumId)
+    if (album instanceof Response) return album
     if (!allPhotosInAlbum(photoIds, album.id))
       return invalidRequest('선택한 사진이 이 앨범에 없습니다.')
 

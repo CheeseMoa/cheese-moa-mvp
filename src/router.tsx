@@ -11,10 +11,15 @@ import { HomePage } from './pages/HomePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupCreatePage } from './pages/GroupCreatePage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
+import { InviteManagePage } from './pages/InviteManagePage'
 import { EventDetailPage } from './pages/EventDetailPage'
 import { PhotoUploadPage } from './pages/PhotoUploadPage'
 import { AlbumDetailPage } from './pages/AlbumDetailPage'
 import { PublishReviewPage } from './pages/PublishReviewPage'
+
+// 학부모(로그인 멤버) 화면 — CHMO-448
+import { ParentGroupPage } from './pages/ParentGroupPage'
+import { ParentEventPhotosPage } from './pages/ParentEventPhotosPage'
 
 // 학부모(무로그인 뷰어) 화면
 import { ViewerUnlockPage } from './pages/viewer/ViewerUnlockPage'
@@ -49,6 +54,7 @@ export const router = createBrowserRouter([
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
       { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함
+      { path: '/groups/:groupId/invites', element: <InviteManagePage /> }, // 20 초대 관리(CHMO-447) — 20-1 아이 연결 시트 포함
       { path: '/groups/:groupId/events/:eventId', element: <EventDetailPage /> }, // 06-E / 08
       { path: '/groups/:groupId/events/:eventId/upload', element: <PhotoUploadPage /> }, // 06-U
       {
@@ -56,6 +62,9 @@ export const router = createBrowserRouter([
         element: <AlbumDetailPage />,
       }, // 09 앨범 상세
       { path: '/groups/:groupId/events/:eventId/publish', element: <PublishReviewPage /> }, // 14 공개 요약
+      // 학부모(ACTIVE PARENT) 조회 — 홈 카드가 role로 분기해 진입(CHMO-448)
+      { path: '/parent/groups/:groupId', element: <ParentGroupPage /> }, // 18 학부모 모임 상세
+      { path: '/parent/groups/:groupId/events/:eventId', element: <ParentEventPhotosPage /> }, // 19 학부모 사진 그리드
     ],
   },
 
