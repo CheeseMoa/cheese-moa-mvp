@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
+import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
 import { Button, Modal, TextField, useToast } from './ui'
 
@@ -22,8 +23,8 @@ interface JoinGroupModalProps {
  * 학부모 전환(CHMO-444)으로 참여는 즉시 합류가 아니라 **신청(PENDING) 생성**이다 — 성공 시
  * 모임 상세가 아니라 홈으로 간다(승인 전엔 모임 접근 불가). 단 구계약 실 BE(즉시 합류)가
  * 아직 배포돼 있어, 응답 status가 active면 기존 UX(모임 상세 이동)를 유지한다(공존 구간).
- * 학부모 joinKey의 자녀 이름 입력 3단계(02-2)는 CHMO-445에서 — 그 전까지 학부모 링크 참여는
- * 서버 400(아이 이름) 안내로 멈춘다.
+ * 학부모 코드를 마커 없이 넣으면(수동 입력 등) 서버 400(자녀 이름 필요)으로 감지해
+ * 02-2 3단계(ParentJoinPage)로 인계한다(CHMO-445).
  */
 export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGroupModalProps) {
   const navigate = useNavigate()
@@ -74,7 +75,17 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
         state: fixedJoinKey !== undefined ? { returnTo: `/join/${fixedJoinKey}` } : undefined,
       },
       // WRONG_PASSWORD·NOT_FOUND·ALREADY_MEMBER 메시지는 사용자 노출 가능한 한국어
-      onError: (msg) => {
+      onError: (msg, err) => {
+        // 400 = 자녀 이름 필요 = 학부모 코드(코드·비밀번호는 채워 보냈으므로 다른 400 원인이
+        // 없다 — 목 VALID400 · BE 코드 미확인이라 status로 판별) → 02-2 3단계로 인계.
+        // 입력한 비밀번호는 state로 넘겨 1/3에 프리필한다(CHMO-445)
+        if (err instanceof ApiRequestError && err.status === 400) {
+          navigate(`/join/${encodeURIComponent(joinKey)}?role=parent`, {
+            replace: fixedJoinKey !== undefined,
+            state: { password: password.trim() },
+          })
+          return
+        }
         setError(msg)
         setSubmitting(false)
       },
