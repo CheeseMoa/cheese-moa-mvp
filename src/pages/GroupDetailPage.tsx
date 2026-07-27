@@ -165,11 +165,10 @@ export function GroupDetailPage() {
                 <Button fullWidth onClick={() => setCreateOpen(true)}>
                   ＋ 이벤트 생성
                 </Button>
-                {/* 목적지 화면 20(초대 관리)은 CHMO-447 — 그 전까진 안내 토스트만(사용자 확정) */}
                 <Button
                   variant="secondary"
                   fullWidth
-                  onClick={() => toast.show('초대 관리 화면을 준비 중이에요')}
+                  onClick={() => navigate(`/groups/${groupId}/invites`)}
                 >
                   초대 관리{pendingRequestCount > 0 ? ` · 신청 ${pendingRequestCount}` : ''}
                 </Button>
