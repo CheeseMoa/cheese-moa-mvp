@@ -13,6 +13,7 @@ import {
   findGroup,
   isObjectUploaded,
   markObjectUploaded,
+  membershipOf,
   nextId,
   nowIso,
   photoCountOfEvent,
@@ -27,12 +28,9 @@ import {
   type DbPhoto,
 } from '../db'
 import {
-  accessibleEvent,
   api,
-  canAccessGroup,
   created,
   errorResponse,
-  eventNotFound,
   invalidBody,
   invalidRequest,
   groupNotFound,
@@ -40,6 +38,8 @@ import {
   optionalString,
   readJson,
   requiredString,
+  teacherEvent,
+  teacherOnlyError,
   toId,
   unauthorized,
   userFrom,
@@ -48,6 +48,7 @@ import {
   toAnalysisStatusResponse,
   toEventDetail,
   toEventSummary,
+  toParentEventSummary,
   toPublishEventResponse,
   toReviewSummaryResponse,
 } from './serializers'
@@ -63,26 +64,39 @@ import {
 const ANALYZING_LOCKED = '분석 중에는 사진을 추가할 수 없습니다.'
 
 export const eventHandlers = [
-  // GET /groups/:id/events — 이벤트 목록(최신순, bare 배열) · 화면 05
+  // GET /groups/:id/events — 이벤트 목록(최신순, bare 배열, ACTIVE 멤버 전용) · 화면 05·18
+  // PARENT 호출엔 **published만 서버 필터**(학부모 전환 Q4 — 뷰어 필터 로직 이관).
   http.get(api('/groups/:id/events'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
+    if (!group) return groupNotFound()
+    const membership = membershipOf(user.id, group.id)
+    if (membership?.status !== 'active') return groupNotFound()
 
     const events = db.events.filter((e) => e.groupId === group.id)
     // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
     for (const event of events) settleAnalysis(event.id)
     events.sort(byEventRecency)
+    // PARENT는 published 필터에 더해 **카운트·커버도 노출 사진 기준** 직렬화(미발행 누출 방지)
+    if (membership.role === 'parent') {
+      return ok(
+        events
+          .filter((e) => e.status === 'published')
+          .map((e) => toParentEventSummary(e, user.id)),
+      )
+    }
     return ok(events.map(toEventSummary))
   }),
 
-  // POST /groups/:id/events — 이벤트 생성(status: empty) · 화면 06-M
+  // POST /groups/:id/events — 이벤트 생성(status: empty, TEACHER 전용 §6) · 화면 06-M
   http.post(api('/groups/:id/events'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
     const group = findGroup(toId(params.id))
-    if (!group || !canAccessGroup(user, group.id)) return groupNotFound()
+    if (!group) return groupNotFound()
+    const denied = teacherOnlyError(user, group.id)
+    if (denied) return denied
 
     const body = await readJson<{ name?: unknown }>(request)
     const name = requiredString(body?.name)
@@ -105,8 +119,8 @@ export const eventHandlers = [
   http.get(api('/events/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
     settleAnalysis(event.id)
     return ok(toEventDetail(event))
   }),
@@ -115,8 +129,8 @@ export const eventHandlers = [
   http.patch(api('/events/:id'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
 
     const body = await readJson<{ name?: unknown }>(request)
     if (!body) return invalidBody()
@@ -131,8 +145,8 @@ export const eventHandlers = [
   http.delete(api('/events/:id'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
     deleteEventCascade(event.id)
     return ok(null)
   }),
@@ -142,8 +156,8 @@ export const eventHandlers = [
   http.post(api('/events/:id/photos/presign'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
     // 분석 진행 중에만 업로드 불가 — 공개(published) 후에도 사진 추가 가능(새 사진은 미검토로 등록돼 뷰어 비노출)
     if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
 
@@ -191,8 +205,8 @@ export const eventHandlers = [
   http.post(api('/events/:id/photos'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
     if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
 
     const body = await readJson<{
@@ -250,8 +264,8 @@ export const eventHandlers = [
   http.post(api('/events/:id/analyze'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
 
     // BE: 미처리(아직 분류되지 않은) 업로드가 없으면 400
     const pending = photosOfEvent(event.id).filter((p) => p.albumIds.length === 0)
@@ -272,8 +286,8 @@ export const eventHandlers = [
   http.get(api('/events/:id/analysis'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
 
     settleAnalysis(event.id)
     return ok(toAnalysisStatusResponse(event))
@@ -285,8 +299,8 @@ export const eventHandlers = [
   http.get(api('/events/:id/review-summary'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
     settleAnalysis(event.id)
     return ok(toReviewSummaryResponse(event))
   }),
@@ -298,8 +312,8 @@ export const eventHandlers = [
   http.post(api('/events/:id/publish'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
-    const event = accessibleEvent(user, toId(params.id))
-    if (!event) return eventNotFound()
+    const event = teacherEvent(user, toId(params.id))
+    if (event instanceof Response) return event
     settleAnalysis(event.id)
 
     // BE PUBLISH400 — 공개 불가 상태(EMPTY/ANALYZING). published는 재발행이라 허용(CHMO-324)

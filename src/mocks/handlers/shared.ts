@@ -6,7 +6,14 @@
  * `src/api/client.ts`·`errors.ts`가 하므로 화면은 봉투를 보지 않는다.
  */
 import { HttpResponse } from 'msw'
-import { findEvent, isMember, resolveUser, type DbEvent, type DbUser } from '../db'
+import {
+  findEvent,
+  membershipOf,
+  resolveUser,
+  type DbEvent,
+  type DbMemberRole,
+  type DbUser,
+} from '../db'
 
 /** docs/api-spec.md §1 Base URL */
 export function api(path: string): string {
@@ -81,21 +88,51 @@ export function invalidBody() {
   return invalidRequest('요청 본문이 올바르지 않습니다.')
 }
 
+/** role 부족(ACTIVE 멤버지만 권한 없음) — BE ROLE403(학부모 전환 Q5 확정, SPACE404 은닉과 구분) */
+export function roleForbidden(message = '이 작업을 할 수 있는 권한이 없습니다.') {
+  return errorResponse(403, 'ROLE403', message)
+}
+
 /** Authorization 헤더에서 제작자 유저 해석(무효면 null) */
 export function userFrom(request: Request): DbUser | null {
   return resolveUser(request.headers.get('Authorization'))
 }
 
-/** 멤버 전용 리소스 접근 가능 여부(비멤버에겐 404로 존재를 숨긴다) */
-export function canAccessGroup(user: DbUser, groupId: number): boolean {
-  return isMember(user.id, groupId)
+/**
+ * role 전용 액션 관문(§6 — 학부모 차단은 서버 403 강제, FE 버튼 숨김은 보조).
+ * null이면 통과. 비멤버·PENDING은 존재 은닉(hide — §7-2 deny-by-default),
+ * ACTIVE지만 role이 다르면 ROLE403(Q5). 선생님·학부모 양쪽 관문이 이 한 구현을 쓴다 —
+ * 승인 상태 규칙이 바뀌어도 두 API의 403/404 계약이 함께 움직인다.
+ */
+export function membershipRoleError(
+  user: DbUser,
+  groupId: number,
+  role: DbMemberRole,
+  hide: () => Response = groupNotFound,
+): Response | null {
+  const membership = membershipOf(user.id, groupId)
+  if (membership?.status !== 'active') return hide()
+  if (membership.role !== role) return roleForbidden()
+  return null
 }
 
-/** 멤버가 접근 가능한 이벤트 조회(없거나 비멤버면 null → 404) */
-export function accessibleEvent(user: DbUser, eventId: number | null): DbEvent | null {
+/** 제작자(TEACHER) 전용 액션 관문 — 업로드·검수·공개·설정·초대·매핑 전부(§6) */
+export function teacherOnlyError(
+  user: DbUser,
+  groupId: number,
+  hide: () => Response = groupNotFound,
+): Response | null {
+  return membershipRoleError(user, groupId, 'teacher', hide)
+}
+
+/**
+ * 제작자 전용 이벤트 관문 — 이벤트 핸들러 대부분(생성·상세·업로드·검수·공개·설정)은
+ * TEACHER 전용이다(§6). 반환이 Response면 그대로 응답한다.
+ */
+export function teacherEvent(user: DbUser, eventId: number | null): DbEvent | Response {
   const event = findEvent(eventId)
-  if (!event || !canAccessGroup(user, event.groupId)) return null
-  return event
+  if (!event) return eventNotFound()
+  return teacherOnlyError(user, event.groupId, eventNotFound) ?? event
 }
 
 /**

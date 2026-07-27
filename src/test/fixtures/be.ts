@@ -104,14 +104,16 @@ export const BE_GROUP_DETAIL = {
 }
 
 /**
- * GET /groups/:id/invite — 평문 모임 비밀번호 포함(값은 치환). 목록엔 joinKey가 없어 이걸로 대조한다.
- * joinUrl은 **쿼리형**이라 FE 라우트(`/join/:joinKey`)와 안 맞는다 — FE는 이 값을 쓰지 않고
- * joinKey로 파생한다(CHMO-237). 2026-07-16 재채집: 오리진이 EC2 IP → 배포 FE(vercel)로 바뀌었지만 여전히 쿼리형.
+ * GET /groups/:id/invite — 평문 비밀번호 포함(값은 치환). 목록엔 joinKey가 없어 이걸로 대조한다.
+ *
+ * **학부모 전환 초안 계약(CHMO-444 — 실서버 미채집)**: 2종 채널(선생님/학부모, Q6)로 바뀐다.
+ * 실서버 구계약(2026-07-16 채집)은 평면 {joinKey, password, joinUrl(쿼리형 — CHMO-237)}이었다 —
+ * BE가 초안을 구현·배포하면 이 픽스처를 실채집으로 교체한다. joinUrl은 초안에서 응답에 없다
+ * (FE가 joinKey로 경로형을 파생 — CHMO-237 규칙은 그대로).
  */
 export const BE_GROUP_INVITE = {
-  joinKey: '<join-key>',
-  password: '<group-password>',
-  joinUrl: 'https://cheese-moa-mvp.vercel.app/join?joinKey=<join-key>',
+  teacher: { joinKey: '<join-key>', password: '<group-password>' },
+  parent: { joinKey: '<parent-join-key>', password: '<share-password>' },
 }
 
 // ── 이벤트 ───────────────────────────────────────────────────

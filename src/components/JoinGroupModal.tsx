@@ -7,17 +7,25 @@ import { Button, Modal, TextField, useToast } from './ui'
 
 interface JoinGroupModalProps {
   open: boolean
-  /** 스크림·ESC로 닫을 때. 참여 성공 시에는 호출되지 않고 모임 상세(05)로 이동한다 */
+  /** 스크림·ESC로 닫을 때. 신청 성공 시에는 호출되지 않고 홈(02)으로 이동한다 */
   onClose: () => void
   /** 초대 링크(/join/:joinKey) 진입 시 참여 코드 고정 — 코드 입력 필드 대신 안내로 표시 */
   fixedJoinKey?: string
+  /** 홈 모달 진입의 신청 성공 후속(목록 refetch 등) — 미지정이면 onClose로 닫기만 한다 */
+  onJoined?: () => void
 }
 
 /**
  * 02-1. 모임 참여 모달 (node 211:1520 · POST /groups/join).
  * 홈의 [모임 참여하기](코드 직접 입력)와 초대 링크 진입(코드 고정) 공용.
+ *
+ * 학부모 전환(CHMO-444)으로 참여는 즉시 합류가 아니라 **신청(PENDING) 생성**이다 — 성공 시
+ * 모임 상세가 아니라 홈으로 간다(승인 전엔 모임 접근 불가). 단 구계약 실 BE(즉시 합류)가
+ * 아직 배포돼 있어, 응답 status가 active면 기존 UX(모임 상세 이동)를 유지한다(공존 구간).
+ * 학부모 joinKey의 자녀 이름 입력 3단계(02-2)는 CHMO-445에서 — 그 전까지 학부모 링크 참여는
+ * 서버 400(아이 이름) 안내로 멈춘다.
  */
-export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalProps) {
+export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGroupModalProps) {
   const navigate = useNavigate()
   const toast = useToast()
   const mutate = useMutation()
@@ -45,11 +53,21 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey }: JoinGroupModalPr
     setSubmitting(true)
     setError(null)
     await mutate(() => joinGroup({ joinKey, password: password.trim() }), {
-      onSuccess: (group) => {
-        toast.show('🧀 모임에 참여했어요')
-        // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
-        // 홈 모달 진입은 push — 뒤로가기로 홈 복귀
-        navigate(`/groups/${group.id}`, { replace: fixedJoinKey !== undefined })
+      onSuccess: (result) => {
+        // 구계약 실 BE(즉시 합류 — status active)면 기존 UX 그대로 모임 상세로.
+        // 매퍼가 구계약 응답을 active로 흡수한다(공존 구간 — mappers.toJoinGroupResult).
+        if (result.status === 'active') {
+          toast.show('🧀 모임에 참여했어요')
+          navigate(`/groups/${result.groupId}`, { replace: fixedJoinKey !== undefined })
+          return
+        }
+        toast.show(
+          `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`,
+        )
+        // 신청 생성이라 모임 접근 불가(PENDING) — 홈으로. 초대 링크 진입은 참여 화면을
+        // 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지), 홈 모달 진입은 닫고 목록 갱신
+        if (fixedJoinKey !== undefined) navigate('/', { replace: true })
+        else (onJoined ?? onClose)()
       },
       // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
       redirect: {

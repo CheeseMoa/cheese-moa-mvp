@@ -15,8 +15,13 @@ import {
   albumCountOf,
   albumsOfEvent,
   eventCountOf,
+  eventsOfGroup,
   findPhoto,
+  mappedPersonsOf,
   memberCountOf,
+  parentCountOf,
+  parentVisibleAlbumsOfEvent,
+  parentVisiblePhotosOfEvent,
   pendingPublishCountOf,
   personNameOf,
   photoCountOfAlbum,
@@ -24,11 +29,13 @@ import {
   photosOfAlbum,
   photosOfEvent,
   progressOf,
+  teacherCountOf,
   unreviewedCountOfAlbum,
   viewerPhotosOfAlbum,
   type DbAlbum,
   type DbEvent,
   type DbGroup,
+  type DbMembership,
   type DbPhoto,
   type DbUser,
 } from '../db'
@@ -42,36 +49,102 @@ export function shareUrlOf(group: DbGroup): string {
   return `${window.location.origin}/share/${group.share.token}`
 }
 
-/**
- * 실 BE 계약(CHMO-237): joinUrl은 **쿼리형**(`/join?joinKey=…`)이라 FE 라우트(`/join/:joinKey`)와
- * 안 맞는다 — 화면이 이 값을 그대로 쓰면 목에서도 404가 나게 그대로 흉내 낸다.
- * FE는 이 값을 버리고 joinKey로 경로형을 파생한다(`src/api/groups.ts`).
- */
-export function joinUrlOf(group: DbGroup): string {
-  return `${window.location.origin}/join?joinKey=${group.joinKey}`
-}
-
-// ── 모임 ─────────────────────────────────────────────────────
+// ── 모임 (학부모 전환 CHMO-444 — role별 필드 분기 §7-3) ──────
 // joinKey·비밀번호·공유 토큰은 응답에 없다 — 시크릿은 invite/share 전용 핸들러만 반환한다.
 
-/** BE GroupSummaryResponse — 목록 전용(eventCount 포함) */
-export function toGroupSummary(group: DbGroup) {
+/** BE MyMembershipResponse(초안 §1) — TEACHER는 claimedChildNames 생략(초안 명시) */
+export function toMyMembership(membership: DbMembership) {
+  return {
+    role: membership.role.toUpperCase(),
+    status: membership.status.toUpperCase(),
+    ...(membership.role === 'parent' ? { claimedChildNames: [...membership.childNames] } : {}),
+  }
+}
+
+/**
+ * BE GroupSummaryResponse — 목록 전용. myMembership을 실어 PENDING 사용자는 이 응답
+ * 하나로 끝낸다(§7-2). 멤버 정보는 ACTIVE TEACHER에게만(§7-3) — PARENT의 eventCount는
+ * 미공개 이벤트 존재가 새지 않게 published 수만 센다(초안 미명시 — BE 재량, 안전 방향).
+ */
+export function toGroupSummary(group: DbGroup, membership: DbMembership) {
+  const isActiveTeacher = membership.status === 'active' && membership.role === 'teacher'
+  const isActiveParent = membership.status === 'active' && membership.role === 'parent'
   return {
     groupId: group.id,
     name: group.name,
-    memberCount: memberCountOf(group.id),
-    eventCount: eventCountOf(group.id),
+    myMembership: toMyMembership(membership),
+    ...(isActiveTeacher
+      ? { memberCount: memberCountOf(group.id), eventCount: eventCountOf(group.id) }
+      : {}),
+    ...(isActiveParent
+      ? { eventCount: eventsOfGroup(group.id).filter((e) => e.status === 'published').length }
+      : {}),
     createdAt: group.createdAt,
   }
 }
 
-/** BE GroupDetailResponse — 상세엔 **eventCount가 없다**(화면이 이벤트 목록 길이로 파생) */
-export function toGroupDetail(group: DbGroup) {
+/**
+ * BE GroupDetailResponse — 상세엔 **eventCount가 없다**(화면이 이벤트 목록 길이로 파생).
+ * 카운트 분리(§7-3) — memberCount는 과도기 병행. 멤버 정보는 **ACTIVE TEACHER에게만** —
+ * 게이트 조건을 toGroupSummary와 동일하게 두어 §7-3 규칙이 한 형태로 유지된다
+ * (지금은 핸들러가 PENDING을 먼저 403으로 막지만, 직렬화기 단독으로도 새지 않게).
+ */
+export function toGroupDetail(group: DbGroup, membership: DbMembership) {
+  const isActiveTeacher = membership.status === 'active' && membership.role === 'teacher'
   return {
     groupId: group.id,
     name: group.name,
-    memberCount: memberCountOf(group.id),
+    ...(isActiveTeacher
+      ? {
+          memberCount: memberCountOf(group.id),
+          teacherCount: teacherCountOf(group.id),
+          parentCount: parentCountOf(group.id),
+        }
+      : {}),
     createdAt: group.createdAt,
+  }
+}
+
+/** BE JoinGroupResponse(초안 §3) — 즉시 합류가 아니라 신청 생성 결과 */
+export function toJoinGroupResponse(group: DbGroup, membership: DbMembership) {
+  return {
+    groupId: group.id,
+    groupName: group.name,
+    role: membership.role.toUpperCase(),
+    status: membership.status.toUpperCase(),
+  }
+}
+
+/** BE JoinRequestResponse(초안 §3) — PENDING 멤버십 행이 곧 신청이다 */
+export function toJoinRequestResponse(membership: DbMembership, user: DbUser) {
+  return {
+    joinRequestId: membership.id,
+    userId: user.id,
+    nickname: user.nickname,
+    role: membership.role.toUpperCase(),
+    ...(membership.role === 'parent' ? { childNames: [...membership.childNames] } : {}),
+    createdAt: membership.createdAt,
+  }
+}
+
+/**
+ * BE GroupMemberResponse(초안 §4) — 초대 관리 데이터 소스. childNames는 신청 원문
+ * (연결 전까지 보존 — §2), mappings는 학부모↔인물 매핑. TEACHER 항목은 둘 다 생략.
+ */
+export function toGroupMemberResponse(membership: DbMembership, user: DbUser) {
+  return {
+    userId: user.id,
+    nickname: user.nickname,
+    role: membership.role.toUpperCase(),
+    ...(membership.role === 'parent'
+      ? {
+          childNames: [...membership.childNames],
+          mappings: mappedPersonsOf(user.id, membership.groupId).map((p) => ({
+            personId: p.id,
+            personName: p.name,
+          })),
+        }
+      : {}),
   }
 }
 
@@ -130,6 +203,28 @@ export function toEventDetail(event: DbEvent) {
     progress: progressOf(event.id),
     // 발행 대기(CHMO-324 재공개 게이트) — 상세 전용(목록 EventSummaryResponse엔 BE도 없다)
     pendingPublishCount: pendingPublishCountOf(event.id),
+  }
+}
+
+/**
+ * 학부모용 이벤트 목록 항목(학부모 전환 Q4 — 뷰어 필터 이관) — BE는 제작자와 같은
+ * EventSummaryResponse 형태를 쓰되 **카운트·커버를 그 학부모의 노출 사진 기준으로 파생**한다
+ * (매핑 인물+공통 · reviewed && published). 제작자용 toEventSummary를 그대로 쓰면
+ * 미발행 사진 수·썸네일이 학부모에게 샌다 — 뷰어의 toViewerEventSummary(CHMO-324)와 같은 결.
+ */
+export function toParentEventSummary(event: DbEvent, userId: number) {
+  const visible = parentVisiblePhotosOfEvent(event.id, userId)
+  const cover = visible[0] ?? null
+  return {
+    eventId: event.id,
+    name: event.name,
+    status: event.status.toUpperCase(),
+    eventDate: event.date,
+    thumbnailPhotoId: cover?.id ?? null,
+    thumbnailUrl: cover ? photoThumbnailUrlOf(cover) : null,
+    photoCount: visible.length,
+    albumCount: parentVisibleAlbumsOfEvent(event.id, userId).length,
+    createdAt: event.createdAt,
   }
 }
 
@@ -307,6 +402,24 @@ export function toDeletePhotosResponse(photoIds: number[]) {
   return {
     detachedCount: photoIds.length,
     deletedPhotoCount: photoIds.filter((id) => !findPhoto(id)).length,
+  }
+}
+
+// ── 학부모 사진 조회 (학부모 전환 초안 §5 — 뷰어 필터링 이관) ────
+
+/**
+ * BE ParentEventPhotosResponse(초안 §5) — 매핑된 인물 + 공통, 노출 사진(reviewed && published)만
+ * 플랫하게. 검토·발행 대기 등 제작자 필드는 싣지 않는다. 뷰어 DTO와 달리 필드명이 url이다.
+ */
+export function toParentEventPhotosResponse(event: DbEvent, userId: number) {
+  return {
+    eventId: event.id,
+    eventName: event.name,
+    photos: parentVisiblePhotosOfEvent(event.id, userId).map((photo) => ({
+      photoId: photo.id,
+      thumbnailUrl: photoThumbnailUrlOf(photo),
+      url: photoUrlOf(photo),
+    })),
   }
 }
 

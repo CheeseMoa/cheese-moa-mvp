@@ -26,7 +26,7 @@ import {
   registerPhotos,
   uploadToPresignedUrl,
 } from './events'
-import { findMyGroupByJoinKey, getGroup, getInviteInfo, listGroups } from './groups'
+import { findMyGroupByJoinKey, getGroup, getInviteInfo, joinGroup, listGroups } from './groups'
 import {
   getViewerAlbumPhotos,
   getViewerAlbums,
@@ -50,7 +50,6 @@ import {
   BE_EVENT_PUBLISHED,
   BE_EVENT_SUMMARY,
   BE_GROUP_DETAIL,
-  BE_GROUP_INVITE,
   BE_GROUP_SUMMARY,
   BE_MEMBER_ZIP,
   BE_MOVE_PHOTOS,
@@ -84,19 +83,53 @@ beforeEach(() => {
 })
 
 describe('모임', () => {
-  it('BE bare 배열 목록 — groupId를 id로 옮기고 role은 항상 null', async () => {
+  it('BE bare 배열 목록 — groupId를 id로 옮기고, myMembership 없는 구계약 응답도 통과한다', async () => {
     serve(envelope([BE_GROUP_SUMMARY]))
 
+    // 실 BE는 학부모 전환(CHMO-444) 미배포 — myMembership이 없어도 매퍼가 undefined로 흡수해
+    // 기존 제작자 화면이 그대로 동작해야 한다(배포 전후 스위치 양쪽 공존 구간).
     await expect(listGroups()).resolves.toEqual([
       {
         id: 6,
         name: 'CHMO-194 업로드검증',
         memberCount: 1,
         eventCount: 1,
-        role: null,
         createdAt: '2026-07-10T03:33:06.314638Z',
       },
     ])
+  })
+
+  it('학부모 전환 초안 — myMembership(대문자 enum·claimedChildNames 생략)을 FE 계약으로 옮긴다', async () => {
+    // BE 미배포 — parent-model-api-draft §1 초안 기대값. 배포 후 실채집 픽스처로 교체한다.
+    serve(
+      envelope([
+        {
+          groupId: 9,
+          name: '햇살반',
+          myMembership: { role: 'PARENT', status: 'PENDING', claimedChildNames: ['김민준'] },
+          createdAt: '2026-07-25T00:00:00Z',
+        },
+        {
+          groupId: 6,
+          name: 'CHMO-194 업로드검증',
+          memberCount: 1,
+          eventCount: 1,
+          myMembership: { role: 'TEACHER', status: 'ACTIVE' },
+          createdAt: '2026-07-10T03:33:06.314638Z',
+        },
+      ]),
+    )
+
+    const [pending, teacher] = await listGroups()
+    expect(pending.myMembership).toEqual({
+      role: 'parent',
+      status: 'pending',
+      claimedChildNames: ['김민준'],
+    })
+    // PENDING 항목엔 멤버 정보가 없다(§7-3) — 매퍼가 undefined로 통과시킨다
+    expect(pending.memberCount).toBeUndefined()
+    // TEACHER는 claimedChildNames를 생략할 수 있다(초안 §1) — 빈 배열로 정규화
+    expect(teacher.myMembership).toEqual({ role: 'teacher', status: 'active', claimedChildNames: [] })
   })
 
   it('BE 빈 목록도 빈 배열로 통과한다', async () => {
@@ -111,12 +144,62 @@ describe('모임', () => {
     expect(group.eventCount).toBeUndefined()
   })
 
-  it('초대 joinUrl은 BE 것(쿼리형)을 버리고 joinKey로 경로형을 파생한다 (CHMO-237)', async () => {
-    serve(envelope({ ...BE_GROUP_INVITE, joinKey: 'Fh1TDIk81EPP' }))
+  it('초대 2종(초안 §2) — 채널별 joinUrl을 joinKey로 경로형 파생한다 (CHMO-237·444)', async () => {
+    serve(
+      envelope({
+        teacher: { joinKey: 'Fh1TDIk81EPP', password: 'PW1' },
+        parent: { joinKey: 'Pk3xYz92QwEr', password: '7421' },
+      }),
+    )
     const invite = await getInviteInfo(6)
-    expect(invite.joinKey).toBe('Fh1TDIk81EPP')
+    expect(invite.teacher.joinKey).toBe('Fh1TDIk81EPP')
+    expect(invite.parent?.password).toBe('7421')
     // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다
-    expect(invite.joinUrl).toBe('/join/Fh1TDIk81EPP')
+    expect(invite.teacher.joinUrl).toBe('/join/Fh1TDIk81EPP')
+    expect(invite.parent?.joinUrl).toBe('/join/Pk3xYz92QwEr')
+  })
+
+  it('초대 구계약 공존 — 평면 응답(현행 실 BE)은 teacher로 흡수하고 parent는 null', async () => {
+    // 2026-07-16 실채집 형태 — joinUrl(쿼리형)은 버린다(CHMO-237)
+    serve(
+      envelope({
+        joinKey: 'Fh1TDIk81EPP',
+        password: '<group-password>',
+        joinUrl: 'https://cheese-moa-mvp.vercel.app/join?joinKey=Fh1TDIk81EPP',
+      }),
+    )
+    const invite = await getInviteInfo(6)
+    expect(invite.teacher).toEqual({
+      joinKey: 'Fh1TDIk81EPP',
+      password: '<group-password>',
+      joinUrl: '/join/Fh1TDIk81EPP',
+    })
+    expect(invite.parent).toBeNull()
+  })
+
+  it('참여 구계약 공존 — 즉시 합류(GroupDetail 형태) 응답을 active/teacher로 흡수한다', async () => {
+    // 현행 실 BE: 참여 즉시 합류 + 상세 형태 응답(role·status·groupName 없음).
+    // 매퍼가 던지면 서버는 이미 합류를 끝냈는데 화면은 실패로 오인한다 — 반드시 성공으로 흡수.
+    serve(envelope(BE_GROUP_DETAIL))
+    const result = await joinGroup({ joinKey: 'K', password: 'p' })
+    expect(result.status).toBe('active')
+    expect(result.role).toBe('teacher')
+    expect(result.groupId).toBe(6)
+    // 구계약의 name 필드가 groupName으로 온다 — 토스트가 'undefined'를 그리지 않게
+    expect(result.groupName).not.toBe('')
+  })
+
+  it('참여 초안 계약 — role·status 대문자 enum을 소문자로 옮긴다 (CHMO-444)', async () => {
+    // BE 미배포 — parent-model-api-draft §3 초안 기대값. 배포 후 실채집 픽스처로 교체한다.
+    serve(
+      envelope({ groupId: 9, groupName: '햇살반', role: 'PARENT', status: 'PENDING' }),
+    )
+    await expect(joinGroup({ joinKey: 'P', password: '7421', childNames: ['김민준'] })).resolves.toEqual({
+      groupId: 9,
+      groupName: '햇살반',
+      role: 'parent',
+      status: 'pending',
+    })
   })
 })
 
@@ -126,7 +209,12 @@ describe('모임', () => {
  * 비번 모달을 다시 띄우는" 오판을 막는 게 이 함수의 존재 이유다.
  */
 describe('findMyGroupByJoinKey', () => {
-  const inviteOf = (joinKey: string) => envelope({ ...BE_GROUP_INVITE, joinKey })
+  // 2종 채널(CHMO-444) — 대조는 선생님/학부모 어느 joinKey든 매치한다
+  const inviteOf = (joinKey: string) =>
+    envelope({
+      teacher: { joinKey, password: 'PW' },
+      parent: { joinKey: `P-${joinKey}`, password: '0000' },
+    })
   const serverError = () => jsonResponse(errorEnvelope('COMMON500', '서버 오류입니다.'), 500)
 
   /** 내 모임 2개(6·5)와 모임별 invite 응답을 라우팅한다 */
@@ -181,6 +269,21 @@ describe('findMyGroupByJoinKey', () => {
   it('재시도도 실패하면 null로 폴백한다 — 참여 자체를 막지는 않는다', async () => {
     stubInvites({ 6: serverError, 5: serverError })
     await expect(findMyGroupByJoinKey('K6')).resolves.toBeNull()
+  })
+
+  it('결정적 실패(ROLE403 학부모 멤버십·404 은닉)는 재시도하지 않는다', async () => {
+    // 학부모 role 모임의 초대 조회는 항상 ROLE403 — 재시도해도 같은 답이라 헛요청만 는다
+    let attempts = 0
+    stubInvites({
+      6: () => {
+        attempts += 1
+        return jsonResponse(errorEnvelope('ROLE403', '권한이 없습니다.'), 403)
+      },
+      5: () => jsonResponse(inviteOf('K5')),
+    })
+
+    await expect(findMyGroupByJoinKey('K6')).resolves.toBeNull()
+    expect(attempts).toBe(1)
   })
 })
 

@@ -22,6 +22,12 @@ const BE_CODE_MAP: Record<string, string> = {
   COMMON401: 'UNAUTHORIZED',
   /** 모임 참여 비밀번호 불일치(403) */
   JOIN403: 'WRONG_PASSWORD',
+  /**
+   * 멤버지만 role 부족(403) — 예: PARENT가 업로드·검수·초대 조회 호출(학부모 전환 Q5 확정,
+   * docs/parent-model-proposal.md §6). 멤버십 없음(SPACE404 은닉)과 구분된다.
+   * 실 BE 미배포 — 코드 자체는 협의 확정이라 등록하고, 배포 후 실서버 채집으로 재확인한다.
+   */
+  ROLE403: 'FORBIDDEN_ROLE',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
   /** 이벤트(BE 도메인명 moment) 없음(404) */
