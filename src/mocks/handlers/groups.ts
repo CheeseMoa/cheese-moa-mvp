@@ -99,7 +99,8 @@ export const groupHandlers = [
     if (!group) return groupNotFound()
     const membership = membershipOf(user.id, group.id)
     if (!membership) return groupNotFound()
-    // PENDING 접근 거부(§7-2 deny-by-default) — BE 코드 미확인(초안: SPACE403 또는 ROLE403 재량)
+    // PENDING 접근 거부(§7-2 deny-by-default) — BE 확정: SPACE403(NOT_SPACE_MEMBER, CHMO-475 AC2).
+    // 선생님도 승인제가 되면서 제작자 화면이 이 응답을 받을 수 있다(승인 전 딥링크·새로고침).
     if (membership.status !== 'active')
       return errorResponse(403, 'SPACE403', '아직 승인되지 않은 모임입니다.')
     return ok(toGroupDetail(group, membership))
@@ -137,6 +138,8 @@ export const groupHandlers = [
 
   // POST /groups/join — 참여 코드+비밀번호로 **신청(PENDING) 생성**(즉시 합류 아님 — §1 승인제) · 화면 02-1
   // role은 joinKey 종류에서 파생(Q6): 선생님 키=모임 비밀번호, 학부모 키=sharePassword(Q2).
+  // **키는 "누가 신청할 수 있나"만 정하고 "누가 들어오나"는 승인이 정한다** — 선생님 키도
+  // PENDING이다(BE CHMO-475로 실 BE도 동일. 모임 생성자만 예외로 즉시 ACTIVE — POST /groups).
   http.post(api('/groups/join'), async ({ request }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()

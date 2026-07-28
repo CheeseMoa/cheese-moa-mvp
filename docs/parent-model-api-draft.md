@@ -16,10 +16,21 @@
 
 ---
 
+## 0. 승인제는 role 무관 (BE 확정 — CHMO-475, 2026-07-28)
+
+초안 §1은 "합류는 승인제"를 학부모 기준으로 썼지만, BE가 **선생님 키 합류도 PENDING 신청으로 통일**했다.
+joinKey는 "누가 신청할 수 있나(=어떤 role로)"만 정하고, "누가 들어오나"는 그 모임의 ACTIVE 선생님이 승인으로 정한다.
+
+- 새 엔드포인트·새 상태값 없음 — 기존 승인 API(§3)를 role만 섞어서 그대로 쓴다.
+- **모임 생성자만 예외** — `POST /groups`는 종전대로 즉시 TEACHER/ACTIVE(승인해 줄 사람이 필요하다).
+- 승인 전 모임 API(상세·이벤트·앨범) 접근은 전부 **`SPACE403`(NOT_SPACE_MEMBER)** — §1의 "BE 재량" 표기를 이 값으로 확정한다.
+- 멤버 수 집계는 종전대로 ACTIVE 기준이라 대기 중인 선생님은 세지 않는다.
+
 ## 1. 모임 목록·상세 (변경)
 
 ### GET /groups — 항목에 `myMembership` 추가
 - **PENDING인 모임도 목록에 포함**한다(홈 비활성 카드용). PENDING 사용자는 이 응답 하나로 끝 — 다른 모임 API를 호출하지 않는다.
+- **승인 대기 항목은 `memberCount` 생략 + `eventCount` 0**(role 무관 — BE 완료 공지 2026-07-28). 멤버 수는 승인 전 정보 노출 0 원칙이고, 이벤트 수 0은 사실 그대로다. FE는 대기 카드에서 카운트 줄 자체를 그리지 않는다 — 선생님 신청은 자녀 이름조차 없어(`claimedChildNames` 빈 배열) 카운트로 폴백하면 "이벤트 0개"가 빈 모임처럼 읽힌다.
 
 ```jsonc
 // GroupSummaryResponse 항목 (추가 필드만)
@@ -42,7 +53,7 @@
 ### GET /groups/:id — ACTIVE 멤버 전용 · 카운트 분리 (§7-3)
 - `memberCount` 대신 **`teacherCount` / `parentCount` 분리**(과도기 병행 후 제거 제안). 헤더 표기: "선생님 3 · 학부모 12".
 - **PARENT 호출 시 멤버 관련 필드(카운트·명단)는 생략** — 학부모에게 멤버 정보 일절 미노출.
-- PENDING 접근은 거부(에러 코드는 BE 재량 — SPACE403 또는 ROLE403, FE는 미지 코드 통과).
+- PENDING 접근은 거부 — **`SPACE403`(NOT_SPACE_MEMBER) 확정**(CHMO-475 AC2). FE는 `errors.ts`에서 `PENDING_APPROVAL`로 정규화하고, 재시도 대신 홈 복귀 CTA로 받는다(ROLE403 = 기다려도 안 열림과 구분).
 
 ### GET /groups/:id/events — PARENT엔 published + 아이 등장 이벤트만
 - PARENT 호출 시 **published 이벤트만 서버 필터**(뷰어 필터 로직 이관 — Q4 확정). TEACHER는 기존 그대로.
@@ -69,7 +80,7 @@
 ## 3. 합류 신청·승인 (§1·7-2 확정)
 
 ### POST /groups/join — 즉시 합류 → **신청(PENDING) 생성**으로 변경
-- role은 joinKey 종류에서 파생(링크 2종 — 역할 선택 화면 없음, Q6).
+- role은 joinKey 종류에서 파생(링크 2종 — 역할 선택 화면 없음, Q6). **선생님 키도 PENDING**(§0 — CHMO-475).
 - `childNames`: 학부모 joinKey일 때 필수(1개 이상, 자유 텍스트). 시도 제한은 기존 리미터 재사용(Q2).
 - 동의 필드는 문구 확정 후 추가 예정(§7) — body에 `consents` 자리만 고려.
 
@@ -81,9 +92,12 @@
 ```
 
 ### GET /groups/:id/join-requests?status=PENDING — 신설, TEACHER 전용
+- **PARENT·TEACHER 신청이 섞여서 온다**(§0) — `role`로 구분한다. 선생님 신청은 `childNames`가 빈 배열(BE는 생략 가능 — FE 매퍼가 빈 배열 정규화).
 ```jsonc
 [{ "joinRequestId": 10, "userId": 55, "nickname": "치즈냥이88",
-   "role": "PARENT", "childNames": ["김민준"], "createdAt": "..." }]
+   "role": "PARENT", "childNames": ["김민준"], "createdAt": "..." },
+ { "joinRequestId": 11, "userId": 58, "nickname": "신입쌤",
+   "role": "TEACHER", "childNames": [], "createdAt": "..." }]
 ```
 
 ### PATCH /join-requests/:id — 신설, TEACHER 전용

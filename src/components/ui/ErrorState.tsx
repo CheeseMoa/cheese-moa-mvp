@@ -11,7 +11,11 @@ interface ErrorStateProps {
   onRetry?: () => void
   /** 401(토큰 무효 — apiFetch가 이미 삭제) 복귀 목적지(로그인/잠금 해제) — 지정하면 즉시 리다이렉트 */
   unauthorizedTo?: string
-  /** 404(영구 실패) 복귀 목적지 — 지정하면 [다시 시도] 대신 돌아가기 CTA */
+  /**
+   * 영구 실패(재시도해도 결과가 같음) 복귀 목적지 — 지정하면 [다시 시도] 대신 돌아가기 CTA.
+   * 404(없음)뿐 아니라 **403(승인 대기·권한 없음)** 도 여기로 받는다(CHMO-475 — 선생님도
+   * 승인제가 되며 제작자 화면이 승인 전 딥링크로 403을 만날 수 있다).
+   */
   notFoundTo?: string
   /** 돌아가기 CTA 라벨 (기본 '돌아가기') */
   notFoundLabel?: string
@@ -24,7 +28,8 @@ interface ErrorStateProps {
 /**
  * useApi 실패 공용 표시 — warn 메시지(role=alert) + 복구 액션 (CHMO-118 에러 상태 정리).
  * 401은 재시도가 영원히 실패하므로 unauthorizedTo로 재인증 화면 복귀,
- * 404는 재시도해도 같은 결과라 notFoundTo가 있으면 [다시 시도] 대신 복귀 CTA를 준다.
+ * 404·403은 재시도해도 같은 결과라 notFoundTo가 있으면 [다시 시도] 대신 복귀 CTA를 준다
+ * (403 = 승인 대기(SPACE403)·role 부족(ROLE403) — 둘 다 이 화면에서 할 수 있는 일이 없다).
  */
 export function ErrorState({
   error,
@@ -41,7 +46,7 @@ export function ErrorState({
       <p role="alert" className="text-center text-sm text-warn">
         {toErrorMessage(error)}
       </p>
-      {error.status === 404 && notFoundTo ? (
+      {(error.status === 404 || error.status === 403) && notFoundTo ? (
         <ButtonLink to={notFoundTo} replace size="sm" variant="secondary">
           {notFoundLabel}
         </ButtonLink>

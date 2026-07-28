@@ -37,6 +37,10 @@ const SECTION_LABEL: Record<GroupRole, string> = { teacher: '선생님', parent:
  * 아이 연결(20-1)은 이 화면 위 바텀시트(ChildLinkSheet)로 뜬다.
  * TEACHER 전용은 서버가 강제(ROLE403·비멤버 404 은닉) — 비정상 진입은 LoadState 에러로 수렴.
  * 기본 탭은 학부모님 — 이 화면의 주 업무(신청 승인·아이 연결)가 학부모 쪽이다.
+ *
+ * 승인제가 role 무관으로 통일되면서(CHMO-475) 신청 목록에 **선생님 신청도 섞여 온다**
+ * (role=TEACHER·childNames 빈 배열 — 원문 줄 없이 닉네임+시각만 렌더된다). 기본 탭이
+ * 학부모님이라 선생님 신청이 묻히지 않게 탭 라벨에 탭별 대기 수를 붙인다.
  */
 export function InviteManagePage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
@@ -108,8 +112,11 @@ export function InviteManagePage() {
   }
 
   const me = meApi.data
-  const requests = (requestsApi.data ?? []).filter((r) => r.role === tab)
+  const allRequests = requestsApi.data ?? []
+  const requests = allRequests.filter((r) => r.role === tab)
   const members = (membersApi.data ?? []).filter((m) => m.role === tab)
+  // 탭별 대기 수 — 기본 탭이 학부모님이라, 표시가 없으면 선생님 신청이 온 줄 모른다(CHMO-475)
+  const pendingCountOf = (role: GroupRole) => allRequests.filter((r) => r.role === role).length
 
   return (
     <PhoneShell>
@@ -118,20 +125,32 @@ export function InviteManagePage() {
       {/* 세그먼트 탭 — 스크롤 밖 고정(긴 명단에서도 항상 전환 가능) · 스타일은 05-2 시트와 동일 */}
       <div className="shrink-0 px-5 pt-4">
         <div role="tablist" aria-label="멤버 구분" className="flex rounded-full bg-surface p-1">
-          {TAB_KEYS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={tab === key}
-              onClick={() => setTab(key)}
-              className={`flex-1 rounded-full py-2 text-sm transition ${
-                tab === key ? 'bg-primary font-bold text-text' : 'font-medium text-muted'
-              }`}
-            >
-              {TAB_LABEL[key]}
-            </button>
-          ))}
+          {TAB_KEYS.map((key) => {
+            const waiting = pendingCountOf(key)
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                aria-label={waiting > 0 ? `${TAB_LABEL[key]} · 대기 신청 ${waiting}건` : undefined}
+                onClick={() => setTab(key)}
+                className={`flex-1 rounded-full py-2 text-sm transition ${
+                  tab === key ? 'bg-primary font-bold text-text' : 'font-medium text-muted'
+                }`}
+              >
+                {TAB_LABEL[key]}
+                {waiting > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="ml-1.5 inline-block rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
+                  >
+                    {waiting}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
