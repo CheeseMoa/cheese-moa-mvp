@@ -600,16 +600,18 @@ export function removePhotoFromAlbum(photoId: number, albumId: number): void {
 }
 
 /**
- * 검수 새 인물 앨범 생성(CHMO-416) — BE CreateAlbumFromPhotosUseCase의 목 대응물:
- * 수동 인물(얼굴 벡터 없음 — 목엔 벡터 개념이 없어 이름만) + 앨범 생성 후 소스에서 사진 이동.
- * 소스가 비어도 앨범은 남는다(CHMO-418 — unlinkPhotoFromAlbum이 커버만 비운다).
+ * 검수 새 인물 앨범 생성(CHMO-416 + 빈 앨범 CHMO-456) — BE CreateAlbumUseCase의 목 대응물:
+ * 수동 인물(얼굴 벡터 없음 — 목엔 벡터 개념이 없어 이름만) + 앨범 생성.
+ * `source`를 주면 선택 사진을 소스에서 옮겨오고(생성=이동 — 09-1), 생략하면 **사진 0장**으로
+ * 태어난다(08 — 빈 앨범은 1급 시민이라 그대로 남는다, CHMO-418).
+ * 소스가 비어도 앨범은 남는다(unlinkPhotoFromAlbum이 커버만 비운다).
+ * 이름 중복은 검사하지 않는다 — 실 BE도 personId를 따로 발급해 통과시킨다(2026-07-27 프로브).
  */
-export function createPersonAlbumFromPhotos(
+export function createManualPersonAlbum(
   eventId: number,
   groupId: number,
   name: string,
-  sourceAlbumId: number,
-  photoIds: number[],
+  source?: { sourceAlbumId: number; photoIds: number[] },
 ): DbAlbum {
   const person: DbPerson = { id: nextId('psn'), groupId, name }
   db.persons.push(person)
@@ -621,7 +623,11 @@ export function createPersonAlbumFromPhotos(
     coverPhotoId: null,
   }
   db.albums.push(album)
-  for (const photoId of photoIds) movePhotoBetweenAlbums(photoId, sourceAlbumId, album.id)
+  if (source) {
+    for (const photoId of source.photoIds) {
+      movePhotoBetweenAlbums(photoId, source.sourceAlbumId, album.id)
+    }
+  }
   return album
 }
 

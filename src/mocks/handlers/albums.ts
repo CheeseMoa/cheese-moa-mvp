@@ -4,7 +4,7 @@
  */
 import { http } from 'msw'
 import {
-  createPersonAlbumFromPhotos,
+  createManualPersonAlbum,
   deleteAlbumCascade,
   findAlbum,
   findEvent,
@@ -79,8 +79,11 @@ export const albumHandlers = [
     return ok(albumsOfEventSorted(event.id).map(toAlbumSummary))
   }),
 
-  // POST /events/:id/albums — 선택 사진으로 새 인물 앨범 생성(CHMO-416, 이동 겸함) · 화면 09-1
-  // 검증 순서는 BE Bean Validation처럼 바디부터 — 이벤트·앨범 조회 전에 VALID400이 나간다.
+  // POST /events/:id/albums — 새 인물 앨범 생성 · 화면 09-1(생성=이동, CHMO-416) / 08(빈 앨범, CHMO-456)
+  // sourceAlbumId·photoIds는 **짝**이다: 함께 주면 선택 사진을 옮겨오고, 함께 생략하면 0장 앨범.
+  // 검증 순서·문구는 실서버 실측 그대로(2026-07-27 프로브) — ① 이름(@NotBlank·20자) → ② 짝 →
+  // ③ 사진 개수 → ④ 이벤트·앨범 조회. 바디 검증이 이벤트 조회보다 먼저라 없는 이벤트에 잘못된
+  // 바디를 보내면 MOMENT404가 아니라 VALID400이 나간다.
   http.post(api('/events/:id/albums'), async ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
@@ -89,17 +92,30 @@ export const albumHandlers = [
       request,
     )
     if (!body) return invalidBody()
-    const sourceAlbumId = toId(body.sourceAlbumId)
-    // 실서버 실측 문구(2026-07-25 프로브)
-    if (!sourceAlbumId) return invalidRequest('원본 앨범은 필수입니다.')
     const name = requiredString(body.name)
-    if (!name || name.length > 20) return invalidRequest('이름은 1~20자로 입력해 주세요.')
-    const photoIds = requiredIdArray(body.photoIds)
-    if (!photoIds || photoIds.length > 100)
-      return invalidRequest('사진은 1~100장 선택해 주세요.')
+    // 공백만 이름도 여기서 걸린다(BE @NotBlank — 실측)
+    if (!name) return invalidRequest('인물 이름은 필수입니다.')
+    if (name.length > 20) return invalidRequest('이름은 20자 이하여야 합니다.')
+
+    const hasSource = body.sourceAlbumId !== undefined && body.sourceAlbumId !== null
+    const hasPhotoIds = body.photoIds !== undefined && body.photoIds !== null
+    if (hasSource !== hasPhotoIds)
+      return invalidRequest('sourceAlbumId 와 photoIds 는 함께 보내거나 함께 생략해야 합니다.')
+
+    // 사진 개수도 바디 검증(@Size)이라 이벤트 조회보다 먼저 — 없는 이벤트 + 빈 배열이면 VALID400이 이긴다
+    const photoIds = hasSource ? requiredIdArray(body.photoIds) : null
+    if (hasSource && (!photoIds || photoIds.length > 100))
+      return invalidRequest('사진은 1~100장이어야 합니다.')
 
     const event = teacherEvent(user, toId(params.id))
     if (event instanceof Response) return event
+
+    // 빈 앨범(사진 0장) — 소스가 없으니 이동도 없다(CHMO-456)
+    if (!photoIds) {
+      return created(toCreateAlbumResponse(createManualPersonAlbum(event.id, event.groupId, name)))
+    }
+
+    const sourceAlbumId = toId(body.sourceAlbumId)
     const source = teacherAlbum(user, sourceAlbumId)
     if (source instanceof Response) return source
     if (source.eventId !== event.id)
@@ -108,7 +124,10 @@ export const albumHandlers = [
       // BE 스펙(CHMO-416 AC-5): 원본 앨범에 없는 사진이 섞이면 PHOTO404
       return errorResponse(404, 'PHOTO404', '원본 앨범에 없는 사진이 있습니다.')
 
-    const album = createPersonAlbumFromPhotos(event.id, event.groupId, name, source.id, photoIds)
+    const album = createManualPersonAlbum(event.id, event.groupId, name, {
+      sourceAlbumId: source.id,
+      photoIds,
+    })
     return created(toCreateAlbumResponse(album))
   }),
 

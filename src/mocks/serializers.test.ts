@@ -17,7 +17,7 @@ import {
   findGroup,
   findPhoto,
   db,
-  createPersonAlbumFromPhotos,
+  createManualPersonAlbum,
   deleteAlbumCascade,
   membershipOf,
   photosOfAlbum,
@@ -466,7 +466,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
   it('새 인물 앨범 생성 — 생성이 곧 이동, 소스가 비어도 남는다 (CHMO-416·418)', () => {
     const photoIds = photosOfAlbum(1).map((p) => p.id)
     expect(photoIds.length).toBeGreaterThan(0)
-    const album = createPersonAlbumFromPhotos(1, 1, '김치즈', 1, photoIds)
+    const album = createManualPersonAlbum(1, 1, '김치즈', { sourceAlbumId: 1, photoIds })
 
     // FE createPersonAlbum이 읽는 응답 필드명(albumId·photoCount) + 인물 이름 실재
     expect(toCreateAlbumResponse(album)).toMatchObject({
@@ -482,6 +482,32 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // 전량 이동으로 빈 소스도 남는다(CHMO-418)
     expect(findAlbum(1)).toBeDefined()
     expect(findAlbum(1)!.coverPhotoId).toBeNull()
+  })
+
+  it('빈 인물 앨범 생성 — 사진 0장으로 태어나 08 그리드에 0장 카드로 나온다 (CHMO-456·471)', () => {
+    const before = db.albums.filter((a) => a.eventId === 1).length
+    const album = createManualPersonAlbum(1, 1, '이치즈')
+
+    // FE createPersonAlbum이 읽는 응답(실서버 실측 형태) — 사진 없이도 인물 이름이 붙는다
+    expect(toCreateAlbumResponse(album)).toMatchObject({
+      albumId: album.id,
+      type: 'PERSON',
+      personName: '이치즈',
+      photoCount: 0,
+    })
+    // 이동이 없으니 다른 앨범은 그대로 — 사진을 훔쳐오지 않는다
+    expect(photosOfAlbum(album.id)).toHaveLength(0)
+    expect(photosOfAlbum(1).length).toBeGreaterThan(0)
+
+    // 그리드 목록에 즉시 포함 + 매퍼가 0장·커버 null을 통과시켜야 카드가 그려진다(CHMO-418 계약)
+    const raw = albumsOfEvent(1).map(toAlbumSummary)
+    expect(raw).toHaveLength(before + 1)
+    expect(toAlbum(raw.find((a) => a.albumId === album.id)!)).toMatchObject({
+      type: 'person',
+      name: '이치즈',
+      photoCount: 0,
+      coverThumbnailUrl: null,
+    })
   })
 
   it('앨범 삭제 — 이 앨범에만 속한 사진은 폐기, 다른 앨범 사본은 유지 (CHMO-271·435)', () => {
