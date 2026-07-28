@@ -46,10 +46,31 @@ interface PickedPhoto {
 type Phase = 'idle' | 'uploading' | 'registering'
 
 /**
+ * 등록(③) 실패가 진짜 실패인지 "응답만 유실"인지 서버에 되묻는다(CHMO-486).
+ * 등록이 서버에 닿았다면 사진 수가 늘었거나 분석이 시작돼 있다 — 하나라도 움직였으면 성공으로 본다.
+ * 확인 자체가 실패하면 판단을 보류하고 false를 돌려 평소 에러 경로를 타게 한다(오검출 방지).
+ */
+async function registrationLanded(eventId: string, photoCountBefore: number): Promise<boolean> {
+  try {
+    const latest = await getEvent(eventId)
+    return (
+      latest.photoCount > photoCountBefore ||
+      latest.status === 'analyzing' ||
+      latest.progress != null
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * 06-U. 사진 업로드 · node 211:1584
+ * **업로드·분류는 이벤트당 1회**(CHMO-486) — 사진이 이미 등록된 이벤트는 진입 자체를 막는다.
+ * 08에 [＋ 사진 추가]가 없고 이 화면은 빈 이벤트에서만 열리지만, 딥링크·뒤로가기로도 들어올 수
+ * 있어 화면이 직접 판정한다(서버 게이트는 CHMO-485).
  * 선택은 MAX_UPLOAD_BATCH(50장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
- * 해제 강요 제거, CHMO-397). 실 BE 상한 50 실측(2026-07-24, VALID400) — 당분간 50장
- * 유지 결정(상향 요청 CHMO-430은 철회, 200~300장 요구가 생기면 재오픈).
+ * 해제 강요 제거, CHMO-397). 실 BE 상한 50 실측(2026-07-24, VALID400) — 1회 정책과 곱해지면
+ * 이벤트당 50장이 되므로 500 상향(CHMO-482) 배포 후 MAX_UPLOAD_BATCH를 올린다.
  * 다중 선택(파일 피커) → 썸네일 그리드에서 선택 조정 → [사진 분류하기] 한 번으로
  * ① presign(POST /events/:id/photos/presign) ② presigned URL로 S3 직접 PUT
  * ③ 등록(POST /events/:id/photos — 제외 토글 함께 전송) → 이벤트 상세(분석중)로 복귀.
@@ -92,8 +113,11 @@ export function PhotoUploadPage() {
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트의 사진 추가는 상태
   // 전이 없는 증분 분석이라(CHMO-215·216) 상세 응답의 progress로만 진행을 알 수 있다(CHMO-442).
   const analysisActive = !!event && (event.status === 'analyzing' || event.progress != null)
+  // 업로드는 이벤트당 1회(CHMO-486) — 분석 중이거나 이미 사진이 등록된 이벤트면 피커를 열지
+  // 않는다. photoCount는 분석 커밋 시점에 올라가므로 분석중 판정과 함께 봐야 공백이 없다.
+  const uploadLocked = !!event && (analysisActive || event.photoCount > 0)
   // 피커 분기(스크롤 밖 하단 CTA 액션바가 있는 상태) — 이때는 main이 아니라 바가 바닥 여백을 소유한다
-  const showPicker = !!event && !analysisActive
+  const showPicker = !!event && !uploadLocked
   const selectedCount = photos.filter((p) => p.selected).length
   const overBatchLimit = selectedCount > MAX_UPLOAD_BATCH
   const busy = phase !== 'idle'
@@ -186,6 +210,9 @@ export function PhotoUploadPage() {
     const attempt = ++attemptRef.current
     // 시도 실패 시 진행 중이던 PUT을 끊는다 — 늦게 도착한 성공이 다음 시도와 뒤섞이지 않게
     const controller = new AbortController()
+    // 등록 실패 시 "서버에 실제로 등록됐는지" 판정 기준(아래 catch) — 요청 전 사진 수를 잡아 둔다
+    const photoCountBefore = event?.photoCount ?? 0
+    let registerAttempted = false
     setError(null)
     setUploadedCount(0)
     setUploadTotal(toUpload.length)
@@ -237,6 +264,7 @@ export function PhotoUploadPage() {
       const s3Keys = pending.map((p) => freshKeys.get(p.key) ?? p.s3Key)
       if (s3Keys.some((key) => !key))
         throw new ApiRequestError(500, 'UPLOAD_FAILED', '업로드가 끝나지 않은 사진이 있어요.')
+      registerAttempted = true
       const registered = await registerPhotos(eventId, {
         s3Keys: s3Keys as string[],
         excludeEyesClosed,
@@ -248,8 +276,10 @@ export function PhotoUploadPage() {
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
       )
       toast.show('🧀 사진 분류를 시작했어요')
-      // published 이벤트는 등록 직후 progress가 아직 null(AI 첫 진행률 메시지 전)이라 상세의
-      // 단발 조회가 분석 시작을 놓친다 — '분석 시작' 킥을 상세로 넘겨 폴링을 켜게 한다(CHMO-443).
+      // '분석 시작' 킥(CHMO-443) — 등록 직후엔 AI 첫 진행률 메시지 전이라 progress가 잠깐 null이고,
+      // 상세의 단발 조회가 분석 시작을 놓칠 수 있다. 1회 정책으로 업로드는 empty 이벤트에서만
+      // 일어나 status만으로 판정될 여지가 생겼지만, 등록 응답 시점에 analyzing이 보장되는지는
+      // 실 BE로 확인 전이라 킥을 유지한다(확인 후 정리 — CHMO-486 범위).
       // expected는 완료 판정용: 사진은 분석 커밋 시점에야 photoCount에 반영된다(실서버 실측).
       navigate(eventPath, {
         state: {
@@ -268,6 +298,16 @@ export function PhotoUploadPage() {
         navigate('/login', { replace: true })
         return
       }
+      // 등록 요청은 서버에 닿았는데 응답만 유실됐을 수 있다(타임아웃·통신 끊김·앱 전환).
+      // 업로드가 이벤트당 1회라 재시도는 서버가 거부하고(CHMO-485) 화면이 "실패"로 굳는다 —
+      // 실제로 등록·분류가 시작됐으면 에러 대신 상세로 인계한다(CHMO-486).
+      if (registerAttempted && (await registrationLanded(eventId, photoCountBefore))) {
+        if (!alive.current) return
+        toast.show('🧀 사진 분류를 시작했어요')
+        navigate(eventPath)
+        return
+      }
+      if (!alive.current) return
       setError(toErrorMessage(err))
       setPhase('idle')
     }
@@ -292,17 +332,29 @@ export function PhotoUploadPage() {
             notFoundTo={`/groups/${groupId}`}
             notFoundLabel="모임 상세로"
           />
-        ) : analysisActive ? (
-          // 분석 중에는 업로드 불가 — 진입 자체를 안내로 막는다(published 증분 분석 포함)
+        ) : uploadLocked ? (
+          // 업로드 불가 — 진입 자체를 안내로 막는다. 분류가 끝나길 기다리면 되는 상태(분석중)와
+          // 이 이벤트에선 더 올릴 수 없는 상태(1회 소진)는 다음 할 일이 달라 문구를 가른다
           <>
             <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-8 py-16 text-center">
               <span aria-hidden className="text-4xl">
-                🤖
+                {analysisActive ? '🤖' : '🧀'}
               </span>
-              <p className="mt-3 text-sm text-muted">
-                지금은 사진을 분류하고 있어요.
-                <br />
-                분류가 끝나면 사진을 추가할 수 있어요.
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                {analysisActive ? (
+                  <>
+                    지금은 사진을 분류하고 있어요.
+                    <br />
+                    분류가 끝나면 앨범이 열려요.
+                  </>
+                ) : (
+                  <>
+                    이 이벤트에는 사진을 이미 올렸어요.
+                    <br />
+                    사진 업로드는 이벤트당 한 번이라,
+                    <br />더 올릴 사진은 새 이벤트를 만들어 주세요.
+                  </>
+                )}
               </p>
             </div>
             <div className="mt-auto pt-6">
@@ -328,12 +380,12 @@ export function PhotoUploadPage() {
                 {/* 상한 사전 고지 — 선택 전부터 상시 보인다(CHMO-397) */}
                 <span className="text-xs text-muted">한 번에 최대 {MAX_UPLOAD_BATCH}장</span>
               </p>
-              {/* 캡으로 해제 상태 사진이 남았을 때만 — 이어 올릴 동선 안내(등록=분석 시작이라
-                  분할 업로드 불가, 상한은 50장 유지 결정 — CHMO-430 철회) */}
+              {/* 캡으로 해제 상태 사진이 남았을 때만. 업로드는 이벤트당 1회라 "다음에 이어
+                  올리세요"는 거짓 안내가 된다(CHMO-486) — 지금 못 올린다는 사실을 그대로 알린다 */}
               {selectedCount >= MAX_UPLOAD_BATCH && photos.some((p) => !p.selected) && (
-                <p className="mt-2 text-xs leading-relaxed text-muted">
-                  선택되지 않은 사진은 이번에 올라가지 않아요 — 분류가 끝난 뒤 다시 들어와
-                  이어서 올릴 수 있어요
+                <p className="mt-2 text-xs leading-relaxed text-warn">
+                  선택되지 않은 사진은 올라가지 않아요 — 업로드는 이벤트당 한 번이라 지금 올릴
+                  사진을 모두 골라 주세요
                 </p>
               )}
 
