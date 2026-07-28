@@ -24,6 +24,7 @@ import {
   startAnalysis,
   todayIsoDate,
   transitionEvent,
+  unreviewedGatePhotoCount,
   uploadKeyPrefixOf,
   type DbEvent,
   type DbPhoto,
@@ -316,10 +317,10 @@ export const eventHandlers = [
     return ok(toReviewSummaryResponse(event))
   }),
 
-  // POST /events/:id/publish — 발행 액션(재공개 게이트 CHMO-324) · 화면 14
-  // 발행 = 전 사진 검토 완료된 인물·공통 앨범의 사진을 published로 전환. **published 재호출도
-  // 그 시점 발행 가능분을 발행한다**(재공개 — CHMO-265). 미검토 존재 시 ?force=true 없으면 409 —
-  // force는 경고 우회일 뿐, 미검토 사진은 발행되지 않는다(앨범 단위 게이트).
+  // POST /events/:id/publish — 발행 액션 · 화면 14
+  // 발행 = 전 사진 검토 완료된 인물·공통 앨범의 사진을 published로 전환.
+  // **전량 검토 완료가 하드 게이트다**(CHMO-488 — 짝 티켓 BE CHMO-487): 인물·공통에 미검토가
+  // 1장이라도 남으면 항상 409고, `?force=true` 우회는 폐기됐다(쿼리가 와도 무시).
   http.post(api('/events/:id/publish'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
@@ -327,21 +328,20 @@ export const eventHandlers = [
     if (event instanceof Response) return event
     settleAnalysis(event.id)
 
-    // BE PUBLISH400 — 공개 불가 상태(EMPTY/ANALYZING). published는 재발행이라 허용(CHMO-324)
+    // BE PUBLISH400 — 공개 불가 상태(EMPTY/ANALYZING). published 재호출은 멱등 허용(동시 작업 대비)
     if (event.status !== 'review' && event.status !== 'ready' && event.status !== 'published')
       return errorResponse(400, 'PUBLISH400', '공개할 수 없는 상태의 이벤트입니다.')
     const photos = photosOfEvent(event.id)
     if (photos.length === 0) return errorResponse(400, 'PUBLISH400', '공개할 사진이 없습니다.')
 
-    const force = new URL(request.url).searchParams.get('force') === 'true'
-    const unreviewedCount = photos.filter((p) => !p.reviewed).length
-    // BE PUBLISH409(2026-07-22 실서버 채집 — CHMO-265) — errors.ts가
-    // HAS_UNREVIEWED_PHOTOS로 정규화해 14가 경고 다이얼로그·force 재시도를 분기한다
-    if (unreviewedCount > 0 && !force)
+    // BE PUBLISH409(2026-07-22 실서버 채집) — errors.ts가 HAS_UNREVIEWED_PHOTOS로 정규화한다.
+    // 판정 범위는 인물·공통뿐 — 특수 앨범은 검토 UI가 없어(CHMO-357) 넣으면 영영 공개 불가가 된다
+    const unreviewedCount = unreviewedGatePhotoCount(event.id)
+    if (unreviewedCount > 0)
       return errorResponse(
         409,
         'PUBLISH409',
-        `미검토 사진 ${unreviewedCount}장이 있습니다. 그대로 공개하면 해당 사진은 학부모에게 보이지 않습니다.`,
+        `미검토 사진 ${unreviewedCount}장이 있습니다. 모든 사진을 검토해야 공개할 수 있습니다.`,
       )
 
     const publishedPhotoCount = publishEventPhotos(event.id)

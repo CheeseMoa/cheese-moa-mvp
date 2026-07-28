@@ -27,6 +27,7 @@ import {
   pendingPublishCountOf,
   publishEventPhotos,
   unlinkPhotoFromAlbum,
+  unreviewedGatePhotoCount,
 } from './db'
 import { createFixtures } from './fixtures'
 import {
@@ -254,8 +255,9 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const detail = toEvent(toEventDetail(event))
     expect(detail).toMatchObject({ id: 2, groupId: 1, status: 'published' })
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
-    // 발행 대기(CHMO-324) — 상세 전용. 시드: 공개 후 추가·검토된 4장(217~220)
-    expect(detail.pendingPublishCount).toBe(4)
+    // 발행 대기(구 CHMO-324) — 상세 전용 필드는 남지만 값은 항상 0이다(CHMO-488):
+    // 전량 검토라야 공개되고 공개 후 사진 추가도 없어 대기가 생길 경로가 없다
+    expect(detail.pendingPublishCount).toBe(0)
     expect(summary.pendingPublishCount).toBeUndefined()
   })
 
@@ -403,37 +405,35 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(viewerPhoto.thumbnailUrl).toContain('picsum')
   })
 
-  it('재공개 흐름 — 공개 후 사진 추가는 검토 완료를 거쳐야 발행 대기가 된다 (CHMO-265)', () => {
-    // 공개된 봄 소풍(2)의 공통 앨범(12)에 새 사진 2장 추가 — 등록 직후 상태(미검토·미발행)
-    const base = photosOfAlbum(12)[0]
-    db.photos.push(
-      { ...base, id: 9001, albumIds: [12], reviewed: false, published: false },
-      { ...base, id: 9002, albumIds: [12], reviewed: false, published: false },
+  it('공개 게이트 — 미검토는 인물·공통만 세고 특수 앨범은 제외한다 (CHMO-488)', () => {
+    // 검수 중 운동회(1): 앨범 1만 검토 완료 → 나머지 인물·공통에 미검토가 남아 게이트에 걸린다
+    expect(unreviewedGatePhotoCount(1)).toBeGreaterThan(0)
+
+    // 인물·공통 사진을 전부 검토 완료 → 게이트 해제. 특수 앨범(분류 애매·품질 제외)에는
+    // 미검토가 그대로 남아 있어야 한다 — 검토 UI가 없는 앨범을 세면 영영 공개할 수 없다(CHMO-357)
+    const gateAlbums = db.albums.filter(
+      (a) => a.eventId === 1 && (a.type === 'person' || a.type === 'common'),
     )
+    for (const album of gateAlbums) {
+      for (const photo of photosOfAlbum(album.id)) photo.reviewed = true
+    }
+    expect(unreviewedGatePhotoCount(1)).toBe(0)
 
-    // 검토 전: 미검토가 생긴 앨범은 게이트에 잠겨 대기에 안 잡힌다 — 시드의 김민준 앨범 4장만
-    expect(pendingPublishCountOf(2)).toBe(4)
-
-    // 앨범 [검토 완료](일괄 — PATCH /albums/:id 핸들러와 같은 변이) → 새 2장이 대기로 합류
-    for (const photo of photosOfAlbum(12)) photo.reviewed = true
-    expect(pendingPublishCountOf(2)).toBe(6)
-
-    // [공개하기] 재호출 → 대기 전량 발행·소진(14 버튼이 다시 잠기는 상태)
-    expect(publishEventPhotos(2)).toBe(6)
-    expect(pendingPublishCountOf(2)).toBe(0)
+    const specialAlbum = db.albums.find(
+      (a) => a.eventId === 1 && a.type !== 'person' && a.type !== 'common',
+    )!
+    expect(photosOfAlbum(specialAlbum.id).some((p) => !p.reviewed)).toBe(true)
   })
 
-  it('재공개 게이트 — 발행 액션으로 발행 대기가 0이 되고 뷰어에 노출된다 (CHMO-324·265)', () => {
-    // 발행 전: 상세엔 발행 대기 4장, 뷰어는 16장(재공개 버튼이 열리는 상태)
-    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(4)
+  it('공개된 이벤트 — 발행 대기 없이 뷰어에 전량 노출된다 (CHMO-488)', () => {
+    // 봄 소풍(2)은 전 사진 검토 + 발행 완료 시드 — 새 정책에선 published면 대기가 0이다
+    // (전량 검토라야 공개되고 공개 후 사진 추가도 없다 — CHMO-486). 재공개 버튼이 열릴 여지가 없다
+    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(0)
+    expect(pendingPublishCountOf(2)).toBe(0)
     expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(16)
 
-    // [공개하기] 재호출 — 전 사진 검토 완료된 인물·공통 앨범(김민준)의 대기분이 발행된다
-    expect(publishEventPhotos(2)).toBe(4)
-
-    // 발행 후: 대기 0(버튼 다시 잠김), 뷰어에 20장 노출
-    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(0)
-    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(20)
+    // 발행 재호출도 새로 나갈 사진이 없다(멱등)
+    expect(publishEventPhotos(2)).toBe(0)
   })
 
   it('검수 중 이벤트 — 앨범 1만 검토 완료(부분 검수 상태)', () => {

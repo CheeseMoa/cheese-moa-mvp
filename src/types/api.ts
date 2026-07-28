@@ -165,9 +165,11 @@ export interface EventItem {
    */
   progress?: AnalysisProgress | null
   /**
-   * 발행 대기 수(재공개 게이트 CHMO-324) — 검토됐지만 아직 발행되지 않은 사진.
-   * **상세 응답에만** 있고 목록엔 없다(05 카드 배지가 불가한 이유 — 목록 필드는 BE 후속).
-   * published 이벤트에서 0보다 크면 [공개하기] 재진입(08 배지·14 버튼)의 근거가 된다(CHMO-265).
+   * 발행 대기 수(구 재공개 게이트 CHMO-324·265) — 검토됐지만 아직 발행되지 않은 사진.
+   * **상세 응답에만** 있고 목록엔 없다.
+   * ⚠ **화면은 더 이상 읽지 않는다**(CHMO-488): 전량 검토 완료가 공개의 하드 게이트가 되고
+   * 이벤트당 업로드도 1회(CHMO-486)라 공개 후에 발행 대기가 생길 경로가 사라졌다.
+   * BE(CHMO-487)가 필드를 걷어낼 때까지는 실 BE 응답 그대로 통과시킨다.
    */
   pendingPublishCount?: number
 }
@@ -285,8 +287,13 @@ export interface RegisterPhotosResult {
 
 // ── 공개 요약(14) ────────────────────────────────────────────
 export interface ReviewSummary {
+  /**
+   * 이벤트 **전체** 사진 수(BE totalPhotos) — 공개될 장수가 아니다(특수 앨범 사진 포함).
+   * 14는 이걸 '전체 사진'으로 라벨해 범위를 드러낸다. 정확한 발행 장수는 사진이 앨범과 다대다라
+   * 앨범별 photoCount 합으로 셀 수 없다(겹친 사진 중복) — BE `publishablePhotoCount`(CHMO-505) 배포 후 전환.
+   * `albumCount`(BE totalAlbums)는 걷어냈다 — 14가 '공개할 앨범'(previewAlbums)만 보여주기 때문(CHMO-488).
+   */
   photoCount: number
-  albumCount: number
   /**
    * 검토 진척은 앨범 단위로 보여준다(CHMO-357) — 검토 행위가 앨범 일괄뿐이라
    * 사진 수 정산은 선생님의 머릿속 진척("앨범 2/3 끝냄")과 어긋난다(피드백 #17).
@@ -295,9 +302,16 @@ export interface ReviewSummary {
   reviewedAlbumCount: number
   reviewableAlbumCount: number
   /**
+   * 공개를 막는 앨범(파생값 — CHMO-488): 인물·공통 중 미검토 사진이 남은 것.
+   * 전량 검토 완료가 공개의 하드 게이트라 이 배열이 비어야 [공개하기]가 열린다.
+   * 14가 앨범명·남은 장수로 "무엇을 더 검토해야 하는지"를 안내하는 데 쓴다.
+   */
+  unreviewedAlbums: Album[]
+  /**
    * 학부모 뷰 프리뷰용 앨범(파생값 — BE albums[]에 뷰어 노출 규칙 적용).
-   * person/common 앨범 중 검토 완료 사진이 있는 것만 — 공개 시 학부모 목록(15)에 보일 앨범과 동일.
-   * 14 미리보기가 08과 같은 앨범 카드(앨범명·검토 테두리)로 그린다(CHMO-346).
+   * **전 사진 검토 완료된** person/common 앨범 = 발행 대상과 같은 집합(CHMO-488 — `reviewedAlbumCount`가
+   * 세는 것과 동일하다). 검수하다 만 앨범은 검토분까지 통째로 대기해 공개해도 나가지 않으므로 제외한다.
+   * 14 미리보기가 08과 같은 앨범 카드로 그린다(CHMO-346).
    */
   previewAlbums: Album[]
 }
