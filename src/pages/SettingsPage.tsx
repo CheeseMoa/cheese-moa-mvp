@@ -127,6 +127,16 @@ export function SettingsPage() {
             ) : null}
           </form>
         )}
+        {/* 온보딩은 계정당 1회만 뜨므로 다시 볼 상시 진입점이 필요하다(CHMO-481) */}
+        <Link
+          to="/onboarding?replay=1"
+          className="mt-5 flex items-center justify-between rounded-2xl border border-border bg-white px-4 py-3.5 text-[15px] text-text shadow-card active:bg-surface"
+        >
+          사용 방법 다시 보기
+          <span aria-hidden className="text-muted">
+            ›
+          </span>
+        </Link>
         {/* 약관·정책 — 프로필 로딩/실패와 무관하게 항상 접근 가능 (CHMO-478) */}
         <nav
           aria-label="약관·정책"

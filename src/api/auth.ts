@@ -1,7 +1,7 @@
 /**
  * 인증·프로필 엔드포인트 (CHMO-192·193) — 01·01-1·01-2 인증 화면, 설정 화면.
  * BE AuthResponse는 user 객체 없이 userId·nickname·accessToken·refreshToken 평면 필드로 온다 —
- * 화면이 쓰는 두 토큰만 남긴다. accessToken 401 자동 재발급(refresh)은 transport 인프라라
+ * 두 토큰과 userId만 남긴다(userId는 온보딩 1회 판정용 계정 식별자 — CHMO-481). accessToken 401 자동 재발급(refresh)은 transport 인프라라
  * client.ts가 소유한다(화면이 호출하지 않는 유일한 auth 엔드포인트).
  */
 import { apiFetch } from './client'
@@ -14,8 +14,14 @@ export interface Credentials {
 }
 
 interface RawAuthResponse {
+  userId: number
   accessToken: string
   refreshToken: string
+}
+
+/** 세 인증 엔드포인트가 같은 평면 응답을 준다 — 남길 필드 선택을 한곳에 둔다 */
+function toAuthResponse(raw: RawAuthResponse): AuthResponse {
+  return { userId: raw.userId, accessToken: raw.accessToken, refreshToken: raw.refreshToken }
 }
 
 export type SocialProvider = 'kakao' | 'google' | 'naver' | 'apple'
@@ -45,7 +51,7 @@ export async function exchangeSocialCode(code: string): Promise<AuthResponse> {
     auth: 'none',
     body: { code },
   })
-  return { accessToken: raw.accessToken, refreshToken: raw.refreshToken }
+  return toAuthResponse(raw)
 }
 
 /** POST /auth/login — 닉네임+PIN 로그인 */
@@ -55,7 +61,7 @@ export async function login(credentials: Credentials): Promise<AuthResponse> {
     auth: 'none',
     body: credentials,
   })
-  return { accessToken: raw.accessToken, refreshToken: raw.refreshToken }
+  return toAuthResponse(raw)
 }
 
 /** POST /auth/signup — 계정 생성(성공 시 바로 로그인 상태) */
@@ -65,7 +71,7 @@ export async function signup(credentials: Credentials): Promise<AuthResponse> {
     auth: 'none',
     body: credentials,
   })
-  return { accessToken: raw.accessToken, refreshToken: raw.refreshToken }
+  return toAuthResponse(raw)
 }
 
 /**

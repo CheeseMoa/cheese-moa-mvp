@@ -245,10 +245,13 @@ export interface Photo {
 // ── 인증 응답 ────────────────────────────────────────────────
 /**
  * BE AuthResponse엔 user 객체가 없다(userId·nickname·accessToken·refreshToken 평면 필드).
- * 화면이 쓰는 건 두 토큰뿐이라 FE 계약도 이것만 둔다.
+ * 두 토큰에 더해 `userId`만 남긴다 — 온보딩 1회 노출 판정(CHMO-481)이 "누구의 기기인가"를
+ * 알아야 하는데, 로그인 응답 말고는 계정 식별자를 알 수 있는 지점이 `GET /me`뿐이라
+ * (온보딩은 서버 호출 없는 화면) 여기서 받아 저장한다. nickname은 쓰는 화면이 없어 계속 버린다.
  * accessToken(만료 1시간) 401 시 refreshToken으로 자동 재발급한다(CHMO-193, client.ts).
  */
 export interface AuthResponse {
+  userId: ID
   accessToken: string
   refreshToken: string
 }

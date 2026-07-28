@@ -734,9 +734,11 @@ describe('학부모 뷰어', () => {
 })
 
 describe('인증 · 프로필', () => {
-  it('BE AuthResponse의 평면 필드에서 두 토큰만 남긴다', async () => {
+  // nickname은 여전히 버린다 — 쓰는 화면이 없다. userId는 온보딩 1회 판정용(CHMO-481)
+  it('BE AuthResponse의 평면 필드에서 userId와 두 토큰을 남긴다', async () => {
     serve(envelope(BE_AUTH))
     await expect(login({ nickname: 'FE연동테스트', pin: '0709' })).resolves.toEqual({
+      userId: 4,
       accessToken: '<access-jwt>',
       refreshToken: '<refresh-token>',
     })

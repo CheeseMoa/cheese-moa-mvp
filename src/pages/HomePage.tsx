@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { JoinGroupModal } from '../components/JoinGroupModal'
 import {
@@ -28,7 +28,11 @@ export function HomePage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { data, error, loading, refetch } = useApi('groups', listGroups)
-  const [joinOpen, setJoinOpen] = useState(false)
+  const location = useLocation()
+  // 온보딩 마지막 장의 '초대 코드로 참여하기'가 넘기는 신호(CHMO-481) — 홈에 도착하자마자 02-1을 연다
+  const [joinOpen, setJoinOpen] = useState(
+    Boolean((location.state as { openJoin?: boolean } | null)?.openJoin),
+  )
   const groups = data ?? []
 
   return (
