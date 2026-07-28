@@ -63,7 +63,10 @@ export const router = createBrowserRouter([
     element: <CreatorGuard />,
     children: [
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
-      { path: '/onboarding', element: <OnboardingPage /> }, // 00 첫 사용 온보딩(CHMO-481) — 로그인 후 1회
+      // 00 첫 사용 온보딩 슬라이드(CHMO-481) — **현재 노출하지 않는다**(CHMO-504, 2026-07-28):
+      // 첫 로그인 안내는 홈 위 '치즈모아 둘러보기'(00-T)가 맡고 슬라이드로 보내는 진입점은 없앴다.
+      // 화면·라우트는 되살릴 수 있게 남겨 둔다(직접 URL로만 열린다).
+      { path: '/onboarding', element: <OnboardingPage /> },
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
       { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함
