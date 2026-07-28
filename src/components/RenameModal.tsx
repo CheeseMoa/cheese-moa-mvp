@@ -11,6 +11,12 @@ interface RenameModalProps {
   placeholder?: string
   /** 서버의 현재 이름 — 열릴 때 입력 초기값 */
   initialName: string
+  /** 입력 상한(글자 수) — 주면 초과 입력 자체를 막는다(BE 20자 거부를 화면에서 선차단) */
+  maxLength?: number
+  /** 제출 버튼 라벨 — 기본은 이름 수정용 '저장'. 생성 흐름(08 앨범 만들기)은 '만들기'로 바꾼다 */
+  submitLabel?: string
+  /** 제출 중 버튼 라벨 — 기본 '저장 중…' */
+  submittingLabel?: string
   /** false면 입력을 비워서 열고 현재 이름은 placeholder(회색)로만 보여준다 — 이름을 통째로
       새로 입력하는 인물 앨범용(지우는 동작 제거, CHMO-429). 부분 편집(이벤트명 등)은 기본 프리필 */
   prefill?: boolean
@@ -29,7 +35,9 @@ interface RenameModalProps {
 }
 
 /**
- * 이름 수정 모달 공용 — 이벤트명(08)·인물 앨범명(09, 이름전파)에서 재사용.
+ * 이름 입력 모달 공용 — 이벤트명(08)·인물 앨범명(09, 이름전파) 수정과 빈 앨범 만들기(08,
+ * CHMO-471)에서 재사용한다. 생성 흐름은 `submitLabel`만 바꿔 쓴다 — 이름 하나를 받아
+ * 서버에 보내고 성공하면 목록을 갱신하는 뼈대가 수정과 같아 화면을 새로 만들지 않는다.
  * 저장 중 화면을 떠났을 때의 늦은 응답, 열린 입력을 덮는 뒤늦은 refetch, 401(토큰 무효)
  * 복귀를 모두 여기서 처리한다. 실제 PATCH는 호출부가 `submit`으로 주입한다.
  * 위험 동작 슬롯(dangerLabel)을 주면 설정 모달 꼴이 된다(⚙ 이벤트 설정 — CHMO-278).
@@ -41,6 +49,9 @@ export function RenameModal({
   label,
   placeholder,
   initialName,
+  maxLength,
+  submitLabel = '저장',
+  submittingLabel = '저장 중…',
   prefill = true,
   submit,
   successMessage,
@@ -107,6 +118,7 @@ export function RenameModal({
           label={label}
           placeholder={placeholder}
           autoComplete="off"
+          maxLength={maxLength}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -117,7 +129,7 @@ export function RenameModal({
           </p>
         ) : null}
         <Button type="submit" fullWidth disabled={!canSubmit} className="mt-1">
-          {submitting ? '저장 중…' : '저장'}
+          {submitting ? submittingLabel : submitLabel}
         </Button>
       </form>
       {/* 위험 동작이지만 확인 다이얼로그(warn 버튼)가 한 번 더 뜨므로 여기선 secondary로 톤을 낮춘다 */}

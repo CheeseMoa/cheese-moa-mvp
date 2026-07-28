@@ -60,7 +60,9 @@ export async function renamePersonAlbum(albumId: ID | string, name: string): Pro
 /**
  * GET /albums/:id/download — 멤버용 앨범 ZIP URL 발급(CHMO-338, 미검토 포함 전체).
  * person/common만 대상 — 특수 앨범(uncertain·eyes_closed·blurry)은 BE가 ALBUM404를
- * 준다(2026-07-20 실서버 채집). 호출부가 특수 앨범에서 진입로를 숨긴다.
+ * 준다(2026-07-20 실서버 채집).
+ * ⚠ 화면은 더 이상 호출하지 않는다(CHMO-473 — ZIP 폐지, 개별 요청 전환). BE 엔드포인트
+ * 존치라 계약 테스트 고정용으로만 남긴다.
  */
 export function getAlbumZip(albumId: ID | string): Promise<AlbumDownloadResponse> {
   return apiFetch<AlbumDownloadResponse>(`/albums/${albumId}/download`)
@@ -76,13 +78,23 @@ interface RawCreateAlbumResponse {
 }
 
 /**
- * POST /events/:id/albums — 선택 사진으로 새 인물 앨범 생성(CHMO-416).
- * 생성이 곧 이동이다: 서버가 새 PERSON 앨범을 만들고 선택 사진을 소스 앨범에서 옮긴다
- * (별도 /photos/move 호출 불필요). name은 필수 1~20자(BE blank 거부 — 이름 없는 생성은 없다).
+ * 새 인물 앨범 입력 — `sourceAlbumId`·`photoIds`는 **짝**이다(BE가 한쪽만 오면 VALID400).
+ * 짝을 주면 생성=이동(09-1), 생략하면 사진 0장 빈 앨범(08 — CHMO-456).
+ */
+export type CreatePersonAlbumInput =
+  | { name: string; sourceAlbumId?: undefined; photoIds?: undefined }
+  | { name: string; sourceAlbumId: ID; photoIds: ID[] }
+
+/**
+ * POST /events/:id/albums — 새 인물 앨범 생성(CHMO-416 + 빈 앨범 CHMO-456).
+ * - 짝(sourceAlbumId+photoIds)을 주면 **생성이 곧 이동**이다: 서버가 새 PERSON 앨범을 만들고
+ *   선택 사진을 소스 앨범에서 옮긴다(별도 /photos/move 호출 불필요) — 09-1 이동 시트.
+ * - 짝을 생략하면 **사진 0장 빈 앨범**이 생긴다(CHMO-418로 빈 앨범이 1급 시민) — 08 그리드.
+ * name은 어느 쪽이든 필수 1~20자(BE @NotBlank — 공백만도 거부).
  */
 export function createPersonAlbum(
   eventId: ID | string,
-  input: { name: string; sourceAlbumId: ID; photoIds: ID[] },
+  input: CreatePersonAlbumInput,
 ): Promise<{ albumId: ID; photoCount: number }> {
   return apiFetch<RawCreateAlbumResponse>(`/events/${eventId}/albums`, {
     method: 'POST',

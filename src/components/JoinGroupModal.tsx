@@ -22,7 +22,11 @@ interface JoinGroupModalProps {
  *
  * 학부모 전환(CHMO-444)으로 참여는 즉시 합류가 아니라 **신청(PENDING) 생성**이다 — 성공 시
  * 모임 상세가 아니라 홈으로 간다(승인 전엔 모임 접근 불가). 단 구계약 실 BE(즉시 합류)가
- * 아직 배포돼 있어, 응답 status가 active면 기존 UX(모임 상세 이동)를 유지한다(공존 구간).
+ * 아직 배포돼 있어, 응답 status가 active면 토스트 문구만 "참여했어요"로 갈린다(공존 구간).
+ *
+ * 이 모달은 **선생님 코드 전용 경로**(학부모 코드는 02-2로 인계)인데, 선생님 합류도
+ * 승인제로 통일되면서(CHMO-475) 문구를 "참여"에서 "참여 신청"으로 바꿨다 — 비밀번호를
+ * 맞게 넣어도 바로 못 들어간다는 사실을 누르기 전에 알려야 한다.
  * 학부모 코드를 마커 없이 넣으면(수동 입력 등) 서버 400(자녀 이름 필요)으로 감지해
  * 02-2 3단계(ParentJoinPage)로 인계한다(CHMO-445).
  */
@@ -96,9 +100,13 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
       onClose={() => {
         if (!submitting) onClose()
       }}
-      title="모임 참여"
+      title="모임 참여 신청"
     >
-      <p className="mt-1.5 text-[13px] text-muted">초대받은 모임의 비밀번호를 입력하세요</p>
+      <p className="mt-1.5 text-[13px] text-muted">
+        초대받은 모임의 비밀번호를 입력하세요.
+        <br />
+        모임의 선생님이 승인하면 이용할 수 있어요.
+      </p>
       <form onSubmit={handleSubmit} noValidate className="mt-3.5 flex flex-col gap-3.5">
         {fixedJoinKey === undefined ? (
           <TextField
@@ -127,7 +135,7 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
           </p>
         ) : null}
         <Button type="submit" fullWidth disabled={!canSubmit} className="mt-1">
-          {submitting ? '참여 중…' : '참여'}
+          {submitting ? '신청 중…' : '참여 신청'}
         </Button>
       </form>
     </Modal>

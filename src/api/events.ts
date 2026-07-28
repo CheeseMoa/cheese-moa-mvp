@@ -79,12 +79,16 @@ interface RawReviewSummary {
 
 /**
  * GET /events/:id/review-summary — 공개 요약(14).
- * 미리보기는 albums[]에서 파생한다 — 뷰어 노출 규칙(person/common)에
- * **검토 완료 사진이 있는** 앨범만(공개 시 학부모 목록(15)에 보일 앨범과 동일, CHMO-346).
- * 전부 미검토면 빈 미리보기가 정직한 응답이다(미검토 사진은 뷰어 비노출 —
- * 미검토 앨범을 "보일 앨범"으로 담으면 14의 빈 상태 경고가 사라진다).
- * 검토 진척도 albums[]에서 앨범 단위로 파생한다(CHMO-357) — 인물·공통(사진 보유)만 세고,
- * 완료 판정은 08 앨범 카드 테두리 규칙(미검토 사진 0)과 동일해 통계와 카드가 항상 일치한다.
+ * BE는 이벤트의 **앨범 전체**(특수 앨범 포함)를 주고, 무엇을 어떻게 보여줄지는 전부 FE 파생이다.
+ * 검토 진척은 앨범 단위로 센다(CHMO-357) — 인물·공통(사진 보유)만 세고, 완료 판정은
+ * 08 앨범 카드 테두리 규칙(미검토 사진 0)과 동일해 통계와 카드가 항상 일치한다.
+ * 같은 집합을 세 갈래로 나눈다: 완료분 = `previewAlbums`, 잔여분 = `unreviewedAlbums`(공개를 막는 앨범).
+ *
+ * 미리보기 = **전 사진 검토 완료된** 인물·공통 앨범(CHMO-488) — 발행 대상과 정확히 같은 집합이다
+ * (`reviewedAlbumCount`가 세는 것과 동일). 종전엔 '검토 완료 사진이 1장이라도 있는' 앨범까지
+ * 담았는데(CHMO-346), 발행은 전 사진 검토된 앨범만 내보내므로 검수하다 만 앨범이
+ * "학부모가 볼 화면"에 섞여 보였다 — 지금 공개해도 안 나가는 앨범이다.
+ * 전부 미검토면 빈 미리보기가 정직한 응답이다.
  */
 export function getReviewSummary(
   eventId: ID | string,
@@ -93,26 +97,25 @@ export function getReviewSummary(
   return apiFetch<RawReviewSummary>(`/events/${eventId}/review-summary`, { signal }).then((raw) => {
     const albums = raw.albums.map(toAlbum)
     const reviewable = albums.filter((a) => a.visibleToViewer && a.photoCount > 0)
+    // 검토를 마친 앨범 = 발행 대상 = 미리보기 / 나머지 = 공개를 막는 앨범(서버 409 판정과 같은 범위)
+    const reviewed = reviewable.filter((a) => a.unreviewedPhotoCount === 0)
     return {
       photoCount: raw.totalPhotos,
-      albumCount: raw.totalAlbums,
-      reviewedAlbumCount: reviewable.filter((a) => a.unreviewedPhotoCount === 0).length,
+      reviewedAlbumCount: reviewed.length,
       reviewableAlbumCount: reviewable.length,
-      previewAlbums: albums.filter(
-        (a) => a.visibleToViewer && a.photoCount - (a.unreviewedPhotoCount ?? 0) > 0,
-      ),
+      unreviewedAlbums: reviewable.filter((a) => a.unreviewedPhotoCount !== 0),
+      previewAlbums: reviewed,
     }
   })
 }
 
-/** POST /events/:id/publish — 이벤트 공개. force는 미검토 사진이 있어도 공개(14 확인 다이얼로그 후) */
-export async function publishEvent(
-  eventId: ID | string,
-  opts: { force?: boolean } = {},
-): Promise<void> {
-  await apiFetch<unknown>(`/events/${eventId}/publish${opts.force ? '?force=true' : ''}`, {
-    method: 'POST',
-  })
+/**
+ * POST /events/:id/publish — 이벤트 공개.
+ * `?force=true`는 폐기됐다(CHMO-488) — 전량 검토 완료가 공개의 하드 게이트라 미검토가 남으면
+ * 서버가 항상 409(PUBLISH409)로 막고, 14는 애초에 버튼을 잠가 그 상태로 호출하지 않는다.
+ */
+export async function publishEvent(eventId: ID | string): Promise<void> {
+  await apiFetch<unknown>(`/events/${eventId}/publish`, { method: 'POST' })
 }
 
 // ── 학부모 사진 조회 (학부모 전환 §5 — ACTIVE PARENT 전용) ───
@@ -131,7 +134,8 @@ export function getParentEventPhotos(
   )
 }
 
-/** GET /events/:id/parent-photos/download — 같은 범위의 이벤트 단위 zip(기존 앨범 zip 응답 재사용) */
+/** GET /events/:id/parent-photos/download — 같은 범위의 이벤트 단위 zip(기존 앨범 zip 응답
+ * 재사용). ⚠ 화면은 더 이상 호출하지 않는다(CHMO-473 — ZIP 폐지) — 계약 테스트 고정용 */
 export function getParentPhotosZip(eventId: ID | string): Promise<AlbumDownloadResponse> {
   return apiFetch<AlbumDownloadResponse>(`/events/${eventId}/parent-photos/download`)
 }

@@ -14,8 +14,15 @@ describe('toFeErrorCode', () => {
     expect(toFeErrorCode(BE_ERRORS.SPACE404.payload.code)).toBe('NOT_FOUND')
     expect(toFeErrorCode('MOMENT404')).toBe('NOT_FOUND')
     expect(toFeErrorCode(BE_ERRORS.ALBUM404.payload.code)).toBe('NOT_FOUND')
-    // 14의 force 재시도 분기 근거(CHMO-324·265) — 2026-07-22 실서버 채집
+    // 공개 하드 게이트의 서버 응답(CHMO-488 — force 우회 폐지) · 2026-07-22 실서버 채집
     expect(toFeErrorCode(BE_ERRORS.PUBLISH409.payload.code)).toBe('HAS_UNREVIEWED_PHOTOS')
+  })
+
+  it('같은 403이라도 승인 대기와 role 부족을 구분한다 (CHMO-475 — 선생님도 승인제)', () => {
+    // 신청은 했지만 아직 승인 전 = 기다리면 열린다 → 화면은 홈 복귀로 받는다
+    expect(toFeErrorCode('SPACE403')).toBe('PENDING_APPROVAL')
+    // ACTIVE 멤버지만 역할이 다르다 = 기다려도 안 열린다(학부모가 제작자 API 호출)
+    expect(toFeErrorCode('ROLE403')).toBe('FORBIDDEN_ROLE')
   })
 
   it('소셜 로그인 실패는 셋을 구분한다 — 다른 방법 안내·재시도·잠시 후 재시도 (CHMO-359)', () => {

@@ -338,6 +338,19 @@ export const BE_MOVE_SUGGESTION_UNNAMED_PERSON = {
   thumbnailUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/thumbs/106.jpg',
 }
 
+/**
+ * POST /events/:id/albums — CreateAlbumResponse, **빈 앨범**(2026-07-27 실서버 채집, CHMO-456).
+ * `{"name":"..."}`만 보낸 응답 원문(COMMON201): 썸네일 필드가 아예 없는 최소형이고 photoCount는 0.
+ * 짝(sourceAlbumId+photoIds)을 준 생성=이동도 같은 형태로 photoCount만 옮긴 장수가 된다.
+ */
+export const BE_CREATE_ALBUM_EMPTY = {
+  albumId: 832,
+  type: 'PERSON',
+  personId: 499,
+  personName: '프로브빈앨범',
+  photoCount: 0,
+}
+
 /** DELETE /photos — DeletePhotosResponse (스키마 기준) */
 export const BE_DELETE_PHOTOS = { detachedCount: 2, deletedPhotoCount: 1 }
 

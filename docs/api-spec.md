@@ -242,45 +242,51 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 
 ### 3.4 업로드 / 분석
 
-> **업로드 = presigned URL 2-step.** 파일 바이트는 서버/Lambda를 거치지 않고 **FE→S3로 직접 `PUT`**. Lambda(IAM 역할)는 ① presigned URL 발급만 하고, ② S3 업로드가 끝나면 **S3 이벤트가 Lambda를 깨워 사진을 이벤트에 자동 등록**한다(FE의 별도 `complete`/커밋 호출 없음). 흐름: **① presign → ② S3 PUT(직접) → [AI 분석]**.
+> **업로드 = presigned URL 3-step**(CHMO-194). 파일 바이트는 서버를 거치지 않고 **FE→S3로 직접 `PUT`**. 흐름: **① presign(`s3Key` 발급) → ② S3 PUT(직접) → ③ 등록**. ③이 서버에 사진이 생기는 시점이고, **등록이 곧 분석 시작이다**(BE가 `analyzing` 전이 + 분류 발행). FE는 `POST /analyze`를 부르지 않는다 — 부르면 같은 사진이 두 job으로 발행돼 앞 job의 결과가 버려진다.
+>
+> **업로드·분류는 이벤트당 1회다**(2026-07-28 정책 변경 — BE CHMO-485 / FE CHMO-486). 사진이 이미 있는 이벤트는 **presign·등록 양쪽에서 거부**되고, 화면도 06-U 진입을 막는다(딥링크 포함). 더 올릴 사진이 있으면 이벤트를 새로 만든다. ⚠ 거부 시 **에러 코드·메시지는 아직 미확정**(BE CHMO-485 AC-4) — 확정되면 목(`src/mocks/handlers/events.ts`)의 임시 `VALID400`을 그 코드로 교체한다.
 
 #### `POST /events/:id/photos/presign` — 업로드 URL 발급(①) · 화면 06-U
 요청
 ```json
-{ "files": [
-  { "filename": "img_001.jpg", "contentType": "image/jpeg", "size": 3145728 }
-] }
+{ "files": [ { "fileName": "img_001.jpg", "size": 3145728 } ] }
 ```
-응답 `200`
+응답 `200` — 요청 `files`와 **같은 순서의 bare 배열**
 ```json
-{ "uploads": [
-  { "photoId": "pht_1", "uploadUrl": "https://cheesemoa-uploads.s3.ap-northeast-2.amazonaws.com/evt_1/pht_1.jpg?X-Amz-...", "method": "PUT", "headers": { "Content-Type": "image/jpeg" }, "expiresAt": "2026-06-27T09:51:00+09:00" }
-] }
+[ { "s3Key": "originals/events/1/3f9a....jpg", "uploadUrl": "https://cheesemoa-uploads.s3.ap-northeast-2.amazonaws.com/originals/events/1/3f9a....jpg?X-Amz-...", "contentType": "image/jpeg" } ]
 ```
-> Lambda가 파일별 `photoId`를 선발급 + **presigned URL**(짧은 TTL, 크기/타입 조건) 반환. FE는 AWS 자격증명 없이 이 URL로만 올린다. 오류: `400 VALIDATION_ERROR`, `413 PAYLOAD_TOO_LARGE`(size 초과).
-> 업로드는 `analyzing` 상태에서만 거부(400). **`published` 이벤트에도 업로드 가능** — 새 사진은 `reviewed: false`로 등록되어 검토 완료 전까지 뷰어에 노출되지 않는다.
+> **사진 레코드는 여기서 생기지 않는다** — 발급되는 건 `s3Key`와 presigned URL(짧은 TTL)뿐이다. `contentType`은 **BE가 파일명 확장자로 정한다**(요청이 MIME을 보내지 않는다) — 화이트리스트 밖 확장자는 `400 PHOTO400`.
+> 제약(단일 원천 `src/lib/upload.ts`): 확장자 jpg/jpeg/png/heic/webp · 파일당 20MB · 요청당 **500장**(`MAX_UPLOAD_BATCH` — 2026-07-28 실측, BE CHMO-482). 웹 화면은 별도로 **100장**에서 캡한다(`MAX_UPLOAD_PICK` — 브라우저 디코드 부담, CHMO-497).
+> 오류: `400 VALID400`(빈 목록·상한 초과·크기 초과·1회 소진) · `400 PHOTO400`(미지원 확장자) · `400`(`analyzing` 중).
 
 #### (②) S3 직접 업로드 — **API 아님**
-FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(병렬·재시도, 진행률은 FE가 측정). 업로드 성공 시 **S3 이벤트 → Lambda가 해당 사진을 이벤트에 자동 등록**(`photoCount` 반영). presign만 하고 `PUT` 안 한 `photoId`는 등록되지 않는다(S3 lifecycle로 정리).
+FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·진행률은 FE가 측정). **`Content-Type` 헤더가 presign 응답의 `contentType`과 정확히 같아야 한다** — 서명에 묶여 있어 다르면 `403 SignatureDoesNotMatch`.
+> presign만 하고 `PUT` 후 등록하지 않으면 **사진 레코드는 생기지 않는다**(이벤트는 `empty` 그대로 = 1회가 소진되지 않는다). 다만 S3 객체는 DB 기록 없이 남으므로 정리 주체가 필요하다 — **BE CHMO-484**(미등록 원본 정리)에서 다룬다.
 
-#### `POST /events/:id/analyze` — AI 분석 시작 · 화면 06-U
-요청 `{ "excludeEyesClosed": true, "excludeBlurry": true }` (기본 각각 `true`)
-응답 `202` → `AnalysisJob`(`status: "analyzing"`). 이벤트 `status`→`analyzing` (**`published`는 공개 유지** — 상태 전이 없이 분석 진행).
-> `[AI 분석]`이 배치 종료 신호 — **아직 앨범에 속하지 않은 사진만 증분 분석**(기존 앨범·수동 배치·검토 상태 보존). `excludeEyesClosed`/`excludeBlurry` ON 시 해당 사진은 인물 앨범 대신 `eyes_closed`/`blurry`로 라우팅.
->
-> ⚠️ **알려진 한계 — 고아 사진(후속 과제 · BE 대응 필요)**: 사진 등록(S3 `PUT` → Lambda 자동 등록)과 분석 시작(`analyze`, **FE가 보내는 신호**)이 분리돼 있어, **업로드는 끝났지만 `analyze` 전에 사용자가 이탈**(브라우저 뒤로가기·탭 닫기·앱 종료·통신 끊김)하면 **등록됐으나 분석되지 않은 '고아 사진'**이 남는다. 이때 이벤트는 `empty`(또는 이전 상태)에 머물러 화면은 "사진 없음"으로 오표시되고, 다음 업로드→분석 때 고아 사진이 한꺼번에 앨범에 편입된다(같은 파일을 다시 골랐다면 **중복 등록**). 프론트만으로는 서버 사진을 되돌릴 수단이 없어(취소/삭제 API 부재) **완전 해결 불가** — **근본 해결은 BE 몫**: ① 미분석 업로드 취소 API, 또는 ② `empty`인데 미분류 사진이 존재하면 재분석을 잇는 서버 트리거. FE 임시 완화안(빈 이벤트에서 `photoCount>0`을 감지해 "분석 이어서 시작" 유도)은 후속 스토리에서 검토. **→ CHMO 백로그 버그 등록 대상.**
+#### `POST /events/:id/photos` — 업로드 완료 등록(③) = **분석 시작** · 화면 06-U
+요청
+```json
+{ "s3Keys": ["originals/events/1/3f9a....jpg"], "excludeEyesClosed": true, "excludeBlurry": true }
+```
+응답 `200` → `{ "jobId": "...", "registeredCount": 42 }`. 이벤트 `status`→`analyzing`.
+> 등록이 곧 분류 시작이라 **품질 제외 옵션을 여기서 함께 받는다**(기본 각각 `true`) — ON이면 해당 사진은 인물 앨범 대신 `eyes_closed`/`blurry`로 라우팅.
+> 오류: `404 PHOTO404`(S3에 없는 키 — `PUT` 전) · `400 VALID400`(다른 이벤트의 키·빈 목록·상한 초과·**1회 소진**) · `400`(`analyzing` 중).
+> **등록이 실패하면 1회를 소진하지 않는다**(BE CHMO-485 AC-2). 남는 예외는 **등록 성공 + 응답 유실** — 서버는 분석을 시작했는데 FE는 실패로 본다. FE는 등록 실패 시 이벤트 상세를 되물어 실제로 시작됐으면 에러 대신 진행으로 인계한다(CHMO-486).
 
-#### `GET /events/:id/analysis` — 분석 상태 확인 · 화면 06-U/05
-응답 `200` → `AnalysisJob`. 완료 시 `{ "eventId": "evt_1", "status": "done" }`, 이벤트 `status`→`review`(`published`였다면 그대로 유지).
-> **진행률(%)·자동 폴링 없음**(MVP 제외). 완료는 화면 재진입/새로고침 시 상태로 확인.
+#### 분석 진행률 — `GET /events/:id` 폴링 · 화면 06-U → 08
+분석 중 이벤트 상세가 `progress`(`{processed,total,percent}`)를 담는다. 화면이 **2초 간격**으로 폴링해 진행률을 표시하고, 완료되면(`review` 전이) 08 앨범 그리드로 자동 전환한다(CHMO-244·287).
+> `progress`는 **분석 job 중에만 non-null**이고 **목록 응답엔 없다**. null이면 인디터미넌트 폴백으로 표시한다 — 등록 직후엔 AI 첫 진행률 메시지 전이라 잠시 null인 공백이 있어, 06-U가 navigate state로 '분석 시작' 킥을 넘겨 상세가 폴링을 켠다(CHMO-443).
+> `GET /events/:id/analysis`(`AnalysisJob`)는 계약상 남아 있으나 **화면은 쓰지 않는다** — 진행률이 없고 분석 **실패**를 표현하지 못한다(이벤트를 `EMPTY`로 되돌려 미시작과 구분 불가 — CHMO-218).
 
 #### `GET /events/:id/review-summary` — 공개 전 검수 요약 · 화면 14
 응답 `200`
 ```json
-{ "photoCount": 124, "albumCount": 8, "reviewedPhotoCount": 118, "totalPhotoCount": 124, "uncertainCount": 6,
-  "previewThumbnailUrls": ["https://cdn.example.com/pht_10_thumb.jpg", "https://cdn.example.com/pht_22_thumb.jpg"] }
+{ "eventId": 1, "eventStatus": "REVIEW", "totalAlbums": 8, "reviewedAlbums": 5, "unreviewedAlbums": 3,
+  "totalPhotos": 124, "reviewedPhotoCount": 118, "uncertainCount": 6, "albums": [ /* AlbumSummary[] */ ] }
 ```
-> `previewThumbnailUrls` = **학부모 뷰 프리뷰용 썸네일 URL**(파생값 — `Album.coverThumbnailUrl`과 동일 규칙). 뷰어 노출 규칙(`person`/`common` 앨범 소속 + 검토 완료 사진)을 적용한 사진만, **최대 6장**. `photoId`만으론 URL을 조립할 수 없어 서버가 완성된 URL을 내려준다(검토된 노출 사진이 없으면 `[]`).
+> **미리보기용 썸네일 배열(`previewThumbnailUrls`)은 없다** — 서버는 이벤트의 **앨범 전체**(특수 앨범 포함)를 `albums[]`로 주고, 무엇을 어떻게 보여줄지는 전부 FE 파생이다(14는 08과 같은 앨범 카드 그리드로 그린다 — CHMO-346).
+> FE 파생 규칙(CHMO-488): **미리보기 = 전 사진 검토 완료된 인물·공통 앨범 = 발행 대상**이고, 같은 범위의 잔여분이 **공개를 막는 앨범**(14가 이름·남은 장수로 안내)이다. 검토 진척(`reviewedAlbumCount/reviewableAlbumCount`)도 여기서 앨범 단위로 센다 — BE `reviewedAlbums`는 특수 앨범까지 세어 화면과 어긋나므로 **쓰지 않는다**(CHMO-357).
+> `totalPhotos`는 특수 앨범을 포함한 **이벤트 총량**이라 공개될 장수가 아니다. 사진이 앨범과 다대다라 앨범별 장수 합으로도 셀 수 없어(겹친 사진 중복) 화면이 `전체 사진`으로 라벨해 범위를 드러낸다 — BE `publishablePhotoCount`(CHMO-505) 배포 후 `공개할 사진`으로 전환한다.
 
 #### `POST /events/:id/publish` — 공개하기 · 화면 14
 요청 `{}`
@@ -289,7 +295,7 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(병렬·재시도, 진행�
 { "id": "evt_1", "status": "published", "publishedAt": "..." }
 ```
 > 공개 = 이 이벤트를 **모임 학부모 공유 목록에 노출**(`published`). **이벤트별 공유 링크/비밀번호는 없다** — 학부모 공유는 **모임 단위**(`Group.share` / `GET /groups/:id/share`)이며 모임 생성 시 이미 발급돼 있다.
-> 정책(확정): 미검토 사진 존재 시 `?force=true` 없이는 `409 HAS_UNREVIEWED_PHOTOS`를 반환하고, `?force=true`면 그대로 공개한다(미검토 사진은 공개 후에도 뷰어에 비노출). `review`/`ready` 상태에서만 공개 가능하며 사진 0장이면 `400`.
+> 정책(확정 — 2026-07-28 변경, CHMO-487·488): **전량 검토 완료가 하드 게이트**다. 인물·공통 앨범에 미검토 사진이 1장이라도 남으면 **항상** `409 HAS_UNREVIEWED_PHOTOS`고, 종전의 `?force=true` 우회는 **폐기**됐다(쿼리가 와도 무시). 게이트 판정 범위가 인물·공통뿐인 이유: 특수 앨범(분류 애매·눈감음·흔들림)엔 검토 UI가 없어(CHMO-357) 포함하면 영영 공개할 수 없는 이벤트가 생긴다. `review`/`ready` 상태에서만 공개 가능하며 사진 0장이면 `400`. 재공개(`pendingPublishCount` 기반 CHMO-324·265)도 함께 폐지 — 업로드가 이벤트당 1회(CHMO-486)고 전량 검토 후에만 공개되니 공개 뒤 발행 대기가 생길 경로가 없다.
 
 ---
 
@@ -422,8 +428,8 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(병렬·재시도, 진행�
 | `GET /groups/:id/events` | 05 |
 | `POST /groups/:id/events` | 06-M |
 | `GET /events/:id` · `PATCH /events/:id` | 06-E / 08 |
-| `POST /events/:id/photos/presign` (→ S3 직접 PUT) | 06-U |
-| `POST /events/:id/analyze` · `GET /events/:id/analysis` | 06-U / 05 |
+| `POST /events/:id/photos/presign` (→ S3 직접 PUT) · `POST /events/:id/photos`(등록=분석 시작) | 06-U |
+| `GET /events/:id`(진행률 폴링) | 06-U → 08 |
 | `GET /events/:id/review-summary` · `POST /events/:id/publish` | 14 |
 | `GET /events/:id/albums` | 08 |
 | `GET /albums/:id` · `PATCH /albums/:id` | 09 / 08 |
@@ -438,8 +444,8 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(병렬·재시도, 진행�
 
 ## 5. FE 개발 메모 (목 데이터)
 - 모든 엔드포인트는 MSW 핸들러로 목업 → 위 응답 예시를 픽스처로 사용.
-- `/events/:id/analysis`는 목업에서 일정 시간 후 `status`를 `analyzing`→`done`으로 전환(진행률 % 없음, 자동 폴링 없음 — 화면 재진입 시 상태 확인).
-- 업로드는 presigned 2-step: 목업에서 `presign`은 가짜 `uploadUrl`을 반환하고, FE의 S3 `PUT`은 성공으로 시뮬레이션(실제 S3 미사용), 등록은 즉시 반영으로 간주. **`complete` 엔드포인트는 없음**(실제로는 S3 이벤트가 등록 담당).
+- 업로드는 presigned **3-step**: 목의 `presign`은 사진을 만들지 않고 `originals/events/{id}/{uuid}.{ext}` 키만 발급하고, 가짜 S3 `PUT`(`/mock-s3/*`)이 업로드 사실을 기록하며, **등록(`POST /events/:id/photos`)이 사진 생성 + 분석 시작**을 맡는다(`PUT` 안 한 키는 `404`). 1회 정책 게이트도 presign·등록 양쪽에 있다.
+- 분석은 목에서 일정 시간 후 완료로 전환되고, 그동안 `GET /events/:id`가 `progress`를 채운다(실 BE와 달리 **등록 즉시** progress가 붙는다 — 실서버의 초기 null 공백은 목으로 재현되지 않아 '분석 시작' 킥은 실 BE로만 검증 가능하다, CHMO-443).
 - 학부모 공유는 **모임 단위**: 링크/비밀번호는 `GET /groups/:id/share`(멤버 전용)로 조회해 표시. `publish`는 이벤트를 목록에 노출만 시킬 뿐 비밀번호를 만들지 않음.
 - 뷰어 목록(`GET /share/:token`)은 `published` 이벤트만 필터해 반환하도록 목업 구성.
 - 인증 토큰/뷰어 토큰은 메모리+localStorage 저장(뷰어 토큰은 **모임 공유 token별** 분리).

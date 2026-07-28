@@ -6,6 +6,7 @@
 
 const ACCESS_TOKEN_KEY = 'cheesemoa.accessToken'
 const REFRESH_TOKEN_KEY = 'cheesemoa.refreshToken'
+const USER_ID_KEY = 'cheesemoa.userId'
 
 let cachedAccessToken: string | null = null
 let cachedRefreshToken: string | null = null
@@ -76,6 +77,25 @@ export function setAuthTokens(tokens: { accessToken: string; refreshToken: strin
 export function clearAuthTokens(): void {
   clearAccessToken()
   clearRefreshToken()
+  removeStored(USER_ID_KEY)
+}
+
+// ── 로그인 계정 식별자 (CHMO-481) ────────────────────────────
+// 온보딩을 "계정당 1회"로 노출하려면 지금 이 기기에 로그인한 사람이 누구인지 알아야 하는데,
+// 온보딩 화면은 서버를 부르지 않으므로 로그인 응답의 userId를 여기 맡겨 둔다. 토큰과 생애주기가
+// 같아(로그인 시 저장·로그아웃 시 삭제) 토큰 저장소가 함께 소유한다.
+
+/** 로그인/회원가입/소셜 교환 성공 시 저장 — 재발급(refresh) 응답엔 userId가 없어 건드리지 않는다 */
+export function setCurrentUserId(userId: number): void {
+  writeStored(USER_ID_KEY, String(userId))
+}
+
+/** 저장된 계정 식별자 — 없거나 깨졌으면 null(온보딩은 계정 무관 폴백 키로 동작) */
+export function getCurrentUserId(): number | null {
+  const raw = readStored(USER_ID_KEY)
+  if (raw === null) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function isAuthenticated(): boolean {

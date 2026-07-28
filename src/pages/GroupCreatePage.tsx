@@ -16,10 +16,13 @@ export function GroupCreatePage() {
   const mutate = useMutation()
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  // 보호자 동의 확보 확인 게이트(CHMO-478) — 아동 사진 처리는 법정대리인 동의가 전제(개인정보 보호법 제22조의2)
+  const [consentConfirmed, setConsentConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const canSubmit = name.trim().length > 0 && password.trim().length > 0 && !submitting
+  const canSubmit =
+    name.trim().length > 0 && password.trim().length > 0 && consentConfirmed && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -71,6 +74,24 @@ export function GroupCreatePage() {
         <p className="mt-3 text-xs leading-relaxed text-muted">
           요금제 선택 없이 무료로 시작해요. 저장 용량이 차면 업그레이드할 수 있어요.
         </p>
+        <div className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-card">
+          <p className="text-xs leading-relaxed text-muted">
+            치즈모아는 사진 속 아이들의 얼굴을 분석해 인물별 앨범을 만들어요. 만 14세 미만 아이의
+            사진을 올리려면 보호자(법정대리인)의 동의가 필요해요.
+          </p>
+          <label className="mt-3 flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={consentConfirmed}
+              onChange={(e) => setConsentConfirmed(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
+            />
+            <span className="text-sm leading-relaxed text-text">
+              사진에 등장하는 모든 아이의 보호자로부터 촬영·업로드, 얼굴 인식을 통한 인물별 분류,
+              보호자 공유에 대한 동의를 받았습니다.
+            </span>
+          </label>
+        </div>
         {error ? (
           <p role="alert" className="mt-3 text-sm text-warn">
             {error}

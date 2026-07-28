@@ -3,6 +3,7 @@ import {
   isUploadableSize,
   MAX_UPLOAD_BATCH,
   MAX_UPLOAD_FILE_BYTES,
+  MAX_UPLOAD_PICK,
   uploadContentTypeOf,
   uploadExtensionOf,
 } from './upload'
@@ -60,7 +61,14 @@ describe('isUploadableSize', () => {
 describe('업로드 상한', () => {
   it('BE 제약을 그대로 옮긴 값이다 — 바꾸려면 BE가 먼저 바뀌어야 한다', () => {
     expect(MAX_UPLOAD_FILE_BYTES).toBe(20 * 1024 * 1024)
-    // presign·등록 요청당 @Size(max = 50). 200~300장 경로는 CHMO-217이 열어 준다.
-    expect(MAX_UPLOAD_BATCH).toBe(50)
+    // presign·등록 요청당 @Size(max = 500) — 2026-07-28 실서버 실측(501장 → VALID400), CHMO-482.
+    expect(MAX_UPLOAD_BATCH).toBe(500)
+  })
+
+  it('화면 상한은 BE 계약 상한과 별개지만 넘어서면 안 된다', () => {
+    // 웹이 스스로 거는 값(CHMO-497) — BE가 더 받아 줘도 브라우저 부담 때문에 100에서 끊는다.
+    expect(MAX_UPLOAD_PICK).toBe(100)
+    // 화면 상한이 BE 상한을 넘으면 BE가 배치 전체를 400으로 거절한다 — 상수를 올릴 때의 안전선.
+    expect(MAX_UPLOAD_PICK).toBeLessThanOrEqual(MAX_UPLOAD_BATCH)
   })
 })

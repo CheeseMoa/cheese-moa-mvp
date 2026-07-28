@@ -24,6 +24,7 @@ import {
   startAnalysis,
   todayIsoDate,
   transitionEvent,
+  unreviewedGatePhotoCount,
   uploadKeyPrefixOf,
   type DbEvent,
   type DbPhoto,
@@ -63,6 +64,10 @@ import {
 } from '../../lib/upload'
 
 const ANALYZING_LOCKED = '분석 중에는 사진을 추가할 수 없습니다.'
+// 업로드·분류는 이벤트당 1회(CHMO-486) — 사진이 이미 있는 이벤트는 presign·등록 모두 거부한다.
+// 화면이 진입을 막지만 딥링크·직접 호출로도 뚫리지 않게 서버(목)에서도 잠근다.
+// BE 코드 미확인 — 실 BE 게이트는 CHMO-485. 전용 코드가 나오면 그 코드로 교체한다.
+const UPLOAD_ONCE_LOCKED = '사진 업로드는 이벤트당 한 번만 할 수 있습니다.'
 
 export const eventHandlers = [
   // GET /groups/:id/events — 이벤트 목록(최신순, bare 배열, ACTIVE 멤버 전용) · 화면 05·18
@@ -161,8 +166,9 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = teacherEvent(user, toId(params.id))
     if (event instanceof Response) return event
-    // 분석 진행 중에만 업로드 불가 — 공개(published) 후에도 사진 추가 가능(새 사진은 미검토로 등록돼 뷰어 비노출)
     if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
+    // 1회 정책 — 이미 사진이 있는 이벤트는 URL 발급부터 막는다(고아 S3 객체를 만들지 않게)
+    if (photoCountOfEvent(event.id) > 0) return invalidRequest(UPLOAD_ONCE_LOCKED)
 
     const body = await readJson<{ files?: { fileName?: unknown; size?: unknown }[] }>(request)
     const files = body?.files
@@ -211,6 +217,8 @@ export const eventHandlers = [
     const event = teacherEvent(user, toId(params.id))
     if (event instanceof Response) return event
     if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
+    // 1회 정책 — presign을 우회해 직접 등록해도 막힌다(CHMO-486)
+    if (photoCountOfEvent(event.id) > 0) return invalidRequest(UPLOAD_ONCE_LOCKED)
 
     const body = await readJson<{
       s3Keys?: unknown
@@ -231,8 +239,8 @@ export const eventHandlers = [
     if ((s3Keys as string[]).some((key) => !isObjectUploaded(key)))
       return errorResponse(404, 'PHOTO404', 'S3에 업로드되지 않은 사진이 있습니다.')
 
-    // published는 공개를 유지한 채 증분 분석(상태 전이 없음), 그 외에는 analyzing으로 전이
-    if (event.status !== 'published' && !transitionEvent(event.id, 'analyzing'))
+    // 위 1회 게이트를 지났으면 사진 0장 이벤트뿐이라 empty → analyzing 전이만 남는다(CHMO-486)
+    if (!transitionEvent(event.id, 'analyzing'))
       return invalidRequest('지금은 사진을 등록할 수 없는 이벤트입니다.')
 
     const baseIndex = photoCountOfEvent(event.id)
@@ -275,7 +283,8 @@ export const eventHandlers = [
     if (pending.length === 0) return invalidRequest('분석할 업로드가 없습니다.')
     const previous = findAnalysisJob(event.id)
     if (previous?.status === 'analyzing') return invalidRequest('이미 분석이 진행 중인 이벤트입니다.')
-    if (event.status !== 'published' && !transitionEvent(event.id, 'analyzing'))
+    // published 무전이 증분 분석은 폐지됐다(CHMO-486) — 전이 규칙이 그대로 판정한다
+    if (!transitionEvent(event.id, 'analyzing'))
       return invalidRequest('지금은 분석을 시작할 수 없는 이벤트입니다.')
 
     // 재발행이라 옵션은 직전 job의 것을 잇는다(BE도 첫 업로드의 옵션을 재사용)
@@ -308,10 +317,10 @@ export const eventHandlers = [
     return ok(toReviewSummaryResponse(event))
   }),
 
-  // POST /events/:id/publish — 발행 액션(재공개 게이트 CHMO-324) · 화면 14
-  // 발행 = 전 사진 검토 완료된 인물·공통 앨범의 사진을 published로 전환. **published 재호출도
-  // 그 시점 발행 가능분을 발행한다**(재공개 — CHMO-265). 미검토 존재 시 ?force=true 없으면 409 —
-  // force는 경고 우회일 뿐, 미검토 사진은 발행되지 않는다(앨범 단위 게이트).
+  // POST /events/:id/publish — 발행 액션 · 화면 14
+  // 발행 = 전 사진 검토 완료된 인물·공통 앨범의 사진을 published로 전환.
+  // **전량 검토 완료가 하드 게이트다**(CHMO-488 — 짝 티켓 BE CHMO-487): 인물·공통에 미검토가
+  // 1장이라도 남으면 항상 409고, `?force=true` 우회는 폐기됐다(쿼리가 와도 무시).
   http.post(api('/events/:id/publish'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
@@ -319,21 +328,20 @@ export const eventHandlers = [
     if (event instanceof Response) return event
     settleAnalysis(event.id)
 
-    // BE PUBLISH400 — 공개 불가 상태(EMPTY/ANALYZING). published는 재발행이라 허용(CHMO-324)
+    // BE PUBLISH400 — 공개 불가 상태(EMPTY/ANALYZING). published 재호출은 멱등 허용(동시 작업 대비)
     if (event.status !== 'review' && event.status !== 'ready' && event.status !== 'published')
       return errorResponse(400, 'PUBLISH400', '공개할 수 없는 상태의 이벤트입니다.')
     const photos = photosOfEvent(event.id)
     if (photos.length === 0) return errorResponse(400, 'PUBLISH400', '공개할 사진이 없습니다.')
 
-    const force = new URL(request.url).searchParams.get('force') === 'true'
-    const unreviewedCount = photos.filter((p) => !p.reviewed).length
-    // BE PUBLISH409(2026-07-22 실서버 채집 — CHMO-265) — errors.ts가
-    // HAS_UNREVIEWED_PHOTOS로 정규화해 14가 경고 다이얼로그·force 재시도를 분기한다
-    if (unreviewedCount > 0 && !force)
+    // BE PUBLISH409(2026-07-22 실서버 채집) — errors.ts가 HAS_UNREVIEWED_PHOTOS로 정규화한다.
+    // 판정 범위는 인물·공통뿐 — 특수 앨범은 검토 UI가 없어(CHMO-357) 넣으면 영영 공개 불가가 된다
+    const unreviewedCount = unreviewedGatePhotoCount(event.id)
+    if (unreviewedCount > 0)
       return errorResponse(
         409,
         'PUBLISH409',
-        `미검토 사진 ${unreviewedCount}장이 있습니다. 그대로 공개하면 해당 사진은 학부모에게 보이지 않습니다.`,
+        `미검토 사진 ${unreviewedCount}장이 있습니다. 모든 사진을 검토해야 공개할 수 있습니다.`,
       )
 
     const publishedPhotoCount = publishEventPhotos(event.id)

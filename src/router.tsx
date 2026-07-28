@@ -8,6 +8,7 @@ import { SignupPage } from './pages/SignupPage'
 import { SocialCallbackPage } from './pages/SocialCallbackPage'
 import { JoinPage } from './pages/JoinPage'
 import { HomePage } from './pages/HomePage'
+import { OnboardingPage } from './pages/OnboardingPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupCreatePage } from './pages/GroupCreatePage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
@@ -29,6 +30,12 @@ import { ViewerAlbumDetailPage } from './pages/viewer/ViewerAlbumDetailPage'
 
 import { NotFoundPage } from './pages/NotFoundPage'
 
+// 약관·정책 전문 (CHMO-478)
+import { LegalDocPage } from './pages/LegalDocPage'
+import { termsOfService } from './legal/terms'
+import { privacyPolicy } from './legal/privacy'
+import { biometricNotice } from './legal/biometric'
+
 /**
  * 전체 라우트 정의 (docs/screen-spec.md 화면 매핑).
  * 제작자 경로는 CreatorGuard, 뷰어 경로는 ViewerGuard로 감싼다.
@@ -46,11 +53,17 @@ export const router = createBrowserRouter([
   { path: '/join/:joinKey', element: <JoinPage /> }, // 02-1 모임 참여(초대 링크 진입) — 로그인 제작자도 사용하므로 GuestGuard 밖
   { path: '/auth/callback', element: <SocialCallbackPage /> }, // 01-C 소셜 로그인 콜백(CHMO-359) — BE 리다이렉트 착지라 가드 밖
 
+  // ── 약관·정책 전문 — 설정·동의 화면·외부 공개 URL(스토어 심사 등) 공용이라 가드 밖 (CHMO-478) ──
+  { path: '/legal/terms', element: <LegalDocPage doc={termsOfService} /> },
+  { path: '/legal/privacy', element: <LegalDocPage doc={privacyPolicy} /> },
+  { path: '/legal/biometric', element: <LegalDocPage doc={biometricNotice} /> },
+
   // ── 제작자(로그인) ──────────────────────────────────
   {
     element: <CreatorGuard />,
     children: [
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
+      { path: '/onboarding', element: <OnboardingPage /> }, // 00 첫 사용 온보딩(CHMO-481) — 로그인 후 1회
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
       { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함

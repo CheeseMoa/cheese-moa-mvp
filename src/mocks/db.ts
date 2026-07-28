@@ -501,6 +501,21 @@ function publishableAlbumsOf(eventId: number): DbAlbum[] {
 }
 
 /**
+ * 공개 게이트에 걸린 미검토 사진 수(CHMO-488) — **인물·공통 앨범만** 센다.
+ * 특수 앨범(분류 애매·눈감음·흔들림)은 09에 검토 UI가 아예 없어(CHMO-357) 게이트에 넣으면
+ * 영영 공개할 수 없는 이벤트가 생긴다 — 실 BE·14 화면 판정과 같은 범위다.
+ * 한 사진이 여러 앨범에 걸쳐 있어도 1장으로 센다(다대다).
+ */
+export function unreviewedGatePhotoCount(eventId: number): number {
+  const unreviewed = new Set<number>()
+  for (const album of albumsOfEvent(eventId)) {
+    if (album.type !== 'person' && album.type !== 'common') continue
+    for (const photo of photosOfAlbum(album.id)) if (!photo.reviewed) unreviewed.add(photo.id)
+  }
+  return unreviewed.size
+}
+
+/**
  * 발행 액션(POST /publish — 재호출 포함): 게이트 통과 앨범의 사진을 published로 전환하고
  * **이번에 새로 발행된 장수**를 반환한다(BE publishedPhotoCount — 재호출이면 0일 수 있다).
  */
@@ -600,16 +615,18 @@ export function removePhotoFromAlbum(photoId: number, albumId: number): void {
 }
 
 /**
- * 검수 새 인물 앨범 생성(CHMO-416) — BE CreateAlbumFromPhotosUseCase의 목 대응물:
- * 수동 인물(얼굴 벡터 없음 — 목엔 벡터 개념이 없어 이름만) + 앨범 생성 후 소스에서 사진 이동.
- * 소스가 비어도 앨범은 남는다(CHMO-418 — unlinkPhotoFromAlbum이 커버만 비운다).
+ * 검수 새 인물 앨범 생성(CHMO-416 + 빈 앨범 CHMO-456) — BE CreateAlbumUseCase의 목 대응물:
+ * 수동 인물(얼굴 벡터 없음 — 목엔 벡터 개념이 없어 이름만) + 앨범 생성.
+ * `source`를 주면 선택 사진을 소스에서 옮겨오고(생성=이동 — 09-1), 생략하면 **사진 0장**으로
+ * 태어난다(08 — 빈 앨범은 1급 시민이라 그대로 남는다, CHMO-418).
+ * 소스가 비어도 앨범은 남는다(unlinkPhotoFromAlbum이 커버만 비운다).
+ * 이름 중복은 검사하지 않는다 — 실 BE도 personId를 따로 발급해 통과시킨다(2026-07-27 프로브).
  */
-export function createPersonAlbumFromPhotos(
+export function createManualPersonAlbum(
   eventId: number,
   groupId: number,
   name: string,
-  sourceAlbumId: number,
-  photoIds: number[],
+  source?: { sourceAlbumId: number; photoIds: number[] },
 ): DbAlbum {
   const person: DbPerson = { id: nextId('psn'), groupId, name }
   db.persons.push(person)
@@ -621,7 +638,11 @@ export function createPersonAlbumFromPhotos(
     coverPhotoId: null,
   }
   db.albums.push(album)
-  for (const photoId of photoIds) movePhotoBetweenAlbums(photoId, sourceAlbumId, album.id)
+  if (source) {
+    for (const photoId of source.photoIds) {
+      movePhotoBetweenAlbums(photoId, source.sourceAlbumId, album.id)
+    }
+  }
   return album
 }
 
@@ -683,15 +704,16 @@ export function deleteGroupCascade(groupId: number): void {
 /**
  * 허용 전이(docs/feature-spec.md 상태머신):
  * empty --analyze--> analyzing --완료--> review --전 사진 reviewed--> ready --publish--> published
- * (사진 추가 시 재분석: review·ready → analyzing 회귀. published는 전이 없이 증분 분석 — 공개 유지.)
+ * 업로드·분류는 이벤트당 1회라(CHMO-486) **analyzing으로 돌아오는 엣지는 empty에서만** 있다 —
+ * 사진 추가로 인한 review·ready → analyzing 회귀, published 무전이 증분 분석은 폐지됐다.
  */
 const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   empty: ['analyzing'],
   analyzing: ['review'],
   // published = force 공개(미검토 존재 시 409 경고 후 ?force=true) — 미검토 사진은 뷰어 비노출이라 안전
-  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장)
-  review: ['ready', 'analyzing', 'published', 'empty'],
-  ready: ['review', 'published', 'analyzing', 'empty'], // 검토 해제 시 review, 재분석 시 analyzing
+  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장) — 0장이면 업로드가 다시 열린다
+  review: ['ready', 'published', 'empty'],
+  ready: ['review', 'published', 'empty'], // 검토 해제 시 review
   // 공개 후 편집·재발행은 상태 전이 없이 진행 — 뷰어 노출은 사진 reviewed && published로 제어(CHMO-324)
   published: [],
 }
@@ -872,6 +894,6 @@ export function completeAnalysis(eventId: number): void {
   }
 
   job.status = 'done'
-  // published 이벤트는 전이 엣지가 없어 공개 상태를 그대로 유지(증분 분석 — 공개 중 편집 허용)
+  // 분류는 이벤트당 1회라 여기 오는 건 analyzing뿐 — analyzing → review로 검수 단계를 연다
   transitionEvent(eventId, 'review')
 }

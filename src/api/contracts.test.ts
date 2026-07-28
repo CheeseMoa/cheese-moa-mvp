@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getMe, login } from './auth'
 import {
+  createPersonAlbum,
   deletePhotos,
   getAlbumWithPhotos,
   getAlbumZip,
@@ -51,6 +52,7 @@ import {
   BE_EVENT_SUMMARY,
   BE_GROUP_DETAIL,
   BE_GROUP_SUMMARY,
+  BE_CREATE_ALBUM_EMPTY,
   BE_MEMBER_ZIP,
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
@@ -483,6 +485,37 @@ describe('앨범 · 사진', () => {
     expect(result).toEqual({ movedCount: 3 })
   })
 
+  it('빈 앨범 생성 — 이름만 보내고 짝(sourceAlbumId·photoIds)은 아예 빠진다 (CHMO-456)', async () => {
+    const calls = serve(envelope(BE_CREATE_ALBUM_EMPTY, 'COMMON201'))
+
+    const result = await createPersonAlbum(63, { name: '이치즈' })
+
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].url).toBe('/api/v1/events/63/albums')
+    // 짝은 함께 보내거나 함께 생략해야 한다 — 한쪽만 실려 나가면 실 BE가 VALID400을 준다
+    expect(bodyOf(calls[0])).toEqual({ name: '이치즈' })
+    expect(result).toEqual({ albumId: 832, photoCount: 0 })
+  })
+
+  it('생성=이동 — 짝을 주면 그대로 실려 나가고 옮긴 장수가 온다 (CHMO-416)', async () => {
+    const calls = serve(
+      envelope({ ...BE_CREATE_ALBUM_EMPTY, personName: '김치즈', photoCount: 3 }, 'COMMON201'),
+    )
+
+    const result = await createPersonAlbum(63, {
+      name: '김치즈',
+      sourceAlbumId: 279,
+      photoIds: [101, 102, 103],
+    })
+
+    expect(bodyOf(calls[0])).toEqual({
+      name: '김치즈',
+      sourceAlbumId: 279,
+      photoIds: [101, 102, 103],
+    })
+    expect(result).toEqual({ albumId: 832, photoCount: 3 })
+  })
+
   it('BE 삭제 — 연결 해제와 완전 삭제를 구분해 준다', async () => {
     const calls = serve(envelope(BE_DELETE_PHOTOS))
 
@@ -495,23 +528,35 @@ describe('앨범 · 사진', () => {
 })
 
 describe('공개 요약 (14)', () => {
-  it('미리보기 앨범은 BE albums[]에서 파생한다 — 뷰어 노출(person/common)만 (CHMO-346)', async () => {
+  it('미리보기 앨범은 BE albums[]에서 파생한다 — 발행 대상(전량 검토된 person/common)만 (CHMO-346·488)', async () => {
     serve(envelope(BE_REVIEW_SUMMARY))
 
     const summary = await getReviewSummary(4)
 
     // 검토 진척은 앨범 단위 파생(CHMO-357): person(미검토 3장)·common(전량 검토)만 세고
     // eyes_closed는 미검토여도 제외 — BE reviewedAlbums(1)/unreviewedAlbums(2)와 다른 값이 맞다
+    // albumCount(BE totalAlbums)는 매핑하지 않는다 — 14가 '공개할 앨범'만 보여준다(CHMO-488)
     expect(summary).toMatchObject({
       photoCount: 19,
-      albumCount: 3,
       reviewedAlbumCount: 1,
       reviewableAlbumCount: 2,
     })
-    // person·common만 — 특수 앨범(eyes_closed)은 뷰어 비노출이라 빠진다.
+    expect('albumCount' in summary).toBe(false)
+    // 미리보기 = 전량 검토된 common만. person은 12장 중 3장이 미검토라 공개해도 나가지 않으므로
+    // "학부모가 볼 화면"에 넣지 않는다(CHMO-488 — 종전엔 검토분이 1장이라도 있으면 담았다).
     // 앨범 카드가 쓰는 이름·검토 수치·커버까지 매핑돼 온다
-    expect(summary.previewAlbums).toHaveLength(2)
+    expect(summary.previewAlbums).toHaveLength(1)
     expect(summary.previewAlbums[0]).toMatchObject({
+      id: 13,
+      type: 'common',
+      name: '공통',
+      photoCount: 5,
+      unreviewedPhotoCount: 0,
+      coverThumbnailUrl: BE_ALBUM_COMMON.thumbnailUrl,
+    })
+    // 그 person 앨범은 공개를 막는 쪽으로 간다 — 14가 이름·남은 장수로 안내하는 목록(CHMO-488)
+    expect(summary.unreviewedAlbums).toHaveLength(1)
+    expect(summary.unreviewedAlbums[0]).toMatchObject({
       id: 11,
       type: 'person',
       name: '지민',
@@ -519,13 +564,14 @@ describe('공개 요약 (14)', () => {
       unreviewedPhotoCount: 3,
       coverThumbnailUrl: BE_ALBUM_PERSON.thumbnailUrl,
     })
-    expect(summary.previewAlbums[1]).toMatchObject({ id: 13, type: 'common', name: '공통' })
   })
 
   it('앨범 카드 그리드는 상한 없이 전량 — 커버 없는 앨범도 카드로 나온다 (CHMO-346, 6장 캡 제거)', async () => {
     const albums = Array.from({ length: 8 }, (_, i) => ({
       ...BE_ALBUM_PERSON,
       albumId: 20 + i,
+      // 미리보기는 전량 검토된 앨범만 담는다(CHMO-488) — 캡 없음을 보려면 8개 다 검토 완료여야 한다
+      unreviewedPhotoCount: 0,
       thumbnailPhotoId: null,
       thumbnailUrl: null,
     }))
@@ -701,9 +747,11 @@ describe('학부모 뷰어', () => {
 })
 
 describe('인증 · 프로필', () => {
-  it('BE AuthResponse의 평면 필드에서 두 토큰만 남긴다', async () => {
+  // nickname은 여전히 버린다 — 쓰는 화면이 없다. userId는 온보딩 1회 판정용(CHMO-481)
+  it('BE AuthResponse의 평면 필드에서 userId와 두 토큰을 남긴다', async () => {
     serve(envelope(BE_AUTH))
     await expect(login({ nickname: 'FE연동테스트', pin: '0709' })).resolves.toEqual({
+      userId: 4,
       accessToken: '<access-jwt>',
       refreshToken: '<refresh-token>',
     })

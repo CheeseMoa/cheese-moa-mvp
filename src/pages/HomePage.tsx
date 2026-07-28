@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
+import { AppTourModal } from '../components/AppTourModal'
 import { JoinGroupModal } from '../components/JoinGroupModal'
 import {
   Button,
@@ -23,12 +24,21 @@ import { listGroups } from '../api/groups'
  * (배지 + "신청: {자녀}" + 탭 시 토스트 — §7-2 확정: 대기 전용 화면 없음, 모임 API 추가 호출
  * 없음), ACTIVE PARENT는 "학부모 · 참여 중" 서브텍스트. myMembership이 없는 응답
  * (구계약 실 BE)은 기존 제작자 카드 그대로다.
+ *
+ * 승인제가 role 무관으로 통일되면서(CHMO-475) **선생님 신청도 이 대기 카드로 온다** — 자녀
+ * 이름이 없는 대기 항목이 생겼고, 실 BE가 대기 항목에 eventCount 0을 실어 주므로 카드가
+ * 카운트로 폴백하지 않도록 GroupCard가 pending일 때 카운트 줄을 잠근다.
  */
 export function HomePage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { data, error, loading, refetch } = useApi('groups', listGroups)
-  const [joinOpen, setJoinOpen] = useState(false)
+  const location = useLocation()
+  // 온보딩 마지막 장의 '초대 코드로 참여하기'가 넘기는 신호(CHMO-481) — 홈에 도착하자마자 02-1을 연다
+  const [joinOpen, setJoinOpen] = useState(
+    Boolean((location.state as { openJoin?: boolean } | null)?.openJoin),
+  )
+  const [tourOpen, setTourOpen] = useState(false)
   const groups = data ?? []
 
   return (
@@ -64,6 +74,13 @@ export function HomePage() {
                   초대받은 모임에 참여해 보세요.
                 </>
               }
+              // 모임이 0개일 때가 구조를 가장 모르는 시점 — 투어는 실제 데이터를 안 쓰므로
+              // 보여줄 모임이 없어도 그대로 돌아간다(CHMO-504)
+              action={
+                <Button size="sm" variant="secondary" onClick={() => setTourOpen(true)}>
+                  앱 구조 둘러보기
+                </Button>
+              }
             />
           ) : (
             <ul className="flex flex-col gap-3">
@@ -79,9 +96,13 @@ export function HomePage() {
                       pending={pending}
                       subtitle={
                         pending
-                          ? membership && membership.claimedChildNames.length > 0
+                          ? // 학부모 신청은 원문(자녀 이름)이 가장 많은 정보를 준다. 선생님 신청은
+                            // childNames가 빈 배열이라(CHMO-475) 어떤 자격으로 신청했는지만 밝힌다
+                            membership && membership.claimedChildNames.length > 0
                             ? `신청: ${membership.claimedChildNames.join(', ')}`
-                            : undefined
+                            : membership?.role === 'parent'
+                              ? '학부모로 참여 신청'
+                              : '선생님으로 참여 신청'
                           : membership?.role === 'parent'
                             ? '학부모 · 참여 중'
                             : undefined
@@ -121,6 +142,7 @@ export function HomePage() {
           refetch()
         }}
       />
+      <AppTourModal open={tourOpen} onClose={() => setTourOpen(false)} />
     </PhoneShell>
   )
 }

@@ -219,6 +219,11 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
             >
               ＋ 아이 추가
             </button>
+            {/* 이름 사용 목적·열람 범위 안내(CHMO-478) — 원아 명단 비노출 구조의 맥락 안내 */}
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              입력한 이름은 아이를 찾아 연결하는 데에만 사용해요. 다른 아이의 개인 앨범은 볼 수
+              없어요.
+            </p>
           </>
         )}
 

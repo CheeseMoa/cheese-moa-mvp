@@ -8,8 +8,8 @@
  * - 이벤트 4(햇살반): review / published / analyzing / empty — 상태별 화면 시연
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
- * - 검토는 사진 단위(reviewed) — 이벤트 1은 앨범 1 사진만, 이벤트 2는 전 사진 검토 완료
- * - 이벤트 2에 발행 대기 4장(217~220, reviewed·미발행) — 재공개 게이트 시연(CHMO-324·265)
+ * - 검토는 사진 단위(reviewed) — 이벤트 1은 앨범 1 사진만, 이벤트 2는 전 사진 검토 + 발행 완료
+ *   (발행 대기 = reviewed·미발행 상태는 두지 않는다 — 재공개 경로 폐지로 도달 불가, CHMO-488)
  *
  * ID는 BE(int64)와 동일하게 숫자 — 리소스 종류별 대역으로 가독성 유지:
  * 유저·모임·이벤트·인물 1~, 앨범 1~12, 사진은 이벤트별 100 단위(101~·201~·301~).
@@ -140,19 +140,13 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
     // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
   })
   assignCovers(picnicAlbums, picnicPhotos)
-  // 공개된 이벤트 — 전 사진 검토 + 발행 완료(공개 시점 발행분 — BE published 백필 대응, CHMO-324)
+  // 공개된 이벤트 — 전 사진 검토 + 발행 완료.
+  // **발행 대기(reviewed·미발행)는 시드에 두지 않는다**(CHMO-488): 전량 검토라야 공개되고
+  // 공개 후 사진 추가도 없으니(CHMO-486) 도달할 수 없는 상태다. 남겨 두면 되살릴 UI가 없는
+  // "영영 안 보이는 사진"이 시연 데이터에 박힌다(종전 재공개 게이트 시연분 216~219 제거).
   for (const photo of picnicPhotos) {
     photo.reviewed = true
     photo.published = true
-  }
-
-  // 공개 후 추가 → 검토까지 마친 **발행 대기분**(재공개 게이트 CHMO-324·265 시연):
-  // 김민준 앨범(9)에 4장 — reviewed지만 published=false. 08 배지·14 [공개하기] 재활성이
-  // 시드만으로 보이고, 발행 전까지 뷰어(학부모)에는 이 4장이 안 보인다.
-  const picnicPendingPhotos = makePhotos(216, 2, 4, '2026-07-20T10:00:00+09:00')
-  for (const photo of picnicPendingPhotos) {
-    photo.albumIds.push(picnicAlbums[0].id)
-    photo.reviewed = true
   }
 
   // 이벤트 3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
@@ -160,7 +154,7 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
 
   return {
     albums: [...sportsAlbums, ...picnicAlbums],
-    photos: [...sportsPhotos, ...picnicPhotos, ...picnicPendingPhotos, ...poolPhotos],
+    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
   }
 }
 
@@ -178,6 +172,8 @@ export function createFixtures(): Db {
       { id: 5, nickname: '서연맘', pin: '2222', createdAt: '2026-07-01T10:05:00+09:00' },
       { id: 6, nickname: '지호네', pin: '3333', createdAt: '2026-07-02T09:00:00+09:00' },
       { id: 7, nickname: '치즈냥이88', pin: '4444', createdAt: '2026-07-25T09:00:00+09:00' },
+      // 선생님 승인제(CHMO-475) 시연 — 선생님 키로 신청만 해 둔 대기 상태(20 선생님 탭)
+      { id: 8, nickname: '신입쌤', pin: '5555', createdAt: '2026-07-27T09:00:00+09:00' },
     ],
     groups: [
       {
@@ -224,6 +220,8 @@ export function createFixtures(): Db {
       { id: 8, userId: 6, groupId: 1, role: 'parent', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
       { id: 9, userId: 7, groupId: 1, role: 'parent', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
       { id: 10, userId: 4, groupId: 3, role: 'parent', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
+      // 선생님 신청(CHMO-475) — 선생님 키 합류도 승인 대기다. 자녀 이름은 없다(childNames 빈 배열)
+      { id: 11, userId: 8, groupId: 1, role: 'teacher', status: 'pending', childNames: [], createdAt: '2026-07-27T09:20:00+09:00' },
     ],
     // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
     personParents: [
