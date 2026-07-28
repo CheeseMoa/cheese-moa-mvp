@@ -501,6 +501,21 @@ function publishableAlbumsOf(eventId: number): DbAlbum[] {
 }
 
 /**
+ * 공개 게이트에 걸린 미검토 사진 수(CHMO-488) — **인물·공통 앨범만** 센다.
+ * 특수 앨범(분류 애매·눈감음·흔들림)은 09에 검토 UI가 아예 없어(CHMO-357) 게이트에 넣으면
+ * 영영 공개할 수 없는 이벤트가 생긴다 — 실 BE·14 화면 판정과 같은 범위다.
+ * 한 사진이 여러 앨범에 걸쳐 있어도 1장으로 센다(다대다).
+ */
+export function unreviewedGatePhotoCount(eventId: number): number {
+  const unreviewed = new Set<number>()
+  for (const album of albumsOfEvent(eventId)) {
+    if (album.type !== 'person' && album.type !== 'common') continue
+    for (const photo of photosOfAlbum(album.id)) if (!photo.reviewed) unreviewed.add(photo.id)
+  }
+  return unreviewed.size
+}
+
+/**
  * 발행 액션(POST /publish — 재호출 포함): 게이트 통과 앨범의 사진을 published로 전환하고
  * **이번에 새로 발행된 장수**를 반환한다(BE publishedPhotoCount — 재호출이면 0일 수 있다).
  */

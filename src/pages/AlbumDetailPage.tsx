@@ -28,6 +28,7 @@ import {
   markAlbumReviewed,
   renamePersonAlbum,
 } from '../api/albums'
+import { getEvent } from '../api/events'
 import { cx } from '../lib/cx'
 import { uncertainCauseMessages } from '../lib/uncertainCauses'
 import type { ID } from '../types/api'
@@ -43,6 +44,10 @@ import type { ID } from '../types/api'
  * 앨범 삭제(CHMO-435 — 전 타입): 앨범명 줄 🗑 → 확인 다이얼로그(이 앨범에만 있는 사진은 영구 삭제 경고) →
  * DELETE /albums/:id → 08 복귀(replace). 사진 전량 삭제·이동으로 앨범이 비어도 앨범은 남는다(CHMO-418 —
  * 자동 삭제 폐지, CHMO-289 복귀 동작 반전): 잔류 + refetch로 빈 상태를 보여주고 삭제는 수동뿐.
+ * [검토 완료]는 **되돌릴 수 없다**(CHMO-488 — 검토 해제 폐기): 확인 다이얼로그로 한 번 받는다.
+ * CHMO-413에서 뺐던 다이얼로그를 되살린 것 — 그때의 근거("되돌릴 수 있는 표시")가 정책상 사라졌다.
+ * 공개된(published) 이벤트에서의 이동도 확인을 받는다(CHMO-488): 옮긴 사진이 발행 상태를 유지해
+ * 학부모 화면에 **즉시** 반영되므로, 오탭 한 번이 곧 잘못된 노출이 된다(미공개 이벤트는 그대로 즉시 이동).
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
  * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
@@ -65,6 +70,9 @@ export function AlbumDetailPage() {
   const navigate = useNavigate()
   const mutate = useMutation()
   const albumApi = useApi(`album:${albumId}`, (signal) => getAlbumWithPhotos(albumId, signal))
+  // 이벤트 상태는 이동 확인(공개 후 즉시 노출 경고 — CHMO-488)에만 쓴다. 앨범 응답엔 없어 따로 읽고,
+  // 실패해도 화면을 막지 않는다(미상이면 경고 없이 종전 동작 — 안 겪을 일을 겪은 척하지 않는다).
+  const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
 
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<ID>>(new Set())
@@ -72,6 +80,7 @@ export function AlbumDetailPage() {
   const [pendingDelete, setPendingDelete] = useState<ID[] | null>(null)
   const [pendingMove, setPendingMove] = useState<ID[] | null>(null)
   const [deleteAlbumOpen, setDeleteAlbumOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -83,6 +92,8 @@ export function AlbumDetailPage() {
   const album = albumApi.data?.album
   const photos = albumApi.data?.photos ?? []
   const eventPath = `/groups/${groupId}/events/${eventId}`
+  // 공개된 이벤트 = 이동이 곧 학부모 화면 변경(발행 상태를 유지한 채 옮겨진다 — BE CHMO-487 AC-4)
+  const eventPublished = eventApi.data?.status === 'published'
   // 검토 상태는 손에 있는 사진 목록으로 직접 판정 — 계약상 optional인 unreviewedPhotoCount에 의존하지 않고
   // 0장 앨범이 공허하게 '완료'로 잡히는 것도 막는다
   const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
@@ -189,12 +200,14 @@ export function AlbumDetailPage() {
     setBusy(true)
     await mutate(() => markAlbumReviewed(albumId), {
       onSuccess: () => {
+        setReviewOpen(false)
         toast.show('🧀 검토 완료로 표시했어요')
         // 검토는 앨범 단위 진행이라 완료하면 08로 복귀해 다음 앨범으로 이어가게 한다(CHMO-414).
         // 앨범이 그대로 있어 뒤로가기로 돌아와도 무해하므로 CHMO-289와 달리 replace가 아닌 push.
         navigate(eventPath)
       },
       onError: (msg) => {
+        setReviewOpen(false)
         toast.show(msg)
         setBusy(false)
       },
@@ -450,7 +463,7 @@ export function AlbumDetailPage() {
                 <Button
                   className="flex-1 !px-2"
                   disabled={locked || allReviewed}
-                  onClick={handleReview}
+                  onClick={() => setReviewOpen(true)}
                 >
                   {allReviewed ? '검토 완료됨' : '검토 완료'}
                 </Button>
@@ -533,6 +546,19 @@ export function AlbumDetailPage() {
         onClose={() => setPendingDelete(null)}
       />
 
+      {/* 검토 완료 확인(CHMO-488) — 해제가 없어 되돌리려면 사진을 지우는 수밖에 없다.
+          CHMO-413에서 뺐던 다이얼로그를 되살린 것(그때 근거였던 '되돌릴 수 있음'이 사라졌다) */}
+      <ConfirmDialog
+        open={reviewOpen}
+        busy={busy}
+        busyLabel="처리 중…"
+        title={`'${album?.name ?? '앨범'}'을 검토 완료할까요?`}
+        description={`사진 ${photos.length}장이 모두 검토 완료로 표시돼요. 검토 완료는 되돌릴 수 없어요 — 빼야 할 사진이 있으면 먼저 삭제하거나 다른 앨범으로 옮겨 주세요.`}
+        confirmLabel="검토 완료"
+        onConfirm={handleReview}
+        onClose={() => setReviewOpen(false)}
+      />
+
       {/* 앨범 삭제 확인(CHMO-435) — 사진이 있으면 함께 삭제됨(N:M 사본 제외)을 명시한다 */}
       <ConfirmDialog
         open={deleteAlbumOpen}
@@ -555,6 +581,8 @@ export function AlbumDetailPage() {
           sourceAlbumId={albumId}
           sourceAlbumType={album.type}
           photoIds={pendingMove}
+          // 공개된 이벤트에선 이동이 곧 학부모 화면 변경 — 대상 탭 후 한 번 더 확인받는다(CHMO-488)
+          confirmImmediateExposure={eventPublished}
           onMoved={handleMoved}
           onCreated={handleCreated}
         />

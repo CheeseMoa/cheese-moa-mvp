@@ -335,15 +335,9 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         </div>
 
         <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
-          {/* 재공개 게이트(CHMO-324·265): 공개 후 검토를 마친 사진은 [공개하기]를 다시 눌러야
-              학부모에게 나간다 — 발행 대기가 있으면 아래 [요약 보기](→14 공개 요약)로 유도한다 */}
-          {event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
-            <p className="text-center text-xs font-bold text-warn">
-              발행 대기 {event.pendingPublishCount}장 — 요약 보기에서 공개할 수 있어요
-            </p>
-          )}
-          {/* [＋ 사진 추가]는 없다 — 업로드·분류는 이벤트당 1회라(CHMO-486) 추가로 가는 진입점을
-              두지 않는다. 더 올릴 사진이 있으면 이벤트를 새로 만든다 */}
+          {/* "발행 대기 N장" 안내는 없다(CHMO-488) — 재공개 경로가 사라졌다: 전량 검토 완료라야
+              공개되고(하드 게이트) 업로드도 이벤트당 1회라(CHMO-486) 공개 뒤 대기가 생기지 않는다.
+              [＋ 사진 추가]도 같은 이유로 없다 — 더 올릴 사진이 있으면 이벤트를 새로 만든다 */}
           <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
             요약 보기
           </Button>
