@@ -2,15 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import {
-  Button,
-  Header,
-  LoadState,
-  PhotoGrid,
-  PhotoTile,
-  Toggle,
-  useToast,
-} from '../components/ui'
+import { Button, Header, LoadState, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
 import { ApiRequestError, toErrorMessage } from '../api/client'
@@ -19,7 +11,7 @@ import { runWithConcurrency } from '../lib/concurrency'
 import { createPreviewThumbnail } from '../lib/previewThumb'
 import {
   isUploadableSize,
-  MAX_UPLOAD_BATCH,
+  MAX_UPLOAD_PICK,
   MAX_UPLOAD_FILE_LABEL,
   UPLOAD_FORMAT_LABEL,
   uploadContentTypeOf,
@@ -34,7 +26,8 @@ const PREVIEW_CONCURRENCY = 2
 interface PickedPhoto {
   key: string
   file: File
-  previewUrl: string
+  /** 축소 썸네일 blob URL — 준비 전엔 null이고 타일은 플레이스홀더를 보여준다(CHMO-497) */
+  previewUrl: string | null
   selected: boolean
   /** S3 PUT 성공 시 받은 키 — 재시도할 때 다시 presign·업로드하지 않는다 */
   s3Key: string | null
@@ -68,9 +61,10 @@ async function registrationLanded(eventId: string, photoCountBefore: number): Pr
  * **업로드·분류는 이벤트당 1회**(CHMO-486) — 사진이 이미 등록된 이벤트는 진입 자체를 막는다.
  * 08에 [＋ 사진 추가]가 없고 이 화면은 빈 이벤트에서만 열리지만, 딥링크·뒤로가기로도 들어올 수
  * 있어 화면이 직접 판정한다(서버 게이트는 CHMO-485).
- * 선택은 MAX_UPLOAD_BATCH(50장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
- * 해제 강요 제거, CHMO-397). 실 BE 상한 50 실측(2026-07-24, VALID400) — 1회 정책과 곱해지면
- * 이벤트당 50장이 되므로 500 상향(CHMO-482) 배포 후 MAX_UPLOAD_BATCH를 올린다.
+ * 선택은 MAX_UPLOAD_PICK(100장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
+ * 해제 강요 제거, CHMO-397). 이 상한은 **BE 계약 상한(500, 2026-07-28 실측)과 별개**로 웹이 스스로
+ * 거는 값이다(CHMO-497) — 브라우저는 고른 파일을 전부 디코드해야 하고, 500장 규모는 앱의 네이티브
+ * 업로드가 맡는다. 미리보기는 원본을 장당 1회만 디코드한다(타일에 원본을 꽂지 않는다).
  * 다중 선택(파일 피커) → 썸네일 그리드에서 선택 조정 → [사진 분류하기] 한 번으로
  * ① presign(POST /events/:id/photos/presign) ② presigned URL로 S3 직접 PUT
  * ③ 등록(POST /events/:id/photos — 제외 토글 함께 전송) → 이벤트 상세(분석중)로 복귀.
@@ -92,6 +86,8 @@ export function PhotoUploadPage() {
   const [uploadedCount, setUploadedCount] = useState(0)
   const [uploadTotal, setUploadTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  // 미리보기 준비 소요(AC-5 기준선 측정용) — DEV에서만 화면에 노출한다
+  const [previewTiming, setPreviewTiming] = useState<{ count: number; ms: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 시도(attempt) 식별자 — 실패 후 곧바로 재시도할 때 이전 시도의 늦은 응답이 진행률을 건드리지 않게
   const attemptRef = useRef(0)
@@ -101,7 +97,7 @@ export function PhotoUploadPage() {
   photosRef.current = photos
   useEffect(
     () => () => {
-      for (const p of photosRef.current) URL.revokeObjectURL(p.previewUrl)
+      for (const p of photosRef.current) if (p.previewUrl) URL.revokeObjectURL(p.previewUrl)
     },
     [],
   )
@@ -119,7 +115,7 @@ export function PhotoUploadPage() {
   // 피커 분기(스크롤 밖 하단 CTA 액션바가 있는 상태) — 이때는 main이 아니라 바가 바닥 여백을 소유한다
   const showPicker = !!event && !uploadLocked
   const selectedCount = photos.filter((p) => p.selected).length
-  const overBatchLimit = selectedCount > MAX_UPLOAD_BATCH
+  const overBatchLimit = selectedCount > MAX_UPLOAD_PICK
   const busy = phase !== 'idle'
 
   const handlePick = (e: ChangeEvent<HTMLInputElement>) => {
@@ -133,7 +129,9 @@ export function PhotoUploadPage() {
     const accepted = supported.filter((f) => isUploadableSize(f.size))
     const notices: string[] = []
     if (supported.length < files.length)
-      notices.push(`${UPLOAD_FORMAT_LABEL}만 올릴 수 있어요(${files.length - supported.length}개 제외)`)
+      notices.push(
+        `${UPLOAD_FORMAT_LABEL}만 올릴 수 있어요(${files.length - supported.length}개 제외)`,
+      )
     if (accepted.length < supported.length)
       notices.push(
         `${MAX_UPLOAD_FILE_LABEL}가 넘는 사진 ${supported.length - accepted.length}개는 제외했어요`,
@@ -145,42 +143,46 @@ export function PhotoUploadPage() {
     const seen = new Set(photos.map((p) => p.key))
     // 상한 캡(CHMO-397) — 남은 슬롯까지만 선택 상태로 담고 초과분은 해제 상태로 추가한다.
     // 사용자가 타일을 직접 해제하지 않아도 바로 진행할 수 있고, 원하면 바꿔 담을 수 있다.
-    const remainingSlots = Math.max(0, MAX_UPLOAD_BATCH - selectedCount)
+    const remainingSlots = Math.max(0, MAX_UPLOAD_PICK - selectedCount)
     const added = accepted
       .map((file) => ({ key: `${file.name}:${file.size}:${file.lastModified}`, file }))
       .filter(({ key }) => !seen.has(key))
       .map(({ key, file }, i) => ({
         key,
         file,
-        previewUrl: URL.createObjectURL(file),
+        // 원본 objectURL을 여기서 만들지 않는다(CHMO-497) — 꽂는 순간 브라우저가 고른 원본을
+        // 전부 디코드해 첫 페인트가 멈춘다. 타일은 썸네일이 올 때까지 플레이스홀더로 둔다.
+        previewUrl: null,
         selected: i < remainingSlots,
         s3Key: null,
         registered: false,
       }))
     if (added.length > remainingSlots)
-      notices.push(`한 번에 ${MAX_UPLOAD_BATCH}장까지 올릴 수 있어요`)
+      notices.push(`한 번에 ${MAX_UPLOAD_PICK}장까지 올릴 수 있어요`)
     if (notices.length > 0) toast.show(notices.join(' · '))
     if (added.length === 0) return
     setPhotos((prev) => [...prev, ...added])
-    void shrinkPreviews(added)
+    void buildPreviews(added)
   }
 
   /**
-   * 원본 미리보기를 축소 썸네일로 순차 교체(CHMO-369) — 원본 수십 장을 타일에 그대로
-   * 디코드하면 피커 복귀 직후 화면이 멈춘다. 축소 실패 항목은 원본 미리보기를 유지한다.
+   * 플레이스홀더 타일을 축소 썸네일로 채운다(CHMO-369 · CHMO-497).
+   * 원본은 여기서 **딱 한 번** 디코드된다 — 타일에 원본을 꽂지 않으므로 브라우저가 따로
+   * 디코드할 일이 없다. 썸네일을 못 만든 파일만 원본 objectURL로 폴백한다(미리보기 공백 방지).
    */
-  const shrinkPreviews = async (items: PickedPhoto[]) => {
+  const buildPreviews = async (items: PickedPhoto[]) => {
+    const startedAt = performance.now()
     await runWithConcurrency(items, PREVIEW_CONCURRENCY, async ({ key, file }) => {
-      const thumbUrl = await createPreviewThumbnail(file)
-      if (!thumbUrl) return
+      const previewUrl = (await createPreviewThumbnail(file)) ?? URL.createObjectURL(file)
       if (!alive.current) {
-        URL.revokeObjectURL(thumbUrl)
+        URL.revokeObjectURL(previewUrl)
         return
       }
-      const original = photosRef.current.find((p) => p.key === key)?.previewUrl
-      setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, previewUrl: thumbUrl } : p)))
-      if (original) URL.revokeObjectURL(original)
+      setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, previewUrl } : p)))
     })
+    // AC-5 기준선 — 실기기(모바일 사파리)는 콘솔을 붙이기 어려워 화면에 띄운다(DEV에서만 렌더)
+    if (alive.current)
+      setPreviewTiming({ count: items.length, ms: Math.round(performance.now() - startedAt) })
   }
 
   const toggleSelected = (key: string) => {
@@ -188,8 +190,8 @@ export function PhotoUploadPage() {
     if (!target) return
     // 캡 도달 상태에서 새로 선택하려는 탭 — 상한을 넘기지 말고 안내만(CHMO-397).
     // 여기서 막아야 CTA가 '초과로 비활성' 상태로 되돌아갈 일이 없다.
-    if (!target.selected && selectedCount >= MAX_UPLOAD_BATCH) {
-      toast.show(`한 번에 ${MAX_UPLOAD_BATCH}장까지 올릴 수 있어요`)
+    if (!target.selected && selectedCount >= MAX_UPLOAD_PICK) {
+      toast.show(`한 번에 ${MAX_UPLOAD_PICK}장까지 올릴 수 있어요`)
       return
     }
     setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, selected: !p.selected } : p)))
@@ -378,11 +380,17 @@ export function PhotoUploadPage() {
                   선택됨 {selectedCount}장
                 </span>
                 {/* 상한 사전 고지 — 선택 전부터 상시 보인다(CHMO-397) */}
-                <span className="text-xs text-muted">한 번에 최대 {MAX_UPLOAD_BATCH}장</span>
+                <span className="text-xs text-muted">한 번에 최대 {MAX_UPLOAD_PICK}장</span>
               </p>
+              {/* 미리보기 준비 시간(AC-5, CHMO-497) — 실기기 기준선 측정용이라 DEV에서만 */}
+              {import.meta.env.DEV && previewTiming ? (
+                <p className="mt-1 text-[11px] text-muted">
+                  [DEV] 미리보기 {previewTiming.count}장 준비 {previewTiming.ms}ms
+                </p>
+              ) : null}
               {/* 캡으로 해제 상태 사진이 남았을 때만. 업로드는 이벤트당 1회라 "다음에 이어
                   올리세요"는 거짓 안내가 된다(CHMO-486) — 지금 못 올린다는 사실을 그대로 알린다 */}
-              {selectedCount >= MAX_UPLOAD_BATCH && photos.some((p) => !p.selected) && (
+              {selectedCount >= MAX_UPLOAD_PICK && photos.some((p) => !p.selected) && (
                 <p className="mt-2 text-xs leading-relaxed text-warn">
                   선택되지 않은 사진은 올라가지 않아요 — 업로드는 이벤트당 한 번이라 지금 올릴
                   사진을 모두 골라 주세요
@@ -405,7 +413,8 @@ export function PhotoUploadPage() {
               </div>
               {/* 카피는 기능 명세 정정본 기준 — 제외 사진은 눈감음/흔들림 앨범으로 라우팅(08 참고) */}
               <p className="mt-2.5 text-xs leading-relaxed text-muted">
-                제외한 사진은 &lsquo;눈감은 사진&rsquo;·&lsquo;흔들린 사진&rsquo; 사진첩으로 이동해요
+                제외한 사진은 &lsquo;눈감은 사진&rsquo;·&lsquo;흔들린 사진&rsquo; 사진첩으로
+                이동해요
               </p>
             </div>
 
@@ -422,7 +431,8 @@ export function PhotoUploadPage() {
               {photos.map((p) => (
                 <PhotoTile
                   key={p.key}
-                  src={p.previewUrl}
+                  // 썸네일 준비 전엔 undefined — PhotoTile이 치즈 도트 플레이스홀더를 보여준다
+                  src={p.previewUrl ?? undefined}
                   alt={p.file.name}
                   selectable
                   selected={p.selected}
@@ -432,7 +442,6 @@ export function PhotoUploadPage() {
                 />
               ))}
             </PhotoGrid>
-
           </>
         )}
 
@@ -451,12 +460,11 @@ export function PhotoUploadPage() {
           (CHMO-369의 sticky 철회, CHMO-424) */}
       {showPicker ? (
         <div className="px-5 pb-safe-9 pt-3">
-          {/* 정상 경로에선 도달 불가 — 선택이 상한에서 캡된다(CHMO-397). BE가 배치 전체를
-              400으로 거절하는 하드 제약이라 회귀 대비 방어선으로만 남긴다 */}
+          {/* 정상 경로에선 도달 불가 — 선택이 상한에서 캡된다(CHMO-397). 회귀 대비 방어선으로만 남긴다 */}
           {overBatchLimit ? (
             <p role="alert" className="mb-2.5 text-sm text-warn">
-              한 번에 {MAX_UPLOAD_BATCH}장까지 올릴 수 있어요.{' '}
-              {selectedCount - MAX_UPLOAD_BATCH}장을 선택 해제해 주세요.
+              한 번에 {MAX_UPLOAD_PICK}장까지 올릴 수 있어요. {selectedCount - MAX_UPLOAD_PICK}장을
+              선택 해제해 주세요.
             </p>
           ) : null}
 

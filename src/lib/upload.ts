@@ -26,10 +26,21 @@ export const MAX_UPLOAD_FILE_BYTES = 20 * 1024 * 1024
 export const MAX_UPLOAD_FILE_LABEL = '20MB'
 
 /**
- * BE `PresignRequest`·`RegisterPhotosRequest`의 `@Size(max = 50)` — presign·등록 한 번에 담을 최대 장수.
- * 200~300장 업로드는 BE 상한이 올라가야 가능하다(CHMO-217) — 그때 이 값만 바꾸면 된다.
+ * BE `PresignRequest`·`RegisterPhotosRequest`의 `@Size(max = 500)` — presign·등록 한 번에 담을
+ * 최대 장수. **2026-07-28 실서버 실측**(501장 → `VALID400 "한 번에 500장까지 업로드할 수 있습니다."`,
+ * presign·등록 양쪽 동일)으로 CHMO-482 상향 배포를 확인했다.
+ *
+ * 이건 **BE가 받아 주는 수**일 뿐 화면이 거는 상한이 아니다 — 06-U는 `MAX_UPLOAD_PICK`을 쓴다.
  */
-export const MAX_UPLOAD_BATCH = 50
+export const MAX_UPLOAD_BATCH = 500
+
+/**
+ * 웹(06-U)이 한 번에 담는 최대 장수 — BE 계약 상한과 **일부러 분리한** 값이다(CHMO-497).
+ * 브라우저는 고른 파일을 전부 디코드해 미리보기를 만들어야 해서 장수가 곧 CPU·메모리 부담이고,
+ * 500장 규모는 앱의 네이티브 업로드가 맡는다(하이브리드 전환). BE 상한이 더 올라가도 웹은 이 값을
+ * 지킨다. 다만 이 값이 `MAX_UPLOAD_BATCH`를 넘으면 BE가 배치 전체를 400으로 거절한다.
+ */
+export const MAX_UPLOAD_PICK = 100
 
 /** 소문자 확장자(화이트리스트 밖이거나 확장자가 없으면 null) */
 export function uploadExtensionOf(fileName: string): string | null {
