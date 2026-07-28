@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, LoadState, PinField, TextField, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
@@ -8,6 +8,13 @@ import { useMutation } from '../hooks/useMutation'
 import { getMe, logout, updateMe } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
+
+// 약관·정책 전문 링크 (CHMO-478) — 라우트는 가드 밖 /legal/*
+const LEGAL_LINKS = [
+  { to: '/legal/terms', label: '이용약관' },
+  { to: '/legal/privacy', label: '개인정보 처리방침' },
+  { to: '/legal/biometric', label: '얼굴 특징정보 처리 안내' },
+]
 
 /**
  * 설정 / 프로필 편집 · node 240:53 · GET /me, PATCH /me + 로그아웃.
@@ -120,6 +127,24 @@ export function SettingsPage() {
             ) : null}
           </form>
         )}
+        {/* 약관·정책 — 프로필 로딩/실패와 무관하게 항상 접근 가능 (CHMO-478) */}
+        <nav
+          aria-label="약관·정책"
+          className="mt-5 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card"
+        >
+          {LEGAL_LINKS.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface"
+            >
+              {label}
+              <span aria-hidden className="text-muted">
+                ›
+              </span>
+            </Link>
+          ))}
+        </nav>
         {/* 로그아웃은 앱 유일의 로그아웃 표면 — 프로필 로딩/실패 중에도 항상 접근 가능해야 한다 */}
         <div className="mt-auto flex flex-col gap-3 pt-6">
           <Button

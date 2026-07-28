@@ -316,6 +316,11 @@ export function PhotoUploadPage() {
             {/* 카운트·품질 토글 — 업로드 전 설정이라 스크롤을 따라올 필요가 없어 일반 흐름에 둔다.
                 CHMO-369의 상단 sticky는 철회: 실기기 WebKit에서 하단 CTA처럼 떠서 사진이 비쳤다(CHMO-424) */}
             <div className="pb-3 pt-3">
+              {/* 아동 사진 고지 배너(CHMO-478) — 얼굴 인식 처리 사실 + 보호자 동의 전제 안내 */}
+              <p className="mb-3 rounded-2xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
+                업로드한 사진은 얼굴 인식으로 인물별 분류됩니다. 보호자 동의를 받은 아이의 사진만
+                올려 주세요.
+              </p>
               <p className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center rounded-full bg-primary/[.15] px-3 py-1 text-xs font-bold text-heading">
                   선택됨 {selectedCount}장
