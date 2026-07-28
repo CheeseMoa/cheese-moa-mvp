@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
+import { AppTourModal } from '../components/AppTourModal'
 import { Button, Header, LoadState, PinField, TextField, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
@@ -33,6 +34,7 @@ export function SettingsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tourOpen, setTourOpen] = useState(false)
 
   useEffect(() => {
     if (me) {
@@ -127,16 +129,32 @@ export function SettingsPage() {
             ) : null}
           </form>
         )}
-        {/* 온보딩은 계정당 1회만 뜨므로 다시 볼 상시 진입점이 필요하다(CHMO-481) */}
-        <Link
-          to="/onboarding?replay=1"
-          className="mt-5 flex items-center justify-between rounded-2xl border border-border bg-white px-4 py-3.5 text-[15px] text-text shadow-card active:bg-surface"
+        {/* 온보딩은 계정당 1회만 뜨므로 다시 볼 상시 진입점이 필요하다(CHMO-481).
+            구조 투어(CHMO-504)는 여기에 이어 붙인다 — 슬라이드=가치, 투어=구조라 서로를 대체하지 않는다 */}
+        <nav
+          aria-label="사용 안내"
+          className="mt-5 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card"
         >
-          사용 방법 다시 보기
-          <span aria-hidden className="text-muted">
-            ›
-          </span>
-        </Link>
+          <Link
+            to="/onboarding?replay=1"
+            className="flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface"
+          >
+            사용 방법 다시 보기
+            <span aria-hidden className="text-muted">
+              ›
+            </span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setTourOpen(true)}
+            className="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] text-text active:bg-surface"
+          >
+            앱 구조 둘러보기
+            <span aria-hidden className="text-muted">
+              ›
+            </span>
+          </button>
+        </nav>
         {/* 약관·정책 — 프로필 로딩/실패와 무관하게 항상 접근 가능 (CHMO-478) */}
         <nav
           aria-label="약관·정책"
@@ -172,6 +190,8 @@ export function SettingsPage() {
           ) : null}
         </div>
       </main>
+
+      <AppTourModal open={tourOpen} onClose={() => setTourOpen(false)} />
     </PhoneShell>
   )
 }
