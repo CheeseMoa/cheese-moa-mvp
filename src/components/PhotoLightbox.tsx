@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { IconClose, IconDownload, useToast } from './ui'
+import { IconClose, IconDownload } from './ui'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { usePhotoSave } from '../hooks/usePhotoSave'
 import { cx } from '../lib/cx'
-import { downloadViaBlob } from '../lib/download'
 import type { FaceBbox, ID } from '../types/api'
 
 /** 라이트박스가 필요로 하는 최소 사진 형태 — Photo(제작자)·ViewerPhoto(뷰어) 공통부 */
@@ -41,7 +41,8 @@ const SWIPE_MIN_X = 48
 /**
  * 사진 크게 보기 공용 라이트박스(09 제작자 검수 · 16 뷰어, CHMO-242) — iOS 사진 앱풍
  * 라이트 크롬: 흰 배경 풀블리드 + 상단 ✕/카운터·하단 아이콘 툴바(반투명 blur 바).
- * 좌우 스와이프·←/→ 키로 이동(끝에서 멈춤), [저장]은 blob 저장. 확인 다이얼로그 등
+ * 좌우 스와이프·←/→ 키로 이동(끝에서 멈춤), [저장]은 앨범 저장 파이프라인(usePhotoSave,
+ * CHMO-473 — iOS는 공유 시트 '이미지 저장', 그 외는 blob 다운로드). 확인 다이얼로그 등
  * z-40 오버레이를 위에 띄우려면 호출부 JSX에서 라이트박스보다 뒤에 두면 된다(DOM 순서).
  */
 export function PhotoLightbox<T extends LightboxPhoto>({
@@ -54,11 +55,17 @@ export function PhotoLightbox<T extends LightboxPhoto>({
   faceBboxes,
   disabled = false,
 }: PhotoLightboxProps<T>) {
-  const toast = useToast()
-  const [saving, setSaving] = useState(false)
+  const save = usePhotoSave()
   const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   const photo = photos[index] as T | undefined
+  const photoId = photo?.id
+
+  // 사진 전환 시 준비물 폐기 — 이전 사진의 파일로 [사진 앱에 저장]이 이어지지 않게
+  useEffect(() => {
+    save.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoId])
 
   // bbox 환산 재료 — 원본 자연 크기(naturalWidth/Height)와 이미지가 그려지는 프레임 크기
   const imgRef = useRef<HTMLImageElement | null>(null)
@@ -133,14 +140,21 @@ export function PhotoLightbox<T extends LightboxPhoto>({
     go(dx < 0 ? 1 : -1)
   }
 
-  const handleSave = async () => {
-    if (saving || disabled) return
-    setSaving(true)
-    const ok = await downloadViaBlob(photo.downloadUrl ?? photo.url, `${photo.id}.jpg`)
-    setSaving(false)
-    // 성공 피드백은 브라우저 저장 동작 자체 — 실패만 알린다
-    if (!ok) toast.show('저장하지 못했어요. 다시 시도해 주세요.')
+  // iOS 2단계: 첫 탭 = 준비 시작(빠르면 시트까지 직행), ready면 재탭이 공유 시트를 연다
+  const handleSave = () => {
+    if (save.busy || disabled) return
+    if (save.state.phase === 'ready') save.shareNext()
+    else void save.start([{ url: photo.downloadUrl ?? photo.url, filename: `${photo.id}.jpg` }])
   }
+
+  const saveLabel =
+    save.state.phase === 'preparing'
+      ? '준비 중…'
+      : save.state.phase === 'downloading'
+        ? '저장 중…'
+        : save.state.phase === 'ready'
+          ? '사진 앱에 저장'
+          : '저장'
 
   // object-contain으로 그려진 실제 이미지 영역(레터박스 제외)을 프레임 안에서 역산한다
   const boxes = faceBboxes?.(photo)
@@ -241,8 +255,8 @@ export function PhotoLightbox<T extends LightboxPhoto>({
         >
           <LightboxToolbarButton
             icon={<IconDownload />}
-            label={saving ? '저장 중…' : '저장'}
-            disabled={saving || disabled}
+            label={saveLabel}
+            disabled={save.busy || disabled}
             onClick={handleSave}
           />
           {actions?.(photo)}

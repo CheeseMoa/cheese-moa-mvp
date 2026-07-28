@@ -131,7 +131,8 @@ export function getParentEventPhotos(
   )
 }
 
-/** GET /events/:id/parent-photos/download — 같은 범위의 이벤트 단위 zip(기존 앨범 zip 응답 재사용) */
+/** GET /events/:id/parent-photos/download — 같은 범위의 이벤트 단위 zip(기존 앨범 zip 응답
+ * 재사용). ⚠ 화면은 더 이상 호출하지 않는다(CHMO-473 — ZIP 폐지) — 계약 테스트 고정용 */
 export function getParentPhotosZip(eventId: ID | string): Promise<AlbumDownloadResponse> {
   return apiFetch<AlbumDownloadResponse>(`/events/${eventId}/parent-photos/download`)
 }
