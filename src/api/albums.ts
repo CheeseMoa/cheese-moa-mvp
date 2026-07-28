@@ -60,7 +60,9 @@ export async function renamePersonAlbum(albumId: ID | string, name: string): Pro
 /**
  * GET /albums/:id/download — 멤버용 앨범 ZIP URL 발급(CHMO-338, 미검토 포함 전체).
  * person/common만 대상 — 특수 앨범(uncertain·eyes_closed·blurry)은 BE가 ALBUM404를
- * 준다(2026-07-20 실서버 채집). 호출부가 특수 앨범에서 진입로를 숨긴다.
+ * 준다(2026-07-20 실서버 채집).
+ * ⚠ 화면은 더 이상 호출하지 않는다(CHMO-473 — ZIP 폐지, 개별 요청 전환). BE 엔드포인트
+ * 존치라 계약 테스트 고정용으로만 남긴다.
  */
 export function getAlbumZip(albumId: ID | string): Promise<AlbumDownloadResponse> {
   return apiFetch<AlbumDownloadResponse>(`/albums/${albumId}/download`)

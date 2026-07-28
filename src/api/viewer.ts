@@ -123,7 +123,8 @@ export function getViewerAlbumPhotos(
   })
 }
 
-/** GET …/albums/:albumId/download — 일괄 zip 다운로드 URL 발급(16) */
+/** GET …/albums/:albumId/download — 일괄 zip URL 발급. ⚠ 화면은 더 이상 호출하지
+ * 않는다(CHMO-473 — ZIP 폐지) — BE 엔드포인트 존치라 계약 테스트 고정용으로만 남긴다 */
 export function getViewerAlbumZip(
   shareToken: string,
   eventId: ID | string,
