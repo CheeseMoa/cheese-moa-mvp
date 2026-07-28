@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
+import { AppTourModal } from '../components/AppTourModal'
 import { JoinGroupModal } from '../components/JoinGroupModal'
 import {
   Button,
@@ -37,6 +38,7 @@ export function HomePage() {
   const [joinOpen, setJoinOpen] = useState(
     Boolean((location.state as { openJoin?: boolean } | null)?.openJoin),
   )
+  const [tourOpen, setTourOpen] = useState(false)
   const groups = data ?? []
 
   return (
@@ -71,6 +73,13 @@ export function HomePage() {
                   <br />
                   초대받은 모임에 참여해 보세요.
                 </>
+              }
+              // 모임이 0개일 때가 구조를 가장 모르는 시점 — 투어는 실제 데이터를 안 쓰므로
+              // 보여줄 모임이 없어도 그대로 돌아간다(CHMO-504)
+              action={
+                <Button size="sm" variant="secondary" onClick={() => setTourOpen(true)}>
+                  앱 구조 둘러보기
+                </Button>
               }
             />
           ) : (
@@ -133,6 +142,7 @@ export function HomePage() {
           refetch()
         }}
       />
+      <AppTourModal open={tourOpen} onClose={() => setTourOpen(false)} />
     </PhoneShell>
   )
 }
