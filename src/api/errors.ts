@@ -43,7 +43,11 @@ const BE_CODE_MAP: Record<string, string> = {
   MOMENT404: 'NOT_FOUND',
   /** 앨범 없음(404) */
   ALBUM404: 'NOT_FOUND',
-  /** 공개 시 미검토 사진 존재(409) — 14가 이 코드로 force 재시도를 분기한다(CHMO-324) */
+  /**
+   * 공개 시 미검토 사진 존재(409) — 전량 검토 완료가 하드 게이트라(CHMO-488) 우회가 없다.
+   * 14는 애초에 버튼을 잠가 이 상태로 호출하지 않으므로, 실제로 오면 동시 작업 레이스다
+   * (종전의 ?force=true 재시도 분기는 폐기 — CHMO-324·265).
+   */
   PUBLISH409: 'HAS_UNREVIEWED_PHOTOS',
   /** 지원하지 않는 소셜 프로바이더(400) — 경로 변수가 BE 미구현 값 (CHMO-359) */
   OAUTH400: 'UNSUPPORTED_SOCIAL_PROVIDER',
