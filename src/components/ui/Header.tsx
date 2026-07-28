@@ -12,6 +12,8 @@ interface HeaderProps {
   backLabel?: string
   /** 뒤로가기 차단(제출 중 등 — 이탈하면 진행 중인 요청 결과를 잃는 화면용) */
   backDisabled?: boolean
+  /** 뒤로가기 핸들러 — 진입점이 여러 곳이라 절대경로 backTo를 못 쓰는 화면용. backTo와 함께 주면 backTo 우선 */
+  onBack?: () => void
   /** 우측 액션 슬롯(설정 ⚙ 등) */
   right?: ReactNode
 }
@@ -20,24 +22,31 @@ interface HeaderProps {
  * 화면 상단 헤더 (dc.html §01).
  * 홈형 = 체다 로고 + 워드마크 + 우측 슬롯 · 서브형 = 뒤로가기(accent) + 중앙 타이틀 + 우측 슬롯.
  */
-export function Header({ title, backTo, backLabel, backDisabled, right }: HeaderProps) {
-  if (backTo) {
+export function Header({ title, backTo, backLabel, backDisabled, onBack, right }: HeaderProps) {
+  if (backTo || onBack) {
+    const backClass = cx(
+      'justify-self-start truncate text-[15px] font-medium',
+      backDisabled ? 'pointer-events-none text-muted' : 'text-accent',
+    )
     return (
       <header className="grid h-[52px] shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-cream px-3.5">
-        <Link
-          to={backTo}
-          aria-disabled={backDisabled || undefined}
-          tabIndex={backDisabled ? -1 : undefined}
-          onClick={(e) => {
-            if (backDisabled) e.preventDefault()
-          }}
-          className={cx(
-            'justify-self-start truncate text-[15px] font-medium',
-            backDisabled ? 'pointer-events-none text-muted' : 'text-accent',
-          )}
-        >
-          ‹ {backLabel ?? '뒤로'}
-        </Link>
+        {backTo ? (
+          <Link
+            to={backTo}
+            aria-disabled={backDisabled || undefined}
+            tabIndex={backDisabled ? -1 : undefined}
+            onClick={(e) => {
+              if (backDisabled) e.preventDefault()
+            }}
+            className={backClass}
+          >
+            ‹ {backLabel ?? '뒤로'}
+          </Link>
+        ) : (
+          <button type="button" onClick={onBack} disabled={backDisabled} className={backClass}>
+            ‹ {backLabel ?? '뒤로'}
+          </button>
+        )}
         <h1 className="truncate text-base font-bold text-text">{title}</h1>
         <div className="justify-self-end">{right}</div>
       </header>

@@ -132,6 +132,11 @@ export function ParentEventPhotosPage() {
               {hasPhotos ? (
                 <>
                   <p className="mt-1 text-[13px] text-muted">{countText}</p>
+                  {/* 재배포 금지 안내(CHMO-478) — 단체 사진 속 다른 아이 초상권 보호 */}
+                  <p className="mt-3 rounded-2xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
+                    받으신 사진은 개인적으로만 이용해 주세요. 사진에는 다른 아이가 함께 나올 수
+                    있어요 — SNS·단체 대화방에 올리면 다른 아이의 초상권을 침해할 수 있습니다.
+                  </p>
                   <div className="mt-4">
                     <PhotoGrid>
                       {photos.map((photo, i) => (
