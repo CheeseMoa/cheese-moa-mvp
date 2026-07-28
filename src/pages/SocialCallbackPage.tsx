@@ -6,7 +6,8 @@ import { ButtonLink } from '../components/ui'
 import { useMutation } from '../hooks/useMutation'
 import { exchangeSocialCode } from '../api/auth'
 import { toFeErrorCode } from '../api/errors'
-import { consumeSocialReturnTo, setAuthTokens } from '../lib/auth'
+import { consumeSocialReturnTo, setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { postLoginDestination } from '../lib/onboarding'
 
 /**
  * BE 콜백이 `?error=`로 싣는 코드별 안내 — 사용자가 취할 행동이 서로 다르다
@@ -48,7 +49,9 @@ export function SocialCallbackPage() {
       noAuthRedirect: true,
       onSuccess: (tokens) => {
         setAuthTokens(tokens)
-        navigate(consumeSocialReturnTo() ?? '/home', { replace: true })
+        // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
+        setCurrentUserId(tokens.userId)
+        navigate(postLoginDestination(consumeSocialReturnTo()), { replace: true })
       },
       onError: setExchangeError,
     })

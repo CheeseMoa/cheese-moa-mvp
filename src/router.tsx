@@ -8,6 +8,7 @@ import { SignupPage } from './pages/SignupPage'
 import { SocialCallbackPage } from './pages/SocialCallbackPage'
 import { JoinPage } from './pages/JoinPage'
 import { HomePage } from './pages/HomePage'
+import { OnboardingPage } from './pages/OnboardingPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupCreatePage } from './pages/GroupCreatePage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
     element: <CreatorGuard />,
     children: [
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
+      { path: '/onboarding', element: <OnboardingPage /> }, // 00 첫 사용 온보딩(CHMO-481) — 로그인 후 1회
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
       { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함

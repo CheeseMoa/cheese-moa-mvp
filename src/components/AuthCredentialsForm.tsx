@@ -3,7 +3,8 @@ import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
 import { login, signup } from '../api/auth'
-import { setAuthTokens } from '../lib/auth'
+import { setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { postLoginDestination } from '../lib/onboarding'
 import { PIN_RE } from '../lib/pin'
 import { SocialLoginButtons } from './SocialLoginButtons'
 import { Button, PinField, TextField } from './ui'
@@ -67,8 +68,10 @@ export function AuthCredentialsForm({ mode }: AuthCredentialsFormProps) {
       noAuthRedirect: true,
       onSuccess: (res) => {
         setAuthTokens(res)
-        // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀
-        navigate(returnTo ?? '/home', { replace: true })
+        // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
+        setCurrentUserId(res.userId)
+        // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀, 아니면 온보딩/홈
+        navigate(postLoginDestination(returnTo), { replace: true })
       },
       // 서버 에러 메시지(INVALID_CREDENTIALS·NICKNAME_TAKEN·INVALID_PIN)는 사용자 노출 가능한 한국어
       onError: (msg) => {
