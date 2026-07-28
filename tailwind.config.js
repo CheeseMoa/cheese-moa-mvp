@@ -49,7 +49,7 @@ export default {
           '0%': { left: '4%' },
           '100%': { left: '96%' },
         },
-        // 앱 구조 둘러보기(CHMO-504) 단계 전환 — 아래에서 살짝 올라오며 나타난다
+        // 치즈모아 둘러보기(CHMO-504) 단계 전환 — 아래에서 살짝 올라오며 나타난다
         'step-in': {
           from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },

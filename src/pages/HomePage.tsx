@@ -87,7 +87,7 @@ export function HomePage() {
               // 보여줄 모임이 없어도 그대로 돌아간다(CHMO-504)
               action={
                 <Button size="sm" variant="secondary" onClick={() => setTourOpen(true)}>
-                  앱 구조 둘러보기
+                  치즈모아 둘러보기
                 </Button>
               }
             />

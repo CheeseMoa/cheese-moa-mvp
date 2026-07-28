@@ -141,7 +141,7 @@ export function SettingsPage() {
             onClick={() => setTourOpen(true)}
             className="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] text-text active:bg-surface"
           >
-            앱 구조 둘러보기
+            치즈모아 둘러보기
             <span aria-hidden className="text-muted">
               ›
             </span>

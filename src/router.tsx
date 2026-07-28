@@ -64,7 +64,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
       // 00 첫 사용 온보딩 슬라이드(CHMO-481) — **현재 노출하지 않는다**(CHMO-504, 2026-07-28):
-      // 첫 로그인 안내는 홈 위 '앱 구조 둘러보기'(00-T)가 맡고 슬라이드로 보내는 진입점은 없앴다.
+      // 첫 로그인 안내는 홈 위 '치즈모아 둘러보기'(00-T)가 맡고 슬라이드로 보내는 진입점은 없앴다.
       // 화면·라우트는 되살릴 수 있게 남겨 둔다(직접 URL로만 열린다).
       { path: '/onboarding', element: <OnboardingPage /> },
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집

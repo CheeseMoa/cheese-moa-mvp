@@ -5,7 +5,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import { cx } from '../lib/cx'
 
 /**
- * 앱 구조 둘러보기 (CHMO-504) — 첫 로그인 직후 1회 + 설정에서 다시 보기.
+ * 치즈모아 둘러보기 (CHMO-504) — 첫 로그인 직후 1회 + 설정에서 다시 보기.
  *
  * `모임 > 이벤트 > 앨범` 3단 정보구조를 **눌러서** 체감시킨다. 실제 화면 위 코치마크가 아니라
  * 축소된 앱 화면을 직접 그리므로 **모임이 하나도 없는 신규 가입자에게도 그대로 돌아간다**
@@ -263,7 +263,7 @@ export function AppTour({ open, onClose }: AppTourProps) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="앱 구조 둘러보기"
+      aria-label="치즈모아 둘러보기"
       className="absolute inset-0 z-50 flex flex-col bg-cream"
     >
       {/* 상단 — 뒤로 · 세그먼트 진행바 · 나가기. '1 / 3' 텍스트 카운터를 대신한다 */}
@@ -306,7 +306,7 @@ export function AppTour({ open, onClose }: AppTourProps) {
           <div className="my-auto w-full">
             <Cheddar size={64} />
             <h2 className="mt-6 text-[24px] font-bold leading-snug text-text">
-              앱이 어떻게 생겼는지
+              치즈모아가 어떻게 생겼는지
               <br />
               먼저 둘러볼까요?
             </h2>
