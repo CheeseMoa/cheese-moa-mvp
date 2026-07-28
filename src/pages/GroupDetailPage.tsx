@@ -42,6 +42,7 @@ export function GroupDetailPage() {
   )
   // 대기 신청 수([초대 관리] 뱃지) — TEACHER 전용 조회(Q3)라 실패할 수 있는데(구계약 실 BE
   // 미구현 404 등) 뱃지만 생략하고 화면은 그대로 둔다. PARENT는 05 진입 자체가 없다(§7-3).
+  // 승인제가 role 무관이 되면서(CHMO-475) 이 수에는 **선생님 신청도 포함**된다 — 탭별 내역은 20에서.
   const requestsApi = useApi(`join-requests:${groupId}`, (signal) =>
     listJoinRequests(groupId, signal),
   )

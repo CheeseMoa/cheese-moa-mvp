@@ -178,6 +178,8 @@ export function createFixtures(): Db {
       { id: 5, nickname: '서연맘', pin: '2222', createdAt: '2026-07-01T10:05:00+09:00' },
       { id: 6, nickname: '지호네', pin: '3333', createdAt: '2026-07-02T09:00:00+09:00' },
       { id: 7, nickname: '치즈냥이88', pin: '4444', createdAt: '2026-07-25T09:00:00+09:00' },
+      // 선생님 승인제(CHMO-475) 시연 — 선생님 키로 신청만 해 둔 대기 상태(20 선생님 탭)
+      { id: 8, nickname: '신입쌤', pin: '5555', createdAt: '2026-07-27T09:00:00+09:00' },
     ],
     groups: [
       {
@@ -224,6 +226,8 @@ export function createFixtures(): Db {
       { id: 8, userId: 6, groupId: 1, role: 'parent', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
       { id: 9, userId: 7, groupId: 1, role: 'parent', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
       { id: 10, userId: 4, groupId: 3, role: 'parent', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
+      // 선생님 신청(CHMO-475) — 선생님 키 합류도 승인 대기다. 자녀 이름은 없다(childNames 빈 배열)
+      { id: 11, userId: 8, groupId: 1, role: 'teacher', status: 'pending', childNames: [], createdAt: '2026-07-27T09:20:00+09:00' },
     ],
     // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
     personParents: [

@@ -32,7 +32,10 @@ export function GroupCard({
   ]
     .filter(Boolean)
     .join(' · ')
-  const sub = subtitle ?? (counts || undefined)
+  // 승인 대기 항목은 카운트로 폴백하지 않는다 — 실 BE는 memberCount를 생략하면서 eventCount는
+  // 0으로 실어 주는데(CHMO-475), 그대로 그리면 "이벤트 0"이 빈 모임처럼 읽힌다.
+  // 선생님 신청은 자녀 이름조차 없어(childNames 빈 배열) subtitle 없이 여기로 새기 쉽다.
+  const sub = subtitle ?? (pending ? undefined : counts || undefined)
   return (
     <button
       type="button"
