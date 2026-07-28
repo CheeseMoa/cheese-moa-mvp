@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getMe, login } from './auth'
 import {
+  createPersonAlbum,
   deletePhotos,
   getAlbumWithPhotos,
   getAlbumZip,
@@ -51,6 +52,7 @@ import {
   BE_EVENT_SUMMARY,
   BE_GROUP_DETAIL,
   BE_GROUP_SUMMARY,
+  BE_CREATE_ALBUM_EMPTY,
   BE_MEMBER_ZIP,
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
@@ -481,6 +483,37 @@ describe('앨범 · 사진', () => {
       targetAlbumId: 12,
     })
     expect(result).toEqual({ movedCount: 3 })
+  })
+
+  it('빈 앨범 생성 — 이름만 보내고 짝(sourceAlbumId·photoIds)은 아예 빠진다 (CHMO-456)', async () => {
+    const calls = serve(envelope(BE_CREATE_ALBUM_EMPTY, 'COMMON201'))
+
+    const result = await createPersonAlbum(63, { name: '이치즈' })
+
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].url).toBe('/api/v1/events/63/albums')
+    // 짝은 함께 보내거나 함께 생략해야 한다 — 한쪽만 실려 나가면 실 BE가 VALID400을 준다
+    expect(bodyOf(calls[0])).toEqual({ name: '이치즈' })
+    expect(result).toEqual({ albumId: 832, photoCount: 0 })
+  })
+
+  it('생성=이동 — 짝을 주면 그대로 실려 나가고 옮긴 장수가 온다 (CHMO-416)', async () => {
+    const calls = serve(
+      envelope({ ...BE_CREATE_ALBUM_EMPTY, personName: '김치즈', photoCount: 3 }, 'COMMON201'),
+    )
+
+    const result = await createPersonAlbum(63, {
+      name: '김치즈',
+      sourceAlbumId: 279,
+      photoIds: [101, 102, 103],
+    })
+
+    expect(bodyOf(calls[0])).toEqual({
+      name: '김치즈',
+      sourceAlbumId: 279,
+      photoIds: [101, 102, 103],
+    })
+    expect(result).toEqual({ albumId: 832, photoCount: 3 })
   })
 
   it('BE 삭제 — 연결 해제와 완전 삭제를 구분해 준다', async () => {

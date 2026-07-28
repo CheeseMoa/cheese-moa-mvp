@@ -8,6 +8,7 @@ import {
   ConfirmDialog,
   EventStatusBadge,
   Header,
+  IconPlus,
   LoadState,
   useToast,
 } from '../components/ui'
@@ -15,7 +16,7 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
-import { renamePersonAlbum } from '../api/albums'
+import { createPersonAlbum, renamePersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 import type { Album, AnalysisProgress, EventItem } from '../types/api'
@@ -245,6 +246,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 08에서 바로 이름 수정할 인물 앨범(CHMO-400) — 열릴 때만 모달 마운트(카드마다 대상이 달라 stale 방지)
   const [renameTarget, setRenameTarget] = useState<Album | null>(null)
+  // 빈 앨범 만들기(CHMO-471) — 이름만 받아 사진 0장 인물 앨범을 만든다
+  const [createOpen, setCreateOpen] = useState(false)
 
   const base = `/groups/${groupId}/events/${event.id}`
 
@@ -279,8 +282,6 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
               notFoundTo={`/groups/${groupId}`}
               notFoundLabel="모임 상세로"
             />
-          ) : albums.length === 0 ? (
-            <p className="py-11 text-center text-sm text-muted">앨범이 아직 없어요.</p>
           ) : (
             <>
               {/* stale 그리드 위에서 refetch가 실패해도 보이게 — 화면은 유지하고 알림만(09와 동일) */}
@@ -300,6 +301,9 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                     onRename={album.type === 'person' ? () => setRenameTarget(album) : undefined}
                   />
                 ))}
+                {/* 빈 앨범 만들기(CHMO-471) — 메인 그리드 맨 끝(09-1 "새 앨범" 타일과 같은 자리 관습).
+                    AI가 놓친 아이를 먼저 만들어 두고 09-1 [옮기기]로 사진을 모으는 동선 */}
+                <CreateAlbumTile onClick={() => setCreateOpen(true)} />
               </div>
 
               {qualityAlbums.length > 0 && (
@@ -318,9 +322,14 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                 </section>
               )}
 
-              <p className="mt-4 text-[11px] text-muted">
-                테두리: 회색 점선=미검토 · 갈색=검토완료
-              </p>
+              {/* 앨범이 하나도 없으면(분석 결과 0건) 범례 대신 안내 — 그래도 만들기 타일은 남는다 */}
+              {albums.length === 0 ? (
+                <p className="mt-4 text-sm text-muted">앨범이 아직 없어요.</p>
+              ) : (
+                <p className="mt-4 text-[11px] text-muted">
+                  테두리: 회색 점선=미검토 · 갈색=검토완료
+                </p>
+              )}
             </>
           )}
         </div>
@@ -350,6 +359,27 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         onEventUpdated={onEventUpdated}
       />
 
+      {/* 빈 앨범 만들기(CHMO-471) — 이름만 받아 POST /events/:id/albums(사진 0장, CHMO-456).
+          만든 뒤 09로 보내지 않는다: 빈 상세엔 할 게 없고, 사진은 사진 있는 앨범의 [옮기기]로 모은다 */}
+      {createOpen && (
+        <RenameModal
+          open
+          onClose={() => setCreateOpen(false)}
+          title="앨범 만들기"
+          label="아이 이름"
+          placeholder="예: 김치즈"
+          prefill={false}
+          initialName=""
+          maxLength={20}
+          submitLabel="만들기"
+          submittingLabel="만드는 중…"
+          submit={(name) => createPersonAlbum(event.id, { name })}
+          successMessage="🧀 앨범을 만들었어요"
+          onRenamed={albumsApi.refetch}
+          note="사진 없이 먼저 만들어 둬요. 다른 앨범에서 사진을 골라 [옮기기]로 이 앨범에 모을 수 있어요."
+        />
+      )}
+
       {/* 인물 앨범 이름 수정(CHMO-400) — 09와 같은 모달·API·이름전파 계약(모임 단위 personId).
           이 화면은 앨범 목록만 refetch — 다른 이벤트의 같은 인물 앨범은 다음 진입 시 갱신된 이름으로 조회 */}
       {renameTarget && (
@@ -369,6 +399,27 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         />
       )}
     </PhoneShell>
+  )
+}
+
+/**
+ * 08 그리드 맨 앞 "앨범 만들기" 타일(CHMO-471) — 앨범 카드와 같은 규격·점선 테두리 +
+ * 플러스(09-1 이동 시트의 "새 앨범" 타일과 같은 문법). 보조 동작이라 커버 자리는
+ * 사진 대신 muted 톤 플러스만 둬 실제 앨범 카드보다 시각적 우선순위를 낮춘다.
+ */
+function CreateAlbumTile({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-2xl border-2 border-dashed border-[#C9C2B4] bg-white p-2 text-left transition active:scale-[0.99]"
+    >
+      <span className="flex h-24 items-center justify-center rounded-[10px] bg-photo text-muted">
+        <IconPlus size={26} />
+      </span>
+      <span className="mt-2 block text-sm font-bold text-text">앨범 만들기</span>
+      <span className="mt-0.5 block text-[11px] text-muted">아이 추가</span>
+    </button>
   )
 }
 
