@@ -235,7 +235,7 @@ interface EventAlbumGridProps {
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
  * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
- * [+ 사진 추가]→06-U · [요약 보기]→14. 앨범 탭 → 09 앨범 상세.
+ * [요약 보기]→14. 앨범 탭 → 09 앨범 상세.
  * 인물 앨범 이름수정은 카드 이름 줄 탭(CHMO-400 — 09 진입 없이 바로) + 09 앨범 상세 헤더 ✎ 병행.
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
@@ -342,9 +342,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
               발행 대기 {event.pendingPublishCount}장 — 요약 보기에서 공개할 수 있어요
             </p>
           )}
-          <Button variant="secondary" fullWidth onClick={() => navigate(`${base}/upload`)}>
-            ＋ 사진 추가
-          </Button>
+          {/* [＋ 사진 추가]는 없다 — 업로드·분류는 이벤트당 1회라(CHMO-486) 추가로 가는 진입점을
+              두지 않는다. 더 올릴 사진이 있으면 이벤트를 새로 만든다 */}
           <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
             요약 보기
           </Button>
