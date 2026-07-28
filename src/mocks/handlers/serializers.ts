@@ -77,6 +77,10 @@ export function toMyMembership(membership: DbMembership) {
  * BE GroupSummaryResponse — 목록 전용. myMembership을 실어 PENDING 사용자는 이 응답
  * 하나로 끝낸다(§7-2). 멤버 정보는 ACTIVE TEACHER에게만(§7-3) — PARENT의 eventCount는
  * 미공개 이벤트 존재가 새지 않게 published 수만 센다(초안 미명시 — BE 재량, 안전 방향).
+ *
+ * 승인 대기 항목(role 무관 — 선생님 합류도 승인제가 된 CHMO-475 이후)은 실 BE가
+ * **memberCount 생략 + eventCount 0**으로 응답한다(BE 완료 공지, 2026-07-28). 멤버 수는
+ * 승인 전 정보 노출 0 원칙이고, 이벤트 수 0은 "볼 게 없다"는 사실 그대로다.
  */
 export function toGroupSummary(group: DbGroup, membership: DbMembership) {
   const isActiveTeacher = membership.status === 'active' && membership.role === 'teacher'
@@ -85,6 +89,7 @@ export function toGroupSummary(group: DbGroup, membership: DbMembership) {
     groupId: group.id,
     name: group.name,
     myMembership: toMyMembership(membership),
+    ...(membership.status === 'pending' ? { eventCount: 0 } : {}),
     ...(isActiveTeacher
       ? { memberCount: memberCountOf(group.id), eventCount: eventCountOf(group.id) }
       : {}),

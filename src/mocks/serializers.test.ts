@@ -134,12 +134,27 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       linkedChildNames: [],
     })
     expect(pending.memberCount).toBeUndefined()
-    expect(pending.eventCount).toBeUndefined()
+    // 대기 항목은 멤버 수를 생략하되 이벤트 수는 0으로 준다(CHMO-475 실 BE 계약) —
+    // 카드가 이 0을 "이벤트 0개"로 그리지 않는 건 화면(GroupCard) 몫이다
+    expect(pending.eventCount).toBe(0)
+
+    // 선생님 신청도 같은 대기 항목이다(CHMO-475 — 키는 신청 자격만 정한다):
+    // 자녀 이름이 없고(claimedChildNames 빈 배열) 멤버 수는 없고 이벤트 수는 0
+    const pendingTeacher = { ...membershipOf(1, 1)!, status: 'pending' as const }
+    const pendingTeacherSummary = toGroup(toGroupSummary(group, pendingTeacher))
+    expect(pendingTeacherSummary.myMembership).toEqual({
+      role: 'teacher',
+      status: 'pending',
+      claimedChildNames: [],
+      linkedChildNames: [],
+    })
+    expect(pendingTeacherSummary.memberCount).toBeUndefined()
+    expect(pendingTeacherSummary.eventCount).toBe(0)
 
     // 승인 전(PENDING)이면 role이 teacher여도 상세 카운트를 주지 않는다 — 목록과 게이트 동일
-    const pendingTeacher = toGroupDetail(group, { ...membershipOf(1, 1)!, status: 'pending' })
-    expect('memberCount' in pendingTeacher).toBe(false)
-    expect('teacherCount' in pendingTeacher).toBe(false)
+    const pendingTeacherDetail = toGroupDetail(group, pendingTeacher)
+    expect('memberCount' in pendingTeacherDetail).toBe(false)
+    expect('teacherCount' in pendingTeacherDetail).toBe(false)
   })
 
   it('학부모 이벤트 목록 — 카운트·커버가 노출 사진 기준이다 (미발행 누출 방지, Q4)', () => {

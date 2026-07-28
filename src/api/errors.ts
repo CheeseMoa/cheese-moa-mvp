@@ -10,7 +10,9 @@
  * (JOIN403·MOMENT404·ALBUM404) + 2026-07-16 참여 실패 채집(SPACE404 — CHMO-285)
  * + 2026-07-21 실서버 채집(OAUTH400 — 애플 미배포 시점의 `/auth/social/apple`) 및 BE ErrorStatus
  * 대조(OAUTH401·OAUTH502 — 콜백이 `?error=`로, exchange가 응답 code로 싣는다)
- * + 2026-07-22 실서버 채집(PUBLISH409 — CHMO-265 착수 중, 재공개 게이트 CHMO-324).
+ * + 2026-07-22 실서버 채집(PUBLISH409 — CHMO-265 착수 중, 재공개 게이트 CHMO-324)
+ * + 2026-07-28 BE 완료 공지(SPACE403 — 선생님 합류 승인제 CHMO-475 AC2. 실서버 채집은
+ *   학부모 전환 배포 후 CHMO-449에서).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -28,6 +30,13 @@ const BE_CODE_MAP: Record<string, string> = {
    * 실 BE 미배포 — 코드 자체는 협의 확정이라 등록하고, 배포 후 실서버 채집으로 재확인한다.
    */
   ROLE403: 'FORBIDDEN_ROLE',
+  /**
+   * 승인 전 모임 접근(403 — BE NOT_SPACE_MEMBER) — 신청은 했지만 아직 ACTIVE가 아닌 멤버십으로
+   * 모임 상세·이벤트·앨범을 호출한 경우. **선생님도 승인제로 통일**(BE CHMO-475 AC2)되면서
+   * 제작자 화면에서도 닿을 수 있게 됐다(딥링크·북마크·승인 전 새로고침).
+   * role 부족(ROLE403)과 달리 "기다리면 열린다"는 뜻이라, 화면은 재시도가 아니라 홈 복귀로 받는다.
+   */
+  SPACE403: 'PENDING_APPROVAL',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
   /** 이벤트(BE 도메인명 moment) 없음(404) */
