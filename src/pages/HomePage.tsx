@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { AppTourModal } from '../components/AppTourModal'
+import { AppTour } from '../components/AppTour'
 import { JoinGroupModal } from '../components/JoinGroupModal'
 import {
   Button,
@@ -14,6 +14,7 @@ import {
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { listGroups } from '../api/groups'
+import { hasSeenOnboarding, markOnboardingSeen } from '../lib/onboarding'
 
 /**
  * 02. 홈 / 내 모임 · node 211:1357(목록) · 211:1396(빈 상태) · 337:4(승인 대기) · GET /groups.
@@ -38,7 +39,15 @@ export function HomePage() {
   const [joinOpen, setJoinOpen] = useState(
     Boolean((location.state as { openJoin?: boolean } | null)?.openJoin),
   )
-  const [tourOpen, setTourOpen] = useState(false)
+  // 첫 로그인 1회 자동 노출(CHMO-504) — 로그인 후 별도 화면으로 튕기지 않고 홈 위에서 연다.
+  // 초대 링크로 들어와 02-1이 열려 있으면 미룬다: 참여 흐름을 안내가 가로막지 않는다.
+  const [tourOpen, setTourOpen] = useState(() => !joinOpen && !hasSeenOnboarding())
+
+  const closeTour = () => {
+    // 끝까지 봤든 ✕로 나갔든 '봤다'로 기록한다 — 차단 화면이 아니라 다시 띄우지 않는다
+    markOnboardingSeen()
+    setTourOpen(false)
+  }
   const groups = data ?? []
 
   return (
@@ -142,7 +151,7 @@ export function HomePage() {
           refetch()
         }}
       />
-      <AppTourModal open={tourOpen} onClose={() => setTourOpen(false)} />
+      <AppTour open={tourOpen} onClose={closeTour} />
     </PhoneShell>
   )
 }
