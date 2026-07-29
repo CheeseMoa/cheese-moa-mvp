@@ -118,7 +118,10 @@ export function EventDetailPage() {
                   <p className="mt-3 text-sm text-muted">아직 사진이 없어요</p>
                 </div>
                 <div className="mt-auto pt-6">
-                  <Button fullWidth onClick={() => navigate(`${base}/upload`)}>
+                  {/* replace로 들어간다 — 업로드는 이벤트당 1회라 06-U는 '지나가는 화면'이고,
+                      06-E 자리를 대신 차지해야 업로드 후 뒤로가기가 모임 상세로 곧장 빠진다.
+                      push로 두면 히스토리에 06-E·06-U가 남아 뒤로가기가 두 번 헛돈다 */}
+                  <Button fullWidth onClick={() => navigate(`${base}/upload`, { replace: true })}>
                     사진 업로드
                   </Button>
                 </div>

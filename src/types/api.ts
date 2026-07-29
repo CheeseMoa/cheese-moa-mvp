@@ -322,7 +322,10 @@ export interface MoveSuggestion {
   name: string
   /** 공통 사진첩 여부 — BE type(PERSON/COMMON)에서 파생. similarity 유무로 판정하지 않는다(CHMO-399) */
   isCommon: boolean
-  /** 대표 벡터 기반 유사도(0~1) — 실 BE는 인물 앨범에도 null을 줄 수 있다(미계산, 2026-07-22 관찰) */
+  /**
+   * 대표 벡터 기반 유사도(0~1) — **실 BE가 더는 보내지 않아 사실상 항상 null**이고
+   * 화면도 표시하지 않는다(2026-07-29). 추천 목록의 **순서**가 유사도를 대신한다.
+   */
   similarity: number | null
   /** 대표 사진 썸네일 URL(CHMO-232) — 커버 없는 앨범은 null(플레이스홀더 폴백) */
   thumbnailUrl: string | null

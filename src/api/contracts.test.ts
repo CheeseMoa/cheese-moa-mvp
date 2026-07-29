@@ -467,6 +467,27 @@ describe('앨범 · 사진', () => {
     ])
   })
 
+  // 실 BE가 similarity를 더는 보내지 않는다(2026-07-29) — 키가 통째로 빠진 응답이 온다.
+  // 그대로 흘리면 undefined가 `number | null` 자리에 앉아, 화면이 %를 다시 붙이는 날
+  // `NaN%`로 새어 나온다(옛 코드가 null만 걸렀던 이유가 이것)
+  it('BE 이동 추천 — similarity 키가 없으면 null로 정규화한다', async () => {
+    serve(
+      envelope([
+        {
+          albumId: BE_MOVE_SUGGESTION_PERSON.albumId,
+          type: BE_MOVE_SUGGESTION_PERSON.type,
+          personName: BE_MOVE_SUGGESTION_PERSON.personName,
+          thumbnailUrl: BE_MOVE_SUGGESTION_PERSON.thumbnailUrl,
+        },
+      ]),
+    )
+
+    const suggestions = await getMoveSuggestions(11, [101])
+
+    expect(suggestions[0].similarity).toBeNull()
+    expect(suggestions[0].name).toBe('서준')
+  })
+
   it('이동 — 요청 본문과 movedCount 응답', async () => {
     const calls = serve(envelope(BE_MOVE_PHOTOS))
 
