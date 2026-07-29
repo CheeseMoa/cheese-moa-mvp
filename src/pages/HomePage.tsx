@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { AppTour } from '../components/AppTour'
@@ -43,11 +43,13 @@ export function HomePage() {
   // 초대 링크로 들어와 02-1이 열려 있으면 미룬다: 참여 흐름을 안내가 가로막지 않는다.
   const [tourOpen, setTourOpen] = useState(() => !joinOpen && !hasSeenOnboarding())
 
-  const closeTour = () => {
-    // 끝까지 봤든 ✕로 나갔든 '봤다'로 기록한다 — 차단 화면이 아니라 다시 띄우지 않는다
-    markOnboardingSeen()
-    setTourOpen(false)
-  }
+  // 자동 노출은 '떴다'는 사실만으로 소진된다(2026-07-29 — 무조건 최초 1회).
+  // 닫을 때 기록하면 투어 도중 새로고침·뒤로가기·앱 전환으로 이탈했을 때 다음 홈 방문에
+  // 또 떠서 1회 보장이 깨진다. 다시 보려면 설정 → '치즈모아 둘러보기'.
+  useEffect(() => {
+    if (tourOpen) markOnboardingSeen()
+  }, [tourOpen])
+
   const groups = data ?? []
 
   return (
@@ -83,13 +85,9 @@ export function HomePage() {
                   초대받은 모임에 참여해 보세요.
                 </>
               }
-              // 모임이 0개일 때가 구조를 가장 모르는 시점 — 투어는 실제 데이터를 안 쓰므로
-              // 보여줄 모임이 없어도 그대로 돌아간다(CHMO-504)
-              action={
-                <Button size="sm" variant="secondary" onClick={() => setTourOpen(true)}>
-                  치즈모아 둘러보기
-                </Button>
-              }
+              // 둘러보기 버튼은 두지 않는다(2026-07-29) — 투어는 무조건 최초 1회만 뜨고,
+              // 다시 보는 경로는 설정 한 곳으로 모은다. 여기 두면 모임이 없는 동안 홈에
+              // 상시 노출돼 '1회'라는 약속과 어긋난다
             />
           ) : (
             <ul className="flex flex-col gap-3">
@@ -151,7 +149,7 @@ export function HomePage() {
           refetch()
         }}
       />
-      <AppTour open={tourOpen} onClose={closeTour} />
+      <AppTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </PhoneShell>
   )
 }

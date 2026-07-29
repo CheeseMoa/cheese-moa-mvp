@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, LoadState, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
@@ -204,7 +204,7 @@ export function PhotoUploadPage() {
     // 기준이 s3Key가 아니라 registered인 이유: presign·PUT은 서버 등록이 아니다(CHMO-194).
     const pending = selected.filter((p) => !p.registered)
     if (pending.length === 0) {
-      navigate(eventPath)
+      navigate(eventPath, { replace: true })
       return
     }
     // 이전 시도에서 PUT까지 끝난 사진은 그 s3Key를 재사용한다(같은 파일을 두 번 올리지 않게)
@@ -283,7 +283,10 @@ export function PhotoUploadPage() {
       // 일어나 status만으로 판정될 여지가 생겼지만, 등록 응답 시점에 analyzing이 보장되는지는
       // 실 BE로 확인 전이라 킥을 유지한다(확인 후 정리 — CHMO-486 범위).
       // expected는 완료 판정용: 사진은 분석 커밋 시점에야 photoCount에 반영된다(실서버 실측).
+      // replace — 업로드가 끝난 06-U는 다시 열 수 없는 화면이라(1회 정책) 히스토리에 남기지
+      // 않는다. 남기면 이벤트 상세에서 뒤로가기가 '이미 올렸어요' 안내로 떨어진다(CHMO-486)
       navigate(eventPath, {
+        replace: true,
         state: {
           analysisKick: {
             eventId,
@@ -306,7 +309,7 @@ export function PhotoUploadPage() {
       if (registerAttempted && (await registrationLanded(eventId, photoCountBefore))) {
         if (!alive.current) return
         toast.show('🧀 사진 분류를 시작했어요')
-        navigate(eventPath)
+        navigate(eventPath, { replace: true })
         return
       }
       if (!alive.current) return
@@ -317,7 +320,13 @@ export function PhotoUploadPage() {
 
   return (
     <PhoneShell>
-      <Header backTo={eventPath} backLabel={event?.name ?? '이벤트 상세'} backDisabled={busy} />
+      {/* 헤더 ‹ 도 replace — 06-U는 히스토리에 남지 않는 지나가는 화면이라는 규칙을 여기서도
+          지킨다(Link는 push라 backTo 대신 onBack). 안 그러면 06-E에서 뒤로가면 06-U로 되돌아온다 */}
+      <Header
+        onBack={() => navigate(eventPath, { replace: true })}
+        backLabel={event?.name ?? '이벤트 상세'}
+        backDisabled={busy}
+      />
       {/* 바닥 여백 소유가 분기별로 다르다 — 피커 분기는 스크롤 밖 하단 액션바가 pb-safe-9를 갖는다 */}
       <main
         className={`flex flex-1 flex-col overflow-y-auto px-5 pt-5 ${showPicker ? '' : 'pb-safe-9'}`}
@@ -335,36 +344,11 @@ export function PhotoUploadPage() {
             notFoundLabel="모임 상세로"
           />
         ) : uploadLocked ? (
-          // 업로드 불가 — 진입 자체를 안내로 막는다. 분류가 끝나길 기다리면 되는 상태(분석중)와
-          // 이 이벤트에선 더 올릴 수 없는 상태(1회 소진)는 다음 할 일이 달라 문구를 가른다
-          <>
-            <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-8 py-16 text-center">
-              <span aria-hidden className="text-4xl">
-                {analysisActive ? '🤖' : '🧀'}
-              </span>
-              <p className="mt-3 text-sm leading-relaxed text-muted">
-                {analysisActive ? (
-                  <>
-                    지금은 사진을 분류하고 있어요.
-                    <br />
-                    분류가 끝나면 앨범이 열려요.
-                  </>
-                ) : (
-                  <>
-                    이 이벤트에는 사진을 이미 올렸어요.
-                    <br />
-                    사진 업로드는 이벤트당 한 번이라,
-                    <br />더 올릴 사진은 새 이벤트를 만들어 주세요.
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="mt-auto pt-6">
-              <Button variant="secondary" fullWidth onClick={() => navigate(eventPath)}>
-                이벤트로 돌아가기
-              </Button>
-            </div>
-          </>
+          // 업로드 불가(분석중 또는 1회 소진) — 안내 화면 대신 이벤트 상세로 곧장 넘긴다.
+          // 여기서 할 수 있는 일이 '돌아가기' 하나뿐이라 화면을 띄우면 뒤로가기가 막다른 길에
+          // 부딪히는 느낌만 준다. replace라 히스토리에도 남지 않아 뒤로가기가 헛돌지 않는다.
+          // 이벤트 상세가 분석중·앨범 그리드를 알아서 갈라 보여주므로 안내도 그쪽이 더 정확하다.
+          <Navigate to={eventPath} replace />
         ) : (
           <>
             {/* 카운트·품질 토글 — 업로드 전 설정이라 스크롤을 따라올 필요가 없어 일반 흐름에 둔다.
@@ -391,7 +375,7 @@ export function PhotoUploadPage() {
               {/* 캡으로 해제 상태 사진이 남았을 때만. 업로드는 이벤트당 1회라 "다음에 이어
                   올리세요"는 거짓 안내가 된다(CHMO-486) — 지금 못 올린다는 사실을 그대로 알린다 */}
               {selectedCount >= MAX_UPLOAD_PICK && photos.some((p) => !p.selected) && (
-                <p className="mt-2 text-xs leading-relaxed text-warn">
+                <p className="mt-2 text-xs font-bold leading-relaxed text-heading">
                   선택되지 않은 사진은 올라가지 않아요 — 업로드는 이벤트당 한 번이라 지금 올릴
                   사진을 모두 골라 주세요
                 </p>
