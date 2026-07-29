@@ -391,7 +391,7 @@ export function PhotoUploadPage() {
               {/* 캡으로 해제 상태 사진이 남았을 때만. 업로드는 이벤트당 1회라 "다음에 이어
                   올리세요"는 거짓 안내가 된다(CHMO-486) — 지금 못 올린다는 사실을 그대로 알린다 */}
               {selectedCount >= MAX_UPLOAD_PICK && photos.some((p) => !p.selected) && (
-                <p className="mt-2 text-xs leading-relaxed text-warn">
+                <p className="mt-2 text-xs font-bold leading-relaxed text-heading">
                   선택되지 않은 사진은 올라가지 않아요 — 업로드는 이벤트당 한 번이라 지금 올릴
                   사진을 모두 골라 주세요
                 </p>
