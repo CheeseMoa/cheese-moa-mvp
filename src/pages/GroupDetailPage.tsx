@@ -27,12 +27,18 @@ import type { Group } from '../types/api'
  * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정) ·
  * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277) ·
  * GET /groups/:id/join-requests(대기 신청 수 — [＋ 초대하기] 뱃지).
- * 초대는 **화면 하나**다(CHMO-520 — 05-2 통합 시트 폐지, CHMO-446 반전): [＋ 초대하기]가 20으로
+ * 초대는 **화면 하나**다(CHMO-520 — 05-2 통합 시트 폐지, CHMO-446 반전): 초대 버튼이 20으로
  * 곧장 가고, 링크 보내기(부르기)와 신청 승인·아이 연결(받기)이 거기서 한 역할 탭 아래 붙어 있다.
  * 시트를 걷어낸 이유는 취향이 아니라 중복이다 — 시트와 20이 선생님/학부모님 세그먼트 탭을 각자
  * 한 벌씩 갖고 있었고, 같은 축으로 두 번 가르는 화면이 둘이라는 건 원래 한 화면이었다는 뜻이다.
- * 그래서 하단은 이 화면에서 **할 일**([＋ 이벤트 생성]) 하나만 남는다 — 종전 [초대 관리]는 다른
- * 화면으로 **가는 일**이라 같은 무게로 쌓일 자리가 아니었다.
+ *
+ * **화면 구성은 CHMO-530에서 다시 잡았다** — 상단 모임 색면 블록(모임명·인원·초대)을 없애고
+ * 모임명은 헤더로, 인원은 목록 라벨 줄로, 초대는 하단으로 갈랐다. 08이 같은 중복(화면 종류명 +
+ * 본문 제목)을 헤더로 올려 푼 것과 같은 해법이고(CHMO-522), 이로써 목록을 끝까지 내려도 어느
+ * 모임인지가 남는다. 하단은 같은 크기 두 버튼([초대 관리] · [＋ 이벤트 생성])인데, CHMO-520이
+ * 하단에서 [초대 관리]를 걷어낸 근거(초대와 이벤트 생성이 같은 무게로 쌓인다)는 상단 진입점이
+ * 사라진 지금 성립하지 않는다 — 무게 차이는 색이 말한다(primary=할 일 / secondary=가는 일).
+ *
  * 카드 메타의 '인원'은 이벤트 API에 없어 날짜·사진만 표시(확정) ·
  * [+ 이벤트 생성]은 06-M 모달(CreateEventModal)로 뜬다.
  */
@@ -42,9 +48,7 @@ export function GroupDetailPage() {
   const toast = useToast()
   const mutate = useMutation()
   const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
-  const eventsApi = useApi(`group-events:${groupId}`, (signal) =>
-    listGroupEvents(groupId, signal),
-  )
+  const eventsApi = useApi(`group-events:${groupId}`, (signal) => listGroupEvents(groupId, signal))
   // 대기 신청 수([초대 관리] 뱃지) — TEACHER 전용 조회(Q3)라 실패할 수 있는데(구계약 실 BE
   // 미구현 404 등) 뱃지만 생략하고 화면은 그대로 둔다. PARENT는 05 진입 자체가 없다(§7-3).
   // 승인제가 role 무관이 되면서(CHMO-475) 이 수에는 **선생님 신청도 포함**된다 — 탭별 내역은 20에서.
@@ -91,13 +95,13 @@ export function GroupDetailPage() {
 
   return (
     <PhoneShell>
-      {/* 타이틀을 두지 않는다(CHMO-515) — '모임 상세'는 어느 모임인지도, 아래 목록이 뭔지도 말하지
-          않으면서 바로 밑의 큰 제목(모임명)과 역할이 겹쳤다. 06-E·분석중 헤더가 이미 타이틀 없이
-          '‹ 모임명' + 본문 큰 제목으로 도는 꼴을 따른다(08 앨범 그리드의 '이벤트 상세' 타이틀은
-          같은 중복이지만 이 스토리 범위 밖이라 그대로 뒀다) */}
+      {/* 헤더 중앙 = 모임명(CHMO-530). CHMO-515에서 타이틀을 비운 건 '모임 상세'라는 화면 종류명이
+          본문 큰 제목(모임명)과 역할이 겹쳤기 때문이고, 이번엔 그 본문 블록 자체를 없앴으니 이름이
+          설 자리가 헤더뿐이다 — 08이 같은 중복을 푼 방식과 같다(CHMO-522). 도착 전엔 비어 있다 */}
       <Header
         backTo="/home"
         backLabel="홈"
+        title={group?.name}
         right={
           group && (
             <button
@@ -111,41 +115,24 @@ export function GroupDetailPage() {
           )
         }
       />
-      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
+      {/* 스크롤은 이벤트 목록만 갖는다(CHMO-530) — main은 스크롤 컨테이너가 아니고(overflow-hidden)
+          라벨 줄·하단 액션이 shrink-0으로 위아래에 붙어 목록만 그 사이를 흐른다. sticky로 띄우지
+          않는 이유는 CHMO-424 — 화면 내 sticky 바는 실기기 WebKit에서 위로 떠 콘텐츠가 비쳤다 */}
+      <main className="flex flex-1 flex-col overflow-hidden px-5">
         {/* 데이터가 있으면 재조회(이름 수정 refetch) 중에도 유지 — 로딩/에러로 화면을 교체하지 않는다 */}
         {group ? (
           <>
-            {/* 모임 = 색면, 이벤트 = 흰 카드(CHMO-515). 모임명·인원·초대를 surface 블록에 묶어
-                이 화면의 주인이 모임임을 밝히고, 아래 카드들과 면부터 갈라 놓는다 */}
-            <div className="rounded-[18px] bg-surface px-4 py-3.5">
-              <div className="flex items-center gap-2.5">
-                <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-text">
-                  {group.name}
-                </h2>
-                {/* 시트가 아니라 화면으로 간다(CHMO-520) — 순수 이동이라 앵커 시맨틱(ButtonLink).
-                    대기 수는 버튼 코너에 얹지 않고 라벨 안쪽 인라인으로 둔다: 20 탭 뱃지와 같은
-                    컴포넌트라 두 화면의 '대기 N건'이 한 모양이고, 오버레이 배지도 피한다 */}
-                <ButtonLink
-                  to={`/groups/${groupId}/invites`}
-                  size="sm"
-                  className="gap-1.5"
-                  aria-label={
-                    pendingRequestCount > 0
-                      ? `초대하기 · 대기 신청 ${pendingRequestCount}건`
-                      : undefined
-                  }
-                >
-                  ＋ 초대하기
-                  {pendingRequestCount > 0 && <CountBadge count={pendingRequestCount} />}
-                </ButtonLink>
-              </div>
-              {memberPart && <p className="mt-1 text-[13px] text-muted">{memberPart}</p>}
+            {/* 왼쪽은 아래 목록이 무엇인지(섹션 라벨 = 12px + 자간, CHMO-513), 오른쪽은 이 모임의
+                인원. 인원은 색면 블록이 갖고 있던 정보인데 블록이 사라져 여기로 옮겼다 —
+                §7-3 분리 표기(선생님 N · 학부모 N)는 그대로다 */}
+            <div className="flex shrink-0 items-baseline gap-3 pb-2 pt-5">
+              <h3 className="text-[12px] tracking-[0.06em] text-muted">{eventsLabel}</h3>
+              {memberPart && (
+                <p className="ml-auto truncate text-[12px] text-muted">{memberPart}</p>
+              )}
             </div>
 
-            {/* 라벨 처리는 홈(02)과 동일 — 바로 위 메타 줄과 굵기로는 갈라지지 않는다(CHMO-513).
-                이벤트 수도 여기서 말한다 — 모임 블록의 인원과 한 줄로 섞여 읽히던 걸 갈랐다 */}
-            <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">{eventsLabel}</h3>
-            <div className="mt-2 flex flex-1 flex-col">
+            <div className="flex flex-1 flex-col overflow-y-auto">
               {eventsApi.loading || eventsApi.error ? (
                 <LoadState
                   loading={eventsApi.loading}
@@ -189,24 +176,43 @@ export function GroupDetailPage() {
                   ))}
                 </ul>
               )}
+            </div>
 
-              <div className="mt-auto pt-6">
-                <Button fullWidth onClick={() => setCreateOpen(true)}>
-                  ＋ 이벤트 생성
-                </Button>
-              </div>
+            {/* 두 버튼은 같은 크기다(flex-1 균등) — 위계는 폭이 아니라 색이 만든다: 이 화면에서
+                할 일은 이벤트 생성(primary)이고 초대 관리는 20으로 가는 일(secondary·앵커 시맨틱).
+                대기 수는 버튼 코너에 얹지 않고 라벨 안쪽 인라인으로 둔다: 20 탭 뱃지와 같은
+                컴포넌트라 두 화면의 '대기 N건'이 한 모양이고, 오버레이 배지도 피한다 */}
+            <div className="flex shrink-0 gap-2.5 pb-safe-9 pt-4">
+              <ButtonLink
+                to={`/groups/${groupId}/invites`}
+                variant="secondary"
+                className="flex-1 gap-1.5 whitespace-nowrap"
+                aria-label={
+                  pendingRequestCount > 0
+                    ? `초대 관리 · 대기 신청 ${pendingRequestCount}건`
+                    : undefined
+                }
+              >
+                초대 관리
+                {pendingRequestCount > 0 && <CountBadge count={pendingRequestCount} />}
+              </ButtonLink>
+              <Button className="flex-1 whitespace-nowrap" onClick={() => setCreateOpen(true)}>
+                ＋ 이벤트 생성
+              </Button>
             </div>
           </>
         ) : (
-          <LoadState
-            loading={groupApi.loading}
-            error={groupApi.error}
-            loadingText="모임을 불러오는 중…"
-            onRetry={groupApi.refetch}
-            unauthorizedTo="/login"
-            notFoundTo="/home"
-            notFoundLabel="홈으로"
-          />
+          <div className="flex flex-1 flex-col overflow-y-auto pt-5">
+            <LoadState
+              loading={groupApi.loading}
+              error={groupApi.error}
+              loadingText="모임을 불러오는 중…"
+              onRetry={groupApi.refetch}
+              unauthorizedTo="/login"
+              notFoundTo="/home"
+              notFoundLabel="홈으로"
+            />
+          </div>
         )}
       </main>
 
@@ -252,7 +258,13 @@ interface RenameGroupModalProps {
  * 모임 설정 ⚙ = 이름 수정(F2.4 — name만 변경 가능) · PATCH /groups/:id
  * + 모임 삭제 진입점(CHMO-277 — 위험 동작이라 설정 문맥 하단에 배치, 확인은 ConfirmDialog).
  */
-function RenameGroupModal({ open, onClose, group, onRenamed, onDeleteRequest }: RenameGroupModalProps) {
+function RenameGroupModal({
+  open,
+  onClose,
+  group,
+  onRenamed,
+  onDeleteRequest,
+}: RenameGroupModalProps) {
   const toast = useToast()
   const mutate = useMutation()
   const [name, setName] = useState(group.name)

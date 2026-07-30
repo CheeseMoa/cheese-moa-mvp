@@ -37,10 +37,12 @@ import { sortAlbumsForDisplay } from '../lib/albumSort'
  *
  * 이벤트 이름이 큰 자리를 갖는다(CHMO-531) — 종전엔 `공개 요약`이라는 **화면 종류명**이 큰 제목이고
  * 이름은 회색 부제에 있었다. 05·08·09가 전부 고유명사(모임명·이벤트명·앨범명)를 큰 자리에 두는데
- * 14만 예외였다. 08처럼 헤더로 올리지 않고 05·09처럼 본문 큰 제목으로 둔 이유는 둘이다:
+ * 14만 예외였다. 08처럼 헤더로 올리지 않고 본문 큰 제목으로 둔 이유는 둘이다:
  * 헤더는 한 줄이라 긴 이름이 잘리고(여기선 곁에 붙는 컨트롤이 없어 2줄까지 쓸 수 있다),
  * 08과 달리 하단 [공개하기]가 늘 붙어 있어 스크롤로 제목이 사라져도 화면의 정체가 흔들리지 않는다.
  * 스크롤로 이름이 안 보이는 구간은 확인 다이얼로그가 이름을 되짚어 메운다.
+ * ⚠ 본문 큰 제목은 이제 09와 14뿐이다 — 05도 같은 꼴이었으나 CHMO-530에서 헤더로 올라갔다
+ * (목록만 스크롤시키려 상단 블록을 걷어낸 결과). 위 두 근거는 그 변경과 무관하게 성립해 유지한다.
  */
 export function PublishReviewPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
@@ -112,7 +114,7 @@ export function PublishReviewPage() {
         <div className="flex-1 overflow-y-auto px-5 pb-4 pt-5">
           {summary && event ? (
             <>
-              {/* 곁에 붙는 컨트롤이 없어 이름이 전폭을 쓴다 — 05·09의 truncate 대신 2줄 클램프
+              {/* 곁에 붙는 컨트롤이 없어 이름이 전폭을 쓴다 — 09의 truncate 대신 2줄 클램프
                   (AlbumCard 이름 규칙과 같다, CHMO-354). 화면 종류명은 부제로 내려간다 */}
               <h1 className="line-clamp-2 text-xl font-bold text-heading">{event.name}</h1>
               <p className="mt-1 text-[13px] text-muted">공개 요약 · 사진 {summary.photoCount}장</p>

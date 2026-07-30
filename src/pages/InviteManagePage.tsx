@@ -44,7 +44,7 @@ const EMPTY_COPY: Record<GroupRole, { title: string; description: string }> = {
 }
 
 /**
- * 20. 초대 · node 307:24(학부모 탭)·319:40(선생님 탭) — 05 [＋ 초대하기] 진입(CHMO-447·520).
+ * 20. 초대 · node 307:24(학부모 탭)·319:40(선생님 탭) — 05 하단 [초대 관리] 진입(CHMO-447·520·530).
  * GET /groups/:id/invite(초대 링크 — GroupInviteLinks) · GET /groups/:id/join-requests(대기 신청) ·
  * PATCH /join-requests/:id(승인/거절 — 승인은 **멤버 확정만**, 인물 연결은 별도 액션 §1) ·
  * GET /groups/:id/members(명단·연결 칩) · DELETE /groups/:id/person-parents(칩 ✕ 해제).
