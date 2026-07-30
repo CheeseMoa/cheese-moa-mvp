@@ -26,6 +26,12 @@
     @apply bg-cream font-sans text-text antialiased;
     /* iOS 고무줄 스크롤 시 프레임 밖 배경색 */
     background-color: var(--color-surface);
+    /* 합성 굵기·기울기 차단(CHMO-513) — Jua는 400 한 벌뿐이라 font-bold가 박힌 자리에서
+       브라우저가 가짜 볼드를 만든다: 획이 뭉치고 둥근 맛이 죽는다. 위계는 크기·색이 만든다.
+       (Jua에 없는 글자 ＋ › ⚙ 등은 system-ui로 폴백하는데, 그쪽은 실제 굵기 파일이 있어
+        폴백 글자만 굵어 보일 수 있다 — 종전 Gothic A1 조합에서도 같았으므로 회귀는 아니다) */
+    font-synthesis: none;
+    font-synthesis-weight: none;
   }
 
   /* 숫자 PIN 입력 등에서 스핀 버튼 제거 */
@@ -39,7 +45,7 @@
 @layer utilities {
   /* 치즈 도트 — 배경 텍스처(치즈 구멍 느낌의 은은한 점 패턴) */
   .cheese-dots {
-    background-image: radial-gradient(rgba(245, 184, 46, 0.18) 1.5px, transparent 1.6px);
+    background-image: radial-gradient(rgba(255, 201, 60, 0.22) 1.5px, transparent 1.6px);
     background-size: 18px 18px;
     background-position: 0 0;
   }

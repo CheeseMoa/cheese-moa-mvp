@@ -73,7 +73,7 @@ function ChannelContent({ channel, copy }: ChannelContentProps) {
     <>
       {copy.notice && <p className="mt-3 text-xs leading-relaxed text-muted">{copy.notice}</p>}
       <div className="mt-2 rounded-2xl border border-border bg-surface p-4">
-        <p className="text-xs font-bold text-muted">비밀번호</p>
+        <p className="text-xs tracking-[0.06em] text-muted">비밀번호</p>
         <div className="mt-0.5 flex items-center gap-3">
           <button
             type="button"

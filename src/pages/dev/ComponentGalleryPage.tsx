@@ -168,14 +168,22 @@ export function ComponentGalleryPage() {
             eventCount={3}
             onClick={() => toast.show('🧀 모임 카드 탭')}
           />
+          {/* 커버는 사진이 있는 이벤트만 진다(CHMO-515) — 아래 세 장이 그 규칙의 전부다:
+              썸네일 있음 / 사진은 있지만 썸네일 아직 없음(플레이스홀더) / 사진 0장(컴팩트) */}
           <EventCard
             name="여름 물놀이"
             status="analyzing"
-            meta="6월 24일 · 사진 124장 · 원아 18명"
+            meta="6월 24일 · 사진 124장"
+            cover={{ url: 'https://picsum.photos/seed/cheese-event/720/360' }}
             onClick={() => toast.show('🧀 이벤트 카드 탭')}
             onSettings={() => toast.show('🧀 이벤트 설정 ⚙')}
           />
-          <EventCard name="봄 소풍" status="published" meta="5월 12일 · 사진 128장" />
+          <EventCard
+            name="봄 소풍"
+            status="published"
+            meta="5월 12일 · 사진 128장"
+            cover={{ url: null }}
+          />
           <EventCard name="새 이벤트" status="empty" meta="오늘 · 사진 0장" />
         </Section>
 

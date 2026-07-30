@@ -160,6 +160,11 @@ export interface EventItem {
   /** 뷰어 목록에서 커버 썸네일 */
   coverPhotoId?: ID | null
   /**
+   * 커버 사진 썸네일 URL — **목록 응답에만** 있다(상세엔 thumbnailUrl이 없다. ViewerEvent 선례와 같은 필드).
+   * 05 이벤트 카드 커버용(CHMO-515) — 사진이 없는 이벤트는 서버가 null을 준다.
+   */
+  coverThumbnailUrl?: string | null
+  /**
    * AI 분석 진행률(CHMO-287) — **상세 응답에만** 있고 목록엔 없다.
    * 분석 job 진행 중에만 non-null(완료 직후 잠시 100을 유지하다 null로 돌아간다 — 실서버 관찰).
    */

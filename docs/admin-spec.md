@@ -117,7 +117,7 @@
 | `admin/nav-active-bg` | `#FEF6E3` | 활성 메뉴 배경(옅은 치즈) |
 | `admin/status-*` | empty `#9E978C` · analyzing `#E8890C` · review `#6B7280` · ready `#8C5A2B` · published `#3FA34D` | 이벤트 상태 배지 |
 
-포인트 색(`primary #F5B82E`)·헤딩 브라운(`#4A3415`)은 기존 토큰을 그대로 쓴다 — 로고, 활성 메뉴 좌측 바, 현재 페이지 버튼에만.
+포인트 색(`primary #FFC93C`)·헤딩 브라운(`#4A3415`)은 기존 토큰을 그대로 쓴다 — 로고, 활성 메뉴 좌측 바, 현재 페이지 버튼에만.
 
 > ⚠️ `review`(검수중) 배지 색은 서비스 쪽에서도 미정이다(`tailwind.config.js`의 TODO). 시안에선 **중립 회색 잠정**으로 뒀다 — 서비스 토큰이 정해지면 그 값을 따른다.
 

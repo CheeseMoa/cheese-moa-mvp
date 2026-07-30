@@ -7,6 +7,7 @@ import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
 import { cx } from '../lib/cx'
+import { setPreferredTourTrack } from '../lib/onboarding'
 import type { JoinGroupResult } from '../types/api'
 
 /** 필수 동의 항목 — 문구 확정 전 자리(api-draft §8). 확정되면 상세 문구·버전과 consents 전송을 붙인다 */
@@ -71,13 +72,18 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
         ? '🧀 모임에 참여했어요'
         : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`,
     )
-    navigate('/home', { replace: true })
+    // 이 사람은 학부모로 들어왔다 — 다음에 둘러보기가 뜰 때 역할을 다시 묻지 않는다(CHMO-504)
+    setPreferredTourTrack('parent')
+    // fromJoin — 도착 직후 둘러보기가 이 안내를 덮지 않게 한 박자 미룬다(홈이 판정)
+    navigate('/home', { replace: true, state: { fromJoin: true } })
   }
 
   const handleBack = () => {
     if (submitting) return
     setError(null)
-    if (step === 1) navigate('/home', { replace: true })
+    // 신청을 포기하고 나가는 길이라 갈래 힌트는 남기지 않는다 — 다만 이 방문에 둘러보기가
+    // 열리면 '왜 갑자기'가 되므로 미루는 신호는 같이 싣는다
+    if (step === 1) navigate('/home', { replace: true, state: { fromJoin: true } })
     else setStep((s) => (s - 1) as Step)
   }
 
@@ -287,7 +293,10 @@ function ConsentRow({ label, checked, onToggle, emphasis }: ConsentRowProps) {
         aria-hidden="true"
         className={cx(
           'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border transition-colors',
-          checked ? 'border-primary bg-primary text-white' : 'border-[#C9C2B4] bg-white text-transparent',
+          // 체크는 heading 브라운 — 옐로우 위 흰 글자 금지(대비). 옐로우가 밝아지며 더 안 보인다
+          checked
+            ? 'border-primary bg-primary text-heading'
+            : 'border-[#C9C2B4] bg-white text-transparent',
         )}
       >
         <IconCheck size={14} />

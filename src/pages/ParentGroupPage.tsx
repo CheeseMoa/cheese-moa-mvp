@@ -36,7 +36,8 @@ export function ParentGroupPage() {
 
   return (
     <PhoneShell>
-      <Header backTo="/home" backLabel="홈" title="모임 상세" />
+      {/* 05와 같은 이유로 타이틀을 비운다(CHMO-515) — 바로 아래 모임명이 제목 역할을 한다 */}
+      <Header backTo="/home" backLabel="홈" />
       <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         {group ? (
           <>

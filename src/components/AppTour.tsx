@@ -12,6 +12,7 @@ import {
 } from './ui'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { cx } from '../lib/cx'
+import type { TourTrack } from '../lib/onboarding'
 
 /**
  * 치즈모아 둘러보기 (CHMO-504) — 첫 로그인 직후 1회 + 설정에서 다시 보기.
@@ -42,13 +43,17 @@ import { cx } from '../lib/cx'
  * 펼쳐진다). 선생님 흐름만 보여주면 학부모로 합류한 사람은 자기 화면을 영영 못 본다.
  */
 
-type Track = 'teacher' | 'parent'
+/** 갈래 이름은 저장 힌트(lib/onboarding)와 같은 값이라 한곳에서 가져온다 */
+type Track = TourTrack
 
 /** 투어용 가짜 데이터 — 어떤 API도 부르지 않는다 */
 const TOUR_GROUP = { name: '별님반', memberCount: 6, eventCount: 2 }
 /** 05 헤더의 카운트 분리 표기(§7-3)와 같은 꼴 — 멤버 6 = 선생님 2 + 학부모 4 */
 const TOUR_GROUP_META = '선생님 2 · 학부모 4 · 이벤트 2개'
 
+// 커버는 URL 없이 플레이스홀더로 진다(CHMO-515) — 투어는 어떤 사진도 갖고 있지 않지만, 사진이 있는
+// 이벤트 카드는 실제 05에서 커버를 지므로 무대도 같은 꼴이어야 한다(사진 자리 PhotoPlaceholders와 같은 처리)
+const TOUR_COVER = { url: null }
 const TOUR_EVENTS = [
   { name: '여름 물놀이', meta: '7월 22일 · 사진 120장', status: 'ready' as const },
   { name: '봄 소풍', meta: '5월 9일 · 사진 86장', status: 'published' as const },
@@ -148,10 +153,16 @@ interface StepView {
 interface AppTourProps {
   open: boolean
   onClose: () => void
+  /**
+   * 갈래를 미리 정해 열기 — 첫 장(역할 고르기)을 건너뛴다. 초대 링크로 합류해 이미 어느 쪽인지
+   * 밝힌 사람에게 다시 묻지 않으려는 것이고(CHMO-504), 첫 장에서 뒤로가면 원래대로 고를 수 있다.
+   * 설정에서 다시 볼 때는 넘기지 않는다 — 그땐 반대편 흐름을 보러 오는 경우도 있다.
+   */
+  initialTrack?: Track | null
 }
 
-export function AppTour({ open, onClose }: AppTourProps) {
-  const [track, setTrack] = useState<Track | null>(null)
+export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
+  const [track, setTrack] = useState<Track | null>(initialTrack)
   const [step, setStep] = useState(0)
   // 어느 이벤트를 눌렀는지 기억해 이후 장 화면 제목에 그대로 쓴다 — 목록의 두 카드가 모두
   // 살아 있어야 "모임 안에 행사가 여러 개"가 보이고, 죽은 카드(탭해도 무반응)도 안 생긴다
@@ -162,11 +173,11 @@ export function AppTour({ open, onClose }: AppTourProps) {
   // 다시 열면 처음부터 — 닫은 지점이 남아 있으면 '둘러보기'가 중간부터 시작한다
   useEffect(() => {
     if (open) {
-      setTrack(null)
+      setTrack(initialTrack)
       setStep(0)
       setPicked(TOUR_EVENTS[0])
     }
-  }, [open])
+  }, [open, initialTrack])
 
   // 단계 이동은 항상 상대 이동 — 중간에 장을 끼워 넣어도 인덱스를 다시 세지 않는다
   const next = () => setStep((s) => s + 1)
@@ -198,7 +209,9 @@ export function AppTour({ open, onClose }: AppTourProps) {
       stage: (
         <div className="flex flex-col gap-3">
           {TOUR_EVENTS.map((event, i) => {
-            const card = <EventCard {...event} onClick={() => enterEvent(event)} />
+            const card = (
+              <EventCard {...event} cover={TOUR_COVER} onClick={() => enterEvent(event)} />
+            )
             return i === 0 ? (
               <TapTarget key={event.name}>{card}</TapTarget>
             ) : (
@@ -300,7 +313,9 @@ export function AppTour({ open, onClose }: AppTourProps) {
     {
       screenTitle: TOUR_GROUP.name,
       screenSub: TOUR_GROUP_META,
-      stage: <EventCard name={picked.name} status="published" meta={picked.meta} />,
+      stage: (
+        <EventCard name={picked.name} status="published" meta={picked.meta} cover={TOUR_COVER} />
+      ),
       title: '공개하면 학부모 화면에 바로 떠요',
       desc: '따로 링크를 보내지 않아도 돼요 · 학부모는 자기 아이 사진만 봐요',
     },
@@ -452,8 +467,9 @@ export function AppTour({ open, onClose }: AppTourProps) {
             <div className="mt-7 flex flex-col gap-3">
               <TrackChoice
                 symbol={
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-emblem">
-                    <Cheddar size={30} />
+                  /* 심볼 뒤 갈색 타일 폐지 — 슬롯(48)은 유지해 학부모 마크와 줄을 맞춘다 */
+                  <span className="flex h-12 w-12 items-center justify-center">
+                    <Cheddar size={44} />
                   </span>
                 }
                 label="사진을 올려요"

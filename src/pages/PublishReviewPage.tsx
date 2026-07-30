@@ -126,7 +126,7 @@ export function PublishReviewPage() {
                 </div>
               )}
 
-              <h2 className="mt-6 text-[13px] font-bold text-muted">미리보기</h2>
+              <h2 className="mt-6 text-[12px] tracking-[0.06em] text-muted">미리보기</h2>
               {hasVisiblePhotos ? (
                 // 08과 같은 앨범 카드 — onClick 없이 순수 프리뷰(CHMO-346).
                 // 검토 범례는 없다(CHMO-488): 여기 오는 앨범은 전부 검토 완료라 테두리가 한 종류뿐이고,
@@ -168,7 +168,7 @@ export function PublishReviewPage() {
               unauthorizedTo="/login"
               // 여기 404 = 이벤트 자체가 사라진 것 — 이벤트 상세로 보내면 또 404라 부모(모임)로
               notFoundTo={`/groups/${groupId}`}
-              notFoundLabel="모임 상세로"
+              notFoundLabel="모임으로"
             />
           )}
         </div>

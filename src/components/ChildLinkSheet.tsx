@@ -113,7 +113,7 @@ export function ChildLinkSheet({ groupId, member, onClose, onLinked }: ChildLink
         </p>
       ) : (
         <>
-          <p className="mt-3 text-xs font-bold text-muted">매핑될 앨범 선택</p>
+          <p className="mt-3 text-xs tracking-[0.06em] text-muted">매핑될 앨범 선택</p>
           <div {...dragScroll} className="mt-2 flex select-none gap-3 overflow-x-auto pb-1">
             {persons.map((p) => {
               const alreadyLinked = linkedIds.has(p.personId)

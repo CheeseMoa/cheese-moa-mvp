@@ -55,7 +55,7 @@ export function Header({ title, backTo, backLabel, backDisabled, onBack, right }
   return (
     <header className="flex h-[52px] shrink-0 items-center border-b border-border bg-cream px-3.5">
       <Cheddar size={30} />
-      <span className="ml-2 font-display text-xl text-heading">{title ?? '치즈모아'}</span>
+      <span className="ml-2 text-xl text-heading">{title ?? '치즈모아'}</span>
       <div className="ml-auto">{right}</div>
     </header>
   )
