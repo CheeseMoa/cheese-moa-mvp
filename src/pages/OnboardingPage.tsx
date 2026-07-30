@@ -187,17 +187,12 @@ export function OnboardingPage() {
               <Button fullWidth onClick={() => finish('/groups/new')}>
                 모임 만들기
               </Button>
-              {/* 초대 코드는 홈의 02-1 모달에서 받는다 — 모달만 여는 전용 라우트를 새로 파지 않는다 */}
-              <button
-                type="button"
-                onClick={() => {
-                  markOnboardingSeen()
-                  navigate('/home', { replace: true, state: { openJoin: true } })
-                }}
-                className="mt-4 w-full text-center text-[15px] font-bold text-accent"
-              >
-                초대 코드로 참여하기
-              </button>
+              {/* 참여는 링크로만 이뤄진다(CHMO-513) — 종전 '초대 코드로 참여하기' 링크는 홈의
+                  02-1 모달을 여는 신호(openJoin)를 보냈지만, 홈에서 그 문을 닫아 받을 곳이 없다.
+                  초대받은 사람은 이 화면을 지나갈 필요 없이 링크로 곧장 참여 화면에 들어간다 */}
+              <p className="mt-4 text-center text-[13px] text-muted">
+                초대받은 모임은 받은 링크로 들어와요.
+              </p>
             </>
           ) : (
             <Button fullWidth onClick={() => goTo(index + 1)}>

@@ -25,9 +25,14 @@ export default {
         },
       },
       fontFamily: {
-        // Jua = 디스플레이(로고/헤딩), Gothic A1 = 본문
-        display: ['Jua', 'system-ui', 'sans-serif'],
-        sans: ['"Gothic A1"', 'system-ui', 'sans-serif'],
+        // 서체는 Jua 한 벌(CHMO-513) — 로고 워드마크와 본문이 같은 얼굴을 쓴다.
+        // `display` 토큰은 폐지했다: sans와 같아져 구분이 거짓이 된다(font-display 사용처도 제거).
+        //
+        // ⚠ Jua는 굵기가 400 하나뿐이다 — `font-bold`는 시각 효과가 없다(index.css가 합성 볼드를
+        // 차단한다. 안 막으면 브라우저가 가짜 굵기를 만들어 획이 뭉갠다). 굵기 유틸은 의미 표시로
+        // 남기되, **화면의 위계는 크기와 색이 만든다**: 같은 크기·같은 색을 굵기로만 갈라놨던
+        // 자리는 크기·자간·색으로 다시 벌려 놨다(섹션 라벨 12px+자간 등).
+        sans: ['Jua', 'system-ui', 'sans-serif'],
       },
       // 그라데이션 토큰(gradient-cheddar/primary/emblem) 폐지 — UI 면은 전부 단색으로 칠한다.
       // 연한 옐로우(구 gradient-primary)는 되살리지 않는다: 음영이 없으면 cream 배경에 묻힌다.
