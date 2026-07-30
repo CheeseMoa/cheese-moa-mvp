@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { ChildLinkSheet } from '../components/ChildLinkSheet'
+import { GroupInviteLinks } from '../components/GroupInviteLinks'
 import {
   Button,
   ConfirmDialog,
+  CountBadge,
   EmptyState,
   Header,
   IconClose,
+  InlineRetry,
   LoadState,
   useToast,
 } from '../components/ui'
@@ -24,19 +27,36 @@ import { formatTimeAgo } from '../lib/timeAgo'
 import { UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 import type { GroupMember, GroupRole, ID, JoinRequest, PersonMapping } from '../types/api'
 
-/** 탭 순서는 초대 시트(05-2)와 동일 — 라벨은 호칭, 섹션 제목은 명단 명칭 */
+/** 라벨은 호칭, 섹션 제목은 명단 명칭 */
 const TAB_KEYS: GroupRole[] = ['teacher', 'parent']
 const TAB_LABEL: Record<GroupRole, string> = { teacher: '선생님', parent: '학부모님' }
 const SECTION_LABEL: Record<GroupRole, string> = { teacher: '선생님', parent: '학부모' }
+/** 명단·신청이 모두 없을 때 — 링크는 바로 위에 있으니 그걸 가리킨다 */
+const EMPTY_COPY: Record<GroupRole, { title: string; description: string }> = {
+  teacher: {
+    title: '아직 선생님이 없어요',
+    description: '위 참여 링크를 함께할 선생님께 보내 보세요.',
+  },
+  parent: {
+    title: '아직 학부모님이 없어요',
+    description: '위 신청 링크를 학부모님께 보내 보세요.',
+  },
+}
 
 /**
- * 20. 초대 관리 · node 307:24(학부모 탭)·319:40(선생님 탭) — 05 하단 [초대 관리] 진입(CHMO-447).
- * GET /groups/:id/join-requests(대기 신청) · PATCH /join-requests/:id(승인/거절 — 승인은
- * **멤버 확정만**, 인물 연결은 별도 액션 §1) · GET /groups/:id/members(명단·연결 칩) ·
- * DELETE /groups/:id/person-parents(칩 ✕ 해제 — 확인 다이얼로그).
+ * 20. 초대 · node 307:24(학부모 탭)·319:40(선생님 탭) — 05 [＋ 초대하기] 진입(CHMO-447·520).
+ * GET /groups/:id/invite(초대 링크 — GroupInviteLinks) · GET /groups/:id/join-requests(대기 신청) ·
+ * PATCH /join-requests/:id(승인/거절 — 승인은 **멤버 확정만**, 인물 연결은 별도 액션 §1) ·
+ * GET /groups/:id/members(명단·연결 칩) · DELETE /groups/:id/person-parents(칩 ✕ 해제).
  * 아이 연결(20-1)은 이 화면 위 바텀시트(ChildLinkSheet)로 뜬다.
  * TEACHER 전용은 서버가 강제(ROLE403·비멤버 404 은닉) — 비정상 진입은 LoadState 에러로 수렴.
  * 기본 탭은 학부모님 — 이 화면의 주 업무(신청 승인·아이 연결)가 학부모 쪽이다.
+ *
+ * 이 화면이 '초대'의 전부다(CHMO-520 — 05-2 통합 시트 흡수·폐지): 한 역할 탭 아래
+ * **부르기(초대 링크) → 기다림(대기 신청) → 들어온 사람(명단)** 순으로 한 바퀴가 놓인다.
+ * 종전엔 부르기만 05 위 시트에 따로 있었고, 그 시트와 이 화면이 같은 역할 세그먼트 탭을 각자
+ * 한 벌씩 갖고 있었다 — 같은 축으로 두 번 가르는 화면이 둘이라는 건 원래 하나였다는 뜻이다.
+ * 탭 라벨에 인원 수를 얹지 않는 이유는 바로 아래 섹션 제목이 이미 그 수를 말하기 때문이다.
  *
  * 승인제가 role 무관으로 통일되면서(CHMO-475) 신청 목록에 **선생님 신청도 섞여 온다**
  * (role=TEACHER·childNames 빈 배열 — 원문 줄 없이 닉네임+시각만 렌더된다). 기본 탭이
@@ -120,9 +140,9 @@ export function InviteManagePage() {
 
   return (
     <PhoneShell>
-      <Header backTo={`/groups/${groupId}`} backLabel="모임" title="초대 관리" />
+      <Header backTo={`/groups/${groupId}`} backLabel="모임" title="초대" />
 
-      {/* 세그먼트 탭 — 스크롤 밖 고정(긴 명단에서도 항상 전환 가능) · 스타일은 05-2 시트와 동일 */}
+      {/* 세그먼트 탭 — 스크롤 밖 고정(긴 명단에서도 항상 전환 가능) */}
       <div className="shrink-0 px-5 pt-4">
         <div role="tablist" aria-label="멤버 구분" className="flex rounded-full bg-surface p-1">
           {TAB_KEYS.map((key) => {
@@ -141,11 +161,8 @@ export function InviteManagePage() {
               >
                 {TAB_LABEL[key]}
                 {waiting > 0 && (
-                  <span
-                    aria-hidden="true"
-                    className="ml-1.5 inline-block rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
-                  >
-                    {waiting}
+                  <span className="ml-1.5">
+                    <CountBadge count={waiting} />
                   </span>
                 )}
               </button>
@@ -155,21 +172,20 @@ export function InviteManagePage() {
       </div>
 
       <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-4">
+        {/* ① 부르기 — 멤버 조회 밖에 둔다(CHMO-520). 링크 복사가 이 화면의 첫 번째 일인데,
+            명단 조회가 일시 실패했다고 링크까지 못 꺼내면 초대 자체가 막힌다 */}
+        <GroupInviteLinks groupId={groupId} role={tab} />
+
         {membersApi.data ? (
           <>
-            {/* 대기 신청 — 이 화면의 첫 번째 일이라 명단보다 위. 조회 실패는 명단을 가리지 않고
+            {/* ② 기다림 — 명단보다 위(승인이 먼저 할 일). 조회 실패는 명단을 가리지 않고
                 인라인으로만 알린다(05 뱃지 생략과 같은 결 — 단, 관리 화면에선 침묵하지 않는다) */}
             {requestsApi.error ? (
-              <section className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-border bg-white p-4 shadow-card">
-                <p className="text-[13px] text-muted">신청 목록을 불러오지 못했어요</p>
-                <button
-                  type="button"
-                  onClick={requestsApi.refetch}
-                  className="shrink-0 text-[13px] font-medium text-accent"
-                >
-                  다시 시도
-                </button>
-              </section>
+              <InlineRetry
+                message="신청 목록을 불러오지 못했어요"
+                onRetry={requestsApi.refetch}
+                className="mb-5"
+              />
             ) : requests.length > 0 ? (
               <section className="mb-5">
                 <h3 className="text-[12px] tracking-[0.06em] text-muted">
@@ -215,6 +231,7 @@ export function InviteManagePage() {
               </section>
             ) : null}
 
+            {/* ③ 들어온 사람 */}
             {members.length > 0 ? (
               <section>
                 <h3 className="text-[12px] tracking-[0.06em] text-muted">
@@ -286,24 +303,8 @@ export function InviteManagePage() {
                 </ul>
               </section>
             ) : requests.length === 0 && !requestsApi.error ? (
-              <EmptyState
-                title={tab === 'parent' ? '아직 학부모님이 없어요' : '아직 선생님이 없어요'}
-                description={
-                  tab === 'parent' ? (
-                    <>
-                      모임 화면의 [＋ 초대하기]에서
-                      <br />
-                      학부모님께 신청 링크를 보내 보세요.
-                    </>
-                  ) : (
-                    <>
-                      모임 화면의 [＋ 초대하기]에서
-                      <br />
-                      함께할 선생님을 초대해 보세요.
-                    </>
-                  )
-                }
-              />
+              // 링크를 다른 화면에서 찾으라고 하지 않는다 — 이제 이 화면 위쪽이 그 자리다
+              <EmptyState title={EMPTY_COPY[tab].title} description={EMPTY_COPY[tab].description} />
             ) : null}
           </>
         ) : (
