@@ -9,6 +9,7 @@ import {
   Button,
   ButtonLink,
   ConfirmDialog,
+  CountBadge,
   EmptyState,
   ErrorState,
   EventCard,
@@ -20,6 +21,7 @@ import {
   IconFolderMove,
   IconShare,
   IconTrash,
+  InlineRetry,
   Modal,
   PhotoGrid,
   PhotoTile,
@@ -142,6 +144,19 @@ export function ComponentGalleryPage() {
             </span>
             <EventStatusBadge status="review" />
           </div>
+          {/* CountBadge — '처리할 것이 N건'. 05 [＋ 초대하기] 라벨 안쪽과 20 탭이 공유(CHMO-520) */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button size="sm" className="gap-1.5" aria-label="초대하기 · 대기 신청 2건">
+              ＋ 초대하기
+              <CountBadge count={2} />
+            </Button>
+            <span className="text-sm text-muted">
+              학부모님
+              <span className="ml-1.5">
+                <CountBadge count={12} />
+              </span>
+            </span>
+          </div>
         </Section>
 
         <Section title="04 · Toggle">
@@ -255,6 +270,16 @@ export function ComponentGalleryPage() {
               notFoundLabel="홈으로"
             />
           </div>
+        </Section>
+
+        <Section title="08-2 · InlineRetry (CHMO-520 추가)">
+          <p className="text-[11px] text-muted">
+            곁가지 조회 실패 — 본문을 대체하는 ErrorState와 달리 화면을 가리지 않는다
+          </p>
+          <InlineRetry
+            message="신청 목록을 불러오지 못했어요"
+            onRetry={() => toast.show('🧀 다시 시도!')}
+          />
         </Section>
 
         <Section title="09~10 · Modal / ConfirmDialog / BottomSheet / Toast">

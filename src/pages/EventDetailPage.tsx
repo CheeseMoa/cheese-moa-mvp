@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { AlbumSettingsSheet } from '../components/AlbumSettingsSheet'
 import { PhoneShell } from '../components/PhoneShell'
 import { RenameModal } from '../components/RenameModal'
 import {
@@ -16,7 +17,7 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
-import { createPersonAlbum, renamePersonAlbum } from '../api/albums'
+import { createPersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 import type { Album, AnalysisProgress, EventItem } from '../types/api'
@@ -236,10 +237,12 @@ interface EventAlbumGridProps {
 
 /**
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
- * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
- * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
+ * 분석 완료 상태의 검수 허브. ① 인물·공통 = 3열 메인 그리드(커버+검토 테두리/배지) ·
+ * ② 공개해도 학부모에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션 · 범례.
+ * 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
  * [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
- * 인물 앨범 이름수정은 카드 이름 줄 탭(CHMO-400 — 09 진입 없이 바로) + 09 앨범 상세 헤더 ✎ 병행.
+ * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 학부모 연결 — CHMO-400 자리를 CHMO-522가
+ * 넓혔다, 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
@@ -247,8 +250,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
     listEventAlbums(event.id, signal),
   )
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // 08에서 바로 이름 수정할 인물 앨범(CHMO-400) — 열릴 때만 모달 마운트(카드마다 대상이 달라 stale 방지)
-  const [renameTarget, setRenameTarget] = useState<Album | null>(null)
+  // 08에서 바로 손볼 인물 앨범(CHMO-400) — 열릴 때만 시트 마운트(카드마다 대상이 달라 stale 방지)
+  const [albumTarget, setAlbumTarget] = useState<Album | null>(null)
   // 빈 앨범 만들기(CHMO-471) — 이름만 받아 사진 0장 인물 앨범을 만든다
   const [createOpen, setCreateOpen] = useState(false)
 
@@ -256,23 +259,28 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
 
   // 표시 정렬은 FE 소유(CHMO-411) — 서버 순서(미검토 우선)는 검토할 때마다 튄다
   const albums = sortAlbumsForDisplay(albumsApi.data ?? [])
-  // 스펙 08: ① 인물/공통/분류어려움 메인 그리드 · ② 품질 제외(눈감음/흔들림) 하단 별도 섹션
-  const mainAlbums = albums.filter((a) => a.type !== 'eyes_closed' && a.type !== 'blurry')
-  const qualityAlbums = albums.filter((a) => a.type === 'eyes_closed' || a.type === 'blurry')
+  // 08 구획 기준은 "공개하면 학부모에게 나가는가"다(CHMO-523): ① 인물·공통 = 메인 그리드(검수·발행
+  // 대상) · ② 분류어려움·눈감음·흔들림 = 하단 별도 섹션(공개해도 학부모 화면에 안 뜬다).
+  // 판정은 타입 열거가 아니라 파생 필드 visibleToViewer(person·common만 true — mappers.toAlbum
+  // 단일 원천, 14 검토 진척 집계도 같은 필드를 쓴다). 분류어려움을 여기로 내린 건 CHMO-114 반전 —
+  // 재분류 대상이라 메인 그리드에 뒀지만, 검토 UI도 발행 대상도 아닌 앨범(CHMO-357)이 검토 테두리·
+  // 범례를 공유하는 자리에 섞여 "이것도 검토해야 하나"로 읽혔다. 섹션 안 카드는 전부 점선이다.
+  const mainAlbums = albums.filter((a) => a.visibleToViewer !== false)
+  const hiddenAlbums = albums.filter((a) => a.visibleToViewer === false)
 
   return (
     <PhoneShell>
+      {/* 제목은 헤더 중앙이 맡는다 — 본문 큰 제목과 '이벤트 상세'가 같은 이름을 두 번 말하고
+          있었다. 뒤로가기 라벨을 '이벤트 목록'에서 '모임'으로 줄여 중앙 폭을 넓혔다 */}
       <Header
         backTo={`/groups/${groupId}`}
-        backLabel="이벤트 목록"
-        title="이벤트 상세"
+        backLabel="모임"
+        title={event.name}
         right={<EventSettingsButton onClick={() => setSettingsOpen(true)} />}
       />
       <main className="flex flex-1 flex-col overflow-hidden">
         {/* 앨범이 많아 프레임(844)을 넘을 수 있어 그리드는 스크롤, 하단 액션은 고정 */}
         <div className="flex-1 overflow-y-auto px-5 pb-4 pt-5">
-          <h1 className="min-w-0 truncate text-xl font-bold text-heading">{event.name}</h1>
-
           {/* 데이터가 있으면 refetch 중에도 그리드를 유지한다(09와 동일 구조) — 이름 저장 등
               성공 직후 갱신 때 화면이 로딩으로 갈아끼워져 새로고침처럼 깜빡이지 않게(CHMO-429) */}
           {albumsApi.data === null ? (
@@ -300,8 +308,8 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                     album={album}
                     coverUrl={album.coverThumbnailUrl ?? undefined}
                     onClick={() => navigate(`${base}/albums/${album.id}`)}
-                    // 인물 앨범만 ✎ — 특수 앨범(공통·분류어려움·품질)은 고정 라벨이라 이름 수정 없음
-                    onRename={album.type === 'person' ? () => setRenameTarget(album) : undefined}
+                    // 인물 앨범만 ✎ — 공통은 고정 라벨이고 연결할 아이도 없다(personId 없음)
+                    onSettings={album.type === 'person' ? () => setAlbumTarget(album) : undefined}
                   />
                 ))}
                 {/* 빈 앨범 만들기(CHMO-471) — 메인 그리드 맨 끝(09-1 "새 앨범" 타일과 같은 자리 관습).
@@ -309,11 +317,15 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                 <CreateAlbumTile onClick={() => setCreateOpen(true)} />
               </div>
 
-              {qualityAlbums.length > 0 && (
+              {hiddenAlbums.length > 0 && (
                 <section className="mt-6">
-                  <h2 className="text-[12px] tracking-[0.06em] text-muted">품질 제외</h2>
+                  {/* 라벨이 문장인 이유 — 선생님은 이 앨범들을 지금 이 화면에서 보고 있어서
+                      '공개 제외' 같은 명사만으론 누구에게 안 보이는지가 빠진다 */}
+                  <h2 className="text-[12px] tracking-[0.06em] text-muted">
+                    공개해도 학부모에게 안 보여요
+                  </h2>
                   <div className="mt-2 grid grid-cols-3 gap-2.5">
-                    {qualityAlbums.map((album) => (
+                    {hiddenAlbums.map((album) => (
                       <AlbumCard
                         key={album.id}
                         album={album}
@@ -325,13 +337,16 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                 </section>
               )}
 
-              {/* 앨범이 하나도 없으면(분석 결과 0건) 범례 대신 안내 — 그래도 만들기 타일은 남는다 */}
+              {/* 앨범이 하나도 없으면(분석 결과 0건) 범례 대신 안내 — 그래도 만들기 타일은 남는다.
+                  범례는 메인 그리드 몫이다 — 검토 테두리를 지는 앨범이 하나도 없으면 걷는다 */}
               {albums.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">앨범이 아직 없어요.</p>
               ) : (
-                <p className="mt-4 text-[11px] text-muted">
-                  테두리: 회색 점선=미검토 · 갈색=검토완료
-                </p>
+                mainAlbums.length > 0 && (
+                  <p className="mt-4 text-[11px] text-muted">
+                    테두리: 회색 점선=미검토 · 갈색=검토완료
+                  </p>
+                )
               )}
             </>
           )}
@@ -376,22 +391,16 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         />
       )}
 
-      {/* 인물 앨범 이름 수정(CHMO-400) — 09와 같은 모달·API·이름전파 계약(모임 단위 personId).
-          이 화면은 앨범 목록만 refetch — 다른 이벤트의 같은 인물 앨범은 다음 진입 시 갱신된 이름으로 조회 */}
-      {renameTarget && (
-        <RenameModal
-          open
-          onClose={() => setRenameTarget(null)}
-          title="아이 이름 수정"
-          label="아이 이름"
-          // 현재 이름은 지우지 않아도 되게 회색 placeholder로만 — 입력은 비워서 연다(CHMO-429)
-          placeholder={renameTarget.name}
-          prefill={false}
-          initialName={renameTarget.name}
-          submit={(name) => renamePersonAlbum(renameTarget.id, name)}
-          successMessage="🧀 아이 이름을 바꿨어요"
-          onRenamed={albumsApi.refetch}
-          note="이 이름은 같은 모임의 모든 이벤트에 함께 반영돼요."
+      {/* 앨범 설정(이름 수정 + 학부모 연결) — 09 헤더 [✎ 앨범 설정]과 같은 시트·같은 API.
+          이 화면은 앨범 목록만 refetch — 다른 이벤트의 같은 인물 앨범은 다음 진입 시 갱신된 이름으로
+          조회된다(이름·연결 모두 모임 단위 personId라 전 이벤트에 걸쳐 적용).
+          삭제는 주지 않는다 — 카드 이름 줄 탭에서 앨범이 사라지는 동작까지 열지 않는다(09에만) */}
+      {albumTarget && (
+        <AlbumSettingsSheet
+          groupId={groupId}
+          album={albumTarget}
+          onClose={() => setAlbumTarget(null)}
+          onUpdated={albumsApi.refetch}
         />
       )}
     </PhoneShell>

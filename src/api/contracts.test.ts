@@ -634,6 +634,33 @@ describe('공개 요약 (14)', () => {
     expect(summary.reviewedAlbumCount).toBe(0)
     expect(summary.reviewableAlbumCount).toBe(2)
   })
+
+  it('공개되지 않는 앨범 = 사진 있는 특수 앨범 — 통계에도 미리보기에도 없는 갈래 (CHMO-521)', async () => {
+    serve(envelope(BE_REVIEW_SUMMARY))
+
+    const summary = await getReviewSummary(4)
+
+    // eyes_closed는 검토 대상(reviewable)도 발행 대상(preview)도 아니라 지금까지 어디에도
+    // 안 잡혔다 — 14가 이름·장수로 "이건 안 나가요"를 알리려면 이 갈래가 필요하다
+    expect(summary.excludedAlbums).toHaveLength(1)
+    expect(summary.excludedAlbums[0]).toMatchObject({
+      id: 14,
+      type: 'eyes_closed',
+      name: '눈감은 사진',
+      photoCount: 2,
+    })
+  })
+
+  it('사진 0장 특수 앨범은 고지하지 않는다 — 안 나가는 사진이 0장이다 (CHMO-521)', async () => {
+    const albums = [
+      BE_ALBUM_PERSON,
+      { ...BE_ALBUM_EYES_CLOSED, photoCount: 0, unreviewedPhotoCount: 0 },
+    ]
+    serve(envelope({ ...BE_REVIEW_SUMMARY, albums }))
+
+    const summary = await getReviewSummary(4)
+    expect(summary.excludedAlbums).toEqual([])
+  })
 })
 
 describe('업로드 3단계 (06-U)', () => {

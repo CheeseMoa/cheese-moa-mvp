@@ -1,6 +1,6 @@
 /** 공용 컴포넌트 세트 (CHMO-107) — 스펙: docs/design/screen-system.dc.html */
 export { AlbumCard } from './AlbumCard'
-export { Badge, EventStatusBadge, type BadgeVariant } from './Badge'
+export { Badge, CountBadge, EventStatusBadge, type BadgeVariant } from './Badge'
 export { BottomSheet } from './BottomSheet'
 export { Button, ButtonLink } from './Button'
 export { Cheddar } from './Cheddar'
@@ -10,7 +10,17 @@ export { ErrorState } from './ErrorState'
 export { EventCard } from './EventCard'
 export { GroupCard } from './GroupCard'
 export { Header } from './Header'
-export { IconCheck, IconClose, IconDownload, IconFolderMove, IconPlus, IconShare, IconTrash } from './icons'
+export {
+  IconCheck,
+  IconClose,
+  IconDownload,
+  IconFolderMove,
+  IconPencil,
+  IconPlus,
+  IconShare,
+  IconTrash,
+} from './icons'
+export { InlineRetry } from './InlineRetry'
 export { LoadState } from './LoadState'
 export { Modal } from './Modal'
 export { PhotoGrid } from './PhotoGrid'
