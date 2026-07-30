@@ -287,7 +287,10 @@ function ConsentRow({ label, checked, onToggle, emphasis }: ConsentRowProps) {
         aria-hidden="true"
         className={cx(
           'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border transition-colors',
-          checked ? 'border-primary bg-primary text-white' : 'border-[#C9C2B4] bg-white text-transparent',
+          // 체크는 heading 브라운 — 옐로우 위 흰 글자 금지(대비). 옐로우가 밝아지며 더 안 보인다
+          checked
+            ? 'border-primary bg-primary text-heading'
+            : 'border-[#C9C2B4] bg-white text-transparent',
         )}
       >
         <IconCheck size={14} />

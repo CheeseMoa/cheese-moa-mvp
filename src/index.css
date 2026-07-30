@@ -39,7 +39,7 @@
 @layer utilities {
   /* 치즈 도트 — 배경 텍스처(치즈 구멍 느낌의 은은한 점 패턴) */
   .cheese-dots {
-    background-image: radial-gradient(rgba(245, 184, 46, 0.18) 1.5px, transparent 1.6px);
+    background-image: radial-gradient(rgba(255, 201, 60, 0.22) 1.5px, transparent 1.6px);
     background-size: 18px 18px;
     background-position: 0 0;
   }

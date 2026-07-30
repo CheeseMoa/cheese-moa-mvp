@@ -452,8 +452,9 @@ export function AppTour({ open, onClose }: AppTourProps) {
             <div className="mt-7 flex flex-col gap-3">
               <TrackChoice
                 symbol={
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-emblem">
-                    <Cheddar size={30} />
+                  /* 심볼 뒤 갈색 타일 폐지 — 슬롯(48)은 유지해 학부모 마크와 줄을 맞춘다 */
+                  <span className="flex h-12 w-12 items-center justify-center">
+                    <Cheddar size={44} />
                   </span>
                 }
                 label="사진을 올려요"
