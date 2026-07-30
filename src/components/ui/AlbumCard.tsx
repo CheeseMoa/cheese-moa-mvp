@@ -18,6 +18,12 @@ interface AlbumCardProps {
    * 이름 전폭 2줄(CHMO-354)에서 고정 폭을 빼앗지 않는다. 뷰어·14는 이 prop을 주지 않는다.
    */
   onSettings?: () => void
+  /**
+   * 메타 줄 문구 교체 — 기본은 `N장`(uncertain만 `N장 · 재분류 대상`).
+   * 14 미검토 구획이 **남은 장수**를 말할 때 쓴다(`10장 남음`, CHMO-531): 같은 앨범이라도
+   * 그 화면이 세는 수가 다르면 카드가 그걸 말해야 한다(08은 전체 장수, 14 미검토는 잔여).
+   */
+  metaText?: string
 }
 
 /**
@@ -26,7 +32,7 @@ interface AlbumCardProps {
  * 품질 앨범(eyes_closed/blurry)도 같은 검토 테두리를 탄다(피드백 #7 — dc.html §06의 '기본 테두리' 규칙을 대체, CHMO-355) ·
  * uncertain은 검토와 무관하게 항상 점선(재분류 대상) · 검토 배지는 person/common에만.
  */
-export function AlbumCard({ album, coverUrl, onClick, onSettings }: AlbumCardProps) {
+export function AlbumCard({ album, coverUrl, onClick, onSettings, metaText }: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
   // 사진 0장이면 unreviewedPhotoCount === 0이 공허하게 참 → '검토완료' 오표시. 사진이 있을 때만 완료로 본다
   const reviewed = album.photoCount > 0 && album.unreviewedPhotoCount === 0
@@ -35,7 +41,8 @@ export function AlbumCard({ album, coverUrl, onClick, onSettings }: AlbumCardPro
       ? 'border-2 border-accent'
       : 'border-2 border-dashed border-[#C9C2B4]'
   const meta =
-    album.type === 'uncertain' ? `${album.photoCount}장 · 재분류 대상` : `${album.photoCount}장`
+    metaText ??
+    (album.type === 'uncertain' ? `${album.photoCount}장 · 재분류 대상` : `${album.photoCount}장`)
   const cover = (
     <span className="cheese-dots block h-24 overflow-hidden rounded-[10px] bg-photo">
       {coverUrl ? (
