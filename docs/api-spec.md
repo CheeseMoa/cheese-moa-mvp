@@ -30,6 +30,15 @@
 | 409 | `NICKNAME_TAKEN`, `ALREADY_MEMBER` | 충돌 |
 | 413 | `PAYLOAD_TOO_LARGE` | 업로드 용량 초과 |
 
+### 요청 추적 (X-Request-Id)
+
+BE는 **모든 응답**에 `X-Request-Id`를 싣는다(BE CHMO-493). 서버가 그 요청에 대해 남긴 모든 로그 줄에 같은 값이 붙어 있어, 이 값 하나로 CloudWatch에서 해당 요청을 특정할 수 있다.
+
+- 값: ASCII 영숫자·`-`·`_`, 64자 이내 (2026-07-30 실서버 실측값은 12자 hex — `db0cdc31fb2c`)
+- CORS `exposedHeaders`에 등록돼 있어 **교차 출처(`app.` → `api.`)에서도 브라우저가 읽는다**(실측: `access-control-expose-headers: X-Request-Id`)
+- 요청 헤더로 보내면 BE가 그 값을 그대로 쓴다(형식을 벗어나면 무시하고 새로 만든다 — 로그 주입 방지). **FE는 보내지 않는다** — 이을 세션 추적 ID가 없어 BE 생성분으로 충분하다
+- FE 소비: `client.ts`가 실패 응답에서 읽어 `ApiRequestError.requestId`에 담고, 에러 화면(`ErrorState`)이 `코드 · 추적ID` 한 줄로 노출한다(CHMO-500). 사용자가 캡처해 보내오면 그 줄로 로그를 짚는다
+
 ---
 
 ## 2. 리소스 스키마

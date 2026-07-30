@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import type { ApiRequestError } from '../../api/client'
-import { toErrorMessage } from '../../api/client'
+import { toErrorMessage, toErrorReference } from '../../api/client'
 import { cx } from '../../lib/cx'
 import { Button, ButtonLink } from './Button'
 
@@ -30,6 +30,11 @@ interface ErrorStateProps {
  * 401은 재시도가 영원히 실패하므로 unauthorizedTo로 재인증 화면 복귀,
  * 404·403은 재시도해도 같은 결과라 notFoundTo가 있으면 [다시 시도] 대신 복귀 CTA를 준다
  * (403 = 승인 대기(SPACE403)·role 부족(ROLE403) — 둘 다 이 화면에서 할 수 있는 일이 없다).
+ *
+ * 맨 아래 회색 한 줄은 제보용 오류 식별 문구다(CHMO-500) — 사용자가 화면을 캡처해 보내오면
+ * 그 값으로 서버 로그를 곧바로 특정한다. **여기에만 노출한다**: 화면이 통째로 실패해 사용자가
+ * 멈춰 서 있는 자리라서다. 3초 뒤 사라지는 토스트에 같은 줄을 넣으면 복사할 틈은 없는 채로
+ * 평상시 화면이 상태 코드로 지저분해진다.
  */
 export function ErrorState({
   error,
@@ -41,6 +46,7 @@ export function ErrorState({
   children,
 }: ErrorStateProps) {
   if (error.status === 401 && unauthorizedTo) return <Navigate to={unauthorizedTo} replace />
+  const reference = toErrorReference(error)
   return (
     <div className={cx('flex flex-col items-center gap-3', className ?? 'py-11')}>
       <p role="alert" className="text-center text-sm text-warn">
@@ -56,6 +62,8 @@ export function ErrorState({
         </Button>
       ) : null}
       {children}
+      {/* select-all: 길게 눌렀을 때 단어 하나가 아니라 줄 전체가 잡힌다 */}
+      {reference ? <p className="select-all text-[11px] text-muted">{reference}</p> : null}
     </div>
   )
 }
