@@ -155,7 +155,8 @@ export function GroupDetailPage() {
                   }
                 />
               ) : (
-                <ul className="flex flex-col gap-3">
+                // 간격은 그림자 blur(8)보다 넓게 둔다(CHMO-532) — 좁으면 그림자가 사이를 메운다
+                <ul className="flex flex-col gap-3.5">
                   {events.map((event) => (
                     <li key={event.id}>
                       <EventCard

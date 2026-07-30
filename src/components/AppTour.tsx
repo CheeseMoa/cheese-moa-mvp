@@ -207,7 +207,8 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
       screenTitle: TOUR_GROUP.name,
       screenSub: TOUR_GROUP_META,
       stage: (
-        <div className="flex flex-col gap-3">
+        // 간격은 05 이벤트 목록과 같게(CHMO-532 — 그림자 blur보다 넓어야 사이가 보인다)
+        <div className="flex flex-col gap-3.5">
           {TOUR_EVENTS.map((event, i) => {
             const card = (
               <EventCard {...event} cover={TOUR_COVER} onClick={() => enterEvent(event)} />
