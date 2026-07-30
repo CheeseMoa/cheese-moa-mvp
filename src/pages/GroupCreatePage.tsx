@@ -4,12 +4,16 @@ import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, TextField, useToast } from '../components/ui'
 import { useMutation } from '../hooks/useMutation'
+import { attestGuardianConsent } from '../api/agreements'
 import { createGroup } from '../api/groups'
+import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
 
 /**
  * 03. 모임 만들기 · node 211:1411 · POST /groups → 모임 상세(05).
  * 요금제·업그레이드 안내는 노출하지 않는다 — MVP에 결제가 없어 '무료'라는 말이 유료 전환을
  * 예고하는 문구로만 읽힌다(2026-07-29 결정).
+ * 보호자 동의 확보 확인 체크는 **서버 기록으로도 남긴다**(CHMO-516) — 그래야 만든 사람이
+ * 첫 업로드에서 같은 확인을 두 번 읽지 않는다(업로드 게이트는 BE CHMO-514).
  */
 export function GroupCreatePage() {
   const navigate = useNavigate()
@@ -32,6 +36,11 @@ export function GroupCreatePage() {
     setError(null)
     await mutate(() => createGroup({ name: name.trim(), password: password.trim() }), {
       onSuccess: (group) => {
+        // 여기서 체크한 확인을 서버 기록으로 남긴다(CHMO-516). 기다리지 않는다 — 모임은 이미
+        // 만들어졌고 이 기록은 업로드 게이트를 미리 통과시켜 두는 용도라 화면을 붙잡을 이유가 없다.
+        // 실패해도 조용히 넘긴다: 첫 업로드에서 확인 모달이 뜨는 것이 안전망이다(이중 확인은
+        // 이 호출이 성공하는 평소 경로에서만 사라진다).
+        void attestGuardianConsent(group.id).catch(() => undefined)
         toast.show('🧀 모임을 만들었어요')
         // 상세에서 뒤로가기가 작성 폼으로 돌아오지 않게 폼 히스토리를 교체
         navigate(`/groups/${group.id}`, { replace: true })
@@ -70,10 +79,7 @@ export function GroupCreatePage() {
           />
         </div>
         <div className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-card">
-          <p className="text-xs leading-relaxed text-muted">
-            치즈모아는 사진 속 아이들의 얼굴을 분석해 인물별 앨범을 만들어요. 만 14세 미만 아이의
-            사진을 올리려면 보호자(법정대리인)의 동의가 필요해요.
-          </p>
+          <p className="text-xs leading-relaxed text-muted">{GUARDIAN_CONSENT_COPY.intro}</p>
           <label className="mt-3 flex items-start gap-2.5">
             <input
               type="checkbox"
@@ -81,9 +87,9 @@ export function GroupCreatePage() {
               onChange={(e) => setConsentConfirmed(e.target.checked)}
               className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
             />
+            {/* 06-U 확인 모달과 같은 문장 — 서버에 남는 기록이 하나라 문구도 하나여야 한다 */}
             <span className="text-sm leading-relaxed text-text">
-              사진에 등장하는 모든 아이의 보호자로부터 촬영·업로드, 얼굴 인식을 통한 인물별 분류,
-              보호자 공유에 대한 동의를 받았습니다.
+              {GUARDIAN_CONSENT_COPY.statement}
             </span>
           </label>
         </div>
