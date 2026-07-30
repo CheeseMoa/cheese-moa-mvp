@@ -37,11 +37,14 @@ export function stubFetch(route: FetchRoute): FetchCall[] {
   return calls
 }
 
+/** 응답 헤더 추가분 — 본문 밖에 실리는 계약(X-Request-Id 등) */
+type ExtraHeaders = Record<string, string>
+
 /** BE·MSW 공통 — JSON 응답(client.ts는 Content-Type으로 파싱 여부를 정한다) */
-export function jsonResponse(payload: unknown, status = 200): Response {
+export function jsonResponse(payload: unknown, status = 200, headers: ExtraHeaders = {}): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
   })
 }
 
@@ -51,8 +54,8 @@ export function emptyResponse(status = 204): Response {
 }
 
 /** 봉투도 error 포맷도 아닌 실패(프록시·게이트웨이 오류) */
-export function textResponse(body: string, status: number): Response {
-  return new Response(body, { status, headers: { 'Content-Type': 'text/plain' } })
+export function textResponse(body: string, status: number, headers: ExtraHeaders = {}): Response {
+  return new Response(body, { status, headers: { 'Content-Type': 'text/plain', ...headers } })
 }
 
 /** 기록된 요청의 JSON 본문 */

@@ -22,27 +22,43 @@ export function api(path: string): string {
 
 // ── BE 응답 봉투 ─────────────────────────────────────────────
 
+/**
+ * 요청 추적 ID — 실 BE는 **성공·실패 가리지 않고 모든 응답**에 싣는다(BE CHMO-493,
+ * 2026-07-30 실서버 실측: 12자 hex). 목도 실어야 에러 화면의 제보용 식별 문구(CHMO-500)가
+ * 목 모드에서 그려지고, 스위치 양쪽(`VITE_ENABLE_MSW` true/false)이 같은 계약을 탄다.
+ * 값은 요청마다 새로 발급된다 — 실 BE처럼 재현되지 않는다.
+ */
+function requestIdHeaders(): Record<string, string> {
+  return { 'X-Request-Id': crypto.randomUUID().replace(/-/g, '').slice(0, 12) }
+}
+
 /** 성공 봉투 — 리소스는 result에 담긴다(목록은 bare 배열) */
 export function ok<T>(result: T) {
-  return HttpResponse.json({ isSuccess: true, code: 'COMMON200', message: '성공입니다.', result })
+  return HttpResponse.json(
+    { isSuccess: true, code: 'COMMON200', message: '성공입니다.', result },
+    { headers: requestIdHeaders() },
+  )
 }
 
 /** 생성 성공 봉투 (201) */
 export function created<T>(result: T) {
   return HttpResponse.json(
     { isSuccess: true, code: 'COMMON201', message: '성공입니다.', result },
-    { status: 201 },
+    { status: 201, headers: requestIdHeaders() },
   )
 }
 
 /** 본문 없는 성공 (로그아웃) — BE 응답 코드는 미확인 */
 export function noContent() {
-  return new HttpResponse(null, { status: 204 })
+  return new HttpResponse(null, { status: 204, headers: requestIdHeaders() })
 }
 
 /** 실패 봉투 — result 없이 code·message만 (HTTP 200이어도 isSuccess:false면 실패) */
 export function errorResponse(status: number, code: string, message: string) {
-  return HttpResponse.json({ isSuccess: false, code, message }, { status })
+  return HttpResponse.json(
+    { isSuccess: false, code, message },
+    { status, headers: requestIdHeaders() },
+  )
 }
 
 /**
