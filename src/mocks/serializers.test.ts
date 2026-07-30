@@ -274,6 +274,15 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // 전량 검토라야 공개되고 공개 후 사진 추가도 없어 대기가 생길 경로가 없다
     expect(detail.pendingPublishCount).toBe(0)
     expect(summary.pendingPublishCount).toBeUndefined()
+
+    // 05 카드 커버(CHMO-515) — 목록에만 오고 상세엔 없다(BE와 같은 비대칭)
+    expect(summary.coverThumbnailUrl).toContain('picsum')
+    expect(detail.coverThumbnailUrl).toBeNull()
+
+    // 사진 0장 이벤트(가을 발표회 준비)는 커버가 없다 — 카드가 컴팩트로 그려지는 근거
+    const emptyEvent = toEvent(toEventSummary(findEvent(4)!))
+    expect(emptyEvent.photoCount).toBe(0)
+    expect(emptyEvent.coverThumbnailUrl).toBeNull()
   })
 
   it('분석 진행률 — 분석중 상세에만 progress, 분석 아니면 null (CHMO-287)', () => {

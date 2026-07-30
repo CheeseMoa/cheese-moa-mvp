@@ -341,7 +341,7 @@ export function PhotoUploadPage() {
             onRetry={eventApi.refetch}
             unauthorizedTo="/login"
             notFoundTo={`/groups/${groupId}`}
-            notFoundLabel="모임 상세로"
+            notFoundLabel="모임으로"
           />
         ) : uploadLocked ? (
           // 업로드 불가(분석중 또는 1회 소진) — 안내 화면 대신 이벤트 상세로 곧장 넘긴다.

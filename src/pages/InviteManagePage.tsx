@@ -120,7 +120,7 @@ export function InviteManagePage() {
 
   return (
     <PhoneShell>
-      <Header backTo={`/groups/${groupId}`} backLabel="모임 상세" title="초대 관리" />
+      <Header backTo={`/groups/${groupId}`} backLabel="모임" title="초대 관리" />
 
       {/* 세그먼트 탭 — 스크롤 밖 고정(긴 명단에서도 항상 전환 가능) · 스타일은 05-2 시트와 동일 */}
       <div className="shrink-0 px-5 pt-4">
@@ -291,13 +291,13 @@ export function InviteManagePage() {
                 description={
                   tab === 'parent' ? (
                     <>
-                      모임 상세의 [＋ 초대하기]에서
+                      모임 화면의 [＋ 초대하기]에서
                       <br />
                       학부모님께 신청 링크를 보내 보세요.
                     </>
                   ) : (
                     <>
-                      모임 상세의 [＋ 초대하기]에서
+                      모임 화면의 [＋ 초대하기]에서
                       <br />
                       함께할 선생님을 초대해 보세요.
                     </>
@@ -314,7 +314,7 @@ export function InviteManagePage() {
             onRetry={membersApi.refetch}
             unauthorizedTo="/login"
             notFoundTo={`/groups/${groupId}`}
-            notFoundLabel="모임 상세로"
+            notFoundLabel="모임으로"
           />
         )}
       </main>

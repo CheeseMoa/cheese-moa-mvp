@@ -97,7 +97,7 @@ export function EventDetailPage() {
     <PhoneShell>
       <Header
         backTo={`/groups/${groupId}`}
-        backLabel={groupApi.data?.name ?? '모임 상세'}
+        backLabel={groupApi.data?.name ?? '뒤로'}
         right={event && <EventSettingsButton onClick={() => setSettingsOpen(true)} />}
       />
       <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
@@ -157,7 +157,7 @@ export function EventDetailPage() {
             onRetry={eventApi.refetch}
             unauthorizedTo="/login"
             notFoundTo={`/groups/${groupId}`}
-            notFoundLabel="모임 상세로"
+            notFoundLabel="모임으로"
           />
         )}
       </main>
@@ -283,7 +283,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
               onRetry={albumsApi.refetch}
               unauthorizedTo="/login"
               notFoundTo={`/groups/${groupId}`}
-              notFoundLabel="모임 상세로"
+              notFoundLabel="모임으로"
             />
           ) : (
             <>

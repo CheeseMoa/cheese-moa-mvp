@@ -311,6 +311,8 @@ describe('이벤트', () => {
       createdAt: '2026-07-10T03:33:06.413658Z',
       publishedAt: null,
       coverPhotoId: null,
+      // 상세 응답엔 thumbnailUrl이 아예 없다 — 매퍼가 null로 채운다(커버 원천은 목록뿐, CHMO-515)
+      coverThumbnailUrl: null,
       // progress 필드가 없던 채집분 — 매퍼가 null로 채운다(CHMO-287 전 BE와의 호환)
       progress: null,
       // pendingPublishCount도 없던 채집분(CHMO-324 전) — 매퍼가 undefined로 통과시킨다
@@ -352,6 +354,19 @@ describe('이벤트', () => {
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ id: 4, date: '2026-07-10', status: 'analyzing' })
     expect(events[0].groupId).toBeUndefined()
+  })
+
+  it('목록의 thumbnailUrl이 05 카드 커버가 된다 (CHMO-515)', async () => {
+    // 커버는 목록 응답에만 있다 — 05가 상세를 원천으로 삼으면 커버가 통째로 사라진다.
+    // 이 매핑이 빠져도 tsc는 통과한다(옵셔널 필드) — 카드만 조용히 회색 면이 된다
+    serve(envelope([BE_EVENT_PUBLISHED]))
+    const [event] = await listGroupEvents(6)
+    expect(event.coverThumbnailUrl).toBe(BE_EVENT_PUBLISHED.thumbnailUrl)
+
+    // 사진 0장 이벤트는 서버가 null을 준다 — 카드는 이 null을 컴팩트 카드로 그린다
+    serve(envelope([BE_EVENT_SUMMARY]))
+    const [empty] = await listGroupEvents(6)
+    expect(empty.coverThumbnailUrl).toBeNull()
   })
 })
 
