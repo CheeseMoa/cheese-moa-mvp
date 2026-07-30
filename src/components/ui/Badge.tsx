@@ -55,6 +55,28 @@ export function Badge({ variant, size = 'md', children }: BadgeProps) {
   )
 }
 
+interface CountBadgeProps {
+  count: number
+}
+
+/**
+ * '처리할 것이 N건' 표시 — 20 초대 화면의 탭별 대기 수(CHMO-502)와 05 [＋ 초대하기] 버튼(CHMO-520)이
+ * 공유한다. 갈색 솔리드인 이유는 두 가지다: 안내용 빨간 글씨를 쓰지 않는다는 톤 규칙과, 옐로우 버튼
+ * 안에 얹혀도 대비가 서는 색이 accent뿐이라는 것.
+ *
+ * 수만 알려주는 장식이라 aria-hidden이다 — 호출부가 버튼·탭에 전체 문장을 aria-label로 달아야 한다.
+ */
+export function CountBadge({ count }: CountBadgeProps) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
+    >
+      {count}
+    </span>
+  )
+}
+
 // EventStatus(types/api.ts) 1:1 매핑. 'review'(검수중)는 배지 정의 미확정이라 제외
 // (screen-spec 05 배지 목록·tailwind.config.js TODO 참조 — 렌더하지 않는다).
 const eventStatusVariant: Partial<Record<EventStatus, BadgeVariant>> = {

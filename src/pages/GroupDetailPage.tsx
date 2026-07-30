@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { GroupInviteSheet } from '../components/GroupInviteSheet'
 import {
   Button,
+  ButtonLink,
   ConfirmDialog,
+  CountBadge,
   EmptyState,
   EventCard,
   Header,
@@ -25,9 +26,13 @@ import type { Group } from '../types/api'
  * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 307:4(학부모 전환 수정안 — CHMO-446)
  * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정) ·
  * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277) ·
- * GET /groups/:id/join-requests(대기 신청 수 — [초대 관리] 뱃지).
- * 초대는 이 화면 위 통합 시트(GroupInviteSheet, 05-2)로 뜬다(확정 — 별도 페이지 아님) —
- * 학부모 공유도 시트의 학부모님 탭으로 흡수됐다(CHMO-446, 하단 공유 버튼 제거).
+ * GET /groups/:id/join-requests(대기 신청 수 — [＋ 초대하기] 뱃지).
+ * 초대는 **화면 하나**다(CHMO-520 — 05-2 통합 시트 폐지, CHMO-446 반전): [＋ 초대하기]가 20으로
+ * 곧장 가고, 링크 보내기(부르기)와 신청 승인·아이 연결(받기)이 거기서 한 역할 탭 아래 붙어 있다.
+ * 시트를 걷어낸 이유는 취향이 아니라 중복이다 — 시트와 20이 선생님/학부모님 세그먼트 탭을 각자
+ * 한 벌씩 갖고 있었고, 같은 축으로 두 번 가르는 화면이 둘이라는 건 원래 한 화면이었다는 뜻이다.
+ * 그래서 하단은 이 화면에서 **할 일**([＋ 이벤트 생성]) 하나만 남는다 — 종전 [초대 관리]는 다른
+ * 화면으로 **가는 일**이라 같은 무게로 쌓일 자리가 아니었다.
  * 카드 메타의 '인원'은 이벤트 API에 없어 날짜·사진만 표시(확정) ·
  * [+ 이벤트 생성]은 06-M 모달(CreateEventModal)로 뜬다.
  */
@@ -46,7 +51,6 @@ export function GroupDetailPage() {
   const requestsApi = useApi(`join-requests:${groupId}`, (signal) =>
     listJoinRequests(groupId, signal),
   )
-  const [inviteOpen, setInviteOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -118,9 +122,22 @@ export function GroupDetailPage() {
                 <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-text">
                   {group.name}
                 </h2>
-                <Button size="sm" onClick={() => setInviteOpen(true)}>
+                {/* 시트가 아니라 화면으로 간다(CHMO-520) — 순수 이동이라 앵커 시맨틱(ButtonLink).
+                    대기 수는 버튼 코너에 얹지 않고 라벨 안쪽 인라인으로 둔다: 20 탭 뱃지와 같은
+                    컴포넌트라 두 화면의 '대기 N건'이 한 모양이고, 오버레이 배지도 피한다 */}
+                <ButtonLink
+                  to={`/groups/${groupId}/invites`}
+                  size="sm"
+                  className="gap-1.5"
+                  aria-label={
+                    pendingRequestCount > 0
+                      ? `초대하기 · 대기 신청 ${pendingRequestCount}건`
+                      : undefined
+                  }
+                >
                   ＋ 초대하기
-                </Button>
+                  {pendingRequestCount > 0 && <CountBadge count={pendingRequestCount} />}
+                </ButtonLink>
               </div>
               {memberPart && <p className="mt-1 text-[13px] text-muted">{memberPart}</p>}
             </div>
@@ -173,16 +190,9 @@ export function GroupDetailPage() {
                 </ul>
               )}
 
-              <div className="mt-auto flex flex-col gap-3 pt-6">
+              <div className="mt-auto pt-6">
                 <Button fullWidth onClick={() => setCreateOpen(true)}>
                   ＋ 이벤트 생성
-                </Button>
-                <Button
-                  variant="secondary"
-                  fullWidth
-                  onClick={() => navigate(`/groups/${groupId}/invites`)}
-                >
-                  초대 관리{pendingRequestCount > 0 ? ` · 신청 ${pendingRequestCount}` : ''}
                 </Button>
               </div>
             </div>
@@ -200,7 +210,6 @@ export function GroupDetailPage() {
         )}
       </main>
 
-      <GroupInviteSheet groupId={groupId} open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <CreateEventModal open={createOpen} onClose={() => setCreateOpen(false)} groupId={groupId} />
       {group && (
         <RenameGroupModal
