@@ -65,6 +65,15 @@ export const BE_ERRORS = {
     status: 409,
     payload: errorEnvelope('PUBLISH409', '검토되지 않은 사진이 있습니다.'),
   },
+  /**
+   * 보호자 동의 확보 확인 없이 업로드 — POST /events/:id/photos/presign.
+   * **BE 소스 기준(미채집)**: CHMO-514 PR #154 `ErrorStatus.GUARDIAN_CONSENT_REQUIRED`
+   * (PRECONDITION_REQUIRED). 실서버 채집은 BE 배포 후.
+   */
+  AGREEMENT428: {
+    status: 428,
+    payload: errorEnvelope('AGREEMENT428', '아동 보호자 동의 확보 확인이 필요합니다.'),
+  },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -442,4 +451,34 @@ export const BE_VIEWER_ALBUM_PHOTOS_COMMON = {
 export const BE_VIEWER_ZIP = {
   downloadUrl: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/zips/4_11.zip',
   expiresAt: '2026-07-10T04:41:30.123456',
+}
+
+// ── 약관 동의 (CHMO-514 — BE 스펙 문서 기준, 미채집) ─────────
+
+/**
+ * GET·POST `/agreements` — AgreementStatusResponse (스펙 문서 기준).
+ * 출처: CheeseMoa-BE `docs/spec/CHMO-514-약관-동의-기록.md` §3(PR #154). 실서버 채집은 배포 후.
+ * ⚠ `CHILD_CONSENT_ATTESTED`(scope GROUP)의 `agreed`는 모임별이라 **항상 false**로 온다.
+ */
+export const BE_AGREEMENTS = {
+  agreements: [
+    { type: 'AGE_14_OVER', currentVersion: '1.0', required: true, scope: 'USER', agreed: false },
+    {
+      type: 'TERMS_OF_SERVICE',
+      currentVersion: '1.0',
+      required: true,
+      scope: 'USER',
+      agreed: false,
+    },
+    { type: 'PRIVACY_POLICY', currentVersion: '1.0', required: true, scope: 'USER', agreed: false },
+    { type: 'FACE_DATA', currentVersion: '1.0', required: true, scope: 'USER', agreed: false },
+    { type: 'MARKETING', currentVersion: '1.0', required: false, scope: 'USER', agreed: false },
+    {
+      type: 'CHILD_CONSENT_ATTESTED',
+      currentVersion: '1.0',
+      required: true,
+      scope: 'GROUP',
+      agreed: false,
+    },
+  ],
 }

@@ -12,7 +12,9 @@
  * 대조(OAUTH401·OAUTH502 — 콜백이 `?error=`로, exchange가 응답 code로 싣는다)
  * + 2026-07-22 실서버 채집(PUBLISH409 — CHMO-265 착수 중, 재공개 게이트 CHMO-324)
  * + 2026-07-28 BE 완료 공지(SPACE403 — 선생님 합류 승인제 CHMO-475 AC2. 실서버 채집은
- *   학부모 전환 배포 후 CHMO-449에서).
+ *   학부모 전환 배포 후 CHMO-449에서)
+ * + 2026-07-30 BE 소스 대조(AGREEMENT428 — 약관 동의 기록 CHMO-514 PR #154의 ErrorStatus.
+ *   실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -49,6 +51,13 @@ const BE_CODE_MAP: Record<string, string> = {
    * (종전의 ?force=true 재시도 분기는 폐기 — CHMO-324·265).
    */
   PUBLISH409: 'HAS_UNREVIEWED_PHOTOS',
+  /**
+   * 아동 보호자 동의 확보 확인이 없는 모임의 업로드(428 Precondition Required — BE CHMO-514).
+   * presign 단계에서만 온다. **막힌 게 아니라 조건이 빈 것**이라 화면은 에러 문구가 아니라
+   * 확인 모달을 띄우고, 확인 기록(POST /groups/:id/agreements) 후 presign부터 재시도한다.
+   * 확인은 선생님별·모임별 1회라 같은 모임의 다음 업로드엔 오지 않는다(CHMO-516).
+   */
+  AGREEMENT428: 'GUARDIAN_CONSENT_REQUIRED',
   /** 지원하지 않는 소셜 프로바이더(400) — 경로 변수가 BE 미구현 값 (CHMO-359) */
   OAUTH400: 'UNSUPPORTED_SOCIAL_PROVIDER',
   /** 소셜 인가 실패(401) — 사용자 동의 취소·일회용 코드 무효/만료/재사용 */

@@ -18,6 +18,8 @@ import {
   findPhoto,
   db,
   createManualPersonAlbum,
+  guardianConsentAttested,
+  recordAgreement,
   deleteAlbumCascade,
   membershipOf,
   photosOfAlbum,
@@ -31,6 +33,7 @@ import {
 } from './db'
 import { createFixtures } from './fixtures'
 import {
+  toAgreementStatusResponse,
   toAlbumDetail,
   toAlbumSummary,
   toCreateAlbumResponse,
@@ -58,6 +61,7 @@ import {
   toViewerUnlockResponse,
 } from './handlers/serializers'
 import {
+  toAgreementStatus,
   toAlbum,
   toAnalysisJob,
   toEvent,
@@ -609,5 +613,69 @@ describe('인라인 조립 응답 → 소비처 필드명 이음매 (CHMO-227)',
     expect(raw.albumId).toBe(9)
     expect(raw.personName).toBe(personNameOf(album))
     expect(raw.photos.map(toViewerPhoto)[0]).toMatchObject({ id: expect.any(Number) })
+  })
+})
+
+/** 응답에서 항목의 agreed를 읽는다 — 상태 판정이 직렬화기 몫이라 응답으로 확인한다 */
+function agreedOf(userId: number, type: string): boolean {
+  const found = toAgreementStatusResponse(userId).agreements.find(
+    (item) => item.type === type.toUpperCase(),
+  )
+  return !!found?.agreed
+}
+
+describe('약관 동의 (CHMO-516 — BE CHMO-514 계약)', () => {
+  it('목 카탈로그를 매퍼가 읽으면 화면 타입이 나온다 — 대문자 enum·agreements 키', () => {
+    const raw = toAgreementStatusResponse(1)
+
+    expect(raw.agreements.map((item) => item.type)).toEqual([
+      'AGE_14_OVER',
+      'TERMS_OF_SERVICE',
+      'PRIVACY_POLICY',
+      'FACE_DATA',
+      'MARKETING',
+      'CHILD_CONSENT_ATTESTED',
+    ])
+    expect(toAgreementStatus(raw.agreements[0])).toEqual({
+      type: 'age_14_over',
+      currentVersion: '1.0',
+      required: true,
+      scope: 'user',
+      agreed: false,
+    })
+    // 선택 항목은 required:false로 내려간다(미동의로도 가입 가능 — 법 제22조⑤)
+    expect(toAgreementStatus(raw.agreements[4])).toMatchObject({
+      type: 'marketing',
+      required: false,
+    })
+  })
+
+  it('동의 상태는 "현재 버전에 동의했는가" — 구버전 기록만 있으면 재동의 대상이다', () => {
+    recordAgreement({ userId: 1, type: 'terms_of_service', version: '0.9', agreed: true })
+    expect(agreedOf(1, 'terms_of_service')).toBe(false)
+
+    recordAgreement({ userId: 1, type: 'terms_of_service', version: '1.0', agreed: true })
+    expect(agreedOf(1, 'terms_of_service')).toBe(true)
+
+    // 철회도 새 행 — 이전 동의 행은 남고(append-only) 상태만 최신 행을 따른다
+    recordAgreement({ userId: 1, type: 'terms_of_service', version: '1.0', agreed: false })
+    expect(agreedOf(1, 'terms_of_service')).toBe(false)
+    expect(db.agreements.filter((row) => row.type === 'terms_of_service')).toHaveLength(3)
+  })
+
+  it('모임 스코프 항목의 agreed는 모임별이라 목록에선 항상 false — 확인 기록이 있어도', () => {
+    recordAgreement({
+      userId: 1,
+      type: 'child_consent_attested',
+      version: '1.0',
+      agreed: true,
+      groupId: 1,
+    })
+
+    expect(guardianConsentAttested(1, 1)).toBe(true)
+    // 다른 선생님·다른 모임의 확인으로 갈음되지 않는다
+    expect(guardianConsentAttested(2, 1)).toBe(false)
+    expect(guardianConsentAttested(1, 2)).toBe(false)
+    expect(agreedOf(1, 'child_consent_attested')).toBe(false)
   })
 })
