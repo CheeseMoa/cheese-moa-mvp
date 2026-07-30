@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
+import { AlbumSettingsSheet } from '../components/AlbumSettingsSheet'
 import { MovePhotosSheet } from '../components/MovePhotosSheet'
 import { LightboxToolbarButton, PhotoLightbox } from '../components/PhotoLightbox'
-import { RenameModal } from '../components/RenameModal'
 import {
   Badge,
   Button,
@@ -11,6 +11,7 @@ import {
   Header,
   IconDownload,
   IconFolderMove,
+  IconPencil,
   IconTrash,
   LoadState,
   PhotoGrid,
@@ -21,13 +22,7 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { usePhotoSave, photoSaveLabel } from '../hooks/usePhotoSave'
 import { toErrorMessage } from '../api/client'
-import {
-  deleteAlbum,
-  deletePhotos,
-  getAlbumWithPhotos,
-  markAlbumReviewed,
-  renamePersonAlbum,
-} from '../api/albums'
+import { deleteAlbum, deletePhotos, getAlbumWithPhotos, markAlbumReviewed } from '../api/albums'
 import { getEvent, listEventAlbums } from '../api/events'
 import { cx } from '../lib/cx'
 import { findNextReviewTarget } from '../lib/reviewFlow'
@@ -42,9 +37,12 @@ import type { ID } from '../types/api'
  * [검토 완료] = 앨범 내 전 사진 일괄 reviewed(앨범 전체 대상이라 선택모드와 이질적이던 버튼은 제거, CHMO-413),
  * 성공하면 **다음 미검토 앨범의 09로 바로 이어 간다**(CHMO-521 — 규칙은 `lib/reviewFlow.ts`. 08 복귀는
  * 앨범 수만큼 왕복을 만들었다(CHMO-414 반전). 남은 앨범이 없으면 다음 차례가 공개라 14로 보낸다).
- * 인물 앨범은 앨범명 옆 ✎로 이름 변경(모임 전체 이름전파). 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시한다.
- * 앨범 삭제(CHMO-435 — 전 타입): 앨범명 줄 🗑 → 확인 다이얼로그(이 앨범에만 있는 사진은 영구 삭제 경고) →
- * DELETE /albums/:id → 08 복귀(replace). 사진 전량 삭제·이동으로 앨범이 비어도 앨범은 남는다(CHMO-418 —
+ * 인물 앨범은 앨범명 옆 [✎ 앨범 설정] 하나로 모은다(AlbumSettingsSheet — 08 카드 이름 줄 탭과 같은 시트, CHMO-522):
+ * 이름 변경(모임 전체 이름전파) · **학부모 연결/해제**(person-parents — 20 초대 관리의 반대 방향) ·
+ * 앨범 삭제 진입. 삭제는 확인 다이얼로그로 결과(완전 삭제 여부)를 명시한다.
+ * 앨범 삭제(CHMO-435 — 전 타입): 인물은 설정 시트 하단, 특수 앨범은 앨범명 줄 🗑 → 확인 다이얼로그
+ * (이 앨범에만 있는 사진은 영구 삭제 경고) → DELETE /albums/:id → 08 복귀(replace).
+ * 사진 전량 삭제·이동으로 앨범이 비어도 앨범은 남는다(CHMO-418 —
  * 자동 삭제 폐지, CHMO-289 복귀 동작 반전): 잔류 + refetch로 빈 상태를 보여주고 삭제는 수동뿐.
  * [검토 완료]는 **되돌릴 수 없다**(CHMO-488 — 검토 해제 폐기): 확인 다이얼로그로 한 번 받는다.
  * CHMO-413에서 뺐던 다이얼로그를 되살린 것 — 그때의 근거("되돌릴 수 있는 표시")가 정책상 사라졌다.
@@ -95,7 +93,8 @@ function AlbumDetailView() {
   const [pendingMove, setPendingMove] = useState<ID[] | null>(null)
   const [deleteAlbumOpen, setDeleteAlbumOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
-  const [renameOpen, setRenameOpen] = useState(false)
+  // 앨범 설정 시트(이름 수정 + 학부모 연결 + 앨범 삭제 진입) — 인물 앨범만
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   // 앨범 저장 파이프라인(CHMO-473) — 데이터를 바꾸지 않아 busy(그리드 잠금)와 분리.
@@ -285,7 +284,9 @@ function AlbumDetailView() {
     <PhoneShell>
       <Header
         backTo={eventPath}
-        backLabel="이벤트 상세"
+        // 08이 헤더에 이벤트명을 띄우게 됐으니 여기 뒤로가기도 그 이름을 그대로 부른다
+        // (이벤트 조회는 이동 확인용으로 이미 하고 있다 — 도착 전엔 중립 라벨로 폴백)
+        backLabel={eventApi.data?.name ?? '이벤트'}
         backDisabled={busy}
         right={
           album && hasPhotos ? (
@@ -332,27 +333,32 @@ function AlbumDetailView() {
                   </div>
                 ) : (
                   <div className="flex flex-none items-center gap-2">
-                    {/* 인물 앨범만 이름 변경(모임 전체 이름전파). 특수 앨범은 고정 라벨이라 미노출 */}
-                    {album.type === 'person' && (
+                    {/* 인물 앨범은 [✎ 앨범 설정] 하나로 모은다 — 이름 수정·학부모 연결·앨범 삭제가
+                        모두 시트 안에 있다(종전 '✎ 이름' + 🗑 두 버튼을 대체). 앨범 하나에 대한
+                        조작이 헤더와 시트로 흩어져 있지 않게. 특수 앨범은 이름·연결 대상이 아니라
+                        종전처럼 🗑만 남는다 */}
+                    {album.type === 'person' ? (
                       <button
                         type="button"
                         disabled={locked}
-                        onClick={() => setRenameOpen(true)}
+                        onClick={() => setSettingsOpen(true)}
                         className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-bold text-accent disabled:opacity-50"
                       >
-                        ✎ 이름
+                        <IconPencil size={13} />
+                        앨범 설정
+                      </button>
+                    ) : (
+                      /* 앨범 삭제(CHMO-435) — 전 타입. 빈 앨범도 여기(+ 하단 CTA)로 지운다 */
+                      <button
+                        type="button"
+                        aria-label="앨범 삭제"
+                        disabled={locked}
+                        onClick={() => setDeleteAlbumOpen(true)}
+                        className="inline-flex items-center rounded-full border border-border bg-white px-2.5 py-1.5 text-warn disabled:opacity-50"
+                      >
+                        <IconTrash size={16} />
                       </button>
                     )}
-                    {/* 앨범 삭제(CHMO-435) — 전 타입. 빈 앨범도 여기(+ 하단 CTA)로 지운다 */}
-                    <button
-                      type="button"
-                      aria-label="앨범 삭제"
-                      disabled={locked}
-                      onClick={() => setDeleteAlbumOpen(true)}
-                      className="inline-flex items-center rounded-full border border-border bg-white px-2.5 py-1.5 text-warn disabled:opacity-50"
-                    >
-                      <IconTrash size={16} />
-                    </button>
                   </div>
                 )}
               </div>
@@ -624,22 +630,21 @@ function AlbumDetailView() {
         />
       )}
 
-      {/* 인물 앨범 이름 변경(모임 전체 이름전파). 로컬 캐시가 없어 현재 앨범만 refetch하면
-          다른 이벤트의 같은 personId 앨범은 다음 진입 시 갱신된 이름으로 조회된다 */}
-      {album?.type === 'person' && (
-        <RenameModal
-          open={renameOpen}
-          onClose={() => setRenameOpen(false)}
-          title="아이 이름 수정"
-          label="아이 이름"
-          // 현재 이름은 지우지 않아도 되게 회색 placeholder로만 — 입력은 비워서 연다(CHMO-429)
-          placeholder={album.name}
-          prefill={false}
-          initialName={album.name}
-          submit={(name) => renamePersonAlbum(albumId, name)}
-          successMessage="🧀 아이 이름을 바꿨어요"
-          onRenamed={albumApi.refetch}
-          note="이 이름은 같은 모임의 모든 이벤트에 함께 반영돼요."
+      {/* 앨범 설정 시트 — 이름 변경(모임 전체 이름전파) + 학부모 연결 + 앨범 삭제 진입.
+          08 카드 이름 줄 탭과 같은 시트다. 로컬 캐시가 없어 현재 앨범만 refetch하면
+          다른 이벤트의 같은 personId 앨범은 다음 진입 시 갱신된 이름으로 조회된다.
+          열려 있을 때만 마운트 — 매 오픈이 새 마운트라 학부모 명단이 신선하다(MovePhotosSheet 선례) */}
+      {album?.type === 'person' && settingsOpen && (
+        <AlbumSettingsSheet
+          groupId={groupId}
+          album={album}
+          onClose={() => setSettingsOpen(false)}
+          onUpdated={albumApi.refetch}
+          // 삭제 확인은 이 화면 소유(앨범이 사라지면 08로 나가야 한다) — 시트를 닫고 다이얼로그를 연다
+          onDeleteRequest={() => {
+            setSettingsOpen(false)
+            setDeleteAlbumOpen(true)
+          }}
         />
       )}
     </PhoneShell>
