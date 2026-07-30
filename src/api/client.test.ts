@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiRequestError, apiFetch, redirectIfUnauthorized, toErrorMessage } from './client'
+import {
+  ApiRequestError,
+  apiFetch,
+  redirectIfUnauthorized,
+  toErrorMessage,
+  toErrorReference,
+} from './client'
 import { clearRefreshToken, getAccessToken, getRefreshToken, setAuthTokens } from '../lib/auth'
 import { getViewerToken, setViewerToken } from '../lib/viewer'
 import { BE_ERRORS, envelope, errorEnvelope } from '../test/fixtures/be'
@@ -214,6 +220,79 @@ describe('apiFetch — accessToken 자동 재발급 (CHMO-193)', () => {
     })
     expect(calls).toHaveLength(1)
     expect(getAccessToken()).toBe('expired')
+  })
+})
+
+/**
+ * 요청 추적 ID(CHMO-500) — 본문이 아니라 헤더에 실리는 계약이라 매퍼도 봉투도 안 지켜 준다.
+ * 실 BE 실측값(2026-07-30): 12자 hex + `access-control-expose-headers: X-Request-Id`.
+ */
+describe('apiFetch — 요청 추적 ID', () => {
+  const failWithRequestId = (requestId: string) =>
+    jsonResponse(BE_ERRORS.PHOTO400.payload, BE_ERRORS.PHOTO400.status, {
+      'X-Request-Id': requestId,
+    })
+
+  it('실패 응답의 X-Request-Id를 예외에 실어 화면까지 보낸다', async () => {
+    stubFetch(() => failWithRequestId('db0cdc31fb2c'))
+
+    const err = await apiFetch('/events/4/photos/presign', { method: 'POST' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toMatchObject({ code: 'PHOTO400', requestId: 'db0cdc31fb2c' })
+    expect(toErrorReference(err)).toBe('PHOTO400 · db0cdc31fb2c')
+  })
+
+  it('봉투가 아닌 실패(프록시 오류)도 헤더가 있으면 함께 싣는다', async () => {
+    stubFetch(() => textResponse('Bad Gateway', 502, { 'X-Request-Id': 'aa11bb22cc33' }))
+
+    const err = await apiFetch('/groups').catch((e: unknown) => e)
+    expect(err).toMatchObject({ status: 502, code: 'UNKNOWN', requestId: 'aa11bb22cc33' })
+    // 사용자에게 보이는 문구는 여전히 일반 문구 — 식별 줄만 따로 붙는다
+    expect(toErrorMessage(err)).toBe('요청에 실패했어요. 잠시 후 다시 시도해 주세요.')
+    expect(toErrorReference(err)).toBe('UNKNOWN · aa11bb22cc33')
+  })
+
+  it('헤더가 없으면 null — 짚을 로그가 없어 화면도 아무것도 그리지 않는다', async () => {
+    stubFetch(() => jsonResponse(BE_ERRORS.PHOTO400.payload, BE_ERRORS.PHOTO400.status))
+
+    const err = await apiFetch('/events/4/photos/presign', { method: 'POST' }).catch(
+      (e: unknown) => e,
+    )
+    expect(err).toMatchObject({ code: 'PHOTO400', requestId: null })
+    expect(toErrorReference(err)).toBeNull()
+  })
+
+  it('형식을 벗어난 값은 버린다 — 화면에 그대로 노출되는 값이다', async () => {
+    // 한글 등 비Latin-1 값은 헤더 자체에 담기지 않으므로(ByteString) 여기 목록은 전부 ASCII다
+    for (const bogus of ['a'.repeat(65), 'id with space', '<script>', '']) {
+      stubFetch(() => failWithRequestId(bogus))
+      const err = await apiFetch('/events/4/photos/presign', { method: 'POST' }).catch(
+        (e: unknown) => e,
+      )
+      expect(err).toMatchObject({ requestId: null })
+    }
+  })
+
+  it('재발급 후 재시도가 또 실패하면 재시도 응답의 ID를 든다 — 첫 401의 것이 아니다', async () => {
+    setAuthTokens({ accessToken: 'expired', refreshToken: 'r1' })
+    let attempt = 0
+    stubFetch((call) => {
+      if (call.url === REFRESH_URL) {
+        return jsonResponse(envelope({ accessToken: 'fresh', refreshToken: 'r2' }))
+      }
+      attempt += 1
+      return jsonResponse(BE_ERRORS.COMMON401.payload, BE_ERRORS.COMMON401.status, {
+        'X-Request-Id': attempt === 1 ? 'first0000001' : 'retry0000002',
+      })
+    })
+
+    await expect(apiFetch('/groups')).rejects.toMatchObject({ requestId: 'retry0000002' })
+  })
+
+  it('네트워크 실패엔 응답이 없어 식별 줄도 없다', () => {
+    expect(toErrorReference(new ApiRequestError(0, 'NETWORK_ERROR', 'Failed to fetch'))).toBeNull()
+    expect(toErrorReference(new TypeError('Failed to fetch'))).toBeNull()
   })
 })
 

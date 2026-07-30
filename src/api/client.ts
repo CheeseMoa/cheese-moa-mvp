@@ -9,12 +9,20 @@ export const API_BASE = '/api/v1'
 export class ApiRequestError extends Error {
   readonly status: number
   readonly code: string
+  /**
+   * BE가 응답에 실은 요청 추적 ID(`X-Request-Id` — BE CHMO-493). 서버가 그 요청에 대해 남긴
+   * 모든 로그 줄에 같은 값이 붙어 있어, 이 값 하나로 CloudWatch에서 해당 요청을 짚어낼 수 있다.
+   * 그래서 에러 화면이 사용자에게 그대로 보여 준다(CHMO-500).
+   * 네트워크 자체가 끊겨 응답이 없거나 헤더가 없으면 null — 짚을 로그도 없다.
+   */
+  readonly requestId: string | null
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, requestId: string | null = null) {
     super(message)
     this.name = 'ApiRequestError'
     this.status = status
     this.code = code
+    this.requestId = requestId
   }
 }
 
@@ -29,6 +37,18 @@ export function toErrorMessage(err: unknown): string {
     return '요청에 실패했어요. 잠시 후 다시 시도해 주세요.'
   }
   return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
+}
+
+/**
+ * 제보용 오류 식별 문구 — `PHOTO400 · db0cdc31fb2c`. 에러 화면 아래에 조용히 붙여, 사용자가
+ * 화면을 캡처해 보내오면 그 한 줄로 서버 로그를 곧바로 특정한다(CHMO-500).
+ *
+ * 추적 ID가 없는 실패(네트워크 끊김·응답 없음)는 짚을 로그도 없으므로 null — 화면은 아무것도
+ * 그리지 않는다. 코드만 남기면 사용자에겐 의미 없는 글자고 우리에게도 로그를 좁혀 주지 않는다.
+ */
+export function toErrorReference(err: unknown): string | null {
+  if (!(err instanceof ApiRequestError) || !err.requestId) return null
+  return `${err.code} · ${err.requestId}`
 }
 
 /** react-router navigate와 구조적으로 호환되는 최소 타입 — lib이 라우터에 직접 의존하지 않게 */
@@ -87,6 +107,26 @@ function normalizeTimestamps(value: unknown): unknown {
     )
   }
   return value
+}
+
+// ── 요청 추적 ID (CHMO-500) ──────────────────────────────────
+// BE는 모든 응답에 X-Request-Id를 싣고 CORS exposedHeaders에도 올려 둔다(BE CHMO-493 —
+// 2026-07-30 실서버 실측: 12자 hex, `access-control-expose-headers: X-Request-Id`). 그래서
+// 배포 환경(app.→api. 교차 출처)에서도 브라우저가 읽을 수 있다.
+// FE는 요청 헤더로 되돌려 보내지 않는다 — 이을 세션 추적 ID가 없어 BE 생성분으로 충분하다.
+
+const REQUEST_ID_HEADER = 'X-Request-Id'
+
+/** BE와 같은 형식 규칙: ASCII 영숫자·`-`·`_`, 64자 이내 */
+const REQUEST_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+/**
+ * 응답의 요청 추적 ID. 화면에 그대로 노출되는 값이라, 중간 프록시·게이트웨이가 실은 엉뚱한
+ * 헤더가 그대로 새지 않게 BE와 같은 규칙으로 걸러 낸다(형식을 벗어나면 없는 것으로 본다).
+ */
+function readRequestId(res: Response): string | null {
+  const raw = res.headers.get(REQUEST_ID_HEADER)
+  return raw !== null && REQUEST_ID_RE.test(raw) ? raw : null
 }
 
 type AuthMode = 'creator' | 'viewer' | 'none'
@@ -210,16 +250,19 @@ async function sendRequest<T>(
   const isJson = res.headers.get('Content-Type')?.includes('application/json') ?? false
   const payload: unknown = isJson ? await res.json() : null
 
+  // 실패 경로가 둘이라 여기서 한 번만 읽는다. 재발급 재시도는 재귀 호출이라 각자 자기 응답의 ID를 든다.
+  const requestId = readRequestId(res)
+
   if (isBeEnvelope(payload)) {
     if (!res.ok || !payload.isSuccess) {
-      throw new ApiRequestError(res.status, toFeErrorCode(payload.code), payload.message)
+      throw new ApiRequestError(res.status, toFeErrorCode(payload.code), payload.message, requestId)
     }
     return normalizeTimestamps(payload.result) as T
   }
 
   // 봉투가 아닌 응답 = API가 아닌 무언가(프록시 오류 페이지 등). 원문이 사용자에게 새지 않게 UNKNOWN.
   if (!res.ok) {
-    throw new ApiRequestError(res.status, 'UNKNOWN', res.statusText)
+    throw new ApiRequestError(res.status, 'UNKNOWN', res.statusText, requestId)
   }
 
   return payload as T

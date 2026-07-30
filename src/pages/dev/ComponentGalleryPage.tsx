@@ -239,8 +239,11 @@ export function ComponentGalleryPage() {
 
         <Section title="08-1 · ErrorState (CHMO-118 추가)">
           <div className="rounded-xl border border-border">
+            {/* 네 번째 인자 = BE X-Request-Id — 있으면 맨 아래 제보용 식별 줄이 붙는다(CHMO-500) */}
             <ErrorState
-              error={new ApiRequestError(500, 'INTERNAL_ERROR', '요청에 실패했어요.')}
+              error={
+                new ApiRequestError(500, 'INTERNAL_ERROR', '요청에 실패했어요.', 'db0cdc31fb2c')
+              }
               onRetry={() => toast.show('🧀 다시 시도!')}
             />
           </div>
