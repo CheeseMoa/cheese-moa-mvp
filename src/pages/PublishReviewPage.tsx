@@ -22,6 +22,11 @@ import { sortAlbumsForDisplay } from '../lib/albumSort'
  * 1회(CHMO-486)고 전량 검토 후에만 공개되니 공개 뒤에 발행 대기가 생길 경로가 없다.
  * 미리보기도 **발행 대상(전 사진 검토 완료)만** 담는다(CHMO-488) — 검수하다 만 앨범은 공개해도
  * 나가지 않아 "학부모가 볼 화면"에 섞이면 거짓이 된다. 그래서 검토 범례(점선/갈색)도 없다.
+ *
+ * 진입은 08 [공개 전 요약보기] 외에 **09에서 직행**도 있다(CHMO-521) — 마지막 앨범을 검토
+ * 완료하면 다음 차례가 공개라 여기로 온다. 그 사람은 특수 앨범(분류 애매·품질 제외)을 검토
+ * 동선에서 한 번도 못 봤으므로(CHMO-357), 미리보기 아래에 "그 앨범들은 공개 대상이 아니다"를
+ * 이름·장수로 밝힌다(`excludedAlbums`).
  */
 export function PublishReviewPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
@@ -46,6 +51,8 @@ export function PublishReviewPage() {
   const hasUnreviewed = blockingAlbums.length > 0
   // 발행 대상 앨범(전 사진 검토 완료 + person/common) 존재 여부 — 0개면 공개해도 학부모에겐 빈 이벤트
   const hasVisiblePhotos = !!summary && summary.previewAlbums.length > 0
+  // 공개되지 않는 앨범(사진 있는 특수 앨범, CHMO-521) — 미리보기와 같은 순서로 늘어놓는다
+  const excludedAlbums = summary ? sortAlbumsForDisplay(summary.excludedAlbums) : []
   // 서버 정책과 동일: review/ready에서만 공개 가능 — published 재진입은 '공개 완료됨'으로 잠그고
   // (재공개 경로 폐지 — CHMO-488), empty/analyzing 딥링크(고아 사진 한계 — api-spec 기록)도
   // 눌리면 항상 400이라 버튼을 잠근다
@@ -148,6 +155,25 @@ export function PublishReviewPage() {
                   <br />
                   정리하면 학부모에게 보여요.
                 </p>
+              )}
+
+              {/* 공개되지 않는 앨범 고지(CHMO-521) — 특수 앨범은 검토 동선에 한 번도 등장하지
+                  않아(CHMO-357) 검토를 다 끝낸 사람에겐 그 사진들의 행방이 사라진다. 미리보기
+                  '공개될 것' 바로 다음에 '안 나가는 것'을 붙여 답한다.
+                  카드가 아닌 문장인 이유는 CHMO-347 — 미리보기 그리드는 공개 대상만 담는다.
+                  시제 중립('공개 대상이 아니에요')이라 공개 전·후 어느 쪽에서 봐도 맞다 */}
+              {excludedAlbums.length > 0 && (
+                <div className="mt-3 rounded-xl bg-surface px-4 py-3.5">
+                  <p className="text-xs font-bold leading-normal text-heading">
+                    학부모에게는 인물·공통 앨범만 보여요
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                    {excludedAlbums
+                      .map((album) => `${album.name} ${album.photoCount}장`)
+                      .join(' · ')}
+                    은 공개 대상이 아니에요.
+                  </p>
+                </div>
               )}
 
               {published && (
