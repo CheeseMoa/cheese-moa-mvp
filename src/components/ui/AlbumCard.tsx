@@ -27,19 +27,25 @@ interface AlbumCardProps {
 }
 
 /**
- * 이벤트 상세(08) 앨범 카드 — 검토 테두리 규칙:
- * 갈색 실선 = 검토완료 · 회색 점선 = 미검토. (검토는 사진 단위 — 앨범 표시는 미검토 사진 수(unreviewedPhotoCount)로 파생)
- * 품질 앨범(eyes_closed/blurry)도 같은 검토 테두리를 탄다(피드백 #7 — dc.html §06의 '기본 테두리' 규칙을 대체, CHMO-355) ·
- * uncertain은 검토와 무관하게 항상 점선(재분류 대상) · 검토 배지는 person/common에만.
+ * 이벤트 상세(08) 앨범 카드 — 검토 상태 규칙:
+ * **채운 면 + 갈색 실선 = 검토완료 · 빈 면(흰색) + 회색 점선 = 미검토.**
+ * (검토는 사진 단위 — 앨범 표시는 미검토 사진 수(unreviewedPhotoCount)로 파생)
+ * 품질 앨범(eyes_closed/blurry)도 같은 검토 규칙을 탄다(피드백 #7 — dc.html §06의 '기본 테두리' 규칙을 대체, CHMO-355) ·
+ * uncertain은 검토와 무관하게 항상 미검토 꼴(재분류 대상) · 검토 배지는 person/common에만.
+ *
+ * 면을 쓰는 이유(CHMO-531 — "검토와 미검토 카드의 대비가 없다"): 110px 카드에서 2px 선의
+ * 색·점선 여부만으로는 두 상태가 같아 보인다. **채움 유무**가 작은 크기에서 가장 멀리서 읽히는
+ * 차이라, 다 한 것은 도장 찍히듯 면이 차고 남은 것은 빈 윤곽으로 남는다(같은 문법: 05 모임 색면 ↔
+ * 이벤트 흰 카드, CHMO-515). 색은 새로 만들지 않고 기존 `surface` 토큰을 쓴다.
  */
 export function AlbumCard({ album, coverUrl, onClick, onSettings, metaText }: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
   // 사진 0장이면 unreviewedPhotoCount === 0이 공허하게 참 → '검토완료' 오표시. 사진이 있을 때만 완료로 본다
   const reviewed = album.photoCount > 0 && album.unreviewedPhotoCount === 0
-  const borderCls =
+  const stateCls =
     reviewed && album.type !== 'uncertain'
-      ? 'border-2 border-accent'
-      : 'border-2 border-dashed border-[#C9C2B4]'
+      ? 'border-2 border-accent bg-surface'
+      : 'border-2 border-dashed border-[#C9C2B4] bg-white'
   const meta =
     metaText ??
     (album.type === 'uncertain' ? `${album.photoCount}장 · 재분류 대상` : `${album.photoCount}장`)
@@ -65,7 +71,8 @@ export function AlbumCard({ album, coverUrl, onClick, onSettings, metaText }: Al
       )}
     </span>
   )
-  const baseCls = cx('w-full rounded-2xl bg-white p-2 text-left', borderCls)
+  // 면 색은 stateCls가 소유한다 — 여기에 bg-white를 박으면 검토완료의 채운 면을 덮는다
+  const baseCls = cx('w-full rounded-2xl p-2 text-left', stateCls)
 
   // 이름 탭 = 앨범 설정(CHMO-400): 카드가 통째로 <button>이면 이름 버튼을 중첩할 수 없어,
   // EventCard의 ⚙과 같은 꼴(클릭 가능한 div + 중첩 버튼 stopPropagation)로 바꾼다 —

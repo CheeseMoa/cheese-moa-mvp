@@ -117,21 +117,17 @@ export function PublishReviewPage() {
               <h1 className="line-clamp-2 text-xl font-bold text-heading">{event.name}</h1>
               <p className="mt-1 text-[13px] text-muted">공개 요약 · 사진 {summary.photoCount}장</p>
 
-              {/* 통계 2칸(CHMO-531) — 둘 다 **앨범 단위**라 `공개될 + 남음 = 전체`가 눈으로 더해진다.
-                  검토할 앨범이 아예 없으면(인물·공통 0개) 두 칸 다 공허해 통째로 걷는다 —
-                  그 상태의 설명은 아래 빈 상태 문구가 맡는다 */}
+              {/* 통계 2칸(CHMO-531) — 두 칸이 **같은 축(검토)의 앨범 수**라 `N + N = 전체`가 눈으로
+                  더해진다. 왼쪽 칸을 '공개될 앨범'이라 부르지 않는 이유(2026-07-30 피드백): 세는 값은
+                  같아도(검토 끝난 인물·공통 = 발행 대상) 오른쪽 칸이 '검토'를 말하는데 왼쪽만 '공개'를
+                  말하면 두 수가 다른 축처럼 보여 또 관계를 따지게 된다. 무엇이 나가는지는 아래
+                  `공개하면 이렇게 보여요` 구획이 카드로 답한다. 축이 같아지니 남은 게 0일 때도 그냥
+                  `0`이면 된다 — 두 칸이 같은 수가 되는 중복이 없어 예외 표기가 필요 없다.
+                  검토할 앨범이 아예 없으면(인물·공통 0개) 두 칸 다 공허해 통째로 걷는다 */}
               {summary.reviewableAlbumCount > 0 && (
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <StatCard
-                    value={String(summary.previewAlbums.length)}
-                    label={published ? '공개된 앨범' : '공개될 앨범'}
-                  />
-                  {/* 남은 게 없을 때 수를 또 쓰지 않는다 — `검토 완료 N`은 왼쪽 칸과 같은 수다(같은 집합) */}
-                  {hasUnreviewed ? (
-                    <StatCard value={String(blockingAlbums.length)} label="검토 남음" />
-                  ) : (
-                    <StatCard value="완료" label="검토" />
-                  )}
+                  <StatCard value={String(summary.reviewedAlbumCount)} label="검토된 앨범" />
+                  <StatCard value={String(blockingAlbums.length)} label="검토 남은 앨범" />
                 </div>
               )}
 
