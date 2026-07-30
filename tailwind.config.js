@@ -5,7 +5,7 @@ export default {
     extend: {
       // 치즈모아 디자인 토큰 (docs/screen-spec.md §1 팔레트 + 확장)
       colors: {
-        primary: '#F5B82E', // 치즈 옐로우 — 주요 버튼/강조
+        primary: '#FFC93C', // 치즈 옐로우 — 주요 버튼/강조(크기 무관 동일 색)
         accent: '#8C5A2B', // 갈색 — 검토완료 테두리/보조 강조
         warn: '#E4572E', // 경고/위험(삭제 등)
         cream: '#FFFDF5', // 페이지 배경(--color-bg)
@@ -29,14 +29,15 @@ export default {
         display: ['Jua', 'system-ui', 'sans-serif'],
         sans: ['"Gothic A1"', 'system-ui', 'sans-serif'],
       },
-      backgroundImage: {
-        'gradient-cheddar': 'linear-gradient(135deg, #F7C948 0%, #F5B82E 50%, #E8890C 100%)',
-        'gradient-primary': 'linear-gradient(135deg, #FFE7A3 0%, #FBD46A 100%)',
-        // 치즈 심볼(Cheddar) 타일 배경 — 노란 심볼이 노란 타일에 묻히지 않게 딥 브라운으로 대비(CHMO-351)
-        'gradient-emblem': 'linear-gradient(135deg, #6B4B20 0%, #4A3415 55%, #35240D 100%)',
-      },
+      // 그라데이션 토큰(gradient-cheddar/primary/emblem) 폐지 — UI 면은 전부 단색으로 칠한다.
+      // 연한 옐로우(구 gradient-primary)는 되살리지 않는다: 음영이 없으면 cream 배경에 묻힌다.
+      // 엠블럼 타일은 심볼 단독 배치가 대체한다.
+      // (로고 심볼 Cheddar 내부의 SVG 그라데이션은 브랜드 자산이라 대상 아님)
       boxShadow: {
         card: '0 8px 30px rgba(58, 49, 40, 0.12)',
+        // 소형(h36) 버튼용 — card는 h48 기준이라 blur 30이 작은 버튼에선 아래로 번진다.
+        // 옐로우가 밝아 cream 배경과 명도차가 작으므로(1.5:1) 면을 띄워 경계를 만든다.
+        'card-sm': '0 3px 10px rgba(58, 49, 40, 0.16)',
       },
       // AI 분석 진행률 — 쥐가 치즈를 쫓아가는 프로그레스(CHMO-287, 분석중 화면 전용)
       keyframes: {

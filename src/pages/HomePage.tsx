@@ -14,7 +14,7 @@ import {
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { listGroups } from '../api/groups'
-import { hasSeenOnboarding, markOnboardingSeen } from '../lib/onboarding'
+import { getPreferredTourTrack, hasSeenOnboarding, markOnboardingSeen } from '../lib/onboarding'
 
 /**
  * 02. 홈 / 내 모임 · node 211:1357(목록) · 211:1396(빈 상태) · 337:4(승인 대기) · GET /groups.
@@ -30,18 +30,35 @@ import { hasSeenOnboarding, markOnboardingSeen } from '../lib/onboarding'
  * 이름이 없는 대기 항목이 생겼고, 실 BE가 대기 항목에 eventCount 0을 실어 주므로 카드가
  * 카운트로 폴백하지 않도록 GroupCard가 pending일 때 카운트 줄을 잠근다.
  */
+/** 홈으로 보낼 때 실리는 신호 — 참여 흐름(02-1·02-2)과 온보딩 슬라이드가 쓴다 */
+interface HomeLocationState {
+  /** 온보딩 슬라이드의 '초대 코드로 참여하기' — 도착 즉시 02-1 모달을 연다 */
+  openJoin?: boolean
+  /** 초대 링크 참여 흐름의 끝 — 이 방문에는 둘러보기를 열지 않는다 */
+  fromJoin?: boolean
+}
+
 export function HomePage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { data, error, loading, refetch } = useApi('groups', listGroups)
   const location = useLocation()
+  const homeState = location.state as HomeLocationState | null
   // 온보딩 마지막 장의 '초대 코드로 참여하기'가 넘기는 신호(CHMO-481) — 홈에 도착하자마자 02-1을 연다
-  const [joinOpen, setJoinOpen] = useState(
-    Boolean((location.state as { openJoin?: boolean } | null)?.openJoin),
-  )
+  const [joinOpen, setJoinOpen] = useState(Boolean(homeState?.openJoin))
   // 첫 로그인 1회 자동 노출(CHMO-504) — 로그인 후 별도 화면으로 튕기지 않고 홈 위에서 연다.
-  // 초대 링크로 들어와 02-1이 열려 있으면 미룬다: 참여 흐름을 안내가 가로막지 않는다.
-  const [tourOpen, setTourOpen] = useState(() => !joinOpen && !hasSeenOnboarding())
+  //
+  // 참여 흐름의 끝(fromJoin)에서는 한 박자 미룬다. 초대 링크를 받은 사람이 홈에 도착한 이유는
+  // "앱을 처음 열었다"가 아니라 "참여 신청을 막 끝냈다"다 — 그 자리에 투어를 띄우면 신청 완료
+  // 토스트와 승인 대기 카드를 덮고, 자녀 이름까지 적어 넣은 사람에게 첫 장이 다시 "어느 쪽으로
+  // 오셨나요?"를 묻는다. 플래그는 소진하지 않으므로 **다음 홈 방문에 뜬다**(안내를 아예 못 보는
+  // 사람은 생기지 않는다). 종전 !joinOpen 가드가 이걸 노렸지만 openJoin 신호를 보내는 곳이
+  // 노출 중단된 온보딩 슬라이드뿐이라 실제 초대 흐름에는 걸리지 않았다.
+  const [tourOpen, setTourOpen] = useState(
+    () => !joinOpen && !homeState?.fromJoin && !hasSeenOnboarding(),
+  )
+  // 초대 링크가 밝혀 준 갈래로 열어 역할 질문을 건너뛴다 — 없으면 첫 장에서 직접 고른다
+  const [tourTrack] = useState(getPreferredTourTrack)
 
   // 자동 노출은 '떴다'는 사실만으로 소진된다(2026-07-29 — 무조건 최초 1회).
   // 닫을 때 기록하면 투어 도중 새로고침·뒤로가기·앱 전환으로 이탈했을 때 다음 홈 방문에
@@ -149,7 +166,7 @@ export function HomePage() {
           refetch()
         }}
       />
-      <AppTour open={tourOpen} onClose={() => setTourOpen(false)} />
+      <AppTour open={tourOpen} onClose={() => setTourOpen(false)} initialTrack={tourTrack} />
     </PhoneShell>
   )
 }

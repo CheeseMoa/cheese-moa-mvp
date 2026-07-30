@@ -22,7 +22,7 @@
   .badge { display:inline-flex; align-items:center; gap:5px; font:700 12px/1 'Gothic A1',sans-serif; padding:6px 11px; border-radius:999px; }
   .badge .dot { width:6px; height:6px; border-radius:50%; }
   .btn { display:flex; align-items:center; justify-content:center; width:330px; height:48px; border-radius:14px; font:700 15px/1 'Gothic A1',sans-serif; }
-  .cheese-dots { background-color:#EAE4D8; background-image:radial-gradient(rgba(245,184,46,0.35) 1.5px, transparent 1.6px); background-size:18px 18px; }
+  .cheese-dots { background-color:#EAE4D8; background-image:radial-gradient(rgba(255,201,60,0.42) 1.5px, transparent 1.6px); background-size:18px 18px; }
   .hrow { display:flex; align-items:center; width:330px; height:52px; padding:0 14px; background:#FFFDF5; border-bottom:1px solid #E6E0D4; box-sizing:border-box; }
 </style>
 </helmet>
@@ -42,7 +42,8 @@
       <stop offset="0.55" stop-color="#4A3415"></stop>
       <stop offset="1" stop-color="#291B0A"></stop>
     </radialGradient>
-    <!-- 체다 — 헤더/엠블럼용 플랫 치즈 카메라 (로고 시안 v3 · 02 정면 플랫 계열) -->
+    <!-- 체다 — 헤더/엠블럼용 플랫 치즈 카메라 (로고 시안 v3 · 02 정면 플랫 계열).
+         로고 심볼은 브랜드 자산이라 그라데이션 단색화 대상에서 제외 — 바뀐 건 뒤에 깔던 갈색 타일뿐. -->
     <symbol id="cheddar" viewBox="0 0 240 240">
       <rect x="102" y="54" width="24" height="22" rx="8" fill="#E8890C"></rect>
       <ellipse cx="114" cy="56" rx="12" ry="4" fill="#FFD66A"></ellipse>
@@ -76,7 +77,7 @@
     </div>
     <div>
       <div style="display:flex;gap:16px;">
-        <div class="chip"><div class="sw" style="background:#F5B82E;"></div><div class="lb">#F5B82E<br>primary</div></div>
+        <div class="chip"><div class="sw" style="background:#FFC93C;"></div><div class="lb">#FFC93C<br>primary</div></div>
         <div class="chip"><div class="sw" style="background:#8C5A2B;"></div><div class="lb">#8C5A2B<br>accent</div></div>
         <div class="chip"><div class="sw" style="background:#E4572E;"></div><div class="lb">#E4572E<br>warn</div></div>
         <div class="chip"><div class="sw" style="background:#FFFDF5;"></div><div class="lb">#FFFDF5<br>cream</div></div>
@@ -90,9 +91,7 @@
         <div class="chip"><div class="sw" style="background:#E8890C;"></div><div class="lb">status.analyzing<br>분석중</div></div>
         <div class="chip"><div class="sw" style="background:#8C5A2B;"></div><div class="lb">status.ready<br>공개 준비</div></div>
         <div class="chip"><div class="sw" style="background:#3FA34D;"></div><div class="lb">status.published<br>공개 완료</div></div>
-        <div class="chip"><div class="sw" style="background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);"></div><div class="lb">gradient<br>cheddar</div></div>
-        <div class="chip"><div class="sw" style="background:linear-gradient(135deg,#FFE7A3 0%,#FBD46A 100%);"></div><div class="lb">gradient<br>primary</div></div>
-        <div class="chip"><div class="sw" style="background:linear-gradient(135deg,#6B4B20 0%,#4A3415 55%,#35240D 100%);"></div><div class="lb">gradient<br>emblem</div></div>
+        <div class="chip"><div class="sw" style="background:#4A3415;"></div><div class="lb">#4A3415<br>heading</div></div>
       </div>
     </div>
   </div>
@@ -123,15 +122,15 @@
 <div style="position:absolute;left:600px;top:380px;width:520px;">
   <div class="sec" data-drags-parent="1">02 · Button — primary / secondary / warn / disabled</div>
   <div class="card" style="display:flex;flex-direction:column;gap:14px;align-items:center;">
-    <div class="btn" style="background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);color:#3A3128;box-shadow:0 8px 30px rgba(58,49,40,0.12);">+ 이벤트 생성</div>
+    <div class="btn" style="background:#FFC93C;color:#3A3128;box-shadow:0 8px 30px rgba(58,49,40,0.12);">+ 이벤트 생성</div>
     <div class="btn" style="background:#F3F0E9;border:1px solid #E6E0D4;color:#3A3128;box-sizing:border-box;">취소</div>
     <div class="btn" style="background:#E4572E;color:#fff;">삭제</div>
     <div class="btn" style="background:#F3F0E9;color:#9E978C;">공개하기 (disabled)</div>
     <div style="display:flex;gap:10px;">
-      <div class="btn" style="width:auto;height:36px;padding:0 16px;border-radius:10px;font-size:13px;background:linear-gradient(135deg,#FFE7A3 0%,#FBD46A 100%);color:#3A3128;">선택</div>
+      <div class="btn" style="width:auto;height:36px;padding:0 16px;border-radius:10px;font-size:13px;background:#FFC93C;color:#3A3128;box-shadow:0 3px 10px rgba(58,49,40,0.16);">선택</div>
       <div class="btn" style="width:auto;height:36px;padding:0 16px;border-radius:10px;font-size:13px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;">전체 해제</div>
     </div>
-    <div class="note" style="align-self:flex-start;">기본 h48·radius 14 · 소형 h36·radius 10. primary = cheddar 그라데이션 + text(#3A3128) — 옐로우 위 흰 글자 금지(대비). warn(#E4572E)만 흰 글자.</div>
+    <div class="note" style="align-self:flex-start;">기본 h48·radius 14 · 소형 h36·radius 10. <b>배경은 전부 단색(그라데이션 폐지)</b> — primary는 크기와 무관하게 #FFC93C 하나, 크기 위계는 높이·radius가 맡는다.<br /><b>primary는 양쪽 크기 다 그림자를 진다</b>(기본 <code>0 8px 30px /.12</code> · 소형 <code>0 3px 10px /.16</code>) — 옐로우가 밝아 cream 배경과 명도차가 작아서(1.5:1) 경계를 색이 아니라 그림자로 만든다. 단색화 직후 그림자 없는 소형 버튼이 배경에 묻혀 글자만 떠 보인 적이 있다. 글자는 text(#3A3128) — 옐로우 위 흰 글자 금지(대비). warn(#E4572E)만 흰 글자.</div>
   </div>
 </div>
 
@@ -162,7 +161,7 @@
   <div class="card">
     <div style="display:flex;align-items:center;gap:26px;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:48px;height:28px;border-radius:999px;background:#F5B82E;position:relative;"><div style="position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div>
+        <div style="width:48px;height:28px;border-radius:999px;background:#FFC93C;position:relative;"><div style="position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div>
         <span style="font:500 13px/1 'Gothic A1',sans-serif;">선택 모드 ON</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -172,8 +171,8 @@
     </div>
     <div style="width:330px;height:48px;border-radius:14px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;display:flex;align-items:center;padding:0 16px;font:500 14px/1 'Gothic A1',sans-serif;color:#9E978C;margin-top:20px;">모임 이름 (예: 햇살반 학부모)</div>
     <div style="display:flex;gap:12px;margin-top:16px;">
-      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:2px solid #F5B82E;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:700 24px/1 'Gothic A1',sans-serif;">1</div>
-      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:2px solid #F5B82E;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:700 24px/1 'Gothic A1',sans-serif;">2</div>
+      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:2px solid #FFC93C;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:700 24px/1 'Gothic A1',sans-serif;">1</div>
+      <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:2px solid #FFC93C;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:700 24px/1 'Gothic A1',sans-serif;">2</div>
       <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;"></div>
       <div style="width:52px;height:60px;border-radius:14px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;"></div>
     </div>
@@ -186,7 +185,8 @@
   <div class="sec" data-drags-parent="1">05 · GroupCard / EventCard</div>
   <div class="card">
     <div style="width:330px;border:1px solid #E6E0D4;border-radius:16px;padding:16px;box-sizing:border-box;background:#fff;box-shadow:0 8px 30px rgba(58,49,40,0.12);display:flex;align-items:center;gap:13px;">
-      <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#6B4B20 0%,#4A3415 55%,#35240D 100%);display:flex;align-items:center;justify-content:center;"><svg width="28" height="28" viewBox="0 0 240 240"><use href="#cheddar"></use></svg></div>
+      <!-- 갈색 엠블럼 타일 폐지 — 심볼만 놓고 슬롯 크기(44)는 유지 -->
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;"><svg width="40" height="40" viewBox="0 0 240 240"><use href="#cheddar"></use></svg></div>
       <div>
         <div style="font:700 16px/1.3 'Gothic A1',sans-serif;">햇살반 학부모</div>
         <div style="font:400 12px/1.4 'Gothic A1',sans-serif;color:#9E978C;">멤버 4 · 이벤트 3</div>
@@ -240,13 +240,13 @@
   <div class="card">
     <div style="display:grid;grid-template-columns:repeat(3,104px);gap:9px;">
       <div class="cheese-dots" style="height:104px;border-radius:12px;"></div>
-      <div style="height:104px;border-radius:12px;position:relative;background:#EAE4D8;box-sizing:border-box;border:3px solid #F5B82E;">
-        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:#F5B82E;color:#4A3415;font:700 13px/22px 'Gothic A1',sans-serif;text-align:center;">✓</div>
+      <div style="height:104px;border-radius:12px;position:relative;background:#EAE4D8;box-sizing:border-box;border:3px solid #FFC93C;">
+        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:#FFC93C;color:#4A3415;font:700 13px/22px 'Gothic A1',sans-serif;text-align:center;">✓</div>
       </div>
       <div class="cheese-dots" style="height:104px;border-radius:12px;"></div>
       <div class="cheese-dots" style="height:104px;border-radius:12px;"></div>
-      <div style="height:104px;border-radius:12px;position:relative;background:#EAE4D8;box-sizing:border-box;border:3px solid #F5B82E;">
-        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:#F5B82E;color:#4A3415;font:700 13px/22px 'Gothic A1',sans-serif;text-align:center;">✓</div>
+      <div style="height:104px;border-radius:12px;position:relative;background:#EAE4D8;box-sizing:border-box;border:3px solid #FFC93C;">
+        <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:#FFC93C;color:#4A3415;font:700 13px/22px 'Gothic A1',sans-serif;text-align:center;">✓</div>
       </div>
       <div class="cheese-dots" style="height:104px;border-radius:12px;position:relative;">
         <div style="position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.85);border:1.5px solid #C9C2B4;box-sizing:border-box;"></div>
@@ -263,7 +263,7 @@
     <svg width="76" height="76" viewBox="0 0 240 240" style="opacity:0.85;"><use href="#cheddar"></use></svg>
     <div style="font-family:Jua,sans-serif;font-size:21px;color:#4A3415;margin-top:16px;">아직 이벤트가 없어요</div>
     <div style="font:400 13px/1.6 'Gothic A1',sans-serif;color:#9E978C;margin-top:8px;">첫 이벤트를 만들고 행사 사진을 올려보세요.<br>AI가 아이별 앨범으로 모아드려요.</div>
-    <div class="btn" style="background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);color:#3A3128;margin:22px auto 0;box-shadow:0 8px 30px rgba(58,49,40,0.12);">+ 이벤트 생성</div>
+    <div class="btn" style="background:#FFC93C;color:#3A3128;margin:22px auto 0;box-shadow:0 8px 30px rgba(58,49,40,0.12);">+ 이벤트 생성</div>
     <div class="note" style="text-align:left;">구성: 체다 일러스트 + Jua 타이틀 + 본문 2줄 + primary CTA. 상황별 문구만 교체(빈 모임/빈 이벤트/빈 앨범/공개 이벤트 없음).</div>
   </div>
 </div>
@@ -278,7 +278,7 @@
         <div style="width:100%;height:44px;border-radius:12px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;display:flex;align-items:center;padding:0 14px;font:500 13px/1 'Gothic A1',sans-serif;color:#9E978C;margin-top:14px;">모임 비밀번호</div>
         <div style="display:flex;gap:10px;margin-top:16px;">
           <div class="btn" style="flex:1;width:auto;height:44px;background:#F3F0E9;border:1px solid #E6E0D4;box-sizing:border-box;font-size:14px;">취소</div>
-          <div class="btn" style="flex:1;width:auto;height:44px;background:linear-gradient(135deg,#F7C948 0%,#F5B82E 50%,#E8890C 100%);font-size:14px;color:#3A3128;">참여하기</div>
+          <div class="btn" style="flex:1;width:auto;height:44px;background:#FFC93C;font-size:14px;color:#3A3128;">참여하기</div>
         </div>
       </div>
     </div>

@@ -21,9 +21,7 @@ function buttonClasses({ variant, size, fullWidth, disabled, className }: Button
   const variantCls = disabled
     ? 'bg-surface text-muted'
     : variant === 'primary'
-      ? size === 'md'
-        ? 'bg-gradient-cheddar text-text shadow-card'
-        : 'bg-gradient-primary text-text'
+      ? cx('bg-primary text-text', size === 'md' ? 'shadow-card' : 'shadow-card-sm')
       : variant === 'secondary'
         ? 'border border-border bg-surface text-text'
         : variant === 'warn'
@@ -48,7 +46,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 /**
  * 공용 버튼. 치즈 옐로우 위 흰 글자 금지(대비) — primary는 text 컬러, warn·accent(갈색)는 흰 글자 (dc.html ③).
- * disabled는 variant와 무관하게 surface+muted.
+ * disabled는 variant와 무관하게 surface+muted. 배경은 전부 단색(그라데이션 폐지) — primary는 크기와
+ * 무관하게 같은 옐로우고, 크기 위계는 높이·radius가 맡는다.
+ *
+ * primary는 양쪽 크기 다 그림자를 진다. 옐로우가 밝아 cream 배경과 명도차가 작은데(1.5:1),
+ * 그라데이션 시절엔 면 안의 음영이 버튼 모양을 만들어 줬다. 단색이 되며 그게 사라져 sm 버튼이
+ * 배경에 묻히고 글자만 뜬 적이 있어(05 '＋ 초대하기'), 경계는 색이 아니라 그림자로 만든다.
  */
 export function Button({
   variant = 'primary',

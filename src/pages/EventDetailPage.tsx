@@ -209,7 +209,7 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
         <div
-          className="h-full rounded-full bg-gradient-cheddar"
+          className="h-full rounded-full bg-primary"
           style={{ width: `${percent ?? 0}%` }}
         />
       </div>

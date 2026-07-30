@@ -37,6 +37,40 @@ export function markOnboardingSeen(): void {
   }
 }
 
+// ── 둘러보기 갈래 힌트 (CHMO-504) ──────────────────────────────
+// 투어 첫 장은 "선생님/학부모 어느 쪽으로 오셨나요?"를 묻는다. 초대 링크로 합류한 사람은
+// 그 답을 이미 행동으로 말했으므로(학부모 링크로 자녀 이름까지 적었거나 선생님 키로 신청했다)
+// 다시 묻지 않는다. 자동 노출이 참여 흐름 다음 방문으로 밀리는 탓에 navigate state로는
+// 전달되지 않아 로컬에 남긴다 — 없으면 첫 장에서 직접 고르는 원래 동작이라 실패해도 무해하다.
+//
+// role은 계정 속성이 아니라 멤버십(모임별) 속성이다 — 이건 "이 사람이 처음 들어온 문이
+// 어느 쪽이었나"를 기억하는 화면 힌트일 뿐, 계정에 역할을 박는 게 아니다.
+
+export type TourTrack = 'teacher' | 'parent'
+
+const TRACK_KEY_PREFIX = 'cheesemoa.tourTrack.'
+
+function trackKey(): string {
+  return `${TRACK_KEY_PREFIX}${getCurrentUserId() ?? 'unknown'}`
+}
+
+export function setPreferredTourTrack(track: TourTrack): void {
+  try {
+    localStorage.setItem(trackKey(), track)
+  } catch {
+    /* 힌트 저장 실패 — 투어 첫 장에서 직접 고르면 된다 */
+  }
+}
+
+export function getPreferredTourTrack(): TourTrack | null {
+  try {
+    const stored = localStorage.getItem(trackKey())
+    return stored === 'teacher' || stored === 'parent' ? stored : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * 로그인 성공 후 목적지 — 언제나 홈이다.
  *
