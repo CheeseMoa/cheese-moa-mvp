@@ -28,11 +28,14 @@ export function LegalDocPage({ doc }: { doc: LegalDoc }) {
         ) : null}
         {doc.sections.map((section, i) => (
           <section key={i}>
+            {/* 장·조 제목은 색과 크기가 가른다(CHMO-513) — 굵기 한 벌짜리 서체에서는 '15px 굵게 +
+                14px 본문'이 사실상 같은 줄로 읽혀, 조문이 수십 개인 문서에서 목차가 사라진다.
+                장(갈색·17px) > 조(갈색·15px) > 본문(먹색·14px) */}
             {section.chapter ? (
-              <h2 className="mt-8 text-base font-bold text-heading">{section.chapter}</h2>
+              <h2 className="mt-8 text-[17px] tracking-[0.01em] text-heading">{section.chapter}</h2>
             ) : null}
             {section.heading ? (
-              <h3 className="mt-5 text-[15px] font-bold text-text">{section.heading}</h3>
+              <h3 className="mt-5 text-[15px] text-heading">{section.heading}</h3>
             ) : null}
             {section.body.map((block, j) =>
               Array.isArray(block) ? (

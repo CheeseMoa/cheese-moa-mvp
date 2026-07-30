@@ -116,7 +116,8 @@ export function GroupDetailPage() {
             </div>
             <p className="mt-1 text-[13px] text-muted">{metaText}</p>
 
-            <h3 className="mt-5 text-[13px] font-bold text-muted">이벤트</h3>
+            {/* 라벨 처리는 홈(02)과 동일 — 바로 위 메타 줄과 굵기로는 갈라지지 않는다(CHMO-513) */}
+            <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">이벤트</h3>
             <div className="mt-2 flex flex-1 flex-col">
               {eventsApi.loading || eventsApi.error ? (
                 <LoadState

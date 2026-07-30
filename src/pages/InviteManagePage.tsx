@@ -172,7 +172,7 @@ export function InviteManagePage() {
               </section>
             ) : requests.length > 0 ? (
               <section className="mb-5">
-                <h3 className="text-[13px] font-bold text-muted">
+                <h3 className="text-[12px] tracking-[0.06em] text-muted">
                   대기 중인 신청 {requests.length}
                 </h3>
                 <ul className="mt-2 flex flex-col gap-3">
@@ -217,7 +217,7 @@ export function InviteManagePage() {
 
             {members.length > 0 ? (
               <section>
-                <h3 className="text-[13px] font-bold text-muted">
+                <h3 className="text-[12px] tracking-[0.06em] text-muted">
                   {SECTION_LABEL[tab]} {members.length}
                 </h3>
                 <ul className="mt-2 flex flex-col gap-3">

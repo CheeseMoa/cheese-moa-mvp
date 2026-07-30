@@ -9,7 +9,7 @@ export function BrandHero() {
     <section className="flex flex-col items-center bg-white px-6 pb-7 pt-9 text-center">
       {/* 심볼 뒤 갈색 타일은 폐지 — 배경과 떼어놓으려 깔았던 색면이 무거워서 심볼만 남긴다 */}
       <Cheddar size={88} />
-      <h1 className="mt-4 font-display text-[32px] leading-tight text-heading">치즈모아</h1>
+      <h1 className="mt-4 text-[32px] leading-tight text-heading">치즈모아</h1>
       <p className="mt-1 text-sm text-muted">사진 정리부터 공유까지 한 번에</p>
     </section>
   )

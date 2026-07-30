@@ -130,7 +130,7 @@ export function EventDetailPage() {
               <>
                 {/* 분석중 — 2초 자동 폴링(위 effect). 진행률 따라 쥐가 치즈로 다가가고, 완료되면 앨범 그리드로 자연 전환 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-6 py-14 text-center">
-                  <p className="font-display text-[19px] text-heading">
+                  <p className="text-[19px] text-heading">
                     AI가 사진을 분류하고 있어요
                   </p>
                   <ChaseProgress progress={event.progress ?? null} />
@@ -311,7 +311,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
 
               {qualityAlbums.length > 0 && (
                 <section className="mt-6">
-                  <h2 className="text-[13px] font-bold text-muted">품질 제외</h2>
+                  <h2 className="text-[12px] tracking-[0.06em] text-muted">품질 제외</h2>
                   <div className="mt-2 grid grid-cols-3 gap-2.5">
                     {qualityAlbums.map((album) => (
                       <AlbumCard

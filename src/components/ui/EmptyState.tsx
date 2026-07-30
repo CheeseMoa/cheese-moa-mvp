@@ -18,7 +18,7 @@ export function EmptyState({ title, description, action, icon }: EmptyStateProps
   return (
     <div className="flex flex-col items-center px-8 py-11 text-center">
       {icon ?? <Cheddar size={76} className="opacity-[.85]" />}
-      <h2 className="mt-4 font-display text-[21px] text-heading">{title}</h2>
+      <h2 className="mt-4 text-[21px] text-heading">{title}</h2>
       {description && <p className="mt-2 text-[13px] leading-relaxed text-muted">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
