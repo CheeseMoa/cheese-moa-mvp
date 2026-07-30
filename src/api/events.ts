@@ -89,6 +89,10 @@ interface RawReviewSummary {
  * 담았는데(CHMO-346), 발행은 전 사진 검토된 앨범만 내보내므로 검수하다 만 앨범이
  * "학부모가 볼 화면"에 섞여 보였다 — 지금 공개해도 안 나가는 앨범이다.
  * 전부 미검토면 빈 미리보기가 정직한 응답이다.
+ *
+ * 나머지 한 갈래가 `excludedAlbums`(CHMO-521) — 사진이 있는 특수 앨범이다. 검토 대상도 발행
+ * 대상도 아니라 위 통계·미리보기 어디에도 안 잡히는데, 사진은 실재하므로 14가 "이건 공개되지
+ * 않아요"라고 밝혀 준다(안 밝히면 검토를 다 끝낸 사람에게 그 사진들의 행방이 사라진다).
  */
 export function getReviewSummary(
   eventId: ID | string,
@@ -105,6 +109,9 @@ export function getReviewSummary(
       reviewableAlbumCount: reviewable.length,
       unreviewedAlbums: reviewable.filter((a) => a.unreviewedPhotoCount !== 0),
       previewAlbums: reviewed,
+      // 공개 대상이 아닌 앨범(사진 보유 특수 앨범) — 14가 "이건 안 나가요"를 한 줄로 알린다(CHMO-521).
+      // 빈 특수 앨범은 알릴 것이 없어 뺀다(안 나가는 사진이 0장이다)
+      excludedAlbums: albums.filter((a) => !a.visibleToViewer && a.photoCount > 0),
     }
   })
 }

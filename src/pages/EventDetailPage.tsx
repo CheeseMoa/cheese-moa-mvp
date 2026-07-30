@@ -237,11 +237,12 @@ interface EventAlbumGridProps {
 
 /**
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
- * 분석 완료 상태의 검수 허브. ① 인물·공통·분류어려움 = 3열 메인 그리드(커버+검토 테두리/배지) ·
- * ② 품질 제외(눈감음/흔들림) = 하단 별도 섹션 · 범례. 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) ·
- * [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세. 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지).
- * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 학부모 연결 — CHMO-400 자리를 넓혔다,
- * 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
+ * 분석 완료 상태의 검수 허브. ① 인물·공통 = 3열 메인 그리드(커버+검토 테두리/배지) ·
+ * ② 공개해도 학부모에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션 · 범례.
+ * 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
+ * [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
+ * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 학부모 연결 — CHMO-400 자리를 CHMO-522가
+ * 넓혔다, 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
  */
 function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
@@ -258,9 +259,14 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
 
   // 표시 정렬은 FE 소유(CHMO-411) — 서버 순서(미검토 우선)는 검토할 때마다 튄다
   const albums = sortAlbumsForDisplay(albumsApi.data ?? [])
-  // 스펙 08: ① 인물/공통/분류어려움 메인 그리드 · ② 품질 제외(눈감음/흔들림) 하단 별도 섹션
-  const mainAlbums = albums.filter((a) => a.type !== 'eyes_closed' && a.type !== 'blurry')
-  const qualityAlbums = albums.filter((a) => a.type === 'eyes_closed' || a.type === 'blurry')
+  // 08 구획 기준은 "공개하면 학부모에게 나가는가"다(CHMO-523): ① 인물·공통 = 메인 그리드(검수·발행
+  // 대상) · ② 분류어려움·눈감음·흔들림 = 하단 별도 섹션(공개해도 학부모 화면에 안 뜬다).
+  // 판정은 타입 열거가 아니라 파생 필드 visibleToViewer(person·common만 true — mappers.toAlbum
+  // 단일 원천, 14 검토 진척 집계도 같은 필드를 쓴다). 분류어려움을 여기로 내린 건 CHMO-114 반전 —
+  // 재분류 대상이라 메인 그리드에 뒀지만, 검토 UI도 발행 대상도 아닌 앨범(CHMO-357)이 검토 테두리·
+  // 범례를 공유하는 자리에 섞여 "이것도 검토해야 하나"로 읽혔다. 섹션 안 카드는 전부 점선이다.
+  const mainAlbums = albums.filter((a) => a.visibleToViewer !== false)
+  const hiddenAlbums = albums.filter((a) => a.visibleToViewer === false)
 
   return (
     <PhoneShell>
@@ -302,7 +308,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                     album={album}
                     coverUrl={album.coverThumbnailUrl ?? undefined}
                     onClick={() => navigate(`${base}/albums/${album.id}`)}
-                    // 인물 앨범만 ✎ — 특수 앨범은 고정 라벨이고 연결할 아이도 없다(personId 없음)
+                    // 인물 앨범만 ✎ — 공통은 고정 라벨이고 연결할 아이도 없다(personId 없음)
                     onSettings={album.type === 'person' ? () => setAlbumTarget(album) : undefined}
                   />
                 ))}
@@ -311,11 +317,15 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                 <CreateAlbumTile onClick={() => setCreateOpen(true)} />
               </div>
 
-              {qualityAlbums.length > 0 && (
+              {hiddenAlbums.length > 0 && (
                 <section className="mt-6">
-                  <h2 className="text-[12px] tracking-[0.06em] text-muted">품질 제외</h2>
+                  {/* 라벨이 문장인 이유 — 선생님은 이 앨범들을 지금 이 화면에서 보고 있어서
+                      '공개 제외' 같은 명사만으론 누구에게 안 보이는지가 빠진다 */}
+                  <h2 className="text-[12px] tracking-[0.06em] text-muted">
+                    공개해도 학부모에게 안 보여요
+                  </h2>
                   <div className="mt-2 grid grid-cols-3 gap-2.5">
-                    {qualityAlbums.map((album) => (
+                    {hiddenAlbums.map((album) => (
                       <AlbumCard
                         key={album.id}
                         album={album}
@@ -327,13 +337,16 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                 </section>
               )}
 
-              {/* 앨범이 하나도 없으면(분석 결과 0건) 범례 대신 안내 — 그래도 만들기 타일은 남는다 */}
+              {/* 앨범이 하나도 없으면(분석 결과 0건) 범례 대신 안내 — 그래도 만들기 타일은 남는다.
+                  범례는 메인 그리드 몫이다 — 검토 테두리를 지는 앨범이 하나도 없으면 걷는다 */}
               {albums.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">앨범이 아직 없어요.</p>
               ) : (
-                <p className="mt-4 text-[11px] text-muted">
-                  테두리: 회색 점선=미검토 · 갈색=검토완료
-                </p>
+                mainAlbums.length > 0 && (
+                  <p className="mt-4 text-[11px] text-muted">
+                    테두리: 회색 점선=미검토 · 갈색=검토완료
+                  </p>
+                )
               )}
             </>
           )}
