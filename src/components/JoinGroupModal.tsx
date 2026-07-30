@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
+import { setPreferredTourTrack } from '../lib/onboarding'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface JoinGroupModalProps {
@@ -69,8 +70,12 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
         // ("권한이 없는 스페이스")로 터진 실측 반영: 홈은 어느 계약에서도 안전하다.
         // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
         // 홈 모달 진입은 닫고 목록 갱신
-        if (fixedJoinKey !== undefined) navigate('/home', { replace: true })
-        else (onJoined ?? onClose)()
+        if (fixedJoinKey !== undefined) {
+          // 400(자녀 이름 필요)으로 갈라지지 않았으니 선생님 키다 — 다음 둘러보기의 갈래로 쓴다.
+          // fromJoin은 도착 직후 둘러보기가 이 안내를 덮지 않게 미루는 신호(CHMO-504)
+          setPreferredTourTrack('teacher')
+          navigate('/home', { replace: true, state: { fromJoin: true } })
+        } else (onJoined ?? onClose)()
       },
       // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
       redirect: {
