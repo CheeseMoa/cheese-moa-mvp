@@ -51,6 +51,9 @@ const TOUR_GROUP = { name: '별님반', memberCount: 6, eventCount: 2 }
 /** 05 헤더의 카운트 분리 표기(§7-3)와 같은 꼴 — 멤버 6 = 선생님 2 + 학부모 4 */
 const TOUR_GROUP_META = '선생님 2 · 학부모 4 · 이벤트 2개'
 
+// 커버는 URL 없이 플레이스홀더로 진다(CHMO-515) — 투어는 어떤 사진도 갖고 있지 않지만, 사진이 있는
+// 이벤트 카드는 실제 05에서 커버를 지므로 무대도 같은 꼴이어야 한다(사진 자리 PhotoPlaceholders와 같은 처리)
+const TOUR_COVER = { url: null }
 const TOUR_EVENTS = [
   { name: '여름 물놀이', meta: '7월 22일 · 사진 120장', status: 'ready' as const },
   { name: '봄 소풍', meta: '5월 9일 · 사진 86장', status: 'published' as const },
@@ -206,7 +209,9 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
       stage: (
         <div className="flex flex-col gap-3">
           {TOUR_EVENTS.map((event, i) => {
-            const card = <EventCard {...event} onClick={() => enterEvent(event)} />
+            const card = (
+              <EventCard {...event} cover={TOUR_COVER} onClick={() => enterEvent(event)} />
+            )
             return i === 0 ? (
               <TapTarget key={event.name}>{card}</TapTarget>
             ) : (
@@ -308,7 +313,9 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
     {
       screenTitle: TOUR_GROUP.name,
       screenSub: TOUR_GROUP_META,
-      stage: <EventCard name={picked.name} status="published" meta={picked.meta} />,
+      stage: (
+        <EventCard name={picked.name} status="published" meta={picked.meta} cover={TOUR_COVER} />
+      ),
       title: '공개하면 학부모 화면에 바로 떠요',
       desc: '따로 링크를 보내지 않아도 돼요 · 학부모는 자기 아이 사진만 봐요',
     },

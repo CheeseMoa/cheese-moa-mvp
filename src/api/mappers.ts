@@ -257,6 +257,9 @@ export function toEvent(raw: RawEvent): EventItem {
     createdAt: raw.createdAt,
     publishedAt: raw.publishedAt ?? null,
     coverPhotoId: raw.thumbnailPhotoId ?? null,
+    // 목록 응답에만 오는 커버(상세엔 없다) — 05 이벤트 카드가 소비한다(CHMO-515).
+    // 뷰어(toViewerEvent)가 같은 필드를 같은 이름으로 이미 쓰고 있었고, 제작자 쪽만 버리고 있었다.
+    coverThumbnailUrl: raw.thumbnailUrl ?? null,
     progress: raw.progress ?? null,
     pendingPublishCount: raw.pendingPublishCount,
   }

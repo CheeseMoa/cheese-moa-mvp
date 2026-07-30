@@ -80,17 +80,20 @@ export function GroupDetailPage() {
       : group?.memberCount !== undefined
         ? `인원 ${group.memberCount}명`
         : null
-  const metaText = [memberPart, eventCount !== null ? `이벤트 ${eventCount}개` : null]
-    .filter(Boolean)
-    .join(' · ')
+  // 이벤트 수는 모임 블록이 아니라 목록 섹션 라벨이 말한다(CHMO-515) — 인원과 한 줄에 섞여 있으면
+  // 모임의 속성처럼 읽혔다. 값이 아직 없으면 라벨만("이벤트") 둔다
+  const eventsLabel = eventCount !== null ? `이벤트 ${eventCount}개` : '이벤트'
   const pendingRequestCount = requestsApi.data?.length ?? 0
 
   return (
     <PhoneShell>
+      {/* 타이틀을 두지 않는다(CHMO-515) — '모임 상세'는 어느 모임인지도, 아래 목록이 뭔지도 말하지
+          않으면서 바로 밑의 큰 제목(모임명)과 역할이 겹쳤다. 06-E·분석중 헤더가 이미 타이틀 없이
+          '‹ 모임명' + 본문 큰 제목으로 도는 꼴을 따른다(08 앨범 그리드의 '이벤트 상세' 타이틀은
+          같은 중복이지만 이 스토리 범위 밖이라 그대로 뒀다) */}
       <Header
         backTo="/home"
         backLabel="홈"
-        title="모임 상세"
         right={
           group && (
             <button
@@ -108,16 +111,23 @@ export function GroupDetailPage() {
         {/* 데이터가 있으면 재조회(이름 수정 refetch) 중에도 유지 — 로딩/에러로 화면을 교체하지 않는다 */}
         {group ? (
           <>
-            <div className="flex items-center gap-2.5">
-              <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-text">{group.name}</h2>
-              <Button size="sm" onClick={() => setInviteOpen(true)}>
-                ＋ 초대하기
-              </Button>
+            {/* 모임 = 색면, 이벤트 = 흰 카드(CHMO-515). 모임명·인원·초대를 surface 블록에 묶어
+                이 화면의 주인이 모임임을 밝히고, 아래 카드들과 면부터 갈라 놓는다 */}
+            <div className="rounded-[18px] bg-surface px-4 py-3.5">
+              <div className="flex items-center gap-2.5">
+                <h2 className="min-w-0 flex-1 truncate text-xl font-bold text-text">
+                  {group.name}
+                </h2>
+                <Button size="sm" onClick={() => setInviteOpen(true)}>
+                  ＋ 초대하기
+                </Button>
+              </div>
+              {memberPart && <p className="mt-1 text-[13px] text-muted">{memberPart}</p>}
             </div>
-            <p className="mt-1 text-[13px] text-muted">{metaText}</p>
 
-            {/* 라벨 처리는 홈(02)과 동일 — 바로 위 메타 줄과 굵기로는 갈라지지 않는다(CHMO-513) */}
-            <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">이벤트</h3>
+            {/* 라벨 처리는 홈(02)과 동일 — 바로 위 메타 줄과 굵기로는 갈라지지 않는다(CHMO-513).
+                이벤트 수도 여기서 말한다 — 모임 블록의 인원과 한 줄로 섞여 읽히던 걸 갈랐다 */}
+            <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">{eventsLabel}</h3>
             <div className="mt-2 flex flex-1 flex-col">
               {eventsApi.loading || eventsApi.error ? (
                 <LoadState
@@ -148,6 +158,14 @@ export function GroupDetailPage() {
                         name={event.name}
                         status={event.status}
                         meta={`${formatEventDate(event.date)} · 사진 ${event.photoCount}장`}
+                        // 사진이 있는 이벤트만 커버를 진다(CHMO-515) — 빈 이벤트는 컴팩트 카드로 남아
+                        // "아직 올릴 차례"임이 목록에서 그대로 보인다. 등록 직후 분류중은 사진 반영이
+                        // 분석 커밋 시점이라 photoCount가 0일 수 있고, 그 구간도 컴팩트로 지나간다
+                        cover={
+                          event.photoCount > 0
+                            ? { url: event.coverThumbnailUrl ?? null }
+                            : undefined
+                        }
                         onClick={() => navigate(`/groups/${groupId}/events/${event.id}`)}
                       />
                     </li>

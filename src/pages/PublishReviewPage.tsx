@@ -168,7 +168,7 @@ export function PublishReviewPage() {
               unauthorizedTo="/login"
               // 여기 404 = 이벤트 자체가 사라진 것 — 이벤트 상세로 보내면 또 404라 부모(모임)로
               notFoundTo={`/groups/${groupId}`}
-              notFoundLabel="모임 상세로"
+              notFoundLabel="모임으로"
             />
           )}
         </div>
