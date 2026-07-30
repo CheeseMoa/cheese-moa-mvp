@@ -15,6 +15,9 @@
  */
 import { SPECIAL_ALBUM_LABELS, UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 import type {
+  AgreementScope,
+  AgreementStatus,
+  AgreementType,
   Album,
   AlbumType,
   AnalysisJob,
@@ -424,5 +427,31 @@ export function toMoveSuggestion(raw: RawMoveSuggestion): MoveSuggestion {
     // 키 자체가 없는 응답을 undefined로 흘리지 않는다 — 타입이 number | null이라 거짓말이 된다
     similarity: raw.similarity ?? null,
     thumbnailUrl: raw.thumbnailUrl,
+  }
+}
+
+// ── 약관 동의 (BE CHMO-514) ──────────────────────────────────
+
+/**
+ * BE AgreementStatusResponse.AgreementStatus — type·scope가 대문자 enum이다.
+ * 문구 전문은 응답에 없다(BE는 버전만 소유 — 정본은 src/legal/·docs/legal/).
+ */
+export interface RawAgreementStatus {
+  /** 대문자 enum(TERMS_OF_SERVICE·CHILD_CONSENT_ATTESTED …) */
+  type: string
+  currentVersion: string
+  required: boolean
+  /** 대문자 enum(USER/GROUP) */
+  scope: string
+  agreed: boolean
+}
+
+export function toAgreementStatus(raw: RawAgreementStatus): AgreementStatus {
+  return {
+    type: raw.type.toLowerCase() as AgreementType,
+    currentVersion: raw.currentVersion,
+    required: raw.required,
+    scope: raw.scope.toLowerCase() as AgreementScope,
+    agreed: raw.agreed,
   }
 }

@@ -8,6 +8,8 @@
  * - 상태전이·이름전파·다대다 헬퍼는 CHMO-109(앨범·검수·공개·뷰어 핸들러)에서도 재사용한다.
  */
 import type {
+  AgreementScope,
+  AgreementType,
   AlbumType,
   AnalysisStatus,
   EventStatus,
@@ -124,6 +126,24 @@ export interface DbPhoto {
   createdAt: ISODateTime
 }
 
+/**
+ * 약관 동의 기록(BE `user_agreement` — CHMO-514). **append-only**: 재동의도 철회도 새 행이고
+ * 기존 행을 고치지 않는다(그래서 unique 제약이 없다 — 동의→철회→재동의가 막히면 이력이 아니다).
+ * 현재 상태는 "항목별 최신 행"으로 계산한다(latestUserAgreementOf).
+ */
+export interface DbAgreement {
+  id: number
+  userId: number
+  type: AgreementType
+  /** 제출된 버전 — 카탈로그의 현재 버전과 다르면 구버전 기록으로 남는다 */
+  version: string
+  /** 거부·철회도 행으로 기록 */
+  agreed: boolean
+  /** 모임 스코프 확인(child_consent_attested)만 값 보유 — 회원 동의는 null */
+  groupId: number | null
+  createdAt: ISODateTime
+}
+
 export interface DbAnalysisJob {
   eventId: number
   status: AnalysisStatus
@@ -143,6 +163,7 @@ export interface Db {
   persons: DbPerson[]
   albums: DbAlbum[]
   photos: DbPhoto[]
+  agreements: DbAgreement[]
   analysisJobs: DbAnalysisJob[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
@@ -157,6 +178,7 @@ export const db: Db = {
   persons: [],
   albums: [],
   photos: [],
+  agreements: [],
   analysisJobs: [],
   uploadedKeys: [],
 }
@@ -171,6 +193,7 @@ export function seedDb(data: Db): void {
   db.persons = data.persons
   db.albums = data.albums
   db.photos = data.photos
+  db.agreements = data.agreements
   db.analysisJobs = data.analysisJobs
   db.uploadedKeys = data.uploadedKeys
 }
@@ -419,6 +442,85 @@ export function parentVisiblePhotosOfEvent(eventId: number, userId: number): DbP
     for (const photo of viewerPhotosOfAlbum(album.id)) photos.set(photo.id, photo)
   }
   return [...photos.values()]
+}
+
+// ── 약관 동의 (BE CHMO-514 — AgreementType enum + user_agreement) ──
+
+export interface AgreementCatalogItem {
+  type: AgreementType
+  /** 항목별 현재 유효 버전 — 문서를 개정하면 올린다(그 순간 기존 동의가 재동의 대상이 된다) */
+  currentVersion: string
+  required: boolean
+  scope: AgreementScope
+}
+
+/**
+ * BE `AgreementType` enum의 목 대응물 — 문구 전문은 담지 않는다(정본은 src/legal/).
+ * 순서까지 BE 그대로: 가입 동의 화면이 이 순서로 항목을 그린다(CHMO-479).
+ */
+export const AGREEMENT_CATALOG: AgreementCatalogItem[] = [
+  { type: 'age_14_over', currentVersion: '1.0', required: true, scope: 'user' },
+  { type: 'terms_of_service', currentVersion: '1.0', required: true, scope: 'user' },
+  { type: 'privacy_policy', currentVersion: '1.0', required: true, scope: 'user' },
+  { type: 'face_data', currentVersion: '1.0', required: true, scope: 'user' },
+  { type: 'marketing', currentVersion: '1.0', required: false, scope: 'user' },
+  { type: 'child_consent_attested', currentVersion: '1.0', required: true, scope: 'group' },
+]
+
+/** 아동 보호자 동의 확보 확인 항목 — 업로드 게이트가 요구하는 그 항목 */
+export const GUARDIAN_CONSENT_TYPE: AgreementType = 'child_consent_attested'
+
+export function agreementCatalogOf(type: AgreementType): AgreementCatalogItem | undefined {
+  return AGREEMENT_CATALOG.find((item) => item.type === type)
+}
+
+/**
+ * 회원(user 스코프) 항목의 최신 기록 — 상태 판정·멱등 스킵의 기준.
+ * 뒤에서부터 찾는다(append-only라 뒤가 최신). 모임 스코프 행(groupId 보유)은 섞이지 않게 제외.
+ */
+export function latestUserAgreementOf(userId: number, type: AgreementType): DbAgreement | undefined {
+  for (let i = db.agreements.length - 1; i >= 0; i -= 1) {
+    const row = db.agreements[i]
+    if (row.userId === userId && row.type === type && row.groupId === null) return row
+  }
+  return undefined
+}
+
+export function recordAgreement(input: {
+  userId: number
+  type: AgreementType
+  version: string
+  agreed: boolean
+  groupId?: number | null
+}): DbAgreement {
+  const row: DbAgreement = {
+    id: nextId('agr'),
+    userId: input.userId,
+    type: input.type,
+    version: input.version,
+    agreed: input.agreed,
+    groupId: input.groupId ?? null,
+    createdAt: nowIso(),
+  }
+  db.agreements.push(row)
+  return row
+}
+
+/**
+ * 그 모임의 보호자 동의 확보 확인이 **이 선생님 이름으로** 현재 버전으로 남아 있는가.
+ * 선생님별로 쌓인다 — 각자 자신의 동의 확보 의무를 확인하는 것이므로 다른 선생님의 확인으로
+ * 갈음되지 않는다(BE GuardianConsentGuard와 동일 규칙).
+ */
+export function guardianConsentAttested(userId: number, groupId: number): boolean {
+  const version = agreementCatalogOf(GUARDIAN_CONSENT_TYPE)?.currentVersion
+  return db.agreements.some(
+    (row) =>
+      row.userId === userId &&
+      row.type === GUARDIAN_CONSENT_TYPE &&
+      row.groupId === groupId &&
+      row.version === version &&
+      row.agreed,
+  )
 }
 
 export function eventsOfGroup(groupId: number): DbEvent[] {

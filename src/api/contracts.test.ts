@@ -7,6 +7,7 @@
  * MSW 목도 이 형태로 응답한다(CHMO-195) — 목/실서버 겸용 계약이라 두 벌의 케이스가 필요 없다.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
+import { attestGuardianConsent, listAgreements, submitAgreements } from './agreements'
 import { getMe, login } from './auth'
 import {
   createPersonAlbum,
@@ -38,6 +39,7 @@ import {
 import { setAuthTokens } from '../lib/auth'
 import { setViewerGroupName, setViewerToken } from '../lib/viewer'
 import {
+  BE_AGREEMENTS,
   BE_ALBUM_COMMON,
   BE_ALBUM_DETAIL,
   BE_ALBUM_DETAIL_UNCERTAIN,
@@ -45,6 +47,7 @@ import {
   BE_ALBUM_PERSON,
   BE_AUTH,
   BE_DELETE_PHOTOS,
+  BE_ERRORS,
   BE_EVENT_CREATED,
   BE_EVENT_DETAIL,
   BE_EVENT_DETAIL_WITH_PROGRESS,
@@ -826,6 +829,80 @@ describe('인증 · 프로필', () => {
       id: 4,
       nickname: 'FE연동테스트',
       createdAt: '2026-07-09T09:50:37.543598Z',
+    })
+  })
+})
+
+describe('약관 동의 (CHMO-514 계약)', () => {
+  it('대문자 enum(type·scope)을 소문자로 내리고 agreements 키를 벗긴다', async () => {
+    serve(envelope(BE_AGREEMENTS))
+
+    const agreements = await listAgreements()
+
+    expect(agreements[0]).toEqual({
+      type: 'age_14_over',
+      currentVersion: '1.0',
+      required: true,
+      scope: 'user',
+      agreed: false,
+    })
+    // 모임 스코프 항목도 목록에 섞여 온다 — 가입 게이트는 scope로 걸러야 한다(CHMO-479)
+    expect(agreements[agreements.length - 1]).toMatchObject({
+      type: 'child_consent_attested',
+      scope: 'group',
+    })
+  })
+
+  it('제출은 BE 대문자 enum으로 되돌려 보낸다 — 선택 항목의 미동의도 그대로 실린다', async () => {
+    const calls = serve(envelope(BE_AGREEMENTS))
+
+    await submitAgreements([
+      { type: 'terms_of_service', version: '1.0', agreed: true },
+      { type: 'marketing', version: '1.0', agreed: false },
+    ])
+
+    expect(calls[0].url).toBe('/api/v1/agreements')
+    expect(calls[0].method).toBe('POST')
+    expect(bodyOf(calls[0])).toEqual({
+      agreements: [
+        { type: 'TERMS_OF_SERVICE', version: '1.0', agreed: true },
+        { type: 'MARKETING', version: '1.0', agreed: false },
+      ],
+    })
+  })
+
+  it('보호자 동의 확인은 현재 버전을 확인한 뒤 그 버전으로 기록한다 (화면은 버전을 모른다)', async () => {
+    const calls = stubFetch((call) =>
+      call.url === '/api/v1/agreements'
+        ? jsonResponse(envelope(BE_AGREEMENTS))
+        : jsonResponse(envelope(null)),
+    )
+
+    await attestGuardianConsent(6)
+
+    expect(calls[0].url).toBe('/api/v1/agreements')
+    expect(calls[1].url).toBe('/api/v1/groups/6/agreements')
+    expect(calls[1].method).toBe('POST')
+    // 항목은 싣지 않는다 — 모임 스코프 항목이 하나뿐이라 BE가 받지 않는다
+    expect(bodyOf(calls[1])).toEqual({ version: '1.0' })
+  })
+
+  it('항목이 응답에 없으면 제출할 버전을 모른다 — 조용히 넘기지 않고 실패한다', async () => {
+    serve(envelope({ agreements: [] }))
+
+    await expect(attestGuardianConsent(6)).rejects.toMatchObject({
+      code: 'AGREEMENT_VERSION_MISSING',
+    })
+  })
+
+  it('업로드 presign의 428은 GUARDIAN_CONSENT_REQUIRED로 정규화된다 (화면이 모달로 분기)', async () => {
+    const { status, payload } = BE_ERRORS.AGREEMENT428
+    stubFetch(() => jsonResponse(payload, status))
+
+    await expect(presignUploads(4, [{ fileName: 'a.jpg', size: 100 }])).rejects.toMatchObject({
+      status: 428,
+      code: 'GUARDIAN_CONSENT_REQUIRED',
+      message: '아동 보호자 동의 확보 확인이 필요합니다.',
     })
   })
 })
