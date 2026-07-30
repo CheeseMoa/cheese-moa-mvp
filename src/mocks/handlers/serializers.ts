@@ -12,11 +12,13 @@
  */
 import { SPECIAL_ALBUM_LABELS } from '../../lib/albumLabels'
 import {
+  AGREEMENT_CATALOG,
   albumCountOf,
   albumsOfEvent,
   eventCountOf,
   eventsOfGroup,
   findPhoto,
+  latestUserAgreementOf,
   mappedPersonsOf,
   memberCountOf,
   parentCountOf,
@@ -530,5 +532,28 @@ export function toViewerEventSummary(event: DbEvent) {
     photoCount: photoIds.size,
     albumCount: albums.length,
     createdAt: event.createdAt,
+  }
+}
+
+// ── 약관 동의 (BE CHMO-514) ──────────────────────────────────
+
+/**
+ * BE AgreementStatusResponse — 카탈로그(항목별 현재 버전·필수·스코프) + 내 동의 상태.
+ * `agreed`는 "현재 버전에 동의한 상태인가"라서 구버전 기록만 있으면 false다(재동의 대상).
+ * 모임 스코프 항목은 모임별이라 여기선 **항상 false** — 어느 모임인지 모르는 응답이고,
+ * FE는 이 항목의 currentVersion만 참조한다(확인 여부는 업로드 게이트가 알려 준다).
+ */
+export function toAgreementStatusResponse(userId: number) {
+  return {
+    agreements: AGREEMENT_CATALOG.map((item) => {
+      const latest = item.scope === 'user' ? latestUserAgreementOf(userId, item.type) : undefined
+      return {
+        type: item.type.toUpperCase(),
+        currentVersion: item.currentVersion,
+        required: item.required,
+        scope: item.scope.toUpperCase(),
+        agreed: !!latest?.agreed && latest.version === item.currentVersion,
+      }
+    }),
   }
 }

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { GuardianConsentDialog } from '../components/GuardianConsentDialog'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, LoadState, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
+import { attestGuardianConsent } from '../api/agreements'
 import { ApiRequestError, toErrorMessage } from '../api/client'
 import { getEvent, presignUploads, registerPhotos, uploadToPresignedUrl } from '../api/events'
 import { runWithConcurrency } from '../lib/concurrency'
@@ -70,6 +72,8 @@ async function registrationLanded(eventId: string, photoCountBefore: number): Pr
  * ③ 등록(POST /events/:id/photos — 제외 토글 함께 전송) → 이벤트 상세(분석중)로 복귀.
  * **등록이 곧 분석 시작**이라 analyze는 부르지 않는다(CHMO-194 — 부르면 같은 사진이 두 job으로 발행된다).
  * 완료 확인은 재진입/새로고침(자동 폴링 없음 — MVP).
+ * ①에서 `AGREEMENT428`이 오면 이 모임의 보호자 동의 확보 확인이 없는 것이다(CHMO-516) —
+ * 확인 모달 → 기록 → ①부터 재시도로 받는다(모임 단위·선생님별 1회라 다음 업로드엔 안 뜬다).
  */
 export function PhotoUploadPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
@@ -86,6 +90,10 @@ export function PhotoUploadPage() {
   const [uploadedCount, setUploadedCount] = useState(0)
   const [uploadTotal, setUploadTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  // 보호자 동의 확보 확인 게이트(CHMO-516) — presign이 AGREEMENT428을 주면 모달로 확인받는다
+  const [consentOpen, setConsentOpen] = useState(false)
+  const [consentBusy, setConsentBusy] = useState(false)
+  const [consentError, setConsentError] = useState<string | null>(null)
   // 미리보기 준비 소요(AC-5 기준선 측정용) — DEV에서만 화면에 노출한다
   const [previewTiming, setPreviewTiming] = useState<{ count: number; ms: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -303,6 +311,15 @@ export function PhotoUploadPage() {
         navigate('/login', { replace: true })
         return
       }
+      // 이 모임의 보호자 동의 확보 확인이 아직 없다(CHMO-516) — 실패가 아니라 조건이 빈 것이라
+      // 에러 문구 대신 확인 모달을 띄운다. ① presign에서 걸리므로 S3에 올라간 파일이 없어
+      // 확인 뒤 처음부터 다시 시도해도 중복 업로드가 없다(사진 선택도 그대로 남는다).
+      if (err instanceof ApiRequestError && err.code === 'GUARDIAN_CONSENT_REQUIRED') {
+        setConsentError(null)
+        setConsentOpen(true)
+        setPhase('idle')
+        return
+      }
       // 등록 요청은 서버에 닿았는데 응답만 유실됐을 수 있다(타임아웃·통신 끊김·앱 전환).
       // 업로드가 이벤트당 1회라 재시도는 서버가 거부하고(CHMO-485) 화면이 "실패"로 굳는다 —
       // 실제로 등록·분류가 시작됐으면 에러 대신 상세로 인계한다(CHMO-486).
@@ -315,6 +332,33 @@ export function PhotoUploadPage() {
       if (!alive.current) return
       setError(toErrorMessage(err))
       setPhase('idle')
+    }
+  }
+
+  /**
+   * 확인 기록(POST /groups/:id/agreements) → 업로드 재시도.
+   * 확인은 모임 단위·선생님별 1회라 이 모임의 다음 업로드엔 모달이 뜨지 않는다.
+   */
+  const handleConsentConfirm = async () => {
+    if (consentBusy) return
+    setConsentBusy(true)
+    setConsentError(null)
+    try {
+      await attestGuardianConsent(groupId)
+      if (!alive.current) return
+      setConsentBusy(false)
+      setConsentOpen(false)
+      // 사진 선택·품질 토글은 그대로라 확인 직후 원래 하려던 업로드를 이어서 시작한다
+      void handleAnalyze()
+    } catch (err) {
+      if (!alive.current) return
+      if (err instanceof ApiRequestError && err.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+      // 모달을 닫지 않는다 — 여기서 바로 다시 시도하는 게 자연스럽다
+      setConsentBusy(false)
+      setConsentError(toErrorMessage(err))
     }
   }
 
@@ -471,6 +515,17 @@ export function PhotoUploadPage() {
           </Button>
         </div>
       ) : null}
+
+      {/* 업로드 게이트 — 닫으면(나중에) 사진 선택 상태가 그대로 남아 다시 [사진 분류하기]를 누를 수 있다 */}
+      <GuardianConsentDialog
+        open={consentOpen}
+        busy={consentBusy}
+        error={consentError}
+        onConfirm={handleConsentConfirm}
+        onClose={() => {
+          if (!consentBusy) setConsentOpen(false)
+        }}
+      />
     </PhoneShell>
   )
 }
