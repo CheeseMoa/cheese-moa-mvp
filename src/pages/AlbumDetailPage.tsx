@@ -487,13 +487,15 @@ export function AlbumDetailPage() {
               {album?.type !== 'uncertain' && (
                 <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />
               )}
+              {/* 품질 플래그는 중립 칩 — 사진 상태를 알려줄 뿐 위험하거나 잘못된 게 아니다.
+                  warn(빨강)은 되돌릴 수 없는 동작(삭제)에만 쓴다 */}
               {photo.flags?.eyesClosed && (
-                <span className="rounded-full bg-warn px-[11px] py-1.5 text-xs font-bold text-white">
+                <span className="rounded-full border border-border bg-white px-[11px] py-1.5 text-xs font-bold text-muted">
                   눈감음
                 </span>
               )}
               {photo.flags?.blurry && (
-                <span className="rounded-full bg-warn px-[11px] py-1.5 text-xs font-bold text-white">
+                <span className="rounded-full border border-border bg-white px-[11px] py-1.5 text-xs font-bold text-muted">
                   흔들림
                 </span>
               )}

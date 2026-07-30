@@ -132,11 +132,9 @@ export function ParentEventPhotosPage() {
               {hasPhotos ? (
                 <>
                   <p className="mt-1 text-[13px] text-muted">{countText}</p>
-                  {/* 재배포 금지 안내(CHMO-478) — 단체 사진 속 다른 아이 초상권 보호 */}
-                  <p className="mt-3 rounded-2xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
-                    받으신 사진은 개인적으로만 이용해 주세요. 사진에는 다른 아이가 함께 나올 수
-                    있어요 — SNS·단체 대화방에 올리면 다른 아이의 초상권을 침해할 수 있습니다.
-                  </p>
+                  {/* 재배포 금지 배너(CHMO-478)는 걷어냈다(2026-07-29) — 아이 사진을 보러 온
+                      학부모에게 첫 화면부터 "당신이 위법할 수 있다"고 경고하는 꼴이라 인상이 나빴다.
+                      같은 의무는 이용약관 제14조(학부모 회원의 이용 범위)에 그대로 남아 있다 */}
                   <div className="mt-4">
                     <PhotoGrid>
                       {photos.map((photo, i) => (

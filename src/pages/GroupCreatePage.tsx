@@ -8,7 +8,8 @@ import { createGroup } from '../api/groups'
 
 /**
  * 03. 모임 만들기 · node 211:1411 · POST /groups → 모임 상세(05).
- * 업그레이드/결제는 MVP 미구현 — 배지·안내 카피만 표시(screen-spec 03).
+ * 요금제·업그레이드 안내는 노출하지 않는다 — MVP에 결제가 없어 '무료'라는 말이 유료 전환을
+ * 예고하는 문구로만 읽힌다(2026-07-29 결정).
  */
 export function GroupCreatePage() {
   const navigate = useNavigate()
@@ -51,10 +52,7 @@ export function GroupCreatePage() {
         noValidate
         className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5"
       >
-        <span className="self-start rounded-full bg-primary/20 px-[11px] py-1.5 text-xs font-bold text-accent">
-          무료 · 용량 차면 업그레이드
-        </span>
-        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
+        <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
           <TextField
             label="모임 이름"
             placeholder="예) 햇살반 학부모"
@@ -71,9 +69,6 @@ export function GroupCreatePage() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        <p className="mt-3 text-xs leading-relaxed text-muted">
-          요금제 선택 없이 무료로 시작해요. 저장 용량이 차면 업그레이드할 수 있어요.
-        </p>
         <div className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-card">
           <p className="text-xs leading-relaxed text-muted">
             치즈모아는 사진 속 아이들의 얼굴을 분석해 인물별 앨범을 만들어요. 만 14세 미만 아이의

@@ -6,7 +6,6 @@ import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { getEvent, getReviewSummary, publishEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
-import { cx } from '../lib/cx'
 
 /**
  * 14. 공개 요약(구 '공개 전 검수' — CHMO-398) · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
@@ -105,7 +104,6 @@ export function PublishReviewPage() {
                 <StatCard
                   value={`${summary.reviewedAlbumCount}/${summary.reviewableAlbumCount}`}
                   label="검토"
-                  warn={hasUnreviewed}
                 />
               </div>
 
@@ -115,7 +113,9 @@ export function PublishReviewPage() {
                   "공개할 수 없어요"라고 안내하면 거짓이 된다(공개는 이미 끝났다) */}
               {hasUnreviewed && !published && (
                 <div className="mt-3 rounded-xl bg-surface px-4 py-3.5">
-                  <p className="text-xs font-bold leading-normal text-warn">
+                  {/* 경고색(warn)을 쓰지 않는다 — 위험한 상태가 아니라 남은 할 일 안내다.
+                      warn은 되돌릴 수 없는 동작(삭제 등)에만 남긴다 */}
+                  <p className="text-xs font-bold leading-normal text-heading">
                     검토를 모두 마쳐야 공개할 수 있어요 — {blockingAlbums.length}개 앨범이 남았어요
                   </p>
                   <p className="mt-1.5 text-xs leading-relaxed text-muted">
@@ -205,17 +205,17 @@ export function PublishReviewPage() {
 interface StatCardProps {
   value: string
   label: string
-  /** 미검토 앨범이 남았을 때 검토 수치를 warn 색으로 강조 */
-  warn?: boolean
 }
 
-/** 요약 통계 카드 — 큰 수치 + 작은 라벨(4열 그리드) */
-function StatCard({ value, label, warn }: StatCardProps) {
+/**
+ * 요약 통계 카드 — 큰 수치 + 작은 라벨(3열 그리드).
+ * 미검토가 남아도 수치를 warn 색으로 물들이지 않는다 — 잘못된 상태가 아니라 진행 중인 상태고,
+ * 왜 공개가 잠겼는지는 바로 아래 안내가 앨범 이름으로 짚어 준다.
+ */
+function StatCard({ value, label }: StatCardProps) {
   return (
     <div className="flex flex-col items-center rounded-2xl bg-surface px-1 py-3.5">
-      <span className={cx('text-base font-bold tabular-nums', warn ? 'text-warn' : 'text-accent')}>
-        {value}
-      </span>
+      <span className="text-base font-bold tabular-nums text-accent">{value}</span>
       <span className="mt-0.5 whitespace-nowrap text-[11px] text-muted">{label}</span>
     </div>
   )

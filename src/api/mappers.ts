@@ -402,7 +402,11 @@ export interface RawMoveSuggestion {
   /** 대문자 enum(PERSON/COMMON) */
   type: string
   personName: string | null
-  similarity: number | null
+  /**
+   * 유사도(0~1) — **실 BE가 더는 보내지 않는다**(2026-07-29). 과거 응답·픽스처엔 키가 남아
+   * 있어 선택 필드로 받아 두고, 화면은 소비하지 않는다(추천 순서가 유사도 순이라 정보는 순서에 있다).
+   */
+  similarity?: number | null
   thumbnailUrl: string | null
 }
 
@@ -414,7 +418,8 @@ export function toMoveSuggestion(raw: RawMoveSuggestion): MoveSuggestion {
     albumId: raw.albumId,
     name: raw.personName ?? (isCommon ? SPECIAL_ALBUM_LABELS.common : UNNAMED_PERSON_LABEL),
     isCommon,
-    similarity: raw.similarity,
+    // 키 자체가 없는 응답을 undefined로 흘리지 않는다 — 타입이 number | null이라 거짓말이 된다
+    similarity: raw.similarity ?? null,
     thumbnailUrl: raw.thumbnailUrl,
   }
 }

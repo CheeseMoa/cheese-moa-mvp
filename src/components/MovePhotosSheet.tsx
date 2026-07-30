@@ -210,14 +210,9 @@ export function MovePhotosSheet({
                     />
                   )}
                   <span className="max-w-full truncate text-xs font-bold text-text">{s.name}</span>
-                  {/* 유사도 미계산(null) 인물은 %를 숨긴다 — 0%로 지어내지 않는다(CHMO-399) */}
-                  {isCommon ? (
-                    <span className="text-[11px] text-muted">사진첩</span>
-                  ) : s.similarity !== null ? (
-                    <span className="text-[11px] font-bold text-accent">
-                      {Math.round(s.similarity * 100)}%
-                    </span>
-                  ) : null}
+                  {/* 유사도 %는 표시하지 않는다(2026-07-29) — 실 BE가 similarity를 더는 보내지
+                      않는다. 추천 순서 자체가 유사도 순이라 숫자가 없어도 정보는 남는다 */}
+                  {isCommon ? <span className="text-[11px] text-muted">사진첩</span> : null}
                 </button>
               )
             })}
