@@ -25,12 +25,21 @@ interface EventCardProps {
  * 홈 모임 카드와 이 카드의 실루엣이 같다는 것이었다(흰 카드 + 제목 + 회색 메타 한 줄). 이벤트는
  * 사진 묶음이니 사진을 보여주고, 모임 쪽(색면 헤더 + 치즈 심볼)과 갈라진다.
  * (서체가 Jua 한 벌이라 font-bold는 시각 효과가 없다 — 제목·메타를 가르는 건 크기와 색이다, CHMO-513)
+ *
+ * **카드끼리도 갈라져야 한다(CHMO-532)** — 여럿을 쌓으면 어디서 끊기는지가 흐렸다. 원인은 취향이
+ * 아니라 색 수치였다: 카드 면(흰색)과 페이지 배경(cream)은 명도차가 1%도 안 돼 사실상 같은 색이라
+ * 경계가 전부 테두리·그림자 몫인데, 그 테두리는 1px `border`(배경 대비 ~10%)로 옅고 그림자는
+ * blur 30이라 카드 사이 간격을 뿌옇게 채우고 있었다. 그래서 **경계는 진한 테두리(1.5px)가 맡고,
+ * 그림자는 카드를 띄우는 몫만**(`shadow-card-stack`) 남긴다 — 그림자를 아예 버리면 홈·앨범·시트에
+ * 두루 깔린 "카드는 떠 있다"는 결과 어긋나 05만 평평해진다.
  */
 export function EventCard({ name, status, meta, cover, onClick, onSettings }: EventCardProps) {
   return (
     <div
       onClick={onClick}
-      className="w-full cursor-pointer overflow-hidden rounded-2xl border border-border bg-white shadow-card transition active:scale-[0.99]"
+      // 테두리 색은 border(#E6E0D4)보다 한 단계 진한 라인 — 팔레트에 중간 톤 라인 색이 없어
+      // 임의값이다(다른 카드도 같은 처방을 하게 되면 토큰으로 올린다)
+      className="w-full cursor-pointer overflow-hidden rounded-[18px] border-[1.5px] border-[#D8CFBB] bg-white shadow-card-stack transition active:scale-[0.99]"
     >
       {cover && (
         <div className="cheese-dots h-32 w-full bg-photo">
