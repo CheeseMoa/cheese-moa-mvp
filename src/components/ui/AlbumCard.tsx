@@ -12,11 +12,12 @@ interface AlbumCardProps {
   /** 없으면 순수 표시용 <div>로 렌더 — 무동작 포커스 버튼을 만들지 않는다(14 미리보기, CHMO-346) */
   onClick?: () => void
   /**
-   * 주면 이름 줄이 탭 = 이름 수정 버튼이 된다(뒤에 작은 ✎ 힌트) — 08 인물 앨범 진입(CHMO-400).
+   * 주면 이름 줄이 탭 = 앨범 설정 버튼이 된다(뒤에 작은 ✎ 힌트) — 08 인물 앨범 진입(CHMO-400).
+   * 여는 것은 이름 수정 + 학부모 연결이 함께 있는 앨범 설정 시트다(AlbumSettingsSheet).
    * 커버 오버레이 칩은 시안 검토에서 기각(2026-07-22). ✎는 이름 텍스트 흐름 안에 붙여
    * 이름 전폭 2줄(CHMO-354)에서 고정 폭을 빼앗지 않는다. 뷰어·14는 이 prop을 주지 않는다.
    */
-  onRename?: () => void
+  onSettings?: () => void
 }
 
 /**
@@ -25,7 +26,7 @@ interface AlbumCardProps {
  * 품질 앨범(eyes_closed/blurry)도 같은 검토 테두리를 탄다(피드백 #7 — dc.html §06의 '기본 테두리' 규칙을 대체, CHMO-355) ·
  * uncertain은 검토와 무관하게 항상 점선(재분류 대상) · 검토 배지는 person/common에만.
  */
-export function AlbumCard({ album, coverUrl, onClick, onRename }: AlbumCardProps) {
+export function AlbumCard({ album, coverUrl, onClick, onSettings }: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
   // 사진 0장이면 unreviewedPhotoCount === 0이 공허하게 참 → '검토완료' 오표시. 사진이 있을 때만 완료로 본다
   const reviewed = album.photoCount > 0 && album.unreviewedPhotoCount === 0
@@ -59,10 +60,10 @@ export function AlbumCard({ album, coverUrl, onClick, onRename }: AlbumCardProps
   )
   const baseCls = cx('w-full rounded-2xl bg-white p-2 text-left', borderCls)
 
-  // 이름 탭 = 수정(CHMO-400): 카드가 통째로 <button>이면 이름 버튼을 중첩할 수 없어,
+  // 이름 탭 = 앨범 설정(CHMO-400): 카드가 통째로 <button>이면 이름 버튼을 중첩할 수 없어,
   // EventCard의 ⚙과 같은 꼴(클릭 가능한 div + 중첩 버튼 stopPropagation)로 바꾼다 —
-  // 카드 어디를 눌러도 09로 가는 기존 동작은 유지되고 이름 줄만 수정으로 가로챈다.
-  if (onRename) {
+  // 카드 어디를 눌러도 09로 가는 기존 동작은 유지되고 이름 줄만 설정으로 가로챈다.
+  if (onSettings) {
     return (
       <div
         onClick={onClick}
@@ -71,10 +72,10 @@ export function AlbumCard({ album, coverUrl, onClick, onRename }: AlbumCardProps
         {cover}
         <button
           type="button"
-          aria-label={`${album.name} 이름 수정`}
+          aria-label={`${album.name} 앨범 설정`}
           onClick={(e) => {
             e.stopPropagation()
-            onRename()
+            onSettings()
           }}
           className="mt-2 block w-full text-left"
         >

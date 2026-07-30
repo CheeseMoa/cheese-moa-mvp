@@ -10,7 +10,16 @@ export { ErrorState } from './ErrorState'
 export { EventCard } from './EventCard'
 export { GroupCard } from './GroupCard'
 export { Header } from './Header'
-export { IconCheck, IconClose, IconDownload, IconFolderMove, IconPlus, IconShare, IconTrash } from './icons'
+export {
+  IconCheck,
+  IconClose,
+  IconDownload,
+  IconFolderMove,
+  IconPencil,
+  IconPlus,
+  IconShare,
+  IconTrash,
+} from './icons'
 export { LoadState } from './LoadState'
 export { Modal } from './Modal'
 export { PhotoGrid } from './PhotoGrid'
