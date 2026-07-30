@@ -338,14 +338,13 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
               )}
 
               {/* 앨범이 하나도 없으면(분석 결과 0건) 범례 대신 안내 — 그래도 만들기 타일은 남는다.
-                  범례는 메인 그리드 몫이다 — 검토 테두리를 지는 앨범이 하나도 없으면 걷는다 */}
+                  범례는 메인 그리드 몫이다 — 검토 표시를 지는 앨범이 하나도 없으면 걷는다.
+                  문구가 '테두리'가 아닌 이유: 선이 아니라 면이 상태를 만든다(CHMO-531) */}
               {albums.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">앨범이 아직 없어요.</p>
               ) : (
                 mainAlbums.length > 0 && (
-                  <p className="mt-4 text-[11px] text-muted">
-                    테두리: 회색 점선=미검토 · 갈색=검토완료
-                  </p>
+                  <p className="mt-4 text-[11px] text-muted">점선=미검토 · 채운 면=검토완료</p>
                 )
               )}
             </>

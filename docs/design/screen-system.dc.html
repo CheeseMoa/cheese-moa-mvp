@@ -211,10 +211,10 @@
 
 <!-- ═══════════ 06 AlbumCard ═══════════ -->
 <div style="position:absolute;left:600px;top:1210px;width:520px;">
-  <div class="sec" data-drags-parent="1">06 · AlbumCard — 검토 테두리 규칙</div>
+  <div class="sec" data-drags-parent="1">06 · AlbumCard — 검토 상태 규칙</div>
   <div class="card">
     <div style="display:flex;gap:14px;">
-      <div style="width:150px;border:2px solid #8C5A2B;border-radius:16px;padding:8px;box-sizing:border-box;background:#fff;">
+      <div style="width:150px;border:2px solid #8C5A2B;border-radius:16px;padding:8px;box-sizing:border-box;background:#F3F0E9;">
         <div class="cheese-dots" style="height:96px;border-radius:10px;"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;">
           <div><div style="font:400 14px/1.2 Jua,sans-serif;">김민준</div><div style="font:400 11px/1.4 Jua,sans-serif;color:#9E978C;">16장</div></div>
@@ -233,8 +233,8 @@
         <div style="margin-top:9px;"><div style="font:400 13px/1.2 Jua,sans-serif;">분류가 어려워요</div><div style="font:400 11px/1.4 Jua,sans-serif;color:#9E978C;">6장 · 재분류 대상</div></div>
       </div>
     </div>
-    <div style="font:400 12px/1 Jua,sans-serif;color:#8C5A2B;margin-top:16px;">테두리: 갈색 실선 = 검토완료 · 회색 점선 = 미검토</div>
-    <div class="note">인물 앨범과 uncertain(분류가 어려워요)은 같은 카드 모양·같은 그리드. 특수 앨범(uncertain/눈감음/흔들림)은 뷰어(학부모)에 비노출.</div>
+    <div style="font:400 12px/1 Jua,sans-serif;color:#8C5A2B;margin-top:16px;">채운 면(surface)+갈색 실선 = 검토완료 · 빈 면(흰색)+회색 점선 = 미검토</div>
+    <div class="note">인물 앨범과 uncertain(분류가 어려워요)은 같은 카드 모양·같은 그리드. 특수 앨범(uncertain/눈감음/흔들림)은 뷰어(학부모)에 비노출. 면 채움은 CHMO-531 — 110px 카드에서 2px 선의 색·점선만으로는 두 상태가 같아 보였다.</div>
   </div>
 </div>
 
@@ -333,7 +333,7 @@
     <b style="color:#3A3128;">① 토큰 원천은 tailwind.config.js 하나</b> — 이 문서의 값은 그 사본이며, 충돌 시 코드가 이긴다 (이 문서를 갱신할 것).&nbsp;
     <b style="color:#3A3128;">② Jua는 로고·헤딩·EmptyState 타이틀에만</b>, 본문·버튼·배지는 Gothic A1.&nbsp;
     <b style="color:#3A3128;">③ 치즈 옐로우 위 흰 글자 금지</b> — primary 버튼 텍스트는 text(#3A3128).&nbsp;
-    <b style="color:#3A3128;">④ AlbumCard 테두리 규칙 고정</b> — 갈색 실선=검토완료 · 회색 점선=미검토.&nbsp;
+    <b style="color:#3A3128;">④ AlbumCard 검토 상태 규칙 고정</b> — 채운 면+갈색 실선=검토완료 · 빈 면+회색 점선=미검토(CHMO-531).&nbsp;
     <b style="color:#3A3128;">⑤ 특수 앨범(분류가 어려워요·눈감음·흔들림)은 뷰어 비노출.</b>&nbsp;
     <b style="color:#3A3128;">⑥ 미확정</b>(screen-spec §5): 홈 관리자 배지 · 품질 제외 사진 라우팅 · common 앨범 정의 — 임의 구현 금지.
   </div>
