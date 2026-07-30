@@ -1,12 +1,21 @@
 import { useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { cx } from '../../lib/cx'
 
 interface BottomSheetProps {
   open: boolean
   onClose: () => void
   title?: string
   subtitle?: string
+  /**
+   * 본문이 프레임보다 길어질 수 있는 시트(앨범 설정의 학부모 명단 등) — children을 세로 스크롤
+   * 영역에 담고, 그 안에서 시작한 제스처는 브라우저 스크롤에 양보한다(끌어내려 닫기는 그랩 핸들·
+   * 제목 영역이 맡는다). 세로 팬을 JS가 가져가는 기본 동작(touch-action: pan-x)으로는 시트 안
+   * 세로 스크롤이 아예 불가능하다 — 조상의 pan-x가 자손의 세로 스크롤까지 막는다.
+   * 기본(false)은 종전 동작 그대로: 시트 어디를 끌어도 닫히고 내부 가로 스크롤만 공존한다.
+   */
+  bodyScrollable?: boolean
   children: ReactNode
 }
 
@@ -43,7 +52,14 @@ interface DragState {
  * 넘겨준다. 수직 드래그로 판정되면 이어지는 click을 캡처 단계에서 삼켜, 끌기 끝에
  * 시트 안 버튼·스크림이 눌리는 오작동을 막는다.
  */
-export function BottomSheet({ open, onClose, title, subtitle, children }: BottomSheetProps) {
+export function BottomSheet({
+  open,
+  onClose,
+  title,
+  subtitle,
+  bodyScrollable = false,
+  children,
+}: BottomSheetProps) {
   useEscapeKey(open, onClose)
   const sheetRef = useRef<HTMLDivElement>(null)
   const drag = useRef<DragState | null>(null)
@@ -54,6 +70,8 @@ export function BottomSheet({ open, onClose, title, subtitle, children }: Bottom
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // 멀티터치 두 번째 포인터가 진행 중인 드래그 상태를 덮어쓰지 않게 무시
     if (drag.current) return
+    // 스크롤 본문에서 시작한 제스처는 스크롤에 양보 — 시트를 끄는 건 핸들·제목 영역뿐이다
+    if (bodyScrollable && (e.target as Element | null)?.closest?.('[data-sheet-body]')) return
     drag.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -131,13 +149,23 @@ export function BottomSheet({ open, onClose, title, subtitle, children }: Bottom
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
-          style={{ touchAction: 'pan-x' }}
+          /* 스크롤 본문 시트는 세로 팬을 브라우저에 남긴다 — pan-x면 자손 스크롤까지 막힌다 */
+          style={{ touchAction: bodyScrollable ? undefined : 'pan-x' }}
           className="select-none rounded-t-[24px] bg-cream px-5 pb-safe-6 pt-3"
         >
           <div className="mx-auto h-1 w-11 rounded-full bg-border" aria-hidden="true" />
           {title && <h2 className="mt-4 text-base font-bold text-text">{title}</h2>}
           {subtitle && <p className="mt-1 text-xs text-muted">{subtitle}</p>}
-          <div className="mt-2">{children}</div>
+          <div
+            data-sheet-body={bodyScrollable ? '' : undefined}
+            className={cx(
+              'mt-2',
+              // 프레임을 넘기지 않게 본문만 스크롤 — 핸들·제목은 위에 남아 끌어내려 닫기가 살아 있다
+              bodyScrollable && 'max-h-[68dvh] overflow-y-auto overscroll-contain',
+            )}
+          >
+            {children}
+          </div>
         </div>
       </div>
     </div>

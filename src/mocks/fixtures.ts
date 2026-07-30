@@ -274,6 +274,10 @@ export function createFixtures(): Db {
     ],
     albums,
     photos,
+    // 동의 기록은 비워 둔다(CHMO-516) — 시드 계정에 보호자 동의 확인이 없으므로 빈 이벤트
+    // (4번 '가을 발표회 준비')에서 업로드를 시작하면 실 BE처럼 AGREEMENT428 게이트를 만난다.
+    // 기록을 미리 넣으면 목에서 그 경로를 한 번도 못 보고 지나간다.
+    agreements: [],
     // 이벤트 1·2는 분석 완료 이력(done) — 상태가 review/published인 이벤트는 분석을 거쳤어야 함.
     // 이벤트 3은 시드 시점부터 분석 중 — 워커 기동 후 ANALYSIS_DURATION_MS 지나 조회하면 review로 전이
     analysisJobs: [

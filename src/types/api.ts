@@ -263,6 +263,44 @@ export interface AuthResponse {
   refreshToken: string
 }
 
+// ── 약관 동의 (CHMO-516 · BE CHMO-514) ───────────────────────
+/**
+ * 동의 항목 — BE `AgreementType`(대문자)을 소문자로 정규화한 값(role·album type 선례).
+ * 문구 전문은 BE에 없다: 정본은 `docs/legal/`·`src/legal/`이고 BE는 항목별 **현재 유효 버전만**
+ * 소유해 FE가 제출한 버전을 검증한다(카탈로그 테이블 없음).
+ */
+export type AgreementType =
+  | 'age_14_over'
+  | 'terms_of_service'
+  | 'privacy_policy'
+  | 'face_data'
+  | 'marketing'
+  /** 아동 보호자 동의 확보 확인 — 회원이 아니라 **모임** 단위(선생님별로 쌓인다) */
+  | 'child_consent_attested'
+
+/** 동의의 적용 범위 — user는 계정 1회, group은 모임마다 */
+export type AgreementScope = 'user' | 'group'
+
+export interface AgreementStatus {
+  type: AgreementType
+  currentVersion: string
+  required: boolean
+  scope: AgreementScope
+  /**
+   * "현재 버전에 동의한 상태인가" — 구버전에만 동의했으면 false(재동의 대상).
+   * ⚠ `scope === 'group'` 항목은 모임별이라 **항상 false**로 온다(어느 모임인지 모르는 응답).
+   * 가입 게이트를 required && !agreed로 계산할 땐 user 스코프만 봐야 한다(CHMO-479).
+   */
+  agreed: boolean
+}
+
+/** POST /agreements 제출 항목 — version은 **화면에 실제로 보여준 버전**을 싣는다 */
+export interface AgreementSubmission {
+  type: AgreementType
+  version: string
+  agreed: boolean
+}
+
 // ── 업로드 3단계 (presign → S3 PUT → 등록) ───────────────────
 /** BE는 contentType을 `fileName` 확장자로 유도한다 — 요청에 담지 않는다 */
 export interface PresignFileRequest {
@@ -319,6 +357,13 @@ export interface ReviewSummary {
    * 14 미리보기가 08과 같은 앨범 카드로 그린다(CHMO-346).
    */
   previewAlbums: Album[]
+  /**
+   * 공개되지 않는 앨범(파생값 — CHMO-521): 사진이 있는 분류가 어려워요·눈감음·흔들림.
+   * 검토 UI가 없어(CHMO-357) 검토 동선에 한 번도 등장하지 않는데 학부모에게도 나가지 않으므로,
+   * 검토를 다 끝내고 온 14에서 "저 사진들은 어떻게 되나"에 한 줄로 답한다.
+   * 카드로는 보여주지 않는다(CHMO-347 — 미리보기는 공개 대상만).
+   */
+  excludedAlbums: Album[]
 }
 
 // ── 이동 추천 ────────────────────────────────────────────────

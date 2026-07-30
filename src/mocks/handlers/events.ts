@@ -11,6 +11,7 @@ import {
   deleteEventCascade,
   findAnalysisJob,
   findGroup,
+  guardianConsentAttested,
   isObjectUploaded,
   markObjectUploaded,
   membershipOf,
@@ -166,6 +167,11 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = teacherEvent(user, toId(params.id))
     if (event instanceof Response) return event
+    // 아동 보호자 동의 확보 확인 게이트(BE CHMO-514 GuardianConsentGuard) — 모임 단위·선생님별
+    // 1회. BE는 이 검사를 선생님 확인 **직후·파일 검증 앞**에 두므로 순서를 그대로 따른다
+    // (파일이 규격에 안 맞아도 428이 먼저 온다 — 화면은 모달을 띄우고 presign부터 재시도한다).
+    if (!guardianConsentAttested(user.id, event.groupId))
+      return errorResponse(428, 'AGREEMENT428', '아동 보호자 동의 확보 확인이 필요합니다.')
     if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
     // 1회 정책 — 이미 사진이 있는 이벤트는 URL 발급부터 막는다(고아 S3 객체를 만들지 않게)
     if (photoCountOfEvent(event.id) > 0) return invalidRequest(UPLOAD_ONCE_LOCKED)
