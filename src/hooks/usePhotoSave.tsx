@@ -1,10 +1,13 @@
 import { useRef, useState } from 'react'
-import { useToast } from '../components/ui'
+import { ConfirmDialog, useToast } from '../components/ui'
 import { useAlive } from './useAlive'
+import { openAppSettings } from '../native/bridge'
 import {
+  bridgeSaveSupported,
   downloadEach,
   downloadPreparedFiles,
   fetchAsFiles,
+  saveViaBridge,
   shareFiles,
   shareSaveSupported,
   splitIntoBatches,
@@ -13,6 +16,10 @@ import {
 
 /**
  * 사진 앨범 저장 상태머신 (CHMO-473) — 라이트박스·09·16·19 공용.
+ *
+ * 앱(웹뷰)에서는 `start`가 브리지 savePhotos로 위임한다(CHMO-540 — 웹뷰엔 공유 시트도
+ * blob 다운로드도 없어 유일한 경로다): 셸 진행 이벤트는 downloading 상태로, 권한 거부는
+ * [설정 열기] 안내 다이얼로그로 잇는다 — 반환값 `dialog`를 호출부 JSX에 그대로 렌더한다.
  *
  * iOS(공유 시트 경로)는 2단계다: `start` 탭 → 첫 배치 선요청(preparing) → 준비 끝나면 즉시
  * 공유를 한 번 시도하고(제스처가 살아 있으면 탭 절약), transient activation 만료(blocked)면
@@ -50,6 +57,8 @@ export function usePhotoSave() {
   const toast = useToast()
   const alive = useAlive()
   const [state, setState] = useState<PhotoSaveState>({ phase: 'idle' })
+  // 앱 경로 권한 거부 안내 — 닫아도 저장 상태와 무관해 상태머신 밖의 별도 플래그다
+  const [askPermission, setAskPermission] = useState(false)
   // 배치 준비물 — 리렌더와 무관한 저장물이라 ref. slots는 시작된 fetch의 promise(프리페치와
   // 본요청이 공유·중복 방지), resolved는 완료분(준비 끝난 배치의 preparing 깜빡임 방지)
   const itemBatchesRef = useRef<PhotoSaveItem[][]>([])
@@ -178,7 +187,8 @@ export function usePhotoSave() {
     if (!ok(run)) return
     if (files.length === 0) {
       // 이 배치가 전멸(전 장 fetch 실패) — 부분 진행분만 남기고 종료
-      if (savedRef.current === 0 && index === 0) toast.show('저장하지 못했어요. 다시 시도해 주세요.')
+      if (savedRef.current === 0 && index === 0)
+        toast.show('저장하지 못했어요. 다시 시도해 주세요.')
       else finish()
       if (runRef.current === run) reset()
       return
@@ -234,7 +244,40 @@ export function usePhotoSave() {
     void shareBatch(runRef.current, state.batchIndex, false)
   }
 
-  /** 저장 시작 — iOS는 배치 선요청→공유 시트, 그 외는 장별 다운로드 */
+  /**
+   * 앱(웹뷰) 경로 — 다운로드·갤러리 저장·권한은 셸 소관이라 웹은 진행률과 결과 UX만
+   * 잇는다. 결과 문구는 공유 경로 finish()와 같은 문법(성공 장수 + 실패 장수).
+   */
+  const saveWithBridge = async (run: number, items: PhotoSaveItem[]) => {
+    setState({ phase: 'downloading', done: 0, total: items.length })
+    const outcome = await saveViaBridge(items, (done, total) => {
+      if (ok(run)) setState({ phase: 'downloading', done, total })
+    })
+    if (!ok(run)) return
+    switch (outcome.kind) {
+      case 'done':
+        toast.show(
+          outcome.failed === 0
+            ? `🧀 사진 ${outcome.saved}장을 저장했어요`
+            : outcome.saved > 0
+              ? `사진 ${outcome.saved}장 저장 · ${outcome.failed}장은 받지 못했어요`
+              : '저장하지 못했어요. 다시 시도해 주세요.',
+        )
+        break
+      case 'permission':
+        if (outcome.canOpenSettings) setAskPermission(true)
+        else toast.show('사진 권한이 없어 저장하지 못했어요. 휴대폰 설정에서 허용해 주세요.')
+        break
+      case 'cancelled':
+        break // 사용자 취소 = 정상 흐름 — 공유 시트 닫기와 같은 무토스트 관용
+      case 'error':
+        toast.show('저장하지 못했어요. 다시 시도해 주세요.')
+        break
+    }
+    reset()
+  }
+
+  /** 저장 시작 — 앱은 브리지 위임, iOS는 배치 선요청→공유 시트, 그 외는 장별 다운로드 */
   const start = async (items: PhotoSaveItem[]) => {
     if (state.phase !== 'idle' || items.length === 0) return
     const run = ++runRef.current
@@ -243,6 +286,13 @@ export function usePhotoSave() {
     tapFailedRef.current = 0
     progressRef.current = []
     visibleRef.current = -1
+
+    // 앱 분기는 여기 한 곳뿐 — 적용 화면(라이트박스·09·16·19)은 자동으로 전부다.
+    if (await bridgeSaveSupported()) {
+      if (!ok(run)) return
+      await saveWithBridge(run, items)
+      return
+    }
 
     if (shareSaveSupported()) {
       itemBatchesRef.current = splitIntoBatches(items)
@@ -276,5 +326,22 @@ export function usePhotoSave() {
     reset()
   }
 
-  return { state, busy, start, shareNext, reset }
+  /** 권한 거부 안내(계약 §2.4 — 안내 + [설정 열기]) — 호출부 JSX에 그대로 렌더한다 */
+  const dialog = (
+    <ConfirmDialog
+      open={askPermission}
+      title="사진 권한이 필요해요"
+      description="사진을 갤러리에 저장하려면 휴대폰 설정에서 치즈모아의 사진 권한을 허용해 주세요."
+      confirmLabel="설정 열기"
+      cancelLabel="닫기"
+      onConfirm={() => {
+        setAskPermission(false)
+        // 설정 화면 열기 실패는 사용자에게 더 해줄 게 없다 — 조용히 삼킨다
+        void openAppSettings().catch(() => {})
+      }}
+      onClose={() => setAskPermission(false)}
+    />
+  )
+
+  return { state, busy, start, shareNext, reset, dialog }
 }
