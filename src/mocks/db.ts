@@ -389,6 +389,21 @@ export function unlinkPersonParent(userId: number, personId: number): void {
   )
 }
 
+/**
+ * 멤버 제거(내보내기·나가기 — BE CHMO-525 RemoveSpaceMemberUseCase 대응): 이 모임 인물에 대한
+ * 매핑 → 멤버십(신청 이름 포함) 순으로 지운다. 사진·앨범·인물은 모임 자산이라 건드리지 않는다 —
+ * 선생님이 나가도 남은 선생님의 앨범은 그대로고, 나간 학부모는 열람 범위(매핑)만 잃는다.
+ */
+export function removeMembershipCascade(membership: DbMembership): void {
+  const groupPersonIds = new Set(
+    db.persons.filter((p) => p.groupId === membership.groupId).map((p) => p.id),
+  )
+  db.personParents = db.personParents.filter(
+    (pp) => !(pp.userId === membership.userId && groupPersonIds.has(pp.personId)),
+  )
+  db.memberships = db.memberships.filter((m) => m.id !== membership.id)
+}
+
 /** 이 모임에서 학부모에게 매핑된 인물들 — 열람 권한의 실체(모임 단위라 이벤트를 관통, §2) */
 export function mappedPersonsOf(userId: number, groupId: number): DbPerson[] {
   const personIds = new Set(

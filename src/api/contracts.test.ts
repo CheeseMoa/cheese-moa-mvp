@@ -8,7 +8,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { attestGuardianConsent, listAgreements, submitAgreements } from './agreements'
-import { getMe, login } from './auth'
+import { deleteAccount, getMe, login } from './auth'
 import {
   createPersonAlbum,
   deletePhotos,
@@ -28,7 +28,14 @@ import {
   registerPhotos,
   uploadToPresignedUrl,
 } from './events'
-import { findMyGroupByJoinKey, getGroup, getInviteInfo, joinGroup, listGroups } from './groups'
+import {
+  findMyGroupByJoinKey,
+  getGroup,
+  getInviteInfo,
+  joinGroup,
+  listGroups,
+  removeGroupMember,
+} from './groups'
 import {
   getViewerAlbumPhotos,
   getViewerAlbums,
@@ -211,6 +218,27 @@ describe('모임', () => {
       groupName: '햇살반',
       role: 'parent',
       status: 'pending',
+    })
+  })
+
+  it('멤버 내보내기·나가기 — 대상 userId가 본문 없이 경로에 실린다 (BE CHMO-525)', async () => {
+    const calls = serve(envelope(null))
+
+    await removeGroupMember(6, 42)
+
+    expect(calls[0].url).toBe('/api/v1/groups/6/members/42')
+    expect(calls[0].method).toBe('DELETE')
+    expect(calls[0].body).toBeNull()
+  })
+
+  it('마지막 선생님 409는 LAST_TEACHER로 정규화된다 — 화면이 "모임 삭제" 안내로 받는다', async () => {
+    const { status, payload } = BE_ERRORS.MEMBER409
+    stubFetch(() => jsonResponse(payload, status))
+
+    await expect(removeGroupMember(6, 42)).rejects.toMatchObject({
+      status: 409,
+      code: 'LAST_TEACHER',
+      message: '모임의 마지막 선생님은 나갈 수 없습니다. 모임을 삭제해 주세요.',
     })
   })
 })
@@ -830,6 +858,16 @@ describe('인증 · 프로필', () => {
       nickname: 'FE연동테스트',
       createdAt: '2026-07-09T09:50:37.543598Z',
     })
+  })
+
+  it('계정 삭제 — DELETE /users/me (BE CHMO-524 미구현 · 티켓 초안 경로를 목이 선행한다)', async () => {
+    const calls = serve(envelope(null))
+
+    await deleteAccount()
+
+    expect(calls[0].url).toBe('/api/v1/users/me')
+    expect(calls[0].method).toBe('DELETE')
+    expect(calls[0].body).toBeNull()
   })
 })
 

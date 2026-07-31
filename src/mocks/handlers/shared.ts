@@ -109,6 +109,14 @@ export function roleForbidden(message = '이 작업을 할 수 있는 권한이 
   return errorResponse(403, 'ROLE403', message)
 }
 
+/**
+ * 멤버십 없음/승인 전 — BE SPACE403(NOT_SPACE_MEMBER — CHMO-475 완료 공지 기준, 메시지는
+ * 실서버 미채집). 멤버 내보내기·나가기(CHMO-525)가 모임 존재를 흘리지 않는 응답으로 쓴다.
+ */
+export function spaceForbidden(message = '모임에 참여하고 있지 않습니다.') {
+  return errorResponse(403, 'SPACE403', message)
+}
+
 /** Authorization 헤더에서 제작자 유저 해석(무효면 null) */
 export function userFrom(request: Request): DbUser | null {
   return resolveUser(request.headers.get('Authorization'))
