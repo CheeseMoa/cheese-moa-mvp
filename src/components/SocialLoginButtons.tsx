@@ -1,6 +1,13 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { setSocialReturnTo } from '../lib/auth'
-import { socialLoginStartUrl, type SocialProvider } from '../api/auth'
+import {
+  socialAuthorizeUrlForApp,
+  socialCallbackPath,
+  socialLoginStartUrl,
+  type SocialProvider,
+} from '../api/auth'
+import { BridgeError, hasCapability, socialLogin } from '../native/bridge'
 
 /** 프로바이더별 브랜드 규격 — 색은 각 사 디자인 가이드 고정값이라 디자인 토큰을 쓰지 않는다 */
 const PROVIDERS: Array<{
@@ -73,13 +80,46 @@ interface SocialLoginButtonsProps {
 
 /**
  * 소셜 로그인 버튼 4종 (CHMO-359) — 01 랜딩 · 01-1/01-2 폼 공용.
- * 버튼은 fetch가 아니라 브라우저 전체 이동이다: BE `/auth/social/{provider}` → 프로바이더 인가
- * 페이지 → BE 콜백 → FE `/auth/callback`으로 돌아온다.
+ * 브라우저: 전체 이동이다 — BE `/auth/social/{provider}` → 프로바이더 인가 → BE 콜백 →
+ * FE `/auth/callback`으로 돌아온다.
+ * 앱 웹뷰(CHMO-539): 구글이 웹뷰 내 OAuth를 차단하므로 브리지 `socialLogin`으로 시스템
+ * 인증 세션에서 왕복하고, 셸이 돌려준 callbackUrl의 쿼리를 SPA 내부 이동으로 기존
+ * `/auth/callback` 처리에 태운다 — exchange·returnTo 복귀·에러 분기 전부 재사용.
  */
 export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
-  const start = (provider: SocialProvider) => {
-    if (returnTo) setSocialReturnTo(returnTo)
-    window.location.assign(socialLoginStartUrl(provider))
+  const navigate = useNavigate()
+  // 인증 세션이 뜨기 전 찰나에 다른 버튼을 또 누르면 세션이 겹친다 — 재진입 가드
+  const inFlight = useRef(false)
+
+  const start = async (provider: SocialProvider) => {
+    if (inFlight.current) return
+    inFlight.current = true
+    try {
+      if (returnTo) setSocialReturnTo(returnTo)
+      // MSW 목 모드는 브라우저 전용(문서 이동으로 목 콜백 직행) — 앱 경로를 타지 않는다
+      if (import.meta.env.VITE_ENABLE_MSW !== 'true' && (await hasCapability('socialLogin'))) {
+        await startInApp(provider)
+        return
+      }
+      window.location.assign(socialLoginStartUrl(provider))
+    } finally {
+      inFlight.current = false
+    }
+  }
+
+  /** 세션 취소(CANCELLED)는 무토스트로 제자리 — 그 외 실패는 기존 콜백 에러 화면으로 수렴 */
+  const startInApp = async (provider: SocialProvider) => {
+    try {
+      const { callbackUrl } = await socialLogin({
+        provider,
+        authorizeUrl: socialAuthorizeUrlForApp(provider),
+      })
+      navigate(socialCallbackPath(callbackUrl))
+    } catch (err) {
+      if (err instanceof BridgeError && err.code === 'CANCELLED') return
+      // 미지 코드는 SocialCallbackPage가 일반 실패 문구(재시도 안내)로 수렴시킨다
+      navigate('/auth/callback?error=APP_BRIDGE')
+    }
   }
 
   return (
@@ -88,7 +128,7 @@ export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
         <button
           key={provider}
           type="button"
-          onClick={() => start(provider)}
+          onClick={() => void start(provider)}
           className={`flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold transition active:scale-[0.98] ${className}`}
         >
           {icon}
