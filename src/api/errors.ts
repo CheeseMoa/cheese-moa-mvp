@@ -14,7 +14,9 @@
  * + 2026-07-28 BE 완료 공지(SPACE403 — 선생님 합류 승인제 CHMO-475 AC2. 실서버 채집은
  *   학부모 전환 배포 후 CHMO-449에서)
  * + 2026-07-30 BE 소스 대조(AGREEMENT428 — 약관 동의 기록 CHMO-514 PR #154의 ErrorStatus.
- *   실서버 채집은 BE 배포 후).
+ *   실서버 채집은 BE 배포 후)
+ * + 2026-07-31 BE 소스 대조(MEMBER409 — 멤버 내보내기·나가기 CHMO-525 PR #155의
+ *   ErrorStatus.LAST_TEACHER. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -39,6 +41,11 @@ const BE_CODE_MAP: Record<string, string> = {
    * role 부족(ROLE403)과 달리 "기다리면 열린다"는 뜻이라, 화면은 재시도가 아니라 홈 복귀로 받는다.
    */
   SPACE403: 'PENDING_APPROVAL',
+  /**
+   * 멤버 내보내기·나가기의 대상이 마지막 ACTIVE 선생님(409 — BE CHMO-525). 승인해 줄 사람이
+   * 없는 고아 모임을 막는 가드라 우회가 없다 — 화면은 "모임 삭제를 쓰라"는 안내로 받는다.
+   */
+  MEMBER409: 'LAST_TEACHER',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
   /** 이벤트(BE 도메인명 moment) 없음(404) */

@@ -74,6 +74,14 @@ export const BE_ERRORS = {
     status: 428,
     payload: errorEnvelope('AGREEMENT428', '아동 보호자 동의 확보 확인이 필요합니다.'),
   },
+  /**
+   * 멤버 내보내기·나가기의 대상이 마지막 ACTIVE 선생님 — DELETE /groups/:id/members/:userId.
+   * **BE 소스 기준(미채집)**: CHMO-525 PR #155 `ErrorStatus.LAST_TEACHER`. 실서버 채집은 배포 후.
+   */
+  MEMBER409: {
+    status: 409,
+    payload: errorEnvelope('MEMBER409', '모임의 마지막 선생님은 나갈 수 없습니다. 모임을 삭제해 주세요.'),
+  },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
