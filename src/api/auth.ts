@@ -44,6 +44,28 @@ export function socialLoginStartUrl(provider: SocialProvider): string {
   return `${origin}/auth/social/${provider}`
 }
 
+/**
+ * 앱(웹뷰) 경로에서 셸 브리지 `socialLogin`에 넘길 인가 시작 URL (CHMO-539).
+ * 항상 실 BE 절대주소다 — socialLoginStartUrl과 달리 MSW 분기가 없다(앱 웹뷰는 실 BE 전용,
+ * 목 모드는 호출부가 앱 경로 자체를 타지 않는다). `client=app`은 BE가 앱 발 요청을 식별해
+ * 복귀 redirect를 커스텀 스킴 `cheesemoa://auth/callback`으로 바꾸는 표시 —
+ * 계약·BE 협의 내용은 앱 리포 `CheeseMoa-App/docs/app-shell-spec.md` §2.5.
+ */
+export function socialAuthorizeUrlForApp(provider: SocialProvider): string {
+  const origin = import.meta.env.VITE_API_ORIGIN ?? 'https://api.cheese-moa.com'
+  return `${origin}/auth/social/${provider}?client=app`
+}
+
+/**
+ * 셸이 돌려준 callbackUrl(전체 URL — `cheesemoa://auth/callback?code=…` 또는 `?error=…`)의
+ * 쿼리를 FE 콜백 라우트에 그대로 태운다 — exchange·returnTo 복귀·에러 분기를 기존
+ * SocialCallbackPage가 전부 재사용한다. 쿼리가 없으면 code 없는 진입 → 기존 실패 화면 수렴.
+ */
+export function socialCallbackPath(callbackUrl: string): string {
+  const q = callbackUrl.indexOf('?')
+  return q >= 0 ? `/auth/callback${callbackUrl.slice(q)}` : '/auth/callback'
+}
+
 /** POST /auth/social/exchange — 콜백 일회용 코드(TTL 60초)를 토큰 쌍으로 교환 (CHMO-359) */
 export async function exchangeSocialCode(code: string): Promise<AuthResponse> {
   const raw = await apiFetch<RawAuthResponse>('/auth/social/exchange', {
