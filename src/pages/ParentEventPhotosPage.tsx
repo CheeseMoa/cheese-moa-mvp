@@ -67,8 +67,7 @@ export function ParentEventPhotosPage() {
   }
 
   const allSelected = photos.length > 0 && selected.size === photos.length
-  const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
 
   const exitSelect = () => {
     setSelectMode(false)
@@ -220,6 +219,8 @@ export function ParentEventPhotosPage() {
           onClose={() => setViewIndex(null)}
         />
       )}
+
+      {save.dialog}
     </PhoneShell>
   )
 }

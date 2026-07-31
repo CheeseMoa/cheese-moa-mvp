@@ -147,8 +147,7 @@ function AlbumDetailView() {
 
   const allSelected = photos.length > 0 && selected.size === photos.length
   // 전체 선택/해제 토글 — 하나라도 빠졌으면 전체 선택, 다 찼으면 전체 해제
-  const toggleAll = () =>
-    setSelected(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(photos.map((p) => p.id)))
 
   const exitSelect = () => {
     setSelectMode(false)
@@ -252,9 +251,7 @@ function AlbumDetailView() {
       save.shareNext()
       return
     }
-    void save.start(
-      targets.map((p) => ({ url: p.downloadUrl ?? p.url, filename: `${p.id}.jpg` })),
-    )
+    void save.start(targets.map((p) => ({ url: p.downloadUrl ?? p.url, filename: `${p.id}.jpg` })))
   }
 
   // 옮기기(09-1) 성공 — 시트 닫고 선택 해제 + 재조회로 그리드에 반영(라이트박스는 다음 사진으로 이어짐).
@@ -647,6 +644,8 @@ function AlbumDetailView() {
           }}
         />
       )}
+
+      {save.dialog}
     </PhoneShell>
   )
 }

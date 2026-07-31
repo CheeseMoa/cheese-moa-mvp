@@ -132,6 +132,8 @@ export function ViewerAlbumDetailPage() {
           onClose={() => setViewIndex(null)}
         />
       )}
+
+      {save.dialog}
     </PhoneShell>
   )
 }
