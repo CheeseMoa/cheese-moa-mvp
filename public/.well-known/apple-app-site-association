@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["QYFZBS52FU.com.cheesemoa.app"],
+        "components": [
+          {
+            "/": "/join/*",
+            "comment": "초대 링크만 앱으로 가로챈다 — CHMO-538 확정(2026-07-31), 앱 리포 docs/app-shell-spec.md §4"
+          }
+        ]
+      }
+    ]
+  }
+}
