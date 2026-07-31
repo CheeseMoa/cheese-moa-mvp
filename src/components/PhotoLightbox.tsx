@@ -198,7 +198,11 @@ export function PhotoLightbox<T extends LightboxPhoto>({
             />
             {/* 애매 얼굴 bbox 오버레이 — 원본 px → 그려진 이미지 영역 비율로 환산(CHMO-412) */}
             {paintedRect && natural && boxes && (
-              <div aria-hidden className="pointer-events-none absolute overflow-hidden" style={paintedRect}>
+              <div
+                aria-hidden
+                className="pointer-events-none absolute overflow-hidden"
+                style={paintedRect}
+              >
                 {boxes.map((box, i) => (
                   <div
                     key={i}
@@ -262,6 +266,8 @@ export function PhotoLightbox<T extends LightboxPhoto>({
           {actions?.(photo)}
         </div>
       </div>
+      {/* 앱 저장 권한 안내(CHMO-540) — 스크림 탭이 라이트박스 onClose로 번지지 않게 막는다 */}
+      <div onClick={(e) => e.stopPropagation()}>{save.dialog}</div>
     </div>
   )
 }

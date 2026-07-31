@@ -1,5 +1,12 @@
 import { runWithConcurrency } from './concurrency'
 import { downloadViaBlob } from './download'
+import {
+  BridgeError,
+  hasCapability,
+  newOpId,
+  savePhotos,
+  subscribeBridgeProgress,
+} from '../native/bridge'
 
 /**
  * 사진 앨범 저장 경로 단일 원천 (CHMO-473 — ZIP 폐지).
@@ -158,4 +165,52 @@ export async function downloadEach(
     onProgress?.(done, items.length)
   })
   return failed
+}
+
+// ── 앱(웹뷰) 경로 (CHMO-540) ────────────────────────────────────────────────
+// 웹뷰에는 Web Share API도 blob 다운로드도 없다(앱 리포 app-shell-spec §3) — 앱에서는
+// 브리지 savePhotos(다운로드·갤러리 저장·권한 전부 셸 소관)가 유일하게 동작하는 저장
+// 경로다. 공유 시트 제약이던 2단계 UX(재탭)·20장 배치(SHARE_BATCH_MAX)도 앱 경로엔 없다.
+
+/** 앱 경로를 쓸지 — 앱 감지 + capability 유무(구버전 앱은 자동 제외, 계약 §1-6) */
+export function bridgeSaveSupported(): Promise<boolean> {
+  return hasCapability('savePhotos')
+}
+
+/** 브리지 저장의 결과 — 훅(usePhotoSave)이 토스트·권한 안내 UX로 옮긴다 */
+export type BridgeSaveOutcome =
+  | { kind: 'done'; saved: number; failed: number }
+  | { kind: 'permission'; canOpenSettings: boolean }
+  | { kind: 'cancelled' }
+  | { kind: 'error' }
+
+/**
+ * 브리지 savePhotos 실행 — 셸의 진행 이벤트를 onProgress로 흘리고, 계약 에러(§2.4)를
+ * UX 결정에 필요한 최소 형태로 접는다. 던지지 않는다(개별 실패는 failed 장수로만).
+ */
+export async function saveViaBridge(
+  items: PhotoSaveItem[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<BridgeSaveOutcome> {
+  const opId = newOpId()
+  const unsubscribe = subscribeBridgeProgress(opId, ({ done, total }) => onProgress?.(done, total))
+  try {
+    const { saved, failed } = await savePhotos({
+      opId,
+      photos: items.map((item) => ({ url: item.url, fileName: item.filename })),
+    })
+    return { kind: 'done', saved, failed: failed.length }
+  } catch (err) {
+    if (err instanceof BridgeError && err.code === 'CANCELLED') {
+      // 사용자 취소 — 공유 시트 닫기(AbortError)와 같은 무토스트 관용(계약 §2.4)
+      return { kind: 'cancelled' }
+    }
+    if (err instanceof BridgeError && err.code === 'PERMISSION_DENIED') {
+      const detail = err.detail as { canOpenSettings?: unknown } | null | undefined
+      return { kind: 'permission', canOpenSettings: detail?.canOpenSettings === true }
+    }
+    return { kind: 'error' }
+  } finally {
+    unsubscribe()
+  }
 }
