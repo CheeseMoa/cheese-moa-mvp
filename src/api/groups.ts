@@ -160,6 +160,17 @@ export function listGroupMembers(
   )
 }
 
+/**
+ * DELETE /groups/:id/members/:userId — 멤버 내보내기·나가기(BE CHMO-525 · 화면 20·05).
+ * 대상이 자신이면 나가기(role 무관 — PENDING이면 신청 취소), 타인이면 TEACHER 전용 내보내기.
+ * 멤버십·신청 이름·인물 매핑만 지워지고 사진·앨범·인물은 모임에 남는다(모임 자산).
+ * 이미 없는 대상은 멱등 성공. 대상이 마지막 ACTIVE 선생님이면 MEMBER409(LAST_TEACHER) —
+ * 화면은 "모임 삭제를 쓰라"는 안내로 받는다(App Store 1.2 차단 수단, CHMO-526).
+ */
+export async function removeGroupMember(groupId: ID | string, userId: ID): Promise<void> {
+  await apiFetch<unknown>(`/groups/${groupId}/members/${userId}`, { method: 'DELETE' })
+}
+
 /** POST /groups/:id/person-parents — 학부모↔인물 매핑 생성(다대다 — 다자녀·부모 2인 허용) */
 export async function linkPersonParent(
   groupId: ID | string,

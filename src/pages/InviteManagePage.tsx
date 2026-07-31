@@ -20,6 +20,7 @@ import { getMe } from '../api/auth'
 import {
   listGroupMembers,
   listJoinRequests,
+  removeGroupMember,
   resolveJoinRequest,
   unlinkPersonParent,
 } from '../api/groups'
@@ -47,7 +48,9 @@ const EMPTY_COPY: Record<GroupRole, { title: string; description: string }> = {
  * 20. 초대 · node 307:24(학부모 탭)·319:40(선생님 탭) — 05 하단 [초대 관리] 진입(CHMO-447·520·530).
  * GET /groups/:id/invite(초대 링크 — GroupInviteLinks) · GET /groups/:id/join-requests(대기 신청) ·
  * PATCH /join-requests/:id(승인/거절 — 승인은 **멤버 확정만**, 인물 연결은 별도 액션 §1) ·
- * GET /groups/:id/members(명단·연결 칩) · DELETE /groups/:id/person-parents(칩 ✕ 해제).
+ * GET /groups/:id/members(명단·연결 칩) · DELETE /groups/:id/person-parents(칩 ✕ 해제) ·
+ * DELETE /groups/:id/members/:userId(멤버 내보내기 — App Store 1.2 차단 수단, CHMO-526·BE 525.
+ * 자기 행("(나)")엔 버튼이 없다 — 같은 API의 본인 대상은 '나가기'라 05 모임 설정이 맡는다).
  * 아이 연결(20-1)은 이 화면 위 바텀시트(ChildLinkSheet)로 뜬다.
  * TEACHER 전용은 서버가 강제(ROLE403·비멤버 404 은닉) — 비정상 진입은 LoadState 에러로 수렴.
  * 기본 탭은 학부모님 — 이 화면의 주 업무(신청 승인·아이 연결)가 학부모 쪽이다.
@@ -86,6 +89,9 @@ export function InviteManagePage() {
     mapping: PersonMapping
   } | null>(null)
   const [unlinking, setUnlinking] = useState(false)
+  // 멤버 내보내기(확인 다이얼로그) 대상 — CHMO-526
+  const [removeTarget, setRemoveTarget] = useState<GroupMember | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const handleResolve = async (request: JoinRequest, decision: 'approved' | 'rejected') => {
     setBusyRequestId(request.id)
@@ -129,6 +135,25 @@ export function InviteManagePage() {
         },
       },
     )
+  }
+
+  const handleRemove = async () => {
+    if (!removeTarget) return
+    setRemoving(true)
+    await mutate(() => removeGroupMember(groupId, removeTarget.userId), {
+      onSuccess: () => {
+        toast.show(`'${removeTarget.nickname}'님을 내보냈어요`)
+        setRemoving(false)
+        setRemoveTarget(null)
+        membersApi.refetch()
+      },
+      // MEMBER409(마지막 선생님)도 서버 메시지가 이미 "모임 삭제" 안내라 그대로 노출한다
+      onError: (msg) => {
+        toast.show(msg)
+        setRemoving(false)
+        setRemoveTarget(null)
+      },
+    })
   }
 
   const me = meApi.data
@@ -242,19 +267,40 @@ export function InviteManagePage() {
                     member.role === 'teacher' ? (
                       <li
                         key={member.userId}
-                        className="rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
+                        className="flex items-baseline justify-between gap-3 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
                       >
-                        <p className="truncate font-bold text-text">
+                        <p className="min-w-0 truncate font-bold text-text">
                           {member.nickname}
                           {me && member.userId === me.id ? ' (나)' : ''}
                         </p>
+                        {/* 자기 행 제외 — 같은 API의 본인 대상은 '나가기'(05 모임 설정). me 도착 전엔
+                            자기 행을 못 가리므로 숨긴다(내보내기인 줄 알고 눌러 나가기가 되면 안 된다) */}
+                        {me && member.userId !== me.id && (
+                          <button
+                            type="button"
+                            onClick={() => setRemoveTarget(member)}
+                            className="shrink-0 text-[13px] font-medium text-warn"
+                          >
+                            내보내기
+                          </button>
+                        )}
                       </li>
                     ) : (
                       <li
                         key={member.userId}
                         className="rounded-2xl border border-border bg-white p-4 shadow-card"
                       >
-                        <p className="truncate font-bold text-text">{member.nickname}</p>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="min-w-0 truncate font-bold text-text">{member.nickname}</p>
+                          {/* 이 화면은 TEACHER 전용이라 학부모 행이 자기 행일 수 없다 — me 무관 노출 */}
+                          <button
+                            type="button"
+                            onClick={() => setRemoveTarget(member)}
+                            className="shrink-0 text-[13px] font-medium text-warn"
+                          >
+                            내보내기
+                          </button>
+                        </div>
                         {member.mappings.length > 0 ? (
                           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                             {member.mappings.map((mapping) => {
@@ -333,6 +379,25 @@ export function InviteManagePage() {
           }}
         />
       )}
+
+      {/* 내보내기 확인 — 멤버십·매핑만 지워지고(사진·앨범은 모임에 남음) 재신청은 가능하다 */}
+      <ConfirmDialog
+        open={removeTarget !== null}
+        danger
+        busy={removing}
+        busyLabel="내보내는 중…"
+        title={removeTarget ? `'${removeTarget.nickname}'님을 내보낼까요?` : ''}
+        description={
+          removeTarget?.role === 'parent'
+            ? '이 모임의 사진을 더 이상 볼 수 없고, 아이 연결도 함께 해제돼요. 참여 링크로 다시 신청할 수 있어요.'
+            : '이 모임을 더 이상 관리할 수 없어요. 그동안 올린 사진·앨범은 모임에 남아요. 참여 링크로 다시 신청할 수 있어요.'
+        }
+        confirmLabel="내보내기"
+        onConfirm={() => void handleRemove()}
+        onClose={() => {
+          if (!removing) setRemoveTarget(null)
+        }}
+      />
 
       {/* 거절 확인 — 거절은 신청 삭제(복구 불가·재신청은 가능)라 한 번 확인한다 */}
       <ConfirmDialog

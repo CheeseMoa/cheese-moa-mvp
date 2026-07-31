@@ -3,10 +3,18 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { AppTour } from '../components/AppTour'
-import { Button, Header, LoadState, PinField, TextField, useToast } from '../components/ui'
+import {
+  Button,
+  ConfirmDialog,
+  Header,
+  LoadState,
+  PinField,
+  TextField,
+  useToast,
+} from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { getMe, logout, updateMe } from '../api/auth'
+import { deleteAccount, getMe, logout, updateMe } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { PIN_RE } from '../lib/pin'
 
@@ -17,10 +25,15 @@ const LEGAL_LINKS = [
   { to: '/legal/biometric', label: '얼굴 특징정보 처리 안내' },
 ]
 
+// 신고·문의 창구(App Store 1.2 — 연락 수단, CHMO-526) — 스토어 등록정보의 지원 이메일과 같은 주소
+const SUPPORT_EMAIL = 'biniwonihyuni@gmail.com'
+
 /**
  * 설정 / 프로필 편집 · node 240:53 · GET /me, PATCH /me + 로그아웃.
  * PIN은 서버가 돌려주지 않으므로 빈 칸으로 시작 — 입력했을 때만 변경 요청에 포함한다.
  * [저장]은 실제 변경(닉네임 수정 또는 새 PIN 4자리 완성)이 있을 때만 활성화.
+ * + 계정 삭제(App Store 5.1.1(v) — 앱 안에서 시작, 설정→[계정 삭제]→확인 두 탭 도달, CHMO-526.
+ *   DELETE /users/me는 BE CHMO-524 미구현·목 선행) · 신고·문의 mailto(1.2 연락 창구).
  */
 export function SettingsPage() {
   const navigate = useNavigate()
@@ -35,6 +48,9 @@ export function SettingsPage() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tourOpen, setTourOpen] = useState(false)
+  // 계정 삭제(CHMO-526) — 확인 다이얼로그·진행 중
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => {
     if (me) {
@@ -71,6 +87,25 @@ export function SettingsPage() {
     })
   }
 
+  // 계정 삭제 — 서버가 refreshToken을 전부 지우므로 로그아웃 호출 없이 로컬 토큰만 폐기하고
+  // 랜딩으로 복귀한다(AC: 저장된 토큰이 남지 않는다). 실패하면 토큰을 지우지 않는다 — 계정이
+  // 살아 있는데 세션만 끊기면 "삭제됐다"로 오독된다.
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true)
+    await mutate(() => deleteAccount(), {
+      onSuccess: () => {
+        clearAuthTokens()
+        toast.show('계정을 삭제했어요')
+        navigate('/', { replace: true })
+      },
+      onError: (msg) => {
+        toast.show(msg)
+        setDeletingAccount(false)
+        setDeleteOpen(false)
+      },
+    })
+  }
+
   const handleLogout = async () => {
     if (loggingOut) return
     setLoggingOut(true)
@@ -90,7 +125,12 @@ export function SettingsPage() {
   return (
     <PhoneShell>
       {/* 와이어프레임의 '‹ 설정'은 별도 설정 목록 화면 전제 — MVP IA에선 이 화면이 설정 전체라 기존 서브형 헤더 관례(‹ 상위화면 + 타이틀)로 맞춘다 */}
-      <Header backTo="/home" backLabel="홈" title="설정" backDisabled={submitting || loggingOut} />
+      <Header
+        backTo="/home"
+        backLabel="홈"
+        title="설정"
+        backDisabled={submitting || loggingOut || deletingAccount}
+      />
       <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h2 className="text-xl font-bold text-text">프로필 편집</h2>
         {loading || loadError ? (
@@ -165,23 +205,68 @@ export function SettingsPage() {
             </Link>
           ))}
         </nav>
-        {/* 로그아웃은 앱 유일의 로그아웃 표면 — 프로필 로딩/실패 중에도 항상 접근 가능해야 한다 */}
+        {/* 신고·문의 — App Store 1.2 연락 창구(CHMO-526). 서버 신고 큐 없이 mailto 한 줄이 전부라
+            메일 앱으로 바로 넘긴다. 주소는 스토어 등록정보의 지원 이메일과 반드시 같아야 한다 */}
+        <nav
+          aria-label="지원"
+          className="mt-5 overflow-hidden rounded-2xl border border-border bg-white shadow-card"
+        >
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface"
+          >
+            신고·문의
+            <span aria-hidden className="text-muted">
+              ›
+            </span>
+          </a>
+        </nav>
+        {/* 로그아웃은 앱 유일의 로그아웃 표면 — 프로필 로딩/실패 중에도 항상 접근 가능해야 한다.
+            계정 삭제도 같은 이유로 폼 밖(App Store 5.1.1(v) — 심사자가 설정에서 바로 찾는다) */}
         <div className="mt-auto flex flex-col gap-3 pt-6">
           <Button
             variant="secondary"
             fullWidth
             onClick={handleLogout}
-            disabled={submitting || loggingOut}
+            disabled={submitting || loggingOut || deletingAccount}
           >
             {loggingOut ? '로그아웃 중…' : '로그아웃'}
           </Button>
           {showForm ? (
-            <Button type="submit" form="profile-form" fullWidth disabled={!canSubmit || loggingOut}>
+            <Button
+              type="submit"
+              form="profile-form"
+              fullWidth
+              disabled={!canSubmit || loggingOut || deletingAccount}
+            >
               {submitting ? '저장 중…' : '저장'}
             </Button>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            disabled={submitting || loggingOut || deletingAccount}
+            className="mx-auto px-3 py-1.5 text-[13px] text-warn"
+          >
+            계정 삭제
+          </button>
         </div>
       </main>
+
+      {/* 파기 범위(CHMO-524 초안)를 확인 문구에 명시 — 내가 마지막 선생님인 모임은 모임째 사라진다 */}
+      <ConfirmDialog
+        open={deleteOpen}
+        danger
+        busy={deletingAccount}
+        busyLabel="삭제 중…"
+        title="계정을 삭제할까요?"
+        description="내가 마지막 선생님인 모임은 사진·앨범과 함께 완전히 삭제돼요. 다른 선생님이 있는 모임은 그대로 남고 나만 빠져요. 되돌릴 수 없어요."
+        confirmLabel="삭제"
+        onConfirm={() => void handleDeleteAccount()}
+        onClose={() => {
+          if (!deletingAccount) setDeleteOpen(false)
+        }}
+      />
 
       <AppTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </PhoneShell>

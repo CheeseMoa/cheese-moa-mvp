@@ -5,15 +5,19 @@ import { http } from 'msw'
 import { PIN_RE } from '../../lib/pin'
 import {
   db,
+  deleteGroupCascade,
   issueAccessToken,
   issueRefreshToken,
+  membershipsOfUser,
   nextId,
   nowIso,
+  removeMembershipCascade,
   resolveUserFromRefreshToken,
   revokeRefreshToken,
+  teacherCountOf,
   type DbUser,
 } from '../db'
-import { persistUser, updatePersistedUser } from '../persist'
+import { persistUser, removePersistedUser, updatePersistedUser } from '../persist'
 import {
   api,
   created,
@@ -161,6 +165,29 @@ export const authHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
     return ok(toUser(user))
+  }),
+
+  // DELETE /users/me — 계정 삭제(회원 탈퇴 — App Store 5.1.1(v)) · 화면 설정 (CHMO-526)
+  // ⚠ 실 BE 미구현(CHMO-524) — 파기 범위는 티켓 초안·목 선행: 마지막 ACTIVE 선생님인 모임은
+  // 모임째 삭제(CHMO-525 가드와 같은 판정 — 승인할 사람이 없는 고아 모임을 남기지 않는다),
+  // 그 외 모임은 멤버십·매핑만 정리. 동의 이력은 FK 없는 append-only 증빙이라 보존한다.
+  http.delete(api('/users/me'), ({ request }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    for (const membership of membershipsOfUser(user.id)) {
+      const lastTeacher =
+        membership.role === 'teacher' &&
+        membership.status === 'active' &&
+        teacherCountOf(membership.groupId) <= 1
+      if (lastTeacher) deleteGroupCascade(membership.groupId)
+      else removeMembershipCascade(membership)
+    }
+    // 목 토큰은 자기서술형(userId 참조)이라 유저 행이 사라지면 access·refresh 모두 즉시 무효 —
+    // "같은 계정으로 재로그인 불가·리프레시 401" AC까지 이 삭제가 담당한다
+    db.users = db.users.filter((u) => u.id !== user.id)
+    removePersistedUser(user.id) // 가입 보존분도 삭제 — 새로고침(재시드) 후 재로그인도 막는다
+    return ok(null)
   }),
 
   // PATCH /me — 프로필 편집(부분 업데이트) · 화면 설정

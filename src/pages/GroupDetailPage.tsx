@@ -17,7 +17,14 @@ import {
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { deleteGroup, getGroup, listJoinRequests, renameGroup } from '../api/groups'
+import { getMe } from '../api/auth'
+import {
+  deleteGroup,
+  getGroup,
+  listJoinRequests,
+  removeGroupMember,
+  renameGroup,
+} from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
 import { formatEventDate } from '../lib/eventDate'
 import type { Group } from '../types/api'
@@ -26,6 +33,8 @@ import type { Group } from '../types/api'
  * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 307:4(학부모 전환 수정안 — CHMO-446)
  * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정) ·
  * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277) ·
+ * DELETE /groups/:id/members/:userId(⚙ 설정 안 모임 나가기 — 본인 대상, CHMO-526·BE 525.
+ * 마지막 선생님이면 서버가 MEMBER409로 거부 — 메시지가 이미 "모임 삭제" 안내라 그대로 띄운다) ·
  * GET /groups/:id/join-requests(대기 신청 수 — [＋ 초대하기] 뱃지).
  * 초대는 **화면 하나**다(CHMO-520 — 05-2 통합 시트 폐지, CHMO-446 반전): 초대 버튼이 20으로
  * 곧장 가고, 링크 보내기(부르기)와 신청 승인·아이 연결(받기)이 거기서 한 역할 탭 아래 붙어 있다.
@@ -59,6 +68,8 @@ export function GroupDetailPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [leaveOpen, setLeaveOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   // 모임 삭제(F2.5) — 성공 시 홈으로(뒤로가기로 죽은 상세에 돌아오지 않게 replace)
   const handleDelete = async () => {
@@ -74,6 +85,30 @@ export function GroupDetailPage() {
         setDeleteOpen(false)
       },
     })
+  }
+
+  // 모임 나가기(CHMO-526) — 경로 대상이 내 userId라(BE CHMO-525 단일 엔드포인트, /members/me 없음)
+  // 확인 시점에 GET /me로 읽는다. 성공 시 홈으로(이 모임은 더 이상 내 것이 아니다 — replace)
+  const handleLeave = async () => {
+    setLeaving(true)
+    await mutate(
+      async () => {
+        const me = await getMe()
+        await removeGroupMember(groupId, me.id)
+      },
+      {
+        onSuccess: () => {
+          toast.show('모임에서 나갔어요')
+          navigate('/home', { replace: true })
+        },
+        // MEMBER409(마지막 선생님) 메시지가 이미 "모임을 삭제해 주세요" 안내다 — 그대로 노출
+        onError: (msg) => {
+          toast.show(msg)
+          setLeaving(false)
+          setLeaveOpen(false)
+        },
+      },
+    )
   }
 
   const group = groupApi.data
@@ -228,6 +263,10 @@ export function GroupDetailPage() {
             setRenameOpen(false)
             setDeleteOpen(true)
           }}
+          onLeaveRequest={() => {
+            setRenameOpen(false)
+            setLeaveOpen(true)
+          }}
         />
       )}
       <ConfirmDialog
@@ -241,6 +280,20 @@ export function GroupDetailPage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteOpen(false)}
       />
+      {/* 나가기는 삭제와 달리 모임을 남긴다 — 사진·앨범 보존과 재신청 가능을 문구로 명시 */}
+      <ConfirmDialog
+        open={leaveOpen}
+        title="모임에서 나갈까요?"
+        description="이 모임이 내 목록에서 사라져요. 그동안 올린 사진·앨범은 모임에 남고, 참여 링크로 다시 신청할 수 있어요."
+        confirmLabel="나가기"
+        danger
+        busy={leaving}
+        busyLabel="나가는 중…"
+        onConfirm={handleLeave}
+        onClose={() => {
+          if (!leaving) setLeaveOpen(false)
+        }}
+      />
     </PhoneShell>
   )
 }
@@ -253,11 +306,14 @@ interface RenameGroupModalProps {
   onRenamed: () => void
   /** '모임 삭제' 탭 — 이 모달을 닫고 확인 다이얼로그를 연다(모달 중첩 회피) */
   onDeleteRequest: () => void
+  /** '모임 나가기' 탭 — 삭제와 같은 결(모달 닫고 확인 다이얼로그, CHMO-526) */
+  onLeaveRequest: () => void
 }
 
 /**
  * 모임 설정 ⚙ = 이름 수정(F2.4 — name만 변경 가능) · PATCH /groups/:id
- * + 모임 삭제 진입점(CHMO-277 — 위험 동작이라 설정 문맥 하단에 배치, 확인은 ConfirmDialog).
+ * + 모임 삭제 진입점(CHMO-277 — 위험 동작이라 설정 문맥 하단에 배치, 확인은 ConfirmDialog)
+ * + 모임 나가기 진입점(CHMO-526 — 멤버십만 정리, 사진·앨범은 모임에 남는다).
  */
 function RenameGroupModal({
   open,
@@ -265,6 +321,7 @@ function RenameGroupModal({
   group,
   onRenamed,
   onDeleteRequest,
+  onLeaveRequest,
 }: RenameGroupModalProps) {
   const toast = useToast()
   const mutate = useMutation()
@@ -329,7 +386,17 @@ function RenameGroupModal({
           {submitting ? '저장 중…' : '저장'}
         </Button>
       </form>
-      {/* 위험 동작이지만 확인 다이얼로그(warn 버튼)가 한 번 더 뜨므로 여기선 secondary로 톤을 낮춘다 */}
+      {/* 나가기(멤버십만 정리·재신청 가능)와 삭제(모임 전체 비가역)는 무게가 다르다 —
+          톤도 기본색 대 warn으로 가른다. 확인 다이얼로그가 한 번 더 뜨므로 둘 다 secondary */}
+      <Button
+        variant="secondary"
+        fullWidth
+        onClick={onLeaveRequest}
+        disabled={submitting}
+        className="mt-2.5"
+      >
+        모임 나가기
+      </Button>
       <Button
         variant="secondary"
         fullWidth

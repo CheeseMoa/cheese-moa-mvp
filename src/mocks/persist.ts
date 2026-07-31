@@ -44,6 +44,11 @@ export function persistUser(user: DbUser): void {
   writeStore(users)
 }
 
+/** DELETE /users/me 반영 — 보존 목록에서 계정 제거(새로고침·재시드 후에도 재로그인 불가) */
+export function removePersistedUser(userId: number): void {
+  writeStore(readStore().filter((u) => u.id !== userId))
+}
+
 /** PATCH /me 반영 — 보존 목록에 이미 있는 계정만 갱신(픽스처 유저는 보존 대상 아님) */
 export function updatePersistedUser(user: DbUser): void {
   const users = readStore()
