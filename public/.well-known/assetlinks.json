@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.cheesemoa.app",
+      "sha256_cert_fingerprints": [
+        "7E:A8:5B:CC:EF:F8:7A:57:E8:9A:0A:9E:F2:BA:3E:30:EC:C7:4E:82:B8:88:90:F2:C9:75:C6:56:0E:89:15:C2"
+      ]
+    }
+  }
+]
