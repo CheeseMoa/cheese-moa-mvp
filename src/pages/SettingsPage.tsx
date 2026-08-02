@@ -3,20 +3,11 @@ import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { AppTour } from '../components/AppTour'
-import {
-  Button,
-  ConfirmDialog,
-  Header,
-  LoadState,
-  PinField,
-  TextField,
-  useToast,
-} from '../components/ui'
+import { Button, ConfirmDialog, Header, LoadState, TextField, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { deleteAccount, getMe, logout, updateMe } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
-import { PIN_RE } from '../lib/pin'
 
 // 약관·정책 전문 링크 (CHMO-478) — 라우트는 가드 밖 /legal/*
 const LEGAL_LINKS = [
@@ -30,8 +21,8 @@ const SUPPORT_EMAIL = 'biniwonihyuni@gmail.com'
 
 /**
  * 설정 / 프로필 편집 · node 240:53 · GET /me, PATCH /me + 로그아웃.
- * PIN은 서버가 돌려주지 않으므로 빈 칸으로 시작 — 입력했을 때만 변경 요청에 포함한다.
- * [저장]은 실제 변경(닉네임 수정 또는 새 PIN 4자리 완성)이 있을 때만 활성화.
+ * [저장]은 실제 변경(이름 수정)이 있을 때만 활성화. PIN 변경 필드는 PIN 로그인 화면과 함께
+ * 내렸다(CHMO-557 — 로그인 입구가 사라진 PIN은 쓸 곳이 없다. PATCH /me의 pin 계약은 api 계층에 잔존).
  * + 계정 삭제(App Store 5.1.1(v) — 앱 안에서 시작, 설정→[계정 삭제]→확인 두 탭 도달, CHMO-526.
  *   DELETE /users/me는 BE CHMO-524 미구현·목 선행) · 신고·문의 mailto(1.2 연락 창구).
  */
@@ -43,7 +34,6 @@ export function SettingsPage() {
   // 저장 성공 후 dirty 판정이 stale me.nickname과 비교하지 않게 서버 반영값을 따로 든다
   const [savedNickname, setSavedNickname] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
-  const [pin, setPin] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,26 +50,23 @@ export function SettingsPage() {
   }, [me])
 
   const showForm = !loading && !loadError && !!me
-  // 변경 없음(닉네임 그대로 + PIN 미입력)이면 저장할 것이 없다 — 비활성
-  const dirty = savedNickname !== null && (nickname.trim() !== savedNickname || pin !== '')
-  const canSubmit =
-    !submitting && dirty && nickname.trim().length > 0 && (pin === '' || PIN_RE.test(pin))
+  // 변경 없음(이름 그대로)이면 저장할 것이 없다 — 비활성
+  const dirty = savedNickname !== null && nickname.trim() !== savedNickname
+  const canSubmit = !submitting && dirty && nickname.trim().length > 0
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    // pin은 입력했을 때만 변경 요청에 포함(undefined는 본문에서 빠진다)
-    await mutate(() => updateMe({ nickname: nickname.trim(), pin: pin || undefined }), {
+    await mutate(() => updateMe({ nickname: nickname.trim() }), {
       onSuccess: (updated) => {
         setSavedNickname(updated.nickname)
         setNickname(updated.nickname)
-        setPin('')
         toast.show('🧀 저장했어요')
         setSubmitting(false)
       },
-      // 서버 에러 메시지(NICKNAME_TAKEN·INVALID_PIN)는 사용자 노출 가능한 한국어
+      // 서버 에러 메시지(NICKNAME_TAKEN)는 사용자 노출 가능한 한국어
       onError: (msg) => {
         setError(msg)
         setSubmitting(false)
@@ -152,14 +139,6 @@ export function SettingsPage() {
                 value={nickname}
                 disabled={submitting}
                 onChange={(e) => setNickname(e.target.value)}
-              />
-              <PinField
-                label="PIN 번호 변경 (숫자4자)"
-                placeholder="변경할 때만 입력"
-                autoComplete="new-password"
-                value={pin}
-                disabled={submitting}
-                onChange={setPin}
               />
             </div>
             {error ? (
