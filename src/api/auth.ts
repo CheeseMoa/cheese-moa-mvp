@@ -76,7 +76,7 @@ export async function exchangeSocialCode(code: string): Promise<AuthResponse> {
   return toAuthResponse(raw)
 }
 
-/** POST /auth/login — 닉네임+PIN 로그인 */
+/** POST /auth/login — 닉네임+PIN 로그인. 소셜 단일화(CHMO-557) 후 호출부는 DEV 전용 /dev/login뿐 */
 export async function login(credentials: Credentials): Promise<AuthResponse> {
   const raw = await apiFetch<RawAuthResponse>('/auth/login', {
     method: 'POST',
@@ -86,7 +86,11 @@ export async function login(credentials: Credentials): Promise<AuthResponse> {
   return toAuthResponse(raw)
 }
 
-/** POST /auth/signup — 계정 생성(성공 시 바로 로그인 상태) */
+/**
+ * POST /auth/signup — 계정 생성(성공 시 바로 로그인 상태).
+ * 화면 호출부 없음(CHMO-557 — 01-2 삭제) · BE 엔드포인트가 살아 있어 계약 테스트 고정용으로 잔존
+ * (CHMO-473 zip 전례). BE가 걷어내면 목·픽스처와 함께 삭제한다.
+ */
 export async function signup(credentials: Credentials): Promise<AuthResponse> {
   const raw = await apiFetch<RawAuthResponse>('/auth/signup', {
     method: 'POST',
