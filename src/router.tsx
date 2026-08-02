@@ -3,8 +3,6 @@ import { CreatorGuard, GuestGuard, ViewerGuard } from './guards/RouteGuards'
 
 // 제작자 화면
 import { LandingPage } from './pages/LandingPage'
-import { LoginPage } from './pages/LoginPage'
-import { SignupPage } from './pages/SignupPage'
 import { SocialCallbackPage } from './pages/SocialCallbackPage'
 import { JoinPage } from './pages/JoinPage'
 import { HomePage } from './pages/HomePage'
@@ -45,9 +43,10 @@ export const router = createBrowserRouter([
   {
     element: <GuestGuard />,
     children: [
-      { path: '/', element: <LandingPage /> }, // 01 로그인 진입
-      { path: '/login', element: <LoginPage /> }, // 01-1 로그인
-      { path: '/signup', element: <SignupPage /> }, // 01-2 계정 생성
+      { path: '/', element: <LandingPage /> }, // 01 로그인 진입(소셜 단일 — CHMO-557)
+      // /login도 01을 그린다 — 앱 전역 401 복귀 목적지(가드·unauthorizedTo)·JoinPage returnTo
+      // 착지가 이 경로를 보므로, 닉네임+PIN 화면(01-1·01-2)을 내리며 라우트만 남겼다(CHMO-557)
+      { path: '/login', element: <LandingPage /> },
     ],
   },
   { path: '/join/:joinKey', element: <JoinPage /> }, // 02-1 모임 참여(초대 링크 진입) — 로그인 제작자도 사용하므로 GuestGuard 밖
@@ -98,13 +97,20 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── 개발용: 공용 컴포넌트 데모 (DEV 전용, 프로덕션 번들 제외) ──
+  // ── 개발용 (DEV 전용, 프로덕션 번들 제외) ──
   ...(import.meta.env.DEV
     ? [
         {
           path: '/dev/components',
           lazy: async () => ({
             Component: (await import('./pages/dev/ComponentGalleryPage')).ComponentGalleryPage,
+          }),
+        },
+        // 닉네임+PIN 로그인(CHMO-557) — 실 BE test 계정·목 시드 확인용 개발 입구, 01 랜딩 DEV 링크로 진입
+        {
+          path: '/dev/login',
+          lazy: async () => ({
+            Component: (await import('./pages/dev/DevLoginPage')).DevLoginPage,
           }),
         },
       ]
