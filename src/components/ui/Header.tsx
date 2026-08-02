@@ -29,7 +29,7 @@ export function Header({ title, backTo, backLabel, backDisabled, onBack, right }
       backDisabled ? 'pointer-events-none text-muted' : 'text-accent',
     )
     return (
-      <header className="grid h-[52px] shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-cream px-3.5">
+      <header className="grid h-[60px] shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-cream px-3.5">
         {backTo ? (
           <Link
             to={backTo}
@@ -47,15 +47,15 @@ export function Header({ title, backTo, backLabel, backDisabled, onBack, right }
             ‹ {backLabel ?? '뒤로'}
           </button>
         )}
-        <h1 className="truncate text-base font-bold text-text">{title}</h1>
+        <h1 className="truncate text-[17px] font-bold text-text">{title}</h1>
         <div className="justify-self-end">{right}</div>
       </header>
     )
   }
   return (
-    <header className="flex h-[52px] shrink-0 items-center border-b border-border bg-cream px-3.5">
-      <Cheddar size={30} />
-      <span className="ml-2 text-xl text-heading">{title ?? '치즈모아'}</span>
+    <header className="flex h-[60px] shrink-0 items-center border-b border-border bg-cream px-3.5">
+      <Cheddar size={34} />
+      <span className="ml-2 text-[22px] text-heading">{title ?? '치즈모아'}</span>
       <div className="ml-auto">{right}</div>
     </header>
   )
