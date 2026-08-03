@@ -871,12 +871,13 @@ describe('인증 · 프로필', () => {
     })
   })
 
-  it('계정 삭제 — DELETE /users/me (BE CHMO-524 미구현 · 티켓 초안 경로를 목이 선행한다)', async () => {
-    const calls = serve(envelope(null))
+  it('계정 삭제 — DELETE /me (실 BE 확정 경로, CHMO-524 · 초안 /users/me 폐기, CHMO-575)', async () => {
+    // 2026-08-03 실서버 채집 — 성공 봉투에 result 키가 아예 없다(envelope(null)과 다른 형태)
+    const calls = serve({ isSuccess: true, code: 'COMMON200', message: '성공입니다.' })
 
     await deleteAccount()
 
-    expect(calls[0].url).toBe('/api/v1/users/me')
+    expect(calls[0].url).toBe('/api/v1/me')
     expect(calls[0].method).toBe('DELETE')
     expect(calls[0].body).toBeNull()
   })
