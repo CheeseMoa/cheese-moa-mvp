@@ -1,11 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { AppTour } from '../components/AppTour'
 import { ButtonLink, EmptyState, GroupCard, Header, LoadState, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { listGroups } from '../api/groups'
-import { getPreferredTourTrack, hasSeenOnboarding, markOnboardingSeen } from '../lib/onboarding'
 
 /**
  * 02. 홈 / 내 모임 · node 211:1357(목록) · 211:1396(빈 상태) · 337:4(승인 대기) · GET /groups.
@@ -20,36 +17,15 @@ import { getPreferredTourTrack, hasSeenOnboarding, markOnboardingSeen } from '..
  * 승인제가 role 무관으로 통일되면서(CHMO-475) **선생님 신청도 이 대기 카드로 온다** — 자녀
  * 이름이 없는 대기 항목이 생겼고, 실 BE가 대기 항목에 eventCount 0을 실어 주므로 카드가
  * 카운트로 폴백하지 않도록 GroupCard가 pending일 때 카운트 줄을 잠근다.
+ *
+ * 둘러보기(00-T)의 첫 로그인 자동 노출은 폐지됐다(CHMO-565 — CHMO-504 반전): 첫 로그인은
+ * 아무것도 덮지 않는 내 홈이고, 안내는 앨범 그리드의 코치 힌트가 그 자리에서 1회 맡는다.
+ * 둘러보기는 설정에서만 연다.
  */
-/** 홈으로 보낼 때 실리는 신호 — 참여 흐름(02-1·02-2)이 쓴다 */
-interface HomeLocationState {
-  /** 초대 링크 참여 흐름의 끝 — 이 방문에는 둘러보기를 열지 않는다 */
-  fromJoin?: boolean
-}
-
 export function HomePage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { data, error, loading, refetch } = useApi('groups', listGroups)
-  const location = useLocation()
-  const homeState = location.state as HomeLocationState | null
-  // 첫 로그인 1회 자동 노출(CHMO-504) — 로그인 후 별도 화면으로 튕기지 않고 홈 위에서 연다.
-  //
-  // 참여 흐름의 끝(fromJoin)에서는 한 박자 미룬다. 초대 링크를 받은 사람이 홈에 도착한 이유는
-  // "앱을 처음 열었다"가 아니라 "참여 신청을 막 끝냈다"다 — 그 자리에 투어를 띄우면 신청 완료
-  // 토스트와 승인 대기 카드를 덮고, 자녀 이름까지 적어 넣은 사람에게 첫 장이 다시 "어느 쪽으로
-  // 오셨나요?"를 묻는다. 플래그는 소진하지 않으므로 **다음 홈 방문에 뜬다**(안내를 아예 못 보는
-  // 사람은 생기지 않는다).
-  const [tourOpen, setTourOpen] = useState(() => !homeState?.fromJoin && !hasSeenOnboarding())
-  // 초대 링크가 밝혀 준 갈래로 열어 역할 질문을 건너뛴다 — 없으면 첫 장에서 직접 고른다
-  const [tourTrack] = useState(getPreferredTourTrack)
-
-  // 자동 노출은 '떴다'는 사실만으로 소진된다(2026-07-29 — 무조건 최초 1회).
-  // 닫을 때 기록하면 투어 도중 새로고침·뒤로가기·앱 전환으로 이탈했을 때 다음 홈 방문에
-  // 또 떠서 1회 보장이 깨진다. 다시 보려면 설정 → '치즈모아 둘러보기'.
-  useEffect(() => {
-    if (tourOpen) markOnboardingSeen()
-  }, [tourOpen])
 
   const groups = data ?? []
 
@@ -85,9 +61,8 @@ export function HomePage() {
               // 그 경로가 없다. 종전 "초대받은 모임에 참여해 보세요"는 앱 안에 방법이 없어
               // 사실과 달라졌다
               description="첫 모임을 만들어 보세요."
-              // 둘러보기 버튼은 두지 않는다(2026-07-29) — 투어는 무조건 최초 1회만 뜨고,
-              // 다시 보는 경로는 설정 한 곳으로 모은다. 여기 두면 모임이 없는 동안 홈에
-              // 상시 노출돼 '1회'라는 약속과 어긋난다
+              // 둘러보기 버튼은 두지 않는다 — 여는 경로는 설정 한 곳으로 모은다(2026-07-29,
+              // CHMO-565에서 자동 노출을 폐지하며 홈 링크 복구안도 기각하고 유지한 결정)
             />
           ) : (
             <ul className="flex flex-col gap-3">
@@ -139,8 +114,6 @@ export function HomePage() {
           </div>
         </div>
       </main>
-
-      <AppTour open={tourOpen} onClose={() => setTourOpen(false)} initialTrack={tourTrack} />
     </PhoneShell>
   )
 }

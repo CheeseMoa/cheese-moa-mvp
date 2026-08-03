@@ -7,6 +7,7 @@ import { LightboxToolbarButton, PhotoLightbox } from '../components/PhotoLightbo
 import {
   Badge,
   Button,
+  CoachHint,
   ConfirmDialog,
   Header,
   IconDownload,
@@ -227,11 +228,11 @@ function AlbumDetailView() {
         }
         const next = findNextReviewTarget(albums, albumId)
         if (next) {
-          toast.show(`🧀 검토 완료 — 다음은 '${next.name}'`)
+          toast.show(`🧀 검토 완료 · 다음은 '${next.name}'`)
           navigate(`${eventPath}/albums/${next.id}`, { replace: true })
           return
         }
-        toast.show('🧀 모두 검토했어요 — 공개 요약을 확인해 주세요')
+        toast.show('🧀 모두 검토했어요 · 공개할 차례예요')
         navigate(`${eventPath}/publish`, { replace: true })
       },
       onError: (msg) => {
@@ -497,13 +498,32 @@ function AlbumDetailView() {
                     )}
                   </Button>
                 )}
-                <Button
-                  className="flex-1 !px-2"
-                  disabled={locked || allReviewed}
-                  onClick={() => setReviewOpen(true)}
-                >
-                  {allReviewed ? '검토 완료됨' : '검토 완료'}
-                </Button>
+                <div className="relative flex-1">
+                  <Button
+                    fullWidth
+                    className="!px-2"
+                    disabled={locked || allReviewed}
+                    onClick={() => setReviewOpen(true)}
+                  >
+                    {allReviewed ? '검토 완료됨' : '검토 완료'}
+                  </Button>
+                  {/* 코치 힌트(CHMO-565) — '검토'와 '전량 검토 = 공개 게이트'(CHMO-488)라는 이 앱의
+                      낯선 개념 둘을, 그 개념이 처음 실행되는 버튼 곁에서 계정당 1회 말한다.
+                      이미 다 검토된 앨범에선 안 띄운다 — 눌러 볼 버튼이 죽어 있는데 누르라고
+                      가리키면 안내가 거짓이 된다 */}
+                  {!allReviewed && (
+                    <CoachHint
+                      id="album-review"
+                      arrow="down"
+                      tail="right"
+                      className="bottom-full right-0 mb-1.5 w-max"
+                    >
+                      다 봤으면 검토 완료를 눌러 주세요.
+                      <br />
+                      모든 앨범을 검토해야 공개할 수 있어요
+                    </CoachHint>
+                  )}
+                </div>
               </>
             )}
           </div>

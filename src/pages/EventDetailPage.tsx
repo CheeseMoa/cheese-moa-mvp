@@ -6,6 +6,7 @@ import { RenameModal } from '../components/RenameModal'
 import {
   AlbumCard,
   Button,
+  CoachHint,
   ConfirmDialog,
   EventStatusBadge,
   Header,
@@ -302,16 +303,34 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                 </p>
               )}
               <div className="mt-4 grid grid-cols-3 gap-2.5">
-                {mainAlbums.map((album) => (
-                  <AlbumCard
-                    key={album.id}
-                    album={album}
-                    coverUrl={album.coverThumbnailUrl ?? undefined}
-                    onClick={() => navigate(`${base}/albums/${album.id}`)}
-                    // 인물 앨범만 ✎ — 공통은 고정 라벨이고 연결할 아이도 없다(personId 없음)
-                    onSettings={album.type === 'person' ? () => setAlbumTarget(album) : undefined}
-                  />
-                ))}
+                {mainAlbums.map((album, i) => {
+                  const card = (
+                    <AlbumCard
+                      key={album.id}
+                      album={album}
+                      coverUrl={album.coverThumbnailUrl ?? undefined}
+                      onClick={() => navigate(`${base}/albums/${album.id}`)}
+                      // 인물 앨범만 ✎ — 공통은 고정 라벨이고 연결할 아이도 없다(personId 없음)
+                      onSettings={album.type === 'person' ? () => setAlbumTarget(album) : undefined}
+                    />
+                  )
+                  // 코치 힌트(CHMO-565) — 자동 투어를 대신하는 유일한 첫 안내. 앨범이 늘어선
+                  // 화면을 처음 만나는 순간이 이 앱의 가장 낯선 지점이다: 사진을 직접 올린
+                  // 사람은 분류가 끝나 여기 도착하고, 나중에 합류한 사람도 앨범이 이미 찬 이
+                  // 화면을 처음 본다 — 둘 다 "여기서 뭘 해야 하지?"가 같은 자리에서 생긴다.
+                  // 첫 카드에만 붙이고, 앨범이 하나도 없으면 안 뜬다(빈 그리드엔 누를 것이 없다)
+                  if (i !== 0) return card
+                  return (
+                    <div key={album.id} className="relative">
+                      {card}
+                      <CoachHint id="album-grid" className="left-0 top-full mt-1.5 w-max">
+                        사진이 아이별로 나뉘었어요.
+                        <br />
+                        앨범을 눌러 확인해 보세요
+                      </CoachHint>
+                    </div>
+                  )
+                })}
                 {/* 빈 앨범 만들기(CHMO-471) — 메인 그리드 맨 끝(09-1 "새 앨범" 타일과 같은 자리 관습).
                     AI가 놓친 아이를 먼저 만들어 두고 09-1 [옮기기]로 사진을 모으는 동선 */}
                 <CreateAlbumTile onClick={() => setCreateOpen(true)} />
