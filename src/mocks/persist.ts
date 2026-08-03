@@ -44,7 +44,7 @@ export function persistUser(user: DbUser): void {
   writeStore(users)
 }
 
-/** DELETE /users/me 반영 — 보존 목록에서 계정 제거(새로고침·재시드 후에도 재로그인 불가) */
+/** DELETE /me 반영 — 보존 목록에서 계정 제거(새로고침·재시드 후에도 재로그인 불가) */
 export function removePersistedUser(userId: number): void {
   writeStore(readStore().filter((u) => u.id !== userId))
 }

@@ -24,7 +24,7 @@ const SUPPORT_EMAIL = 'biniwonihyuni@gmail.com'
  * [저장]은 실제 변경(이름 수정)이 있을 때만 활성화. PIN 변경 필드는 PIN 로그인 화면과 함께
  * 내렸다(CHMO-557 — 로그인 입구가 사라진 PIN은 쓸 곳이 없다. PATCH /me의 pin 계약은 api 계층에 잔존).
  * + 계정 삭제(App Store 5.1.1(v) — 앱 안에서 시작, 설정→[계정 삭제]→확인 두 탭 도달, CHMO-526.
- *   DELETE /users/me는 BE CHMO-524 미구현·목 선행) · 신고·문의 mailto(1.2 연락 창구).
+ *   DELETE /me — 실 BE 확정 경로, CHMO-524·575) · 신고·문의 mailto(1.2 연락 창구).
  */
 export function SettingsPage() {
   const navigate = useNavigate()
