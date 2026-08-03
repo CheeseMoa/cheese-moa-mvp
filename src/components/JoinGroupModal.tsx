@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
-import { setPreferredTourTrack } from '../lib/onboarding'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface JoinGroupModalProps {
@@ -63,19 +62,17 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
         toast.show(
           result.status === 'active'
             ? '🧀 모임에 참여했어요'
-            : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`,
+            : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 · 승인되면 이용할 수 있어요`,
         )
         // 성공 후 랜딩은 status와 무관하게 **홈**(모임 카드) — active여도 상세로 직행하지 않는다.
         // 구계약(즉시 합류) 응답 형태로 승인제 BE가 응답하는 과도기에 상세 직행이 권한 오류
         // ("권한이 없는 스페이스")로 터진 실측 반영: 홈은 어느 계약에서도 안전하다.
         // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
         // 홈 모달 진입은 닫고 목록 갱신
-        if (fixedJoinKey !== undefined) {
-          // 400(자녀 이름 필요)으로 갈라지지 않았으니 선생님 키다 — 다음 둘러보기의 갈래로 쓴다.
-          // fromJoin은 도착 직후 둘러보기가 이 안내를 덮지 않게 미루는 신호(CHMO-504)
-          setPreferredTourTrack('teacher')
-          navigate('/home', { replace: true, state: { fromJoin: true } })
-        } else (onJoined ?? onClose)()
+        // 둘러보기 갈래 힌트·fromJoin 미루기 신호는 자동 투어와 함께 소멸(CHMO-565) — 홈은
+        // 이 방문에 아무것도 덮지 않으므로 그냥 보낸다
+        if (fixedJoinKey !== undefined) navigate('/home', { replace: true })
+        else (onJoined ?? onClose)()
       },
       // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
       redirect: {
