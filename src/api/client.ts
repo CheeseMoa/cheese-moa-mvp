@@ -2,8 +2,18 @@ import { clearAuthTokens, getAccessToken, getRefreshToken, setAuthTokens } from 
 import { clearViewerToken, getViewerToken } from '../lib/viewer'
 import { toFeErrorCode } from './errors'
 
-/** docs/api-spec.md §1: Base URL (실 BE는 vite 프록시가 /api/v1을 벗겨 전달) */
-export const API_BASE = '/api/v1'
+/**
+ * docs/api-spec.md §1: Base URL. 기본은 상대경로 `/api/v1` — 오리진 결정은 호스팅 계층
+ * (로컬 vite 프록시·운영 vercel.json rewrite)이 맡고, 그 계층이 프리픽스를 벗겨 실 BE로 전달한다.
+ * `VITE_API_DIRECT='true'`면 `VITE_API_ORIGIN`을 직접 부른다(프리픽스 없이 — 실 BE 경로엔
+ * /api/v1이 없다). vercel.json rewrite는 프로젝트별로 가를 수 없어, 스테이징 BE를 바라보는
+ * 개발환경 Vercel 배포가 이 모드를 쓴다(CHMO-573). 직통 호출은 CORS를 타므로 BE
+ * CORS_ALLOWED_ORIGINS에 이 FE 오리진이 있어야 하고, MSW(같은 출처 /api/v1 핸들러)와 병용 금지.
+ */
+export const API_BASE =
+  import.meta.env.VITE_API_DIRECT === 'true'
+    ? (import.meta.env.VITE_API_ORIGIN ?? 'https://api.cheese-moa.com').replace(/\/+$/, '')
+    : '/api/v1'
 
 /** API 오류를 감싼 예외 — code는 FE 의미 코드(errors.ts에서 정규화) */
 export class ApiRequestError extends Error {
