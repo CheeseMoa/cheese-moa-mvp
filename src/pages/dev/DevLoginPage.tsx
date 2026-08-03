@@ -5,7 +5,9 @@ import { PhoneShell } from '../../components/PhoneShell'
 import { BrandHero } from '../../components/BrandHero'
 import { useMutation } from '../../hooks/useMutation'
 import { login } from '../../api/auth'
+import { listAgreements } from '../../api/agreements'
 import { setAuthTokens, setCurrentUserId } from '../../lib/auth'
+import { evaluateConsentGate } from '../../lib/consentGate'
 import { postLoginDestination } from '../../lib/onboarding'
 import { PIN_RE } from '../../lib/pin'
 import { Button, PinField, TextField } from '../../components/ui'
@@ -41,12 +43,17 @@ export function DevLoginPage() {
     // 401(자격 오류)도 리다이렉트하지 않고 에러로 — 이 화면 자체가 로그인 표면이다
     await mutate(() => login({ nickname: nickname.trim(), pin }), {
       noAuthRedirect: true,
-      onSuccess: (res) => {
+      onSuccess: async (res) => {
         setAuthTokens(res)
         // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
         setCurrentUserId(res.userId)
         // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀, 아니면 온보딩/홈
-        navigate(postLoginDestination(returnTo), { replace: true })
+        const dest = postLoginDestination(returnTo)
+        // 가입 동의 게이트(CHMO-479) — 소셜 콜백(01-C)과 같은 판정. DEV 입구도 실 게이트를
+        // 태워야 목 시드(기록 없음)로 01-A를 재현할 수 있다. 조회 실패는 통과(로그인은 막지 않는다)
+        const gate = await listAgreements().then(evaluateConsentGate).catch(() => 'pass' as const)
+        if (gate === 'pass') navigate(dest, { replace: true })
+        else navigate('/consent', { replace: true, state: { returnTo: dest } })
       },
       onError: (msg) => {
         setError(msg)
