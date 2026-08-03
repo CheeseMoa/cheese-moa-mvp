@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { setCurrentUserId } from './auth'
 import {
-  getPreferredTourTrack,
+  hasSeenCoachHint,
   hasSeenOnboarding,
+  markCoachHintSeen,
   markOnboardingSeen,
   postLoginDestination,
-  setPreferredTourTrack,
 } from './onboarding'
 
 /**
@@ -31,8 +31,8 @@ describe('첫 사용 안내 노출 판정 (CHMO-481 · CHMO-504)', () => {
     expect(hasSeenOnboarding()).toBe(false)
   })
 
-  // CHMO-504: 첫 안내가 슬라이드 화면에서 홈 위 둘러보기로 바뀌면서 목적지는 언제나 홈이다 —
-  // 로그인 직후 별도 화면으로 튕기지 않고, 안 봤는지 여부는 홈이 hasSeenOnboarding으로 판정한다
+  // 로그인 직후 별도 화면으로 튕기지 않는다 — 자동 안내 자체가 없으므로(CHMO-565) 목적지는
+  // 언제나 홈이고, 이 플래그는 슬라이드(00) 부활 대비 기록으로만 남는다
   it('로그인 후 목적지는 처음이든 아니든 홈이다', () => {
     setCurrentUserId(4)
     expect(postLoginDestination()).toBe('/home')
@@ -47,37 +47,35 @@ describe('첫 사용 안내 노출 판정 (CHMO-481 · CHMO-504)', () => {
 })
 
 /**
- * 초대 링크로 합류한 사람은 어느 쪽인지 이미 행동으로 밝혔다 — 둘러보기가 첫 장에서 역할을
- * 다시 묻지 않게 갈래를 남긴다. 자동 노출이 참여 흐름 **다음** 방문으로 밀리므로 navigate
- * state로는 전달되지 않아 로컬에 남기고, 따라서 완료 플래그와 같은 계정별 격리가 필요하다.
+ * 코치 힌트(CHMO-565) — 자동 투어를 대신해 실제 화면의 낯선 지점에 계정당 1회 뜨는 안내.
+ * 노출 판정은 서버가 해 주지 않으므로 이 로컬 규칙이 곧 계약이다: 힌트 id 단위·계정별 격리.
  */
-describe('둘러보기 갈래 힌트 (CHMO-504)', () => {
-  it('남긴 적 없으면 null — 투어 첫 장에서 직접 고른다', () => {
+describe('코치 힌트 노출 기록 (CHMO-565)', () => {
+  it('기록 전에는 본 적 없음으로 판정한다', () => {
     setCurrentUserId(4)
-    expect(getPreferredTourTrack()).toBeNull()
+    expect(hasSeenCoachHint('album-grid')).toBe(false)
   })
 
-  it('학부모·선생님 갈래를 그대로 되읽는다', () => {
+  it('기록하면 같은 계정·같은 힌트만 다시 뜨지 않는다 — id 단위 격리', () => {
     setCurrentUserId(4)
-    setPreferredTourTrack('parent')
-    expect(getPreferredTourTrack()).toBe('parent')
-    setPreferredTourTrack('teacher')
-    expect(getPreferredTourTrack()).toBe('teacher')
+    markCoachHintSeen('album-grid')
+    expect(hasSeenCoachHint('album-grid')).toBe(true)
+    // 다른 힌트를 새로 달아도 이미 본 힌트의 기록이 그걸 가리면 안 된다
+    expect(hasSeenCoachHint('another-hint')).toBe(false)
   })
 
-  it('계정별로 갈린다 — role은 계정 속성이 아니라 이 사람이 들어온 문의 기록이다', () => {
+  it('계정별로 갈린다 — 기기 공유 시 다른 계정의 첫 안내를 잃지 않는다', () => {
     setCurrentUserId(4)
-    setPreferredTourTrack('parent')
+    markCoachHintSeen('album-grid')
     setCurrentUserId(7)
-    expect(getPreferredTourTrack()).toBeNull()
+    expect(hasSeenCoachHint('album-grid')).toBe(false)
   })
 
-  it('완료 플래그와 서로를 오염시키지 않는다', () => {
+  it('온보딩 완료 플래그와 서로를 오염시키지 않는다', () => {
     setCurrentUserId(4)
-    setPreferredTourTrack('parent')
-    // 갈래만 남았을 뿐 아직 본 적은 없다 — 다음 홈 방문에 학부모 흐름으로 떠야 한다
+    markCoachHintSeen('album-grid')
     expect(hasSeenOnboarding()).toBe(false)
     markOnboardingSeen()
-    expect(getPreferredTourTrack()).toBe('parent')
+    expect(hasSeenCoachHint('album-grid')).toBe(true)
   })
 })

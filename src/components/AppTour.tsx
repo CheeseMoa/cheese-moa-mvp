@@ -12,10 +12,16 @@ import {
 } from './ui'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { cx } from '../lib/cx'
-import type { TourTrack } from '../lib/onboarding'
 
 /**
- * 치즈모아 둘러보기 (CHMO-504) — 첫 로그인 직후 1회 + 설정에서 다시 보기.
+ * 치즈모아 둘러보기 (CHMO-504) — 설정 '치즈모아 둘러보기'에서만 연다.
+ *
+ * **첫 로그인 자동 노출은 폐지됐다**(CHMO-565, 2026-08-03): NN/g 실험은 선행 튜토리얼이 과업
+ * 성공률을 못 올리고 체감 난이도만 악화시킨다는 것을 보였고, 자동 노출 투어의 완주율(39%)은
+ * 스스로 연 투어(67%)의 절반 이하다. 첫 안내는 앨범 그리드의 코치 힌트(CoachHint)가 실제
+ * 화면에서 맡고, 이 투어는 전체 그림을 원할 때 꺼내 보는 pull 전용 자산으로 남는다.
+ * (자동 노출 전제였던 initialTrack 갈래 힌트·fromJoin 미루기도 함께 걷어냈다 — 설정에서 여는
+ * 사람은 첫 장에서 직접 고른다. 7단 압축안은 pull 전용이 되며 급하지 않아 보류.)
  *
  * 실제 화면 위 코치마크가 아니라 축소된 앱 화면을 직접 그리므로 **모임이 하나도 없는 신규
  * 가입자에게도 그대로 돌아간다**(코치마크는 가리킬 대상 자체가 없다). 서버 호출 없음 ·
@@ -43,20 +49,19 @@ import type { TourTrack } from '../lib/onboarding'
  * 펼쳐진다). 선생님 흐름만 보여주면 학부모로 합류한 사람은 자기 화면을 영영 못 본다.
  */
 
-/** 갈래 이름은 저장 힌트(lib/onboarding)와 같은 값이라 한곳에서 가져온다 */
-type Track = TourTrack
+type Track = 'teacher' | 'parent'
 
 /** 투어용 가짜 데이터 — 어떤 API도 부르지 않는다 */
 const TOUR_GROUP = { name: '별님반', memberCount: 6, eventCount: 2 }
-/** 05 헤더의 카운트 분리 표기(§7-3)와 같은 꼴 — 멤버 6 = 선생님 2 + 학부모 4 */
-const TOUR_GROUP_META = '선생님 2 · 학부모 4 · 이벤트 2개'
+/** 05 목록 라벨 줄(이벤트 수 왼쪽 · 인원 우측, CHMO-530)과 같은 순서 — 멤버 6 = 선생님 2 + 학부모 4 */
+const TOUR_GROUP_META = '이벤트 2개 · 선생님 2 · 학부모 4'
 
 // 커버는 URL 없이 플레이스홀더로 진다(CHMO-515) — 투어는 어떤 사진도 갖고 있지 않지만, 사진이 있는
 // 이벤트 카드는 실제 05에서 커버를 지므로 무대도 같은 꼴이어야 한다(사진 자리 PhotoPlaceholders와 같은 처리)
 const TOUR_COVER = { url: null }
 const TOUR_EVENTS = [
-  { name: '여름 물놀이', meta: '7월 22일 · 사진 120장', status: 'ready' as const },
-  { name: '봄 소풍', meta: '5월 9일 · 사진 86장', status: 'published' as const },
+  { name: '여름 물놀이', meta: '7월 22일 · 사진 120장', photoCount: 120, status: 'ready' as const },
+  { name: '봄 소풍', meta: '5월 9일 · 사진 86장', photoCount: 86, status: 'published' as const },
 ]
 
 // 특수 앨범 표시명은 lib/albumLabels.ts와 같은 문구를 쓴다(공통 · 분류가 어려워요)
@@ -153,16 +158,10 @@ interface StepView {
 interface AppTourProps {
   open: boolean
   onClose: () => void
-  /**
-   * 갈래를 미리 정해 열기 — 첫 장(역할 고르기)을 건너뛴다. 초대 링크로 합류해 이미 어느 쪽인지
-   * 밝힌 사람에게 다시 묻지 않으려는 것이고(CHMO-504), 첫 장에서 뒤로가면 원래대로 고를 수 있다.
-   * 설정에서 다시 볼 때는 넘기지 않는다 — 그땐 반대편 흐름을 보러 오는 경우도 있다.
-   */
-  initialTrack?: Track | null
 }
 
-export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
-  const [track, setTrack] = useState<Track | null>(initialTrack)
+export function AppTour({ open, onClose }: AppTourProps) {
+  const [track, setTrack] = useState<Track | null>(null)
   const [step, setStep] = useState(0)
   // 어느 이벤트를 눌렀는지 기억해 이후 장 화면 제목에 그대로 쓴다 — 목록의 두 카드가 모두
   // 살아 있어야 "모임 안에 행사가 여러 개"가 보이고, 죽은 카드(탭해도 무반응)도 안 생긴다
@@ -173,11 +172,11 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
   // 다시 열면 처음부터 — 닫은 지점이 남아 있으면 '둘러보기'가 중간부터 시작한다
   useEffect(() => {
     if (open) {
-      setTrack(initialTrack)
+      setTrack(null)
       setStep(0)
       setPicked(TOUR_EVENTS[0])
     }
-  }, [open, initialTrack])
+  }, [open])
 
   // 단계 이동은 항상 상대 이동 — 중간에 장을 끼워 넣어도 인덱스를 다시 세지 않는다
   const next = () => setStep((s) => s + 1)
@@ -260,7 +259,7 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
           )}
         </div>
       ),
-      title: '잠깐 기다리면 아이별로 나뉘어 있어요',
+      title: '잠깐 기다리면 아이별로 나뉘어요',
       desc: '선생님이 일일이 고르지 않아도 돼요',
       hint: TAP_CARD,
     },
@@ -284,16 +283,18 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
       hint: TAP_BUTTON,
     },
     {
-      screenTitle: '공개 요약',
-      screenSub: picked.name,
+      // 실제 14의 이름 자리(CHMO-531)와 같은 꼴 — 본문 큰 제목 = 이벤트명, '공개 요약'은 부제
+      screenTitle: picked.name,
+      screenSub: `공개 요약 · 사진 ${picked.photoCount}장`,
       stage: (
         <>
-          <div className="grid grid-cols-3 gap-2">
-            <StatTile value="120" label="전체 사진" />
-            <StatTile value="3" label="공개할 앨범" />
-            <StatTile value="3/3" label="검토" />
+          {/* 통계는 같은 축(검토) 2칸 — 구 3칸(전체 사진·공개할 앨범·검토 n/m)은 CHMO-531에서 폐지 */}
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile value="3" label="검토된 앨범" />
+            <StatTile value="0" label="검토 남은 앨범" />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <p className="mt-3 text-[12px] tracking-[0.06em] text-muted">공개하면 이렇게 보여요</p>
+          <div className="mt-2 grid grid-cols-2 gap-3">
             {TOUR_ALBUMS.slice(0, 2).map((album) => (
               <AlbumCard key={album.name} album={{ ...album, unreviewedPhotoCount: 0 }} />
             ))}
@@ -318,7 +319,7 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
         <EventCard name={picked.name} status="published" meta={picked.meta} cover={TOUR_COVER} />
       ),
       title: '공개하면 학부모 화면에 바로 떠요',
-      desc: '따로 링크를 보내지 않아도 돼요 · 학부모는 자기 아이 사진만 봐요',
+      desc: '링크를 안 보내도 돼요 · 학부모는 자기 아이 사진만 봐요',
     },
   ]
 
@@ -383,7 +384,7 @@ export function AppTour({ open, onClose, initialTrack = null }: AppTourProps) {
         </>
       ),
       title: '우리 아이 사진만 모여 있어요',
-      desc: '아이가 나온 사진과 다 함께 찍은 사진이 한 화면에 담겨요',
+      desc: '아이 사진과 단체 사진이 한 화면에 담겨요',
       hint: TAP_BUTTON,
     },
     {

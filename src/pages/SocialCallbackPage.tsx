@@ -5,8 +5,10 @@ import { BrandHero } from '../components/BrandHero'
 import { ButtonLink } from '../components/ui'
 import { useMutation } from '../hooks/useMutation'
 import { exchangeSocialCode } from '../api/auth'
+import { listAgreements } from '../api/agreements'
 import { toFeErrorCode } from '../api/errors'
 import { consumeSocialReturnTo, setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { evaluateConsentGate } from '../lib/consentGate'
 import { postLoginDestination } from '../lib/onboarding'
 
 /**
@@ -47,11 +49,17 @@ export function SocialCallbackPage() {
     void mutate(() => exchangeSocialCode(code), {
       // 교환 실패 401은 세션 만료가 아니라 이 화면의 결과 — 리다이렉트 대신 에러 표시
       noAuthRedirect: true,
-      onSuccess: (tokens) => {
+      onSuccess: async (tokens) => {
         setAuthTokens(tokens)
         // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
         setCurrentUserId(tokens.userId)
-        navigate(postLoginDestination(consumeSocialReturnTo()), { replace: true })
+        const dest = postLoginDestination(consumeSocialReturnTo())
+        // 가입 동의 게이트(CHMO-479) — 소셜엔 별도 가입 단계가 없어 첫 로그인이 곧 가입이다.
+        // 필수 미동의(신규·재동의 대상)면 01-A를 먼저 거친다. 조회 실패는 통과 — 게이트는
+        // FE 몫이고(서버 강제는 CHMO-519 후속) 곁가지 조회가 로그인을 막지 않는다.
+        const gate = await listAgreements().then(evaluateConsentGate).catch(() => 'pass' as const)
+        if (gate === 'pass') navigate(dest, { replace: true })
+        else navigate('/consent', { replace: true, state: { returnTo: dest } })
       },
       onError: setExchangeError,
     })

@@ -7,7 +7,6 @@ import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
 import { cx } from '../lib/cx'
-import { setPreferredTourTrack } from '../lib/onboarding'
 import type { JoinGroupResult } from '../types/api'
 
 /** 필수 동의 항목 — 문구 확정 전 자리(api-draft §8). 확정되면 상세 문구·버전과 consents 전송을 붙인다 */
@@ -70,20 +69,17 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
     toast.show(
       result.status === 'active'
         ? '🧀 모임에 참여했어요'
-        : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 — 승인 후 이용할 수 있어요`,
+        : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 · 승인되면 이용할 수 있어요`,
     )
-    // 이 사람은 학부모로 들어왔다 — 다음에 둘러보기가 뜰 때 역할을 다시 묻지 않는다(CHMO-504)
-    setPreferredTourTrack('parent')
-    // fromJoin — 도착 직후 둘러보기가 이 안내를 덮지 않게 한 박자 미룬다(홈이 판정)
-    navigate('/home', { replace: true, state: { fromJoin: true } })
+    // 둘러보기 갈래 힌트·fromJoin 미루기 신호는 자동 투어와 함께 소멸(CHMO-565) — 홈은
+    // 이 방문에 아무것도 덮지 않는다
+    navigate('/home', { replace: true })
   }
 
   const handleBack = () => {
     if (submitting) return
     setError(null)
-    // 신청을 포기하고 나가는 길이라 갈래 힌트는 남기지 않는다 — 다만 이 방문에 둘러보기가
-    // 열리면 '왜 갑자기'가 되므로 미루는 신호는 같이 싣는다
-    if (step === 1) navigate('/home', { replace: true, state: { fromJoin: true } })
+    if (step === 1) navigate('/home', { replace: true })
     else setStep((s) => (s - 1) as Step)
   }
 

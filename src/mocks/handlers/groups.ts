@@ -8,6 +8,7 @@ import {
   db,
   deleteGroupCascade,
   findGroup,
+  hasAnalyzingEvent,
   membershipOf,
   membershipsOfUser,
   nextId,
@@ -132,6 +133,14 @@ export const groupHandlers = [
     if (!group) return groupNotFound()
     const denied = teacherOnlyError(user, group.id)
     if (denied) return denied
+    // 분석 중 이벤트가 있으면 거부 — BE DeleteSpaceUseCase 가드(CHMO-564 스펙 대조로 확인, 미채집).
+    // 마지막 선생님 나가기(parents.ts)가 이 가드를 우회하지 못하는 것과 한 규칙이다
+    if (hasAnalyzingEvent(group.id))
+      return errorResponse(
+        409,
+        'MOMENT409',
+        '분석 중인 이벤트는 삭제할 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.',
+      )
     deleteGroupCascade(group.id)
     return ok(null)
   }),

@@ -12,6 +12,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import {
   seedDb,
+  agreementCatalogOf,
   findAlbum,
   findEvent,
   findGroup,
@@ -32,6 +33,8 @@ import {
   unreviewedGatePhotoCount,
 } from './db'
 import { createFixtures } from './fixtures'
+import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
+import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
 import {
   toAgreementStatusResponse,
   toAlbumDetail,
@@ -677,5 +680,18 @@ describe('약관 동의 (CHMO-516 — BE CHMO-514 계약)', () => {
     expect(guardianConsentAttested(2, 1)).toBe(false)
     expect(guardianConsentAttested(1, 2)).toBe(false)
     expect(agreedOf(1, 'child_consent_attested')).toBe(false)
+  })
+
+  // 제출 버전의 원천이 FE 문구로 옮겨간 뒤(CHMO-517)의 드리프트 방지 — FE가 실을 버전과
+  // 목(=BE AgreementType) 현재 버전이 어긋나면 제출이 전부 VALID400인데 tsc는 못 잡는다.
+  // 실 BE의 버전 인상은 이 테스트가 못 보므로, 문구 개정 시 FE·BE·목을 함께 올리는 규칙은
+  // src/legal의 주석이 지킨다.
+  it('FE 문구 버전(가입 4종 + 보호자 확인)이 목 카탈로그 현재 버전과 같다 (CHMO-517)', () => {
+    for (const item of SIGNUP_AGREEMENT_ITEMS) {
+      expect(agreementCatalogOf(item.type)?.currentVersion, item.type).toBe(item.version)
+    }
+    expect(agreementCatalogOf('child_consent_attested')?.currentVersion).toBe(
+      GUARDIAN_CONSENT_COPY.version,
+    )
   })
 })

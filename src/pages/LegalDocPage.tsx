@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
+import { LegalDocBody } from '../components/LegalDocBody'
 import { Header } from '../components/ui'
 import type { LegalDoc } from '../legal/types'
 
 /**
  * 약관·정책 전문 공용 렌더러 (CHMO-478) — /legal/* 3종이 문서 데이터만 바꿔 공유한다.
  * 설정·동의 화면·외부 공개 URL(스토어 심사 등) 어디서든 열리므로 가드 밖 라우트.
+ * 본문은 LegalDocBody — 가입 동의 화면(01-A)의 [전문 보기] 시트와 같은 렌더러(CHMO-479).
  */
 export function LegalDocPage({ doc }: { doc: LegalDoc }) {
   const navigate = useNavigate()
@@ -20,40 +22,7 @@ export function LegalDocPage({ doc }: { doc: LegalDoc }) {
     <PhoneShell>
       <Header onBack={handleBack} title={doc.title} />
       <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
-        <p className="rounded-xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
-          {doc.status}
-        </p>
-        {doc.intro ? (
-          <p className="mt-4 text-sm leading-relaxed text-text">{doc.intro}</p>
-        ) : null}
-        {doc.sections.map((section, i) => (
-          <section key={i}>
-            {/* 장·조 제목은 색과 크기가 가른다(CHMO-513) — 굵기 한 벌짜리 서체에서는 '15px 굵게 +
-                14px 본문'이 사실상 같은 줄로 읽혀, 조문이 수십 개인 문서에서 목차가 사라진다.
-                장(갈색·17px) > 조(갈색·15px) > 본문(먹색·14px) */}
-            {section.chapter ? (
-              <h2 className="mt-8 text-[17px] tracking-[0.01em] text-heading">{section.chapter}</h2>
-            ) : null}
-            {section.heading ? (
-              <h3 className="mt-5 text-[15px] text-heading">{section.heading}</h3>
-            ) : null}
-            {section.body.map((block, j) =>
-              Array.isArray(block) ? (
-                <ul key={j} className="mt-2 flex flex-col gap-1.5 pl-5 text-sm leading-relaxed text-text">
-                  {block.map((item, k) => (
-                    <li key={k} className="list-disc">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p key={j} className="mt-2 text-sm leading-relaxed text-text">
-                  {block}
-                </p>
-              ),
-            )}
-          </section>
-        ))}
+        <LegalDocBody doc={doc} />
       </main>
     </PhoneShell>
   )

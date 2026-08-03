@@ -18,6 +18,12 @@ export interface LegalSection {
 
 export interface LegalDoc {
   title: string
+  /**
+   * 문서 버전 (CHMO-517) — 동의 제출(POST /agreements)에 실리는 값의 단일 원천.
+   * BE `AgreementType`이 항목별 현재 유효 버전을 소유·검증하므로, 문구를 고치면
+   * 이 버전과 BE enum 버전을 **함께** 올린다(안 맞으면 제출이 VALID400으로 거부된다).
+   */
+  version: string
   /** 문서 상태 표기 — 확정 전에는 초안 고지를 유지한다 */
   status: string
   /** 문서 머리 안내(있으면 제목 아래 강조 박스) */

@@ -6,6 +6,7 @@ import { LandingPage } from './pages/LandingPage'
 import { SocialCallbackPage } from './pages/SocialCallbackPage'
 import { JoinPage } from './pages/JoinPage'
 import { HomePage } from './pages/HomePage'
+import { SignupConsentPage } from './pages/SignupConsentPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupCreatePage } from './pages/GroupCreatePage'
@@ -62,6 +63,10 @@ export const router = createBrowserRouter([
     element: <CreatorGuard />,
     children: [
       { path: '/home', element: <HomePage /> }, // 02 홈/내 모임
+      // 01-A 가입 동의(CHMO-479) — 로그인 성공 시점(01-C·DEV 로그인)의 게이트 판정이 보낸다.
+      // 제출(POST /agreements)에 토큰이 필요해 가드 안이고, 이미 전부 동의된 계정의 직접
+      // 진입은 화면이 스스로 홈으로 돌려보낸다
+      { path: '/consent', element: <SignupConsentPage /> },
       // 00 첫 사용 온보딩 슬라이드(CHMO-481) — **현재 노출하지 않는다**(CHMO-504, 2026-07-28):
       // 첫 로그인 안내는 홈 위 '치즈모아 둘러보기'(00-T)가 맡고 슬라이드로 보내는 진입점은 없앴다.
       // 화면·라우트는 되살릴 수 있게 남겨 둔다(직접 URL로만 열린다).

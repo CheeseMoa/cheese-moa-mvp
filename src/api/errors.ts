@@ -16,7 +16,9 @@
  * + 2026-07-30 BE 소스 대조(AGREEMENT428 — 약관 동의 기록 CHMO-514 PR #154의 ErrorStatus.
  *   실서버 채집은 BE 배포 후)
  * + 2026-07-31 BE 소스 대조(MEMBER409 — 멤버 내보내기·나가기 CHMO-525 PR #155의
- *   ErrorStatus.LAST_TEACHER. 실서버 채집은 BE 배포 후).
+ *   ErrorStatus.LAST_TEACHER. 실서버 채집은 BE 배포 후)
+ * + 2026-08-03 BE 소스 대조(MOMENT409 — ErrorStatus.MOMENT_ANALYZING. 모임 삭제·마지막 선생님
+ *   나가기의 분석 중 가드, CHMO-564 스펙 확인. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -42,10 +44,19 @@ const BE_CODE_MAP: Record<string, string> = {
    */
   SPACE403: 'PENDING_APPROVAL',
   /**
-   * 멤버 내보내기·나가기의 대상이 마지막 ACTIVE 선생님(409 — BE CHMO-525). 승인해 줄 사람이
-   * 없는 고아 모임을 막는 가드라 우회가 없다 — 화면은 "모임 삭제를 쓰라"는 안내로 받는다.
+   * 멤버 **내보내기**로 ACTIVE 선생님이 0명이 되는 경우(409 — BE CHMO-525·564). 마지막 선생님의
+   * **나가기**는 CHMO-564부터 거부가 아니라 모임 삭제로 승격돼 이 코드가 오지 않는다 — 남는 건
+   * 동시 나가기 경쟁의 내보내기뿐이라, 화면은 서버 메시지("모임에는 최소 1명의 선생님이 남아야
+   * 합니다.")를 그대로 노출한다(종전 "모임 삭제를 쓰라" 안내는 BE 메시지째 폐기됐다).
    */
   MEMBER409: 'LAST_TEACHER',
+  /**
+   * 모임 삭제·마지막 선생님 나가기인데 분석 중 이벤트가 있음(409 — BE MOMENT_ANALYZING,
+   * CHMO-564 AC-3: 나가기로 모임 삭제의 분석 중 가드를 우회할 수 없다). BE 메시지가 삭제
+   * 문맥("삭제할 수 없습니다")이라 나가기 화면(05)은 나가기 문맥 문구로 바꿔 안내한다.
+   * 분석이 끝나면 풀리는 일시 상태다.
+   */
+  MOMENT409: 'MOMENT_ANALYZING',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
   /** 이벤트(BE 도메인명 moment) 없음(404) */
