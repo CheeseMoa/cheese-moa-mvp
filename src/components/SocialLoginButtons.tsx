@@ -8,6 +8,7 @@ import {
   type SocialProvider,
 } from '../api/auth'
 import { BridgeError, hasCapability, socialLogin } from '../native/bridge'
+import { isSocialProviderVisible } from '../lib/socialProviders'
 
 /** 프로바이더별 브랜드 규격 — 색은 각 사 디자인 가이드 고정값이라 디자인 토큰을 쓰지 않는다 */
 const PROVIDERS: Array<{
@@ -85,6 +86,7 @@ interface SocialLoginButtonsProps {
  * 앱 웹뷰(CHMO-539): 구글이 웹뷰 내 OAuth를 차단하므로 브리지 `socialLogin`으로 시스템
  * 인증 세션에서 왕복하고, 셸이 돌려준 callbackUrl의 쿼리를 SPA 내부 이동으로 기존
  * `/auth/callback` 처리에 태운다 — exchange·returnTo 복귀·에러 분기 전부 재사용.
+ * Android 앱 웹뷰는 Apple 버튼을 숨긴다(CHMO-551 — 규칙은 `lib/socialProviders`).
  */
 export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
   const navigate = useNavigate()
@@ -124,17 +126,19 @@ export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
 
   return (
     <div className="flex flex-col gap-2.5">
-      {PROVIDERS.map(({ provider, label, className, icon }) => (
-        <button
-          key={provider}
-          type="button"
-          onClick={() => void start(provider)}
-          className={`flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold transition active:scale-[0.98] ${className}`}
-        >
-          {icon}
-          {label}
-        </button>
-      ))}
+      {PROVIDERS.filter(({ provider }) => isSocialProviderVisible(provider)).map(
+        ({ provider, label, className, icon }) => (
+          <button
+            key={provider}
+            type="button"
+            onClick={() => void start(provider)}
+            className={`flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold transition active:scale-[0.98] ${className}`}
+          >
+            {icon}
+            {label}
+          </button>
+        ),
+      )}
     </div>
   )
 }
