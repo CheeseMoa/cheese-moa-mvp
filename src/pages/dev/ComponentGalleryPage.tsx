@@ -295,7 +295,7 @@ export function ComponentGalleryPage() {
           <Button
             variant="secondary"
             fullWidth
-            onClick={() => toast.show('🧀 검토 완료로 표시했어요')}
+            onClick={() => toast.show('🧀 검토를 완료했어요')}
           >
             Toast 띄우기
           </Button>

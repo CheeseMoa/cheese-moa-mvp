@@ -222,13 +222,15 @@ function AlbumDetailView() {
         // 목록을 못 읽었으면 다음 앨범을 알 수 없다 — 검토 자체는 성공했으니 에러로 알리지 않고
         // 종전 동작(08 복귀)으로 내려앉는다
         if (!albums) {
-          toast.show('🧀 검토 완료로 표시했어요')
+          toast.show('🧀 검토를 완료했어요')
           navigate(eventPath, { replace: true })
           return
         }
         const next = findNextReviewTarget(albums, albumId)
         if (next) {
-          toast.show(`🧀 검토 완료 · 다음은 '${next.name}'`)
+          // 다음 앨범 이름은 토스트에 싣지 않는다(CHMO-585) — 도착한 09 제목이 이미 말하고,
+          // 이름 없는 인물 앨범이면 "다음은 '인물 3'"처럼 읽혀 어색하다
+          toast.show('🧀 검토를 완료했어요')
           navigate(`${eventPath}/albums/${next.id}`, { replace: true })
           return
         }
