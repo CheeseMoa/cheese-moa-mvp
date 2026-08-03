@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { AppTour } from '../components/AppTour'
 import { Button, ConfirmDialog, Header, LoadState, TextField, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
@@ -37,7 +36,6 @@ export function SettingsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tourOpen, setTourOpen] = useState(false)
   // 계정 삭제(CHMO-526) — 확인 다이얼로그·진행 중
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
@@ -148,24 +146,8 @@ export function SettingsPage() {
             ) : null}
           </form>
         )}
-        {/* 첫 안내는 계정당 1회만 뜨므로 다시 볼 상시 진입점이 필요하다(CHMO-481·504).
-            온보딩 슬라이드('사용 방법 다시 보기' → /onboarding) 링크는 **일단 내렸다**
-            (2026-07-28 — 슬라이드 자체를 노출하지 않기로. 화면·라우트는 되살릴 수 있게 남겨 둔다) */}
-        <nav
-          aria-label="사용 안내"
-          className="mt-5 overflow-hidden rounded-2xl border border-border bg-white shadow-card"
-        >
-          <button
-            type="button"
-            onClick={() => setTourOpen(true)}
-            className="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] text-text active:bg-surface"
-          >
-            치즈모아 둘러보기
-            <span aria-hidden className="text-muted">
-              ›
-            </span>
-          </button>
-        </nav>
+        {/* 사용 안내 진입점은 없다 — 둘러보기(00-T)는 CHMO-578에서 삭제(안내는 코치 힌트가 전담),
+            온보딩 슬라이드('사용 방법 다시 보기' → /onboarding) 링크도 내려 둔 상태(2026-07-28) */}
         {/* 약관·정책 — 프로필 로딩/실패와 무관하게 항상 접근 가능 (CHMO-478) */}
         <nav
           aria-label="약관·정책"
@@ -246,8 +228,6 @@ export function SettingsPage() {
           if (!deletingAccount) setDeleteOpen(false)
         }}
       />
-
-      <AppTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </PhoneShell>
   )
 }

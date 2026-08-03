@@ -60,22 +60,16 @@ export default {
           '0%': { left: '4%' },
           '100%': { left: '96%' },
         },
-        // 치즈모아 둘러보기(CHMO-504) 단계 전환 — 아래에서 살짝 올라오며 나타난다
+        // 코치 힌트(CHMO-565) 등장 — 아래에서 살짝 올라오며 나타난다
         'step-in': {
           from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        // 탭 지점 인디케이터 — 카드 전체를 감싸는 점멸 링(낡은 핫스팟 패턴) 대신 작은 물결 하나
-        'tap-ripple': {
-          '0%': { transform: 'scale(0.6)', opacity: '0.5' },
-          '75%, 100%': { transform: 'scale(1.9)', opacity: '0' },
         },
       },
       animation: {
         'chase-scurry': 'chase-scurry 0.45s ease-in-out infinite',
         'chase-roam': 'chase-roam 1.8s ease-in-out infinite alternate',
         'step-in': 'step-in 0.3s ease-out both',
-        'tap-ripple': 'tap-ripple 1.8s ease-out infinite',
       },
       borderRadius: {
         '4xl': '2rem',

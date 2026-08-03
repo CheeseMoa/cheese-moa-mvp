@@ -612,7 +612,7 @@ function AlbumDetailView() {
         busy={busy}
         busyLabel="처리 중…"
         title={`'${album?.name ?? '앨범'}'을 검토 완료할까요?`}
-        description={`사진 ${photos.length}장이 모두 검토 완료로 표시돼요. 검토 완료는 되돌릴 수 없어요 — 빼야 할 사진이 있으면 먼저 삭제하거나 다른 앨범으로 옮겨 주세요.`}
+        description={`사진 ${photos.length}장을 검토 완료해요. 완료하면 되돌릴 수 없어요.`}
         confirmLabel="검토 완료"
         onConfirm={handleReview}
         onClose={() => setReviewOpen(false)}
