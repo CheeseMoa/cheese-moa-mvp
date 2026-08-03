@@ -24,7 +24,7 @@ export interface LegalDoc {
    * 이 버전과 BE enum 버전을 **함께** 올린다(안 맞으면 제출이 VALID400으로 거부된다).
    */
   version: string
-  /** 문서 상태 표기 — 확정 전에는 초안 고지를 유지한다 */
+  /** 문서 상태 표기 — 게시일("YYYY. M. D. 게시"). "초안"류 미완성 고지는 노출하지 않는다(2026-08-03 출시 워딩 정리) */
   status: string
   /** 문서 머리 안내(있으면 제목 아래 강조 박스) */
   intro?: string

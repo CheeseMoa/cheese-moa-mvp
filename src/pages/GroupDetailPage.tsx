@@ -38,7 +38,7 @@ import type { Group, ID } from '../types/api'
  * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277) ·
  * DELETE /groups/:id/members/:userId(⚙ 설정 안 모임 나가기 — 본인 대상, CHMO-526·BE 525.
  * **마지막 ACTIVE 선생님의 나가기는 모임 삭제로 승격**(BE CHMO-564)이라 확인 모달이 두 갈래다
- * (CHMO-571): 열기 전에 멤버 목록+내 userId로 판별(GET /groups/:id/members + GET /users/me —
+ * (CHMO-571): 열기 전에 멤버 목록+내 userId로 판별(GET /groups/:id/members + GET /me —
  * BE가 별도 필드를 주지 않는 FE 파생값)해 마지막 선생님이면 전체 삭제 경고를 띄운다) ·
  * GET /groups/:id/join-requests(대기 신청 수 — [＋ 초대하기] 뱃지).
  * 초대는 **화면 하나**다(CHMO-520 — 05-2 통합 시트 폐지, CHMO-446 반전): 초대 버튼이 20으로

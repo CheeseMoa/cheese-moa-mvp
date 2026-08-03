@@ -35,7 +35,7 @@ export interface SignupAgreementItem {
 const privacyCollectionConsent: LegalDoc = {
   title: '개인정보 수집·이용 동의',
   version: privacyPolicy.version,
-  status: '초안 · 2026. 8. 3. — 법률 검토 후 확정됩니다',
+  status: '2026. 8. 3. 게시',
   intro: '치즈모아는 아래와 같이 개인정보를 수집·이용합니다.',
   sections: [
     {
@@ -91,7 +91,7 @@ const privacyCollectionConsent: LegalDoc = {
 const faceDataConsent: LegalDoc = {
   title: '얼굴 특징정보 처리 동의',
   version: biometricNotice.version,
-  status: '초안 · 2026. 8. 3. — 법률 검토 후 확정됩니다',
+  status: '2026. 8. 3. 게시',
   intro:
     '치즈모아는 업로드된 사진에서 얼굴을 찾아, 얼굴의 생김새를 여러 개의 숫자로 바꾼 값(얼굴 특징정보)을 만듭니다. 이 값이 서로 비슷한 얼굴끼리 묶어 인물별 앨범을 자동으로 만들어 드립니다.',
   sections: [

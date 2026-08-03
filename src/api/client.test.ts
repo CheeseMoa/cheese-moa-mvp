@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  API_BASE,
   ApiRequestError,
   apiFetch,
   redirectIfUnauthorized,
@@ -345,5 +346,26 @@ describe('toErrorMessage', () => {
       '닉네임 또는 PIN이 일치하지 않습니다.',
     )
     expect(toErrorMessage(err)).toBe('닉네임 또는 PIN이 일치하지 않습니다.')
+  })
+})
+
+/** env는 모듈 로드 시점에 읽히므로 직통 모드 검증은 리셋 후 새로 임포트한다 */
+describe('API_BASE — VITE_API_DIRECT 직통 모드 (CHMO-573)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('직통 모드면 VITE_API_ORIGIN이 베이스가 된다 — /api/v1 프리픽스 없음(실 BE 경로 계약)', async () => {
+    vi.stubEnv('VITE_API_DIRECT', 'true')
+    vi.stubEnv('VITE_API_ORIGIN', 'https://staging.example.com/')
+    vi.resetModules()
+    const fresh = await import('./client')
+    // 뒤 슬래시는 벗긴다 — `${API_BASE}${path}`가 //groups 를 만들지 않게
+    expect(fresh.API_BASE).toBe('https://staging.example.com')
+  })
+
+  it('미설정 빌드는 종전 그대로 상대경로 — 오리진 결정은 호스팅 계층(프록시·rewrite) 몫', () => {
+    expect(API_BASE).toBe('/api/v1')
   })
 })

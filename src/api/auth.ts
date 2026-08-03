@@ -125,11 +125,12 @@ export function updateMe(input: { nickname: string; pin?: string }): Promise<Use
 }
 
 /**
- * DELETE /users/me — 계정 삭제(회원 탈퇴 — App Store 5.1.1(v), CHMO-526).
- * ⚠ 실 BE 미구현(CHMO-524 — 경로·파기 범위는 티켓 초안·목 선행, 배포 후 실계약 재확인):
- * 마지막 ACTIVE 선생님인 모임은 모임째 삭제, 그 외 모임은 멤버십만 정리, 동의 이력은 보존.
+ * DELETE /me — 계정 삭제(회원 탈퇴 — App Store 5.1.1(v), CHMO-526 · 실계약 정합 CHMO-575).
+ * 경로는 GET/PATCH /me 관례를 따른 실 BE 확정값(CHMO-524 PR #166 — 티켓 초안 /users/me 폐기).
+ * 파기 범위(ADR 019): 마지막 ACTIVE 선생님인 모임은 모임째 삭제, 그 외 모임은 멤버십만 정리,
+ * 동의 이력은 보존. 분석 중 이벤트가 있어도 막히지 않는다(모임 나가기 MOMENT409와 다른 점).
  * 성공 시 서버가 refreshToken을 전부 지운다 — 로컬 토큰 폐기(clearAuthTokens)는 호출부 몫.
  */
 export async function deleteAccount(): Promise<void> {
-  await apiFetch<unknown>('/users/me', { method: 'DELETE' })
+  await apiFetch<unknown>('/me', { method: 'DELETE' })
 }
