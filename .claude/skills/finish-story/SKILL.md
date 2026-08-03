@@ -2,7 +2,7 @@
 name: finish-story
 description: >-
   현재 스토리 브랜치 작업을 마무리한다 — 커밋·푸시, develop 대상 PR 생성, 테스트 가이드 출력,
-  Jira PR 링크 코멘트, develop 머지, Jira '완료' 전환까지. main 머지는 릴리즈 성격이라
+  Jira PR 링크 코멘트, develop 머지, 원격·로컬 브랜치 정리, Jira '완료' 전환까지. main 머지는 릴리즈 성격이라
   사용자가 명시 지시할 때만 한다. 사용자가 "/finish-story", "스토리 마무리", "PR 올려"로 요청할 때 사용.
 ---
 
@@ -34,7 +34,10 @@ Jira 도구 미로드면 ToolSearch: `mcp__jira__getJiraIssue`(AC 조회용), `m
 
 6. **테스트 가이드** — `/test-guide` 절차(`.claude/skills/test-guide`)로 이번 변경의 자동 검증 결과 + "진입 경로 → 조작 → 기대 결과" 수동 체크리스트를 만들어 사용자에게 보여주고, PR 본문 `## 테스트` 섹션도 같은 내용으로 채운다.
 
-7. **develop 머지** — `gh pr merge <PR번호> --merge`. 실패(브랜치 보호·충돌 등)하면 원인을 보여주고 사용자 판단을 기다린다. 머지 후 원격 feature 브랜치는 `git push origin --delete <브랜치>`로 정리한다(로컬/워크트리 브랜치 정리는 사용자 또는 세션 종료 시).
+7. **develop 머지 + 정리** — `gh pr merge <PR번호> --merge`. 실패(브랜치 보호·충돌 등)하면 원인을 보여주고 사용자 판단을 기다린다. 머지 후 **원격·로컬 정리까지 한다**:
+   - 원격 feature 브랜치 삭제: `git push origin --delete <브랜치>`
+   - **본 체크아웃 세션이면**: `git switch develop && git pull --ff-only && git branch -d <브랜치>`
+   - **워크트리 세션이면**: 본 체크아웃(`~/Developer/cheese-moa-mvp`, develop)을 `git -C <본 폴더> pull --ff-only`로 최신화한다(본 폴더가 dirty·비FF면 중단 말고 안내만). 로컬 feature 브랜치는 워크트리가 물고 있으면 다음 브랜치로 갈아탄 뒤 `git branch -d`, 워크트리 자체는 세션 종료 시 제거로 정리.
 
 8. **Jira 마무리** — `addCommentToJiraIssue`로 PR URL 코멘트(best-effort — 실패 시 중단하지 말고 문구만 출력) → `transitionJiraIssue`(id `31`)로 **'완료' 전환**. 담당자 지정은 여전히 사용자 몫.
 

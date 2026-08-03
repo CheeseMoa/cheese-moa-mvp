@@ -71,7 +71,7 @@ React 18 + Vite 5 + TypeScript(모바일웹, 기준 프레임 390×844) · 라�
 **워크플로우 스킬**(`.claude/skills/`):
 - `/start-story CHMO-###` — 스토리 시작: SP 추천·설정, 상태 '진행 중', `feature/CHMO-###-<slug>` 브랜치 생성.
 - `/test-guide` — 현재 브랜치 변경분 기준 테스트 가이드 생성: 자동 검증(typecheck·lint·build) 실행 + "진입 경로 → 조작 → 기대 결과" 수동 체크리스트.
-- `/finish-story` — 커밋·푸시·PR 생성(테스트 가이드 포함) + Jira PR 코멘트(best-effort) + **develop 머지(머지 커밋)·Jira '완료' 전환까지**. `main` 머지는 사용자가 명시 지시할 때만(릴리즈).
+- `/finish-story` — 커밋·푸시·PR 생성(테스트 가이드 포함) + Jira PR 코멘트(best-effort) + **develop 머지(머지 커밋)·원격/로컬 브랜치 정리·Jira '완료' 전환까지**. `main` 머지는 사용자가 명시 지시할 때만(릴리즈).
 - `/bug-briefing` — 버그·코드리뷰 결함을 "무슨 코드 → 언제 터지나 → 왜 그렇게 됐나 → 어떻게 고치나" 4단 형식 + 코드 위치 링크 + 요약 표로 브리핑.
 
 **가드 훅**(`.claude/settings.json` → `.claude/hooks/`): `main` 직접 commit/push 차단, commit/push 전 typecheck·lint·test(스크립트 정의 시) 실행.
