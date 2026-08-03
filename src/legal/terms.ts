@@ -6,6 +6,7 @@ import type { LegalDoc } from './types'
  */
 export const termsOfService: LegalDoc = {
   title: '이용약관',
+  version: '1.0', // BE AgreementType.TERMS_OF_SERVICE 최초 버전과 일치(CHMO-517)
   status: '초안 · 2026. 7. 28. — 법률 검토 후 확정됩니다',
   sections: [
     {

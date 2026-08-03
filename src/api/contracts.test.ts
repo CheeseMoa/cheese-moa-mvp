@@ -8,6 +8,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { attestGuardianConsent, listAgreements, submitAgreements } from './agreements'
+import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
 import { deleteAccount, getMe, login } from './auth'
 import {
   createPersonAlbum,
@@ -909,28 +910,18 @@ describe('약관 동의 (CHMO-514 계약)', () => {
     })
   })
 
-  it('보호자 동의 확인은 현재 버전을 확인한 뒤 그 버전으로 기록한다 (화면은 버전을 모른다)', async () => {
-    const calls = stubFetch((call) =>
-      call.url === '/api/v1/agreements'
-        ? jsonResponse(envelope(BE_AGREEMENTS))
-        : jsonResponse(envelope(null)),
-    )
+  it('보호자 동의 확인은 FE 문장 버전을 싣는다 — 서버 조회 에코 없음(CHMO-517)', async () => {
+    const calls = serve(envelope(null))
 
     await attestGuardianConsent(6)
 
-    expect(calls[0].url).toBe('/api/v1/agreements')
-    expect(calls[1].url).toBe('/api/v1/groups/6/agreements')
-    expect(calls[1].method).toBe('POST')
+    // 종전엔 GET /agreements로 현재 버전을 읽어 되돌려줬다 — 이제 화면에 보여준 확인 문장의
+    // 버전(GUARDIAN_CONSENT_COPY.version)이 원천이라 요청이 하나다
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('/api/v1/groups/6/agreements')
+    expect(calls[0].method).toBe('POST')
     // 항목은 싣지 않는다 — 모임 스코프 항목이 하나뿐이라 BE가 받지 않는다
-    expect(bodyOf(calls[1])).toEqual({ version: '1.0' })
-  })
-
-  it('항목이 응답에 없으면 제출할 버전을 모른다 — 조용히 넘기지 않고 실패한다', async () => {
-    serve(envelope({ agreements: [] }))
-
-    await expect(attestGuardianConsent(6)).rejects.toMatchObject({
-      code: 'AGREEMENT_VERSION_MISSING',
-    })
+    expect(bodyOf(calls[0])).toEqual({ version: GUARDIAN_CONSENT_COPY.version })
   })
 
   it('업로드 presign의 428은 GUARDIAN_CONSENT_REQUIRED로 정규화된다 (화면이 모달로 분기)', async () => {
