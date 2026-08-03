@@ -5,6 +5,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import {
   Button,
   ButtonLink,
+  CoachHint,
   ConfirmDialog,
   CountBadge,
   EmptyState,
@@ -264,19 +265,29 @@ export function GroupDetailPage() {
                 대기 수는 버튼 코너에 얹지 않고 라벨 안쪽 인라인으로 둔다: 20 탭 뱃지와 같은
                 컴포넌트라 두 화면의 '대기 N건'이 한 모양이고, 오버레이 배지도 피한다 */}
             <div className="flex shrink-0 gap-2.5 pb-safe-9 pt-4">
-              <ButtonLink
-                to={`/groups/${groupId}/invites`}
-                variant="secondary"
-                className="flex-1 gap-1.5 whitespace-nowrap"
-                aria-label={
-                  pendingRequestCount > 0
-                    ? `초대 관리 · 대기 신청 ${pendingRequestCount}건`
-                    : undefined
-                }
-              >
-                초대 관리
-                {pendingRequestCount > 0 && <CountBadge count={pendingRequestCount} />}
-              </ButtonLink>
+              <div className="relative flex-1">
+                <ButtonLink
+                  to={`/groups/${groupId}/invites`}
+                  variant="secondary"
+                  fullWidth
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label={
+                    pendingRequestCount > 0
+                      ? `초대 관리 · 대기 신청 ${pendingRequestCount}건`
+                      : undefined
+                  }
+                >
+                  초대 관리
+                  {pendingRequestCount > 0 && <CountBadge count={pendingRequestCount} />}
+                </ButtonLink>
+                {/* 승인제 힌트(CHMO-578) — 참여 신청은 승인해야 합류되는데(CHMO-475) 그 일이
+                    이 버튼 너머에 있다는 걸 알 길이 없다. 놓치면 학부모가 며칠씩 기다린다 */}
+                <CoachHint id="invite-manage" arrow="down" className="bottom-full left-0 mb-1.5 w-max">
+                  학부모가 참여를 신청하면
+                  <br />
+                  여기서 승인하고 아이를 연결해요
+                </CoachHint>
+              </div>
               <Button className="flex-1 whitespace-nowrap" onClick={() => setCreateOpen(true)}>
                 ＋ 이벤트 생성
               </Button>

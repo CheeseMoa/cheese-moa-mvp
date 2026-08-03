@@ -7,7 +7,7 @@
  */
 
 const CAUSE_MESSAGES: Record<string, string> = {
-  low_resolution: '사진 화질이 낮아 얼굴을 알아보기 어려웠어요 — 원본 화질로 다시 올리면 나아져요',
+  low_resolution: '사진 화질이 낮아 얼굴을 알아보기 어려웠어요. 원본 화질로 다시 올리면 나아져요',
   small_faces: '얼굴이 작게 찍혀 알아보기 어려웠어요',
   single_appearance: '이 얼굴이 나온 사진이 한 장뿐이라 앨범을 만들지 못했어요',
 }
