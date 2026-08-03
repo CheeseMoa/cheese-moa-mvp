@@ -16,7 +16,7 @@ import { postLoginDestination } from '../lib/onboarding'
  * (다른 방법으로 로그인 / 그냥 재시도 / 시간을 두고 재시도).
  */
 const SOCIAL_ERROR_MESSAGES: Record<string, string> = {
-  UNSUPPORTED_SOCIAL_PROVIDER: '아직 준비되지 않은 로그인 방법이에요. 다른 방법으로 로그인해 주세요.',
+  UNSUPPORTED_SOCIAL_PROVIDER: '지원하지 않는 로그인 방법이에요. 다른 방법으로 로그인해 주세요.',
   SOCIAL_AUTH_FAILED: '소셜 로그인에 실패했어요. 다시 시도해 주세요.',
   SOCIAL_PROVIDER_ERROR: '로그인 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요.',
 }

@@ -2,12 +2,13 @@ import type { LegalDoc } from './types'
 
 /**
  * 이용약관 앱 적용판 (CHMO-478). 정본: docs/legal/terms-of-service.md — 함께 수정할 것.
- * 마커 치환: 운영주체·시행일은 확정 전 중립 문구, 나머지는 정본과 동일.
+ * 마커 치환: 운영주체는 중립 문구·시행일은 "게시한 날부터"(2026-08-03 출시 워딩 정리 —
+ * "정식 오픈 전"·"확정되면"류 미완성 문구는 노출하지 않는다), 나머지는 정본과 동일.
  */
 export const termsOfService: LegalDoc = {
   title: '이용약관',
   version: '1.0', // BE AgreementType.TERMS_OF_SERVICE 최초 버전과 일치(CHMO-517)
-  status: '초안 · 2026. 7. 28. — 법률 검토 후 확정됩니다',
+  status: '2026. 7. 28. 게시',
   sections: [
     {
       chapter: '제1장 총칙',
@@ -210,7 +211,7 @@ export const termsOfService: LegalDoc = {
     {
       heading: '부칙',
       body: [
-        '이 약관은 서비스 정식 오픈일부터 시행하며, 시행일이 확정되면 이 문서에서 공지합니다.',
+        '이 약관은 게시한 날부터 시행합니다.',
       ],
     },
   ],
