@@ -49,7 +49,6 @@ export function SettingsPage() {
     }
   }, [me])
 
-  const showForm = !loading && !loadError && !!me
   // 변경 없음(이름 그대로)이면 저장할 것이 없다 — 비활성
   const dirty = savedNickname !== null && nickname.trim() !== savedNickname
   const canSubmit = !submitting && dirty && nickname.trim().length > 0
@@ -129,7 +128,7 @@ export function SettingsPage() {
             unauthorizedTo="/login"
           />
         ) : (
-          <form id="profile-form" onSubmit={handleSubmit} noValidate className="mt-4">
+          <form onSubmit={handleSubmit} noValidate className="mt-4">
             <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
               {/* 라벨만 '이름'(소셜 표시명 이름 전환, CHMO-440) — 데이터 필드는 BE 계약 그대로 nickname */}
               <TextField
@@ -146,6 +145,15 @@ export function SettingsPage() {
                 {error}
               </p>
             ) : null}
+            {/* [저장]은 조작 대상(이름 필드) 곁 — 로그아웃·계정 삭제 사이에 끼우지 않는다 (CHMO-579) */}
+            <Button
+              type="submit"
+              fullWidth
+              className="mt-4"
+              disabled={!canSubmit || loggingOut || deletingAccount}
+            >
+              {submitting ? '저장 중…' : '저장'}
+            </Button>
           </form>
         )}
         {/* 첫 안내는 계정당 1회만 뜨므로 다시 볼 상시 진입점이 필요하다(CHMO-481·504).
@@ -211,16 +219,6 @@ export function SettingsPage() {
           >
             {loggingOut ? '로그아웃 중…' : '로그아웃'}
           </Button>
-          {showForm ? (
-            <Button
-              type="submit"
-              form="profile-form"
-              fullWidth
-              disabled={!canSubmit || loggingOut || deletingAccount}
-            >
-              {submitting ? '저장 중…' : '저장'}
-            </Button>
-          ) : null}
           <button
             type="button"
             onClick={() => setDeleteOpen(true)}
