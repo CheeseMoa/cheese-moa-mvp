@@ -21,6 +21,7 @@ import { getGroup } from '../api/groups'
 import { createPersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
+import { hasSeenCoachHint } from '../lib/onboarding'
 import type { Album, AnalysisProgress, EventItem } from '../types/api'
 
 /**
@@ -255,6 +256,10 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
   const [albumTarget, setAlbumTarget] = useState<Album | null>(null)
   // 빈 앨범 만들기(CHMO-471) — 이름만 받아 사진 0장 인물 앨범을 만든다
   const [createOpen, setCreateOpen] = useState(false)
+  // 공개 게이트 힌트 차례 판정(CHMO-578) — album-grid 힌트를 이미 본 계정에만 띄워 한 화면
+  // 한 힌트를 지킨다. 마운트 시점에 한 번 읽는다: 같은 방문에서 album-grid 힌트가 '뜰 때'
+  // 기록을 남겨도 이 값은 안 바뀌어 두 힌트가 겹치지 않고, 다음 방문부터 이쪽 차례가 된다
+  const [gateHintTurn] = useState(() => hasSeenCoachHint('album-grid'))
 
   const base = `/groups/${groupId}/events/${event.id}`
 
@@ -370,9 +375,22 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
           {/* "발행 대기 N장" 안내는 없다(CHMO-488) — 재공개 경로가 사라졌다: 전량 검토 완료라야
               공개되고(하드 게이트) 업로드도 이벤트당 1회라(CHMO-486) 공개 뒤 대기가 생기지 않는다.
               [＋ 사진 추가]도 같은 이유로 없다 — 더 올릴 사진이 있으면 이벤트를 새로 만든다 */}
-          <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
-            공개 전 요약보기
-          </Button>
+          <div className="relative">
+            <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
+              공개 전 요약보기
+            </Button>
+            {/* 공개 게이트 힌트(CHMO-578) — "모든 앨범 검토 완료 = 공개 조건"(CHMO-488)은 화면
+                어디에도 미리 나오지 않아 14에 가서야 잠긴 버튼으로 알게 된다. 게이트가 실행되는
+                문(공개 요약 진입 버튼) 곁에서 계정당 1회 미리 말한다. 공개된 이벤트에선 지난
+                단계 안내라 안 띄우고, 앨범 0개면 검토할 대상이 없어 안 띄운다 */}
+            {gateHintTurn && event.status !== 'published' && mainAlbums.length > 0 && (
+              <CoachHint id="publish-gate" arrow="down" className="bottom-full left-0 mb-1.5 w-max">
+                모든 앨범을 검토 완료하면
+                <br />
+                학부모에게 공개할 수 있어요
+              </CoachHint>
+            )}
+          </div>
         </div>
       </main>
 

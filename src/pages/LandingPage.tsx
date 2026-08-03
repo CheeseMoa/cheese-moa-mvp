@@ -51,7 +51,7 @@ export function LandingPage() {
         <div className="flex flex-col gap-3 px-5 pb-safe-9">
           {returnTo?.startsWith('/join/') && (
             <p className="rounded-xl bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-text">
-              🧀 초대받은 모임에 참여하려면 로그인이 필요해요 — 완료하면 참여 화면으로 이어져요.
+              🧀 초대받은 모임에 참여하려면 로그인이 필요해요. 완료하면 참여 화면으로 이어져요.
             </p>
           )}
           <SocialLoginButtons returnTo={returnTo} />
