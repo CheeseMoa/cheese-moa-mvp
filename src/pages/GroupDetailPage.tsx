@@ -18,23 +18,28 @@ import {
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { getMe } from '../api/auth'
+import { ApiRequestError } from '../api/client'
 import {
   deleteGroup,
   getGroup,
+  listGroupMembers,
   listJoinRequests,
   removeGroupMember,
   renameGroup,
 } from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
 import { formatEventDate } from '../lib/eventDate'
-import type { Group } from '../types/api'
+import { isLastActiveTeacher } from '../lib/lastTeacher'
+import type { Group, ID } from '../types/api'
 
 /**
  * 05. 모임 상세 = 이벤트 목록 · node 211:1443(목록) · 307:4(학부모 전환 수정안 — CHMO-446)
  * GET /groups/:id · GET /groups/:id/events · PATCH /groups/:id(⚙ 이름 수정) ·
  * DELETE /groups/:id(⚙ 설정 안 모임 삭제 — CHMO-277) ·
  * DELETE /groups/:id/members/:userId(⚙ 설정 안 모임 나가기 — 본인 대상, CHMO-526·BE 525.
- * 마지막 선생님이면 서버가 MEMBER409로 거부 — 메시지가 이미 "모임 삭제" 안내라 그대로 띄운다) ·
+ * **마지막 ACTIVE 선생님의 나가기는 모임 삭제로 승격**(BE CHMO-564)이라 확인 모달이 두 갈래다
+ * (CHMO-571): 열기 전에 멤버 목록+내 userId로 판별(GET /groups/:id/members + GET /users/me —
+ * BE가 별도 필드를 주지 않는 FE 파생값)해 마지막 선생님이면 전체 삭제 경고를 띄운다) ·
  * GET /groups/:id/join-requests(대기 신청 수 — [＋ 초대하기] 뱃지).
  * 초대는 **화면 하나**다(CHMO-520 — 05-2 통합 시트 폐지, CHMO-446 반전): 초대 버튼이 20으로
  * 곧장 가고, 링크 보내기(부르기)와 신청 승인·아이 연결(받기)이 거기서 한 역할 탭 아래 붙어 있다.
@@ -68,7 +73,14 @@ export function GroupDetailPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [leaveOpen, setLeaveOpen] = useState(false)
+  // 나가기 확인 컨텍스트 — null이면 닫힘. 확인 모달을 열기 **전에** 판별을 끝내 두는 이유는
+  // 문구가 곧 결과이기 때문이다(CHMO-571): 마지막 선생님에게 기존 문구("사진·앨범은 모임에
+  // 남고")를 보여주면 그 문장 그대로 거짓이 된다(BE CHMO-564 — 나가기가 모임 삭제로 승격).
+  // myUserId는 판별에 쓴 GET /me 값을 확인 시점에 재사용한다(경로 대상이 내 userId — BE 525).
+  const [leaveConfirm, setLeaveConfirm] = useState<{ myUserId: ID; lastTeacher: boolean } | null>(
+    null,
+  )
+  const [leavePreparing, setLeavePreparing] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
   // 모임 삭제(F2.5) — 성공 시 홈으로(뒤로가기로 죽은 상세에 돌아오지 않게 replace)
@@ -87,28 +99,61 @@ export function GroupDetailPage() {
     })
   }
 
-  // 모임 나가기(CHMO-526) — 경로 대상이 내 userId라(BE CHMO-525 단일 엔드포인트, /members/me 없음)
-  // 확인 시점에 GET /me로 읽는다. 성공 시 홈으로(이 모임은 더 이상 내 것이 아니다 — replace)
-  const handleLeave = async () => {
-    setLeaving(true)
+  // 나가기 확인 준비(CHMO-571) — "내가 마지막 ACTIVE 선생님인가"를 판별해 모달 문구를 가른다.
+  // 판별 실패는 판별 불가 = 진행 불가로 받는다(토스트만) — 모르는 채 띄운 기존 문구가 곧
+  // 무경고 모임 삭제라서다. 예외는 ROLE403 하나: 멤버 조회가 TEACHER 전용(Q3)이라 학부모는
+  // 항상 여기서 걸리는데, 학부모는 마지막 선생님일 수 없으니 기존 확인으로 진행한다(AC-4).
+  const prepareLeave = async () => {
+    setLeavePreparing(true)
     await mutate(
       async () => {
         const me = await getMe()
-        await removeGroupMember(groupId, me.id)
+        try {
+          const members = await listGroupMembers(groupId)
+          return { myUserId: me.id, lastTeacher: isLastActiveTeacher(members, me.id) }
+        } catch (err) {
+          if (err instanceof ApiRequestError && err.code === 'FORBIDDEN_ROLE')
+            return { myUserId: me.id, lastTeacher: false }
+          throw err
+        }
       },
       {
-        onSuccess: () => {
-          toast.show('모임에서 나갔어요')
-          navigate('/home', { replace: true })
+        onSuccess: (ctx) => {
+          setLeavePreparing(false)
+          setRenameOpen(false)
+          setLeaveConfirm(ctx)
         },
-        // MEMBER409(마지막 선생님) 메시지가 이미 "모임을 삭제해 주세요" 안내다 — 그대로 노출
+        // 설정 모달은 열린 채 둔다 — 실패를 알리고 같은 자리에서 다시 시도할 수 있게
         onError: (msg) => {
+          setLeavePreparing(false)
           toast.show(msg)
-          setLeaving(false)
-          setLeaveOpen(false)
         },
       },
     )
+  }
+
+  // 모임 나가기(CHMO-526) — 성공 시 홈으로(이 모임은 더 이상 내 것이 아니다 — replace).
+  // 마지막 선생님 경로(CHMO-564 승격)도 같다: 모임이 사라졌으니 목록으로 나간다.
+  const handleLeave = async () => {
+    if (!leaveConfirm) return
+    setLeaving(true)
+    await mutate(() => removeGroupMember(groupId, leaveConfirm.myUserId), {
+      onSuccess: () => {
+        toast.show(leaveConfirm.lastTeacher ? '모임에서 나가며 모임을 삭제했어요' : '모임에서 나갔어요')
+        navigate('/home', { replace: true })
+      },
+      // MOMENT409(분석 중 이벤트 — 모임 삭제와 같은 가드)는 BE 메시지가 삭제 문맥이라
+      // 나가기 문맥으로 바꿔 안내한다. MEMBER409(동시 나가기 경쟁)는 서버 메시지 그대로.
+      onError: (msg, err) => {
+        toast.show(
+          err instanceof ApiRequestError && err.code === 'MOMENT_ANALYZING'
+            ? '분석 중인 이벤트가 있어 지금은 모임을 나갈 수 없습니다.'
+            : msg,
+        )
+        setLeaving(false)
+        setLeaveConfirm(null)
+      },
+    })
   }
 
   const group = groupApi.data
@@ -263,10 +308,12 @@ export function GroupDetailPage() {
             setRenameOpen(false)
             setDeleteOpen(true)
           }}
+          // 나가기는 삭제와 달리 모달을 바로 닫지 않는다 — 판별 조회(prepareLeave)가 성공해야
+          // 확인 다이얼로그로 넘어가고, 실패하면 이 모달이 그대로 남아 재시도 자리가 된다
           onLeaveRequest={() => {
-            setRenameOpen(false)
-            setLeaveOpen(true)
+            void prepareLeave()
           }}
+          leavePreparing={leavePreparing}
         />
       )}
       <ConfirmDialog
@@ -280,18 +327,24 @@ export function GroupDetailPage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteOpen(false)}
       />
-      {/* 나가기는 삭제와 달리 모임을 남긴다 — 사진·앨범 보존과 재신청 가능을 문구로 명시 */}
+      {/* 나가기 확인은 두 갈래다(CHMO-571) — 보통은 모임을 남기지만(사진·앨범 보존·재신청 가능),
+          마지막 ACTIVE 선생님이면 BE가 나가기를 모임 삭제로 승격하므로(CHMO-564) 같은 문구를
+          띄우면 거짓 안내가 된다. 판별은 열기 전에 끝나 있다(leaveConfirm) */}
       <ConfirmDialog
-        open={leaveOpen}
-        title="모임에서 나갈까요?"
-        description="이 모임이 내 목록에서 사라져요. 그동안 올린 사진·앨범은 모임에 남고, 참여 링크로 다시 신청할 수 있어요."
-        confirmLabel="나가기"
+        open={leaveConfirm !== null}
+        title={leaveConfirm?.lastTeacher ? '나가면 모임이 삭제돼요' : '모임에서 나갈까요?'}
+        description={
+          leaveConfirm?.lastTeacher
+            ? '이 모임의 선생님은 나 혼자예요. 지금 나가면 모임과 그 안의 이벤트·앨범·사진이 모두 삭제되고, 학부모도 더 이상 볼 수 없어요. 되돌릴 수 없어요.'
+            : '이 모임이 내 목록에서 사라져요. 그동안 올린 사진·앨범은 모임에 남고, 참여 링크로 다시 신청할 수 있어요.'
+        }
+        confirmLabel={leaveConfirm?.lastTeacher ? '삭제하고 나가기' : '나가기'}
         danger
         busy={leaving}
         busyLabel="나가는 중…"
         onConfirm={handleLeave}
         onClose={() => {
-          if (!leaving) setLeaveOpen(false)
+          if (!leaving) setLeaveConfirm(null)
         }}
       />
     </PhoneShell>
@@ -306,8 +359,13 @@ interface RenameGroupModalProps {
   onRenamed: () => void
   /** '모임 삭제' 탭 — 이 모달을 닫고 확인 다이얼로그를 연다(모달 중첩 회피) */
   onDeleteRequest: () => void
-  /** '모임 나가기' 탭 — 삭제와 같은 결(모달 닫고 확인 다이얼로그, CHMO-526) */
+  /**
+   * '모임 나가기' 탭 — 확인 다이얼로그 전에 마지막 선생님 판별 조회가 붙는다(CHMO-571).
+   * 모달은 판별 성공 시 페이지가 닫는다(실패하면 열린 채 남아 재시도 자리)
+   */
   onLeaveRequest: () => void
+  /** 판별 조회 진행 중 — 나가기 버튼을 잠그고 표시한다 */
+  leavePreparing: boolean
 }
 
 /**
@@ -322,6 +380,7 @@ function RenameGroupModal({
   onRenamed,
   onDeleteRequest,
   onLeaveRequest,
+  leavePreparing,
 }: RenameGroupModalProps) {
   const toast = useToast()
   const mutate = useMutation()
@@ -392,10 +451,10 @@ function RenameGroupModal({
         variant="secondary"
         fullWidth
         onClick={onLeaveRequest}
-        disabled={submitting}
+        disabled={submitting || leavePreparing}
         className="mt-2.5"
       >
-        모임 나가기
+        {leavePreparing ? '확인 중…' : '모임 나가기'}
       </Button>
       <Button
         variant="secondary"

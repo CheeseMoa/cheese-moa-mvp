@@ -75,12 +75,26 @@ export const BE_ERRORS = {
     payload: errorEnvelope('AGREEMENT428', '아동 보호자 동의 확보 확인이 필요합니다.'),
   },
   /**
-   * 멤버 내보내기·나가기의 대상이 마지막 ACTIVE 선생님 — DELETE /groups/:id/members/:userId.
-   * **BE 소스 기준(미채집)**: CHMO-525 PR #155 `ErrorStatus.LAST_TEACHER`. 실서버 채집은 배포 후.
+   * 멤버 **내보내기**로 ACTIVE 선생님이 0명이 되는 경우 — DELETE /groups/:id/members/:userId.
+   * **BE 소스 기준(미채집)**: CHMO-525 PR #155 `ErrorStatus.LAST_TEACHER` — 메시지는 CHMO-564에서
+   * 갱신됐다(마지막 선생님의 **나가기**가 모임 삭제로 승격되면서 종전 "모임 삭제를 쓰라" 안내가
+   * 폐기되고, 이 코드는 동시 나가기 경쟁의 내보내기에만 남았다). 실서버 채집은 배포 후.
    */
   MEMBER409: {
     status: 409,
-    payload: errorEnvelope('MEMBER409', '모임의 마지막 선생님은 나갈 수 없습니다. 모임을 삭제해 주세요.'),
+    payload: errorEnvelope('MEMBER409', '모임에는 최소 1명의 선생님이 남아야 합니다.'),
+  },
+  /**
+   * 분석 중 이벤트가 있는 모임의 삭제·마지막 선생님 나가기 — DELETE /groups/:id(/members/:userId).
+   * **BE 소스 기준(미채집)**: `ErrorStatus.MOMENT_ANALYZING`(CHMO-564 AC-3 대조 — 나가기로 모임
+   * 삭제의 분석 중 가드를 우회할 수 없다). 실서버 채집은 배포 후.
+   */
+  MOMENT409: {
+    status: 409,
+    payload: errorEnvelope(
+      'MOMENT409',
+      '분석 중인 이벤트는 삭제할 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.',
+    ),
   },
 }
 

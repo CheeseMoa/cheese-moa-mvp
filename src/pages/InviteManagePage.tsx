@@ -147,7 +147,8 @@ export function InviteManagePage() {
         setRemoveTarget(null)
         membersApi.refetch()
       },
-      // MEMBER409(마지막 선생님)도 서버 메시지가 이미 "모임 삭제" 안내라 그대로 노출한다
+      // MEMBER409(내보내기로 선생님이 0명 — 동시 나가기 경쟁, CHMO-564)도 서버 메시지
+      // ("모임에는 최소 1명의 선생님이 남아야 합니다.")가 안내로 충분해 그대로 노출한다
       onError: (msg) => {
         toast.show(msg)
         setRemoving(false)
