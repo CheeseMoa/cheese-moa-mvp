@@ -7,9 +7,11 @@ import { http } from 'msw'
 import {
   activeMembersOfGroup,
   db,
+  deleteGroupCascade,
   findEvent,
   findGroup,
   findMembershipById,
+  hasAnalyzingEvent,
   hasPersonParent,
   isActiveTeacher,
   linkPersonParent,
@@ -148,37 +150,38 @@ export const parentHandlers = [
     return ok(items)
   }),
 
-  // DELETE /groups/:id/members/:userId — 멤버 내보내기·나가기(BE CHMO-525) · 화면 20·05 (CHMO-526)
+  // DELETE /groups/:id/members/:userId — 멤버 내보내기·나가기(BE CHMO-525·564) · 화면 20·05 (CHMO-526·571)
   // 대상이 자신이면 나가기(role 무관 — PENDING이면 신청 취소), 타인이면 TEACHER 전용 내보내기.
-  // 마지막 ACTIVE 선생님 가드는 양쪽 공통(MEMBER409) — 승인해 줄 사람이 없는 고아 모임을 막는다.
+  // 마지막 ACTIVE 선생님의 **나가기는 모임 삭제로 승격**(CHMO-564 — 거부 대신 같은 결과를 한
+  // 동작으로, 확인 책임은 FE 모달). 내보내기 쪽 가드는 그대로다(MEMBER409) — 내보내는 쪽이
+  // ACTIVE 선생님이라 정상 경로에선 성립하지 않고 동시 나가기 경쟁에서만 걸린다.
   http.delete(api('/groups/:id/members/:userId'), ({ request, params }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
     const groupId = toId(params.id)
     const targetUserId = toId(params.userId)
 
-    // 대상이 마지막 ACTIVE 선생님이면 거부, 아니면 제거(BE RemoveSpaceMemberUseCase.remove 대응)
-    const removeOrGuard = (target: DbMembership) => {
-      if (
-        target.role === 'teacher' &&
-        target.status === 'active' &&
-        teacherCountOf(target.groupId) <= 1
-      )
-        return errorResponse(
-          409,
-          'MEMBER409',
-          '모임의 마지막 선생님은 나갈 수 없습니다. 모임을 삭제해 주세요.',
-        )
-      removeMembershipCascade(target)
-      return ok(null)
-    }
+    const isLastActiveTeacher = (target: DbMembership) =>
+      target.role === 'teacher' && target.status === 'active' && teacherCountOf(target.groupId) <= 1
 
     // 나가기 — 모임 조회보다 멤버십 판정이 먼저다: 멤버십이 없으면 모임 존재 여부를 흘리지 않고
     // SPACE403으로 끝낸다(BE 스펙 "본인 부재는 403" — 멱등 성공은 타인 내보내기 쪽만)
     if (targetUserId !== null && targetUserId === user.id) {
       const mine = groupId === null ? undefined : membershipOf(user.id, groupId)
       if (!mine) return spaceForbidden()
-      return removeOrGuard(mine)
+      if (isLastActiveTeacher(mine)) {
+        // 모임 삭제의 분석 중 가드를 나가기로 우회할 수 없다(CHMO-564 AC-3 — purge 전에 직접 가드)
+        if (hasAnalyzingEvent(mine.groupId))
+          return errorResponse(
+            409,
+            'MOMENT409',
+            '분석 중인 이벤트는 삭제할 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.',
+          )
+        deleteGroupCascade(mine.groupId)
+        return ok(null)
+      }
+      removeMembershipCascade(mine)
+      return ok(null)
     }
 
     // 내보내기 — 모임 없음(SPACE404) → 비멤버·PENDING(SPACE403) → 학부모(ROLE403) 순 판정
@@ -190,7 +193,10 @@ export const parentHandlers = [
     const target = membershipOf(targetUserId, group.id)
     // 이미 없는 멤버는 멱등 성공 — 중복 탭·경쟁 삭제를 오류로 만들지 않는다(BE와 동일)
     if (!target) return ok(null)
-    return removeOrGuard(target)
+    if (isLastActiveTeacher(target))
+      return errorResponse(409, 'MEMBER409', '모임에는 최소 1명의 선생님이 남아야 합니다.')
+    removeMembershipCascade(target)
+    return ok(null)
   }),
 
   // POST /groups/:id/person-parents — 학부모↔인물 매핑 생성(TEACHER 전용, 다대다 §4) · 화면 20-1

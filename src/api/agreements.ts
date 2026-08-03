@@ -9,12 +9,14 @@
  * - `scope: 'user'` — 계정 1회(가입 동의 4종 + 선택 마케팅). 수집 화면은 CHMO-479
  * - `scope: 'group'` — 모임마다(아동 보호자 동의 확보 확인). 업로드 presign이 이걸 요구한다
  *
- * ⚠ 버전의 원천은 **지금은 서버**다(`currentVersion`을 되돌려준다). FE 문구가 버전을 소유하도록
- * 바꾸는 건 CHMO-517 — 그때 `attestGuardianConsent`도 서버 조회 없이 FE 상수를 싣는다.
+ * 버전의 원천은 **FE 문구다**(CHMO-517) — 서버 `currentVersion`을 에코하지 않고 화면에 실제로
+ * 보여준 문서·문장의 버전(`src/legal/*`)을 싣는다. 서버 버전과 어긋나면(배포 시차) BE가
+ * VALID400으로 거부하고, 가입 동의 화면은 제출 전에 새로고침 안내로 빠진다(lib/consentGate).
  */
-import { ApiRequestError, apiFetch } from './client'
+import { apiFetch } from './client'
 import { toAgreementStatus, type RawAgreementStatus } from './mappers'
-import type { AgreementStatus, AgreementSubmission, AgreementType, ID } from '../types/api'
+import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
+import type { AgreementStatus, AgreementSubmission, ID } from '../types/api'
 
 /** BE AgreementStatusResponse — 목록이 bare 배열이 아니라 `agreements` 키에 담겨 온다 */
 interface RawAgreementStatusResponse {
@@ -46,37 +48,22 @@ export function submitAgreements(items: AgreementSubmission[]): Promise<Agreemen
   }).then((raw) => (raw.agreements ?? []).map(toAgreementStatus))
 }
 
-/** 항목의 현재 유효 버전 — 없으면(미배포·항목 삭제) 제출할 버전을 모르므로 실패로 다룬다 */
-export async function currentAgreementVersion(
-  type: AgreementType,
-  signal?: AbortSignal,
-): Promise<string> {
-  const found = (await listAgreements(signal)).find((item) => item.type === type)
-  if (!found)
-    throw new ApiRequestError(
-      502,
-      'AGREEMENT_VERSION_MISSING',
-      '약관 정보를 받지 못했어요. 잠시 후 다시 시도해 주세요.',
-    )
-  return found.currentVersion
-}
-
 /**
  * POST /groups/:id/agreements — 아동 보호자 동의 확보 확인(선생님 전용·멱등).
  * 확인은 **선생님별·모임별**로 쌓인다(다른 선생님의 확인으로 갈음되지 않는다) — 그래서 초대로
  * 합류한 선생님은 첫 업로드에서 자기 확인을 남긴다.
- * 화면은 버전을 모른다: 현재 버전을 확인한 뒤 그 버전으로 기록한다(안내 문서가 개정돼 버전이
- * 오르면 다시 확인 대상이 되는 것도 이 조회 덕이다).
+ * 버전은 화면에 보여준 확인 문장의 것(`GUARDIAN_CONSENT_COPY.version`)을 싣는다(CHMO-517 —
+ * 종전 서버 조회 에코 폐지). 문장이 개정돼 서버 버전이 앞서면 VALID400으로 거부되고, 그 계정은
+ * 새 배포에서 다시 확인 대상이 된다.
  * 철회는 없다 — 이미 올라간 사진의 근거를 없애는 행위라 사진 삭제로 처리한다(BE 계약).
  */
 export async function attestGuardianConsent(
   groupId: ID | string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const version = await currentAgreementVersion('child_consent_attested', signal)
   await apiFetch<unknown>(`/groups/${groupId}/agreements`, {
     method: 'POST',
-    body: { version },
+    body: { version: GUARDIAN_CONSENT_COPY.version },
     signal,
   })
 }

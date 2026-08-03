@@ -909,6 +909,18 @@ export function settleAnalysis(eventId: number): DbAnalysisJob | undefined {
   return job
 }
 
+/**
+ * 모임에 분석 중 이벤트가 있는가 — 모임 삭제·마지막 선생님 나가기의 MOMENT409 가드
+ * (BE DeleteSpaceUseCase·RemoveSpaceMemberUseCase 대응, CHMO-564 스펙 대조).
+ * 목 분석은 조회 시점에야 전이되므로 먼저 정산한다 — 안 하면 지연이 이미 지난
+ * analyzing(사실상 완료)이 가드에 걸려 실 BE에 없는 거부를 만든다.
+ */
+export function hasAnalyzingEvent(groupId: number): boolean {
+  const events = eventsOfGroup(groupId)
+  events.forEach((e) => settleAnalysis(e.id))
+  return events.some((e) => e.status === 'analyzing')
+}
+
 /** 목 인물 이름 풀 — 분석 완료 시 모임에 인물이 부족하면 여기서 생성 */
 const PERSON_NAME_POOL = ['김민준', '이서연', '박하린', '최지우', '정도윤', '한소율']
 

@@ -5,10 +5,13 @@
  * 06-U 업로드 게이트 모달(CHMO-516). 같은 확인을 두 문장으로 갈라 두면 사용자가 서로 다른
  * 두 가지에 동의한 것처럼 읽히고, 서버에 남는 기록은 하나라 증빙과 화면이 어긋난다.
  *
- * ⚠ statement를 고치면 BE `AgreementType.CHILD_CONSENT_ATTESTED`의 버전도 올려야 한다
- * (기존 확인이 구버전이 되어 다시 확인받는다). 버전을 FE가 소유하도록 옮기는 건 CHMO-517.
+ * ⚠ statement를 고치면 아래 version과 BE `AgreementType.CHILD_CONSENT_ATTESTED`의 버전을
+ * **함께** 올려야 한다(기존 확인이 구버전이 되어 다시 확인받는다). 제출 버전의 원천은
+ * 서버 에코가 아니라 이 상수다(CHMO-517) — 화면에 보여준 문장과 기록된 버전이 어긋나지 않게.
  */
 export const GUARDIAN_CONSENT_COPY = {
+  /** 이 statement의 버전 — BE AgreementType.CHILD_CONSENT_ATTESTED 최초 버전과 일치(CHMO-517) */
+  version: '1.0',
   /** 왜 필요한지 — 얼굴 인식으로 처리한다는 사실 + 법정대리인 동의가 전제라는 안내 */
   intro:
     '치즈모아는 사진 속 아이들의 얼굴을 분석해 인물별 앨범을 만들어요. 만 14세 미만 아이의 사진을 올리려면 보호자(법정대리인)의 동의가 필요해요.',
