@@ -9,7 +9,7 @@ import type { LegalDoc } from '../legal/types'
 export function LegalDocBody({ doc }: { doc: LegalDoc }) {
   return (
     <>
-      {/* 시행일은 법률 검토 후 확정이라 초안 상태 표기(status)가 그 자리를 대신한다 */}
+      {/* 상태 표기(status)는 게시일 — "초안"류 미완성 고지는 쓰지 않는다(2026-08-03 출시 워딩 정리) */}
       <p className="rounded-xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
         버전 {doc.version} · {doc.status}
       </p>

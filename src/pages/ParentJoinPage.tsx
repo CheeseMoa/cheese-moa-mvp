@@ -9,9 +9,10 @@ import { joinGroup } from '../api/groups'
 import { cx } from '../lib/cx'
 import type { JoinGroupResult } from '../types/api'
 
-/** 필수 동의 항목 — 문구 확정 전 자리(api-draft §8). 확정되면 상세 문구·버전과 consents 전송을 붙인다 */
+/** 필수 동의 항목 — 상세 문구 확정 전 자리(api-draft §8, 라벨에 그 사정을 노출하지는 않는다 —
+ * 2026-08-03 출시 워딩 정리). 확정되면 상세 문구·버전과 consents 전송을 붙인다 */
 const CONSENT_ITEMS = [
-  '[필수] 개인정보 제3자 제공 동의 (문구 확정 전)',
+  '[필수] 개인정보 제3자 제공 동의',
   '[필수] 만 14세 미만 자녀의 법정대리인 동의',
 ] as const
 

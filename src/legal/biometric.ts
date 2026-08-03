@@ -7,7 +7,7 @@ import type { LegalDoc } from './types'
 export const biometricNotice: LegalDoc = {
   title: '얼굴 특징정보 처리 안내',
   version: '1.0', // BE AgreementType.FACE_DATA 최초 버전과 일치(CHMO-517)
-  status: '초안 · 2026. 7. 28. — 법률 검토 후 확정됩니다',
+  status: '2026. 7. 28. 게시',
   intro:
     '치즈모아는 사진 속 얼굴의 생김새를 수치로 바꾼 값(얼굴 특징정보)으로 인물별 앨범을 자동으로 만듭니다. 얼굴 특징정보는 「개인정보 보호법」상 민감정보(생체인식정보)에 해당하여, 다른 개인정보와 별도로 동의를 받아 처리합니다.',
   sections: [
