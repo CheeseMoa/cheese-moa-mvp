@@ -15,8 +15,9 @@ const LEGAL_LINKS = [
   { to: '/legal/biometric', label: '얼굴 특징정보 처리 안내' },
 ]
 
-// 신고·문의 창구(App Store 1.2 — 연락 수단, CHMO-526) — 스토어 등록정보의 지원 이메일과 같은 주소
-const SUPPORT_EMAIL = 'biniwonihyuni@gmail.com'
+// 신고·문의 창구(App Store 1.2 — 연락 수단, CHMO-526) — 공식 서비스 주소로 통일(CHMO-581,
+// 처리방침 §11·이용약관 제21조③과 같은 주소). 스토어 등록정보의 지원 이메일도 이 주소로 맞춘다.
+const SUPPORT_EMAIL = 'cheesemoa03@gmail.com'
 
 /**
  * 설정 / 프로필 편집 · node 240:53 · GET /me, PATCH /me + 로그아웃.
