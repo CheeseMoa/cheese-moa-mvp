@@ -232,14 +232,24 @@ describe('모임', () => {
     expect(calls[0].body).toBeNull()
   })
 
-  it('마지막 선생님 409는 LAST_TEACHER로 정규화된다 — 화면이 "모임 삭제" 안내로 받는다', async () => {
+  it('내보내기 경쟁 409는 LAST_TEACHER로 정규화된다 — 화면은 서버 메시지("최소 1명")를 그대로 띄운다 (CHMO-564)', async () => {
     const { status, payload } = BE_ERRORS.MEMBER409
     stubFetch(() => jsonResponse(payload, status))
 
     await expect(removeGroupMember(6, 42)).rejects.toMatchObject({
       status: 409,
       code: 'LAST_TEACHER',
-      message: '모임의 마지막 선생님은 나갈 수 없습니다. 모임을 삭제해 주세요.',
+      message: '모임에는 최소 1명의 선생님이 남아야 합니다.',
+    })
+  })
+
+  it('분석 중 409는 MOMENT_ANALYZING으로 정규화된다 — 05 나가기가 문구를 나가기 문맥으로 바꿔 안내한다 (CHMO-564·571)', async () => {
+    const { status, payload } = BE_ERRORS.MOMENT409
+    stubFetch(() => jsonResponse(payload, status))
+
+    await expect(removeGroupMember(6, 42)).rejects.toMatchObject({
+      status: 409,
+      code: 'MOMENT_ANALYZING',
     })
   })
 })
