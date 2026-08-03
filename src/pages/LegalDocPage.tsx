@@ -20,8 +20,10 @@ export function LegalDocPage({ doc }: { doc: LegalDoc }) {
     <PhoneShell>
       <Header onBack={handleBack} title={doc.title} />
       <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
+        {/* 버전은 동의 제출에 실리는 값과 같은 원천(doc.version — CHMO-517)이라 화면 표기가 곧 증빙.
+            시행일은 법률 검토 후 확정이라 초안 상태 표기(status)가 그 자리를 대신한다 */}
         <p className="rounded-xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
-          {doc.status}
+          버전 {doc.version} · {doc.status}
         </p>
         {doc.intro ? (
           <p className="mt-4 text-sm leading-relaxed text-text">{doc.intro}</p>

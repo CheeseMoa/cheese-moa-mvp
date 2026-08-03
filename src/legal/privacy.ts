@@ -7,6 +7,7 @@ import type { LegalDoc } from './types'
  */
 export const privacyPolicy: LegalDoc = {
   title: '개인정보 처리방침',
+  version: '1.0', // BE AgreementType.PRIVACY_POLICY 최초 버전과 일치(CHMO-517)
   status: '초안 · 2026. 7. 28. — 법률 검토 후 확정됩니다',
   intro:
     '치즈모아(이하 "회사")는 「개인정보 보호법」에 따라 정보주체의 개인정보를 보호하고 관련 고충을 처리하기 위하여 다음과 같이 개인정보 처리방침을 수립·공개합니다.',
