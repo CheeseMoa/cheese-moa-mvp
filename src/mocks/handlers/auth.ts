@@ -97,7 +97,8 @@ export const authHandlers = [
     if (!pin) return invalidPin()
     if (nicknameTaken(nickname)) return nicknameConflict()
 
-    const user = { id: nextId('usr'), nickname, pin, createdAt: nowIso() }
+    // 신규 가입 기본 role = USER(BE와 동일 — 관리자 지정은 DB 직접 변경뿐, admin-spec §2-3)
+    const user = { id: nextId('usr'), nickname, pin, role: 'USER' as const, createdAt: nowIso() }
     db.users.push(user)
     persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
     return created(authResponse(user))
@@ -132,7 +133,7 @@ export const authHandlers = [
     let user = db.users.find((u) => u.nickname === nickname)
     if (!user) {
       // 소셜 계정은 PIN이 없다 — 빈 문자열은 PIN_RE에 걸려 닉네임+PIN 로그인으로는 진입 불가
-      user = { id: nextId('usr'), nickname, pin: '', createdAt: nowIso() }
+      user = { id: nextId('usr'), nickname, pin: '', role: 'USER' as const, createdAt: nowIso() }
       db.users.push(user)
       persistUser(user) // 새로고침(재시드) 후에도 발급된 토큰의 주인이 남게
     }

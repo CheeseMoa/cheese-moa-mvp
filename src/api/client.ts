@@ -87,7 +87,46 @@ interface BeEnvelope {
   isSuccess: boolean
   code: string
   message: string
+  /** 페이지네이션 응답만 동봉(BE Response.onSuccess(status, Page) — 어드민 목록 등) */
+  pageInfo?: unknown
   result?: unknown
+}
+
+/**
+ * BE 봉투의 페이지 정보(BE PageInfo — CHMO-378 어드민 목록에서 확인). result와 나란히
+ * 봉투에 실리는 유일한 부가 데이터라, result만 언랩하는 apiFetch로는 읽을 수 없어
+ * apiFetchPaged가 함께 꺼낸다.
+ */
+export interface BePageInfo {
+  page: number
+  size: number
+  hasNext: boolean
+  totalElements: number
+  totalPages: number
+}
+
+/** 페이지네이션 응답 — 형태가 어긋난 pageInfo는 null로 접는다(화면은 목록만이라도 그린다) */
+export interface PagedResult<T> {
+  items: T
+  pageInfo: BePageInfo | null
+}
+
+function toPageInfo(value: unknown): BePageInfo | null {
+  if (typeof value !== 'object' || value === null) return null
+  const info = value as Record<string, unknown>
+  return typeof info.page === 'number' &&
+    typeof info.size === 'number' &&
+    typeof info.hasNext === 'boolean' &&
+    typeof info.totalElements === 'number' &&
+    typeof info.totalPages === 'number'
+    ? {
+        page: info.page,
+        size: info.size,
+        hasNext: info.hasNext,
+        totalElements: info.totalElements,
+        totalPages: info.totalPages,
+      }
+    : null
 }
 
 function isBeEnvelope(payload: unknown): payload is BeEnvelope {
@@ -200,7 +239,19 @@ async function requestFreshTokens(): Promise<boolean> {
  * - 실패 시 ApiRequestError throw
  */
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  return sendRequest<T>(path, options, true)
+  return (await sendRequest<T>(path, options, true)).result
+}
+
+/**
+ * 페이지네이션 응답용 fetch — result와 함께 봉투의 pageInfo를 꺼낸다(어드민 목록, CHMO-378).
+ * 그 외 동작(재발급·에러 정규화·시각 보정)은 apiFetch와 동일하다.
+ */
+export async function apiFetchPaged<T>(
+  path: string,
+  options: ApiOptions = {},
+): Promise<PagedResult<T>> {
+  const { result, pageInfo } = await sendRequest<T>(path, options, true)
+  return { items: result, pageInfo }
 }
 
 /**
@@ -211,7 +262,7 @@ async function sendRequest<T>(
   path: string,
   options: ApiOptions,
   allowRefresh: boolean,
-): Promise<T> {
+): Promise<{ result: T; pageInfo: BePageInfo | null }> {
   const { auth = 'creator', viewerShareToken, body, headers, ...init } = options
 
   const finalHeaders = new Headers(headers)
@@ -254,7 +305,7 @@ async function sendRequest<T>(
   }
 
   if (res.status === 204) {
-    return undefined as T
+    return { result: undefined as T, pageInfo: null }
   }
 
   const isJson = res.headers.get('Content-Type')?.includes('application/json') ?? false
@@ -267,7 +318,10 @@ async function sendRequest<T>(
     if (!res.ok || !payload.isSuccess) {
       throw new ApiRequestError(res.status, toFeErrorCode(payload.code), payload.message, requestId)
     }
-    return normalizeTimestamps(payload.result) as T
+    return {
+      result: normalizeTimestamps(payload.result) as T,
+      pageInfo: toPageInfo(payload.pageInfo),
+    }
   }
 
   // 봉투가 아닌 응답 = API가 아닌 무언가(프록시 오류 페이지 등). 원문이 사용자에게 새지 않게 UNKNOWN.
@@ -275,5 +329,5 @@ async function sendRequest<T>(
     throw new ApiRequestError(res.status, 'UNKNOWN', res.statusText, requestId)
   }
 
-  return payload as T
+  return { result: payload as T, pageInfo: null }
 }

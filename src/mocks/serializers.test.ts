@@ -36,6 +36,10 @@ import { createFixtures } from './fixtures'
 import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
 import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
 import {
+  toAdminGroupDetailResponse,
+  toAdminGroupSummary,
+  toAdminProfileResponse,
+  toAdminRecentGroup,
   toAgreementStatusResponse,
   toAlbumDetail,
   toAlbumSummary,
@@ -80,6 +84,12 @@ import {
   toViewerEvent,
   toViewerPhoto,
 } from '../api/mappers'
+import {
+  toAdminGroupDetail,
+  toAdminGroupRow,
+  toAdminProfile,
+  toAdminStats,
+} from '../admin/api/mappers'
 
 beforeEach(() => seedDb(createFixtures()))
 
@@ -694,5 +704,77 @@ describe('약관 동의 (CHMO-516 — BE CHMO-514 계약)', () => {
     expect(agreementCatalogOf('child_consent_attested')?.currentVersion).toBe(
       GUARDIAN_CONSENT_COPY.version,
     )
+  })
+})
+
+describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
+  it('프로필 — role이 그대로 전달된다(시드 이현정 = ADMIN 겸용 계정)', () => {
+    expect(toAdminProfile(toAdminProfileResponse(db.users[0]))).toEqual({
+      userId: 1,
+      nickname: '이현정',
+      role: 'ADMIN',
+    })
+  })
+
+  it('모임 목록 행 — 사진 수는 앨범 매핑 distinct(분석 전 사진은 세지 않는다)', () => {
+    const row = toAdminGroupRow(toAdminGroupSummary(findGroup(1)!))
+    expect(row).toEqual({
+      groupId: 1,
+      name: '햇살반',
+      memberCount: 6, // ACTIVE만 — 대기 신청 2건(치즈냥이88·신입쌤)은 세지 않는다
+      eventCount: 4,
+      // 운동회 28 + 봄 소풍 16 — 분석 중인 물놀이 20장은 앨범 매핑 전이라 제외(BE AlbumPhoto 기준)
+      photoCount: 44,
+      createdAt: '2026-05-01T09:00:00+09:00',
+    })
+  })
+
+  it('최근 모임 — stats 매퍼를 거쳐 memberCount·createdAt이 살아 있다', () => {
+    const stats = toAdminStats({
+      totals: { users: 8, groups: 3, events: 4, photos: 64 },
+      last7Days: { newGroups: 0, newEvents: 0, newPhotos: 0 },
+      recentGroups: [toAdminRecentGroup(findGroup(3)!)],
+    })
+    expect(stats.recentGroups).toEqual([
+      { groupId: 3, name: '별님반', memberCount: 1, createdAt: '2026-06-20T09:00:00+09:00' },
+    ])
+  })
+
+  it('모임 상세 — 멤버는 PENDING 포함 신청 순, 이벤트는 최신(id 역순)·대문자 상태', () => {
+    const detail = toAdminGroupDetail(toAdminGroupDetailResponse(findGroup(1)!))
+    expect(detail.name).toBe('햇살반')
+    expect(detail.ownerNickname).toBe('이현정') // 최초 ACTIVE 선생님 = 생성자 파생
+    expect(detail.memberCount).toBe(6)
+    // ACTIVE 6 + 대기 신청 2(치즈냥이88 학부모·신입쌤 선생님) — 운영자는 신청도 봐야 한다
+    expect(detail.members).toHaveLength(8)
+    expect(detail.members[0]).toMatchObject({ nickname: '이현정', role: 'TEACHER', status: 'ACTIVE' })
+    expect(detail.members[6]).toMatchObject({ nickname: '치즈냥이88', status: 'PENDING' })
+    expect(detail.members[7]).toMatchObject({ nickname: '신입쌤', role: 'TEACHER', status: 'PENDING' })
+
+    expect(detail.events.map((e) => e.eventId)).toEqual([4, 3, 2, 1])
+    expect(detail.events[0]).toMatchObject({ name: '가을 발표회 준비', status: 'EMPTY', photoCount: 0 })
+    // 봄 소풍 — 공개 이벤트만 publishedAt 보유, 나머지는 null 정규화
+    expect(detail.events[1].publishedAt).toBeNull()
+    expect(detail.events[2]).toMatchObject({
+      name: '봄 소풍',
+      status: 'PUBLISHED',
+      photoCount: 16,
+      publishedAt: '2026-05-14T18:00:00+09:00',
+    })
+    expect(detail.events[3]).toMatchObject({ name: '6.15 운동회 오전', status: 'REVIEW', photoCount: 28 })
+  })
+
+  it('어드민 응답에 시크릿 4종이 없다(AC-6 — joinKey·비밀번호·공유 토큰·공유 비밀번호)', () => {
+    const group = findGroup(1)!
+    const serialized = JSON.stringify([
+      toAdminGroupSummary(group),
+      toAdminGroupDetailResponse(group),
+      toAdminRecentGroup(group),
+    ])
+    expect(serialized).not.toContain(group.joinKey)
+    expect(serialized).not.toContain(group.parentJoinKey)
+    expect(serialized).not.toContain(group.password)
+    expect(serialized).not.toContain(group.share.token)
+    expect(serialized).not.toContain(group.share.password)
   })
 })
