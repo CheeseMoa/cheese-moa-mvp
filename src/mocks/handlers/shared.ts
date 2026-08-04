@@ -40,6 +40,26 @@ export function ok<T>(result: T) {
   )
 }
 
+/**
+ * BE PageInfo(Response.onSuccess(status, Page) — CHMO-378 어드민 목록) — 봉투에 result와
+ * 나란히 실린다. 필드명·형태는 BE common/response/PageInfo 그대로.
+ */
+export interface MockPageInfo {
+  page: number
+  size: number
+  hasNext: boolean
+  totalElements: number
+  totalPages: number
+}
+
+/** 페이지네이션 성공 봉투 — pageInfo가 result 앞에 동봉된다(BE @JsonPropertyOrder와 동일) */
+export function okPaged<T>(result: T, pageInfo: MockPageInfo) {
+  return HttpResponse.json(
+    { isSuccess: true, code: 'COMMON200', message: '성공입니다.', pageInfo, result },
+    { headers: requestIdHeaders() },
+  )
+}
+
 /** 생성 성공 봉투 (201) */
 export function created<T>(result: T) {
   return HttpResponse.json(
@@ -97,6 +117,19 @@ export function albumNotFound() {
 /** 검증 실패 — BE VALID400(업로드 키 불일치 응답에서 채집: 도메인 무관 공용 검증 코드) */
 export function invalidRequest(message: string) {
   return errorResponse(400, 'VALID400', message)
+}
+
+/**
+ * 관리자가 아님 — BE ADMIN403(2026-08-04 실서버 채집, CHMO-377 가드). `/admin/*` 전용이라
+ * 대상 은닉 없이 곧바로 403이다(비로그인은 COMMON401 — 순서도 실서버 관찰과 동일).
+ */
+export function adminForbidden() {
+  return errorResponse(403, 'ADMIN403', '관리자 권한이 필요합니다.')
+}
+
+/** 요청 파라미터 검증 실패 — BE COMMON400(_BAD_REQUEST, 소스 대조 — 어드민 목록 sort·size) */
+export function commonBadRequest() {
+  return errorResponse(400, 'COMMON400', '잘못된 요청입니다.')
 }
 
 /** 본문이 JSON이 아닐 때(readJson → null) 공통 400 */

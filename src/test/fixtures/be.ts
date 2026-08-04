@@ -96,6 +96,8 @@ export const BE_ERRORS = {
       '분석 중인 이벤트는 삭제할 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.',
     ),
   },
+  /** 관리자가 아님 — GET /admin/stats (비관리자 토큰 · 2026-08-04 실서버 채집, CHMO-379 프로브) */
+  ADMIN403: { status: 403, payload: errorEnvelope('ADMIN403', '관리자 권한이 필요합니다.') },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -501,6 +503,91 @@ export const BE_AGREEMENTS = {
       required: true,
       scope: 'GROUP',
       agreed: false,
+    },
+  ],
+}
+
+// ── 관리자 (CHMO-377·378 — BE 스펙 문서 §3·admin/dto 소스 대조 2026-08-04) ──
+// 실서버 채집은 관리자 role 부여(DB 직접 변경) 후에만 가능하다 — 가드 403만 채집됐고
+// 성공 응답은 BE 스펙 문서의 예시·DTO 레코드 정의에서 옮겼다(계약은 형태지 값이 아니다).
+
+/** GET /admin/me — AdminProfileResponse */
+export const BE_ADMIN_PROFILE = { userId: 3, nickname: '김선생', role: 'ADMIN' }
+
+/** GET /admin/stats — AdminStatsResponse(recentGroups는 생성일 내림차순 5개 고정) */
+export const BE_ADMIN_STATS = {
+  totals: { users: 123, groups: 45, events: 210, photos: 8123 },
+  last7Days: { newGroups: 3, newEvents: 12, newPhotos: 950 },
+  recentGroups: [
+    { groupId: 45, name: '치즈유치원', memberCount: 8, createdAt: '2026-08-01T10:00:00' },
+  ],
+}
+
+/** GET /admin/groups — result(bare 배열). pageInfo는 봉투에 나란히 실린다(아래) */
+export const BE_ADMIN_GROUP_ROWS = [
+  {
+    groupId: 45,
+    name: '치즈유치원',
+    memberCount: 8,
+    eventCount: 12,
+    photoCount: 830,
+    createdAt: '2026-08-01T10:00:00',
+  },
+]
+
+/** 봉투의 pageInfo — BE common/response/PageInfo(Response.onSuccess(status, Page)) */
+export const BE_ADMIN_PAGE_INFO = {
+  page: 0,
+  size: 20,
+  hasNext: false,
+  totalElements: 1,
+  totalPages: 1,
+}
+
+/** GET /admin/groups/:groupId — AdminGroupDetailResponse(멤버 PENDING 포함·publishedAt null 가능) */
+export const BE_ADMIN_GROUP_DETAIL = {
+  groupId: 45,
+  name: '치즈유치원',
+  createdAt: '2026-08-01T10:00:00',
+  ownerUserId: 3,
+  ownerNickname: '김선생',
+  memberCount: 8,
+  members: [
+    {
+      userId: 3,
+      nickname: '김선생',
+      role: 'TEACHER',
+      status: 'ACTIVE',
+      joinedAt: '2026-08-01T10:00:00',
+    },
+    {
+      userId: 9,
+      nickname: '민준아빠',
+      role: 'PARENT',
+      status: 'PENDING',
+      joinedAt: '2026-08-02T09:30:00',
+    },
+  ],
+  events: [
+    {
+      eventId: 101,
+      name: '여름 물놀이',
+      status: 'PUBLISHED',
+      eventDate: '2026-07-30',
+      photoCount: 120,
+      albumCount: 9,
+      createdAt: '2026-07-30T14:00:00',
+      publishedAt: '2026-07-31T09:00:00',
+    },
+    {
+      eventId: 98,
+      name: '가을 발표회 준비',
+      status: 'EMPTY',
+      eventDate: '2026-08-20',
+      photoCount: 0,
+      albumCount: 0,
+      createdAt: '2026-08-01T11:00:00',
+      publishedAt: null,
     },
   ],
 }

@@ -18,7 +18,9 @@
  * + 2026-07-31 BE 소스 대조(MEMBER409 — 멤버 내보내기·나가기 CHMO-525 PR #155의
  *   ErrorStatus.LAST_TEACHER. 실서버 채집은 BE 배포 후)
  * + 2026-08-03 BE 소스 대조(MOMENT409 — ErrorStatus.MOMENT_ANALYZING. 모임 삭제·마지막 선생님
- *   나가기의 분석 중 가드, CHMO-564 스펙 확인. 실서버 채집은 BE 배포 후).
+ *   나가기의 분석 중 가드, CHMO-564 스펙 확인. 실서버 채집은 BE 배포 후)
+ * + 2026-08-04 실서버 채집(ADMIN403 — 비관리자 토큰의 `/admin/*` 호출. CHMO-377 가드 배포 확인,
+ *   CHMO-379 착수 프로브).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -57,6 +59,12 @@ const BE_CODE_MAP: Record<string, string> = {
    * 분석이 끝나면 풀리는 일시 상태다.
    */
   MOMENT409: 'MOMENT_ANALYZING',
+  /**
+   * 관리자가 아님(403) — "관리자 권한이 필요합니다." `/admin/*` 전용 가드(BE CHMO-377).
+   * 어드민 가드(src/admin/AdminLayout)가 진입 차단 화면으로 받는다 — 기다려도 안 풀리는
+   * 권한 문제라 재시도 CTA를 주지 않는다(CHMO-379).
+   */
+  ADMIN403: 'NOT_ADMIN',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
   /** 이벤트(BE 도메인명 moment) 없음(404) */

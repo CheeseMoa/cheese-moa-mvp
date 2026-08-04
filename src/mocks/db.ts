@@ -21,11 +21,18 @@ import type {
 
 // ── 내부 레코드 타입 (BE 내부 모델 포함 — API 응답에 그대로 노출 금지) ──
 
+/**
+ * BE UserRole(CHMO-377) — 기존 서비스 API는 이 값을 보지 않고 `/admin/*` 인가에만 쓰인다.
+ * 기본값은 USER(BE 마이그레이션과 동일 — 기존 행 영향 없음).
+ */
+export type DbUserRole = 'USER' | 'ADMIN'
+
 export interface DbUser {
   id: number
   nickname: string
   /** 4자리 PIN — 응답에 절대 포함하지 않는다 */
   pin: string
+  role: DbUserRole
   createdAt: ISODateTime
 }
 
@@ -562,6 +569,15 @@ export function photosOfEvent(eventId: number): DbPhoto[] {
 
 export function photosOfAlbum(albumId: number): DbPhoto[] {
   return db.photos.filter((p) => p.albumIds.includes(albumId))
+}
+
+/**
+ * 앨범에 실린(분류가 커밋된) 사진 — BE `AlbumPhotoRepository.countDistinctPhotosBySpaceIds`의
+ * 이벤트 단위 대응(어드민 집계 CHMO-378: 모임 사진 수·이벤트 사진 수 둘 다 이 규칙).
+ * 분석 전 사진(albumIds 빈 배열)은 세지 않는다 — 목도 실 BE처럼 "분류를 거친 사진"만 센다.
+ */
+export function albumMappedPhotosOfEvent(eventId: number): DbPhoto[] {
+  return photosOfEvent(eventId).filter((p) => p.albumIds.length > 0)
 }
 
 // ── 파생 카운트 ──────────────────────────────────────────────
