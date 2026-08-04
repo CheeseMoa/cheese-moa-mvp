@@ -2,19 +2,25 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, IconCheck, IconClose, TextField, useToast } from '../components/ui'
+import { LegalDocBody } from '../components/LegalDocBody'
+import {
+  BottomSheet,
+  Button,
+  IconCheck,
+  IconClose,
+  InlineRetry,
+  TextField,
+  useToast,
+} from '../components/ui'
+import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
+import { listAgreements } from '../api/agreements'
 import { joinGroup } from '../api/groups'
+import { GUARDIAN_CHILD_CONSENT_COPY } from '../legal/consents'
+import { biometricNotice } from '../legal/biometric'
 import { cx } from '../lib/cx'
 import type { JoinGroupResult } from '../types/api'
-
-/** 필수 동의 항목 — 상세 문구 확정 전 자리(api-draft §8, 라벨에 그 사정을 노출하지는 않는다 —
- * 2026-08-03 출시 워딩 정리). 확정되면 상세 문구·버전과 consents 전송을 붙인다 */
-const CONSENT_ITEMS = [
-  '[필수] 개인정보 제3자 제공 동의',
-  '[필수] 만 14세 미만 자녀의 법정대리인 동의',
-] as const
 
 type Step = 1 | 2 | 3
 
@@ -29,6 +35,10 @@ interface ParentJoinPageProps {
  * 02-1 모달의 학부모 코드 감지 인계(서버 400 → 비밀번호 state 동반). 1/3 모임 비밀번호 →
  * 2/3 자녀 이름(자유 텍스트·복수) → 3/3 동의 → [동의하고 참여 신청] → 신청(PENDING) 생성.
  * 랜딩은 홈(§7-2 확정 — 대기 전용 화면 없음, 홈의 비활성 카드가 곧 "신청됨" 피드백).
+ *
+ * 3/3 동의는 실계약이다(CHMO-587 · BE CHMO-586) — 자녀의 사진·얼굴 특징정보 처리 동의 1건
+ * (필수·기본 미체크·전문 보기 시트)을 받고, 최종 제출에 childConsentVersion(서버 카탈로그의
+ * 현재 버전 — 하드코딩 금지)을 동봉한다. 누락·구버전은 서버가 VALID400으로 신청째 거부한다.
  *
  * 1/3 [다음]은 childNames 없이 한 번 제출(프로브)한다 — 비밀번호 오류(JOIN403)·중복 신청(409)
  * 은 이 시점에 잡히고, 400(자녀 이름 필요)이면 관문 통과로 보고 2/3로 간다. 실 BE 검증 순서가
@@ -50,16 +60,29 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
   const [step, setStep] = useState<Step>(1)
   const [password, setPassword] = useState(handedPassword)
   const [childNames, setChildNames] = useState<string[]>([''])
-  const [agreed, setAgreed] = useState<boolean[]>(CONSENT_ITEMS.map(() => false))
+  // 필수 항목 기본 체크 금지(01-A와 같은 원칙 — 정본 §1.1) — 미체크로 시작한다
+  const [consentChecked, setConsentChecked] = useState(false)
+  const [docOpen, setDocOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 제출에 실을 동의 버전의 원천 — 서버 카탈로그(CHMO-587, 하드코딩 금지). 진입 시점에 미리
+  // 읽어 3/3 앞에 대기가 붙지 않게 한다. 항목이 없으면(구계약 BE — CHMO-586 미배포) 필드를
+  // 생략한다: 게이트가 없는 서버라 종전 계약 그대로 신청이 접수된다(FE 선행 배포 안전망).
+  const agreementsApi = useApi('agreements', (signal) => listAgreements(signal))
+  const childConsent =
+    agreementsApi.data?.find((s) => s.type === 'guardian_child_consent') ?? null
+
   // 다자녀 신청(§2) — 비워둔 칸은 제출에서 걸러진다
   const names = childNames.map((n) => n.trim()).filter((n) => n.length > 0)
-  const allAgreed = agreed.every(Boolean)
+  // 3/3은 카탈로그 도착도 기다린다 — 버전 없이 제출하면 신형 BE가 VALID400으로 거부한다
   const canProceed =
     !submitting &&
-    (step === 1 ? password.trim().length > 0 : step === 2 ? names.length > 0 : allAgreed)
+    (step === 1
+      ? password.trim().length > 0
+      : step === 2
+        ? names.length > 0
+        : consentChecked && agreementsApi.data !== null)
 
   const returnTo = `/join/${encodeURIComponent(joinKey)}?role=parent`
 
@@ -83,12 +106,6 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
     if (step === 1) navigate('/home', { replace: true })
     else setStep((s) => (s - 1) as Step)
   }
-
-  const toggleAll = () => {
-    const next = !allAgreed
-    setAgreed(CONSENT_ITEMS.map(() => next))
-  }
-  const toggleOne = (i: number) => setAgreed((prev) => prev.map((v, idx) => (idx === i ? !v : v)))
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -118,17 +135,27 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
       })
       return
     }
-    // 3/3 최종 제출 — 동의 문구 확정 전이라 consents는 싣지 않는다(§8 — body 자리만 예약)
-    await mutate(() => joinGroup({ joinKey, password: password.trim(), childNames: names }), {
-      onSuccess: finishJoined,
-      redirect: { state: { returnTo } },
-      onError: (msg, err) => {
-        setSubmitting(false)
-        // 실 BE 검증 순서가 목과 달라 1/3 프로브가 비밀번호를 못 거른 경우 — 1/3로 되돌려 고치게
-        if (err instanceof ApiRequestError && err.code === 'WRONG_PASSWORD') setStep(1)
-        setError(msg)
+    // 3/3 최종 제출 — 화면에 보여준 동의의 버전을 동봉한다(CHMO-587). 카탈로그에 항목이
+    // 없으면(구계약 BE) undefined라 JSON에서 빠진다 — 종전 계약 그대로.
+    await mutate(
+      () =>
+        joinGroup({
+          joinKey,
+          password: password.trim(),
+          childNames: names,
+          childConsentVersion: childConsent?.currentVersion,
+        }),
+      {
+        onSuccess: finishJoined,
+        redirect: { state: { returnTo } },
+        onError: (msg, err) => {
+          setSubmitting(false)
+          // 실 BE 검증 순서가 목과 달라 1/3 프로브가 비밀번호를 못 거른 경우 — 1/3로 되돌려 고치게
+          if (err instanceof ApiRequestError && err.code === 'WRONG_PASSWORD') setStep(1)
+          setError(msg)
+        },
       },
-    })
+    )
   }
 
   return (
@@ -238,17 +265,22 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
               동의가 필요해요
             </h2>
             <p className="mt-1.5 text-[13px] text-muted">아이들 사진 보호를 위해 꼭 확인해 주세요</p>
-            <div className="mt-5 flex flex-col gap-2.5">
-              <ConsentRow emphasis label="모두 동의합니다" checked={allAgreed} onToggle={toggleAll} />
-              {CONSENT_ITEMS.map((label, i) => (
-                <ConsentRow
-                  key={label}
-                  label={label}
-                  checked={agreed[i]}
-                  onToggle={() => toggleOne(i)}
-                />
-              ))}
+            <div className="mt-5">
+              <ConsentRow
+                checked={consentChecked}
+                onToggle={() => setConsentChecked((v) => !v)}
+                onShowDoc={() => setDocOpen(true)}
+              />
             </div>
+            {/* 동의 버전을 못 읽으면 제출할 수 없다(신형 BE가 VALID400) — 화면을 가리지 않고
+                이 줄로만 알린다. 성공 응답에 항목이 없는 건 구계약 BE라 정상 진행(버전 생략) */}
+            {agreementsApi.error ? (
+              <InlineRetry
+                className="mt-3"
+                message="동의 항목을 불러오지 못했어요"
+                onRetry={agreementsApi.refetch}
+              />
+            ) : null}
           </>
         )}
 
@@ -264,45 +296,69 @@ export function ParentJoinPage({ joinKey }: ParentJoinPageProps) {
           </Button>
         </div>
       </form>
+
+      {/* [전문 보기] — 화면 이탈 없이 본다(비밀번호·자녀 이름·체크가 컴포넌트 state라 라우팅으로
+          나가면 날아간다 — 01-A와 같은 관용). 문서는 /legal/biometric과 같은 전문 */}
+      <BottomSheet
+        open={docOpen}
+        onClose={() => setDocOpen(false)}
+        title={biometricNotice.title}
+        bodyScrollable
+      >
+        <div className="px-1 pb-2">
+          <LegalDocBody doc={biometricNotice} />
+        </div>
+      </BottomSheet>
     </PhoneShell>
   )
 }
 
 interface ConsentRowProps {
-  label: string
   checked: boolean
   onToggle: () => void
-  /** 상단 "모두 동의합니다" 행 — 굵은 타이포 */
-  emphasis?: boolean
+  onShowDoc: () => void
 }
 
-/** 동의 행 — 행 전체가 탭 영역. 문구 확정 전이라 상세 보기(›)는 아직 없다(§8 — 확정 시 시트 추가) */
-function ConsentRow({ label, checked, onToggle, emphasis }: ConsentRowProps) {
+/**
+ * 자녀 정보 처리 동의 행(CHMO-587) — 문구는 GUARDIAN_CHILD_CONSENT_COPY 단일 원천.
+ * 체크 토글과 [전문 보기]는 별개 버튼이다(전문 탭이 체크로 번지지 않게 — 01-A와 같은 관용).
+ */
+function ConsentRow({ checked, onToggle, onShowDoc }: ConsentRowProps) {
   return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      onClick={onToggle}
-      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3.5 text-left shadow-card"
-    >
-      <span
-        aria-hidden="true"
-        className={cx(
-          'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border transition-colors',
-          // 체크는 heading 브라운 — 옐로우 위 흰 글자 금지(대비). 옐로우가 밝아지며 더 안 보인다
-          checked
-            ? 'border-primary bg-primary text-heading'
-            : 'border-[#C9C2B4] bg-white text-transparent',
-        )}
+    <div className="flex w-full items-center gap-1 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card">
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        onClick={onToggle}
+        className="flex min-w-0 flex-1 items-start gap-3 text-left"
       >
-        <IconCheck size={14} />
-      </span>
-      <span
-        className={cx('leading-snug text-text', emphasis ? 'text-[15px] font-bold' : 'text-[13px]')}
+        <span
+          aria-hidden="true"
+          className={cx(
+            'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border transition-colors',
+            // 체크는 heading 브라운 — 옐로우 위 흰 글자 금지(대비). 옐로우가 밝아지며 더 안 보인다
+            checked
+              ? 'border-primary bg-primary text-heading'
+              : 'border-[#C9C2B4] bg-white text-transparent',
+          )}
+        >
+          <IconCheck size={14} />
+        </span>
+        <span className="min-w-0 text-[13px] leading-snug text-text">
+          <span className="text-muted">(필수)</span> {GUARDIAN_CHILD_CONSENT_COPY.label}
+          <span className="mt-1 block text-xs leading-relaxed text-muted">
+            {GUARDIAN_CHILD_CONSENT_COPY.statement}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onShowDoc}
+        className="shrink-0 px-1 py-0.5 text-xs text-accent underline underline-offset-2"
       >
-        {label}
-      </span>
-    </button>
+        전문 보기
+      </button>
+    </div>
   )
 }

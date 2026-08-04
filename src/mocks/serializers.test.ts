@@ -638,6 +638,7 @@ describe('약관 동의 (CHMO-516 — BE CHMO-514 계약)', () => {
       'FACE_DATA',
       'MARKETING',
       'CHILD_CONSENT_ATTESTED',
+      'GUARDIAN_CHILD_CONSENT',
     ])
     expect(toAgreementStatus(raw.agreements[0])).toEqual({
       type: 'age_14_over',

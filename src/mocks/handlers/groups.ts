@@ -4,15 +4,18 @@
  */
 import { http } from 'msw'
 import {
+  agreementCatalogOf,
   createMembership,
   db,
   deleteGroupCascade,
   findGroup,
+  GUARDIAN_CHILD_CONSENT_TYPE,
   hasAnalyzingEvent,
   membershipOf,
   membershipsOfUser,
   nextId,
   nowIso,
+  recordAgreement,
   type DbGroup,
 } from '../db'
 import {
@@ -31,6 +34,7 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
+import { STALE_VERSION } from './agreements'
 import { shareUrlOf, toGroupDetail, toGroupSummary, toJoinGroupResponse } from './serializers'
 
 function randomJoinKey(): string {
@@ -153,9 +157,12 @@ export const groupHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ joinKey?: unknown; password?: unknown; childNames?: unknown }>(
-      request,
-    )
+    const body = await readJson<{
+      joinKey?: unknown
+      password?: unknown
+      childNames?: unknown
+      childConsentVersion?: unknown
+    }>(request)
     const joinKey = requiredString(body?.joinKey)
     const password = requiredString(body?.password)
     if (!joinKey || !password) return invalidRequest('참여 코드와 비밀번호를 입력해 주세요.')
@@ -186,7 +193,35 @@ export const groupHandlers = [
     if (role === 'parent') {
       const raw = Array.isArray(body?.childNames) ? body.childNames : []
       childNames = raw.map(requiredString).filter((name): name is string => name !== null)
+      // 자녀 이름 검증이 동의 검증보다 앞 — 1/3 프로브(이름·동의 없는 제출)가 이 400으로
+      // 학부모 코드를 감지하는 흐름 유지. BE 검증 순서·문구는 미채집(CHMO-586 배포 전)
       if (childNames.length === 0) return invalidRequest('아이 이름을 입력해 주세요.')
+
+      // 자녀 정보 처리 동의(BE CHMO-586) — 동의권자(보호자) 본인의 기록이라 신청 필수.
+      // 누락·구버전이면 신청째 거부(VALID400 — 티켓 확정, 문구는 BE 미채집이라 추정)
+      const consentVersion = requiredString(body?.childConsentVersion)
+      if (!consentVersion) return invalidRequest('자녀 정보 처리 동의는 필수입니다.')
+      const consentCatalog = agreementCatalogOf(GUARDIAN_CHILD_CONSENT_TYPE)
+      if (consentVersion !== consentCatalog?.currentVersion) return invalidRequest(STALE_VERSION)
+
+      // 기록은 신청 시(승인 전 — 동의 의사표시 시각이 기준·append-only라 거절돼도 남는다).
+      // 같은 모임 재신청(거절 후)이 같은 상태면 행을 늘리지 않는다(멱등 — BE AC)
+      const already = db.agreements.some(
+        (row) =>
+          row.userId === user.id &&
+          row.type === GUARDIAN_CHILD_CONSENT_TYPE &&
+          row.groupId === group.id &&
+          row.version === consentVersion &&
+          row.agreed,
+      )
+      if (!already)
+        recordAgreement({
+          userId: user.id,
+          type: GUARDIAN_CHILD_CONSENT_TYPE,
+          version: consentVersion,
+          agreed: true,
+          groupId: group.id,
+        })
     }
 
     const membership = createMembership({
