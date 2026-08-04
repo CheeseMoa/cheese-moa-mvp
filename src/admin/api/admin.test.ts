@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   adminLogin,
+  adminLogout,
   getAdminGroupDetail,
   getAdminProfile,
   getAdminStats,
@@ -56,6 +57,26 @@ describe('어드민 로그인 (POST /auth/login — CHMO-594)', () => {
     expect((err as ApiRequestError).code).toBe('INVALID_CREDENTIALS')
     expect((err as ApiRequestError).message).toBe('닉네임 또는 PIN이 일치하지 않습니다.')
     expect(getAccessToken()).toBe('at') // beforeEach 세션 그대로 — auth: 'none'이라 401이 토큰을 지우지 않는다
+  })
+})
+
+describe('어드민 로그아웃 (POST /auth/logout — CHMO-595)', () => {
+  it('refreshToken을 실어 서버 무효화 후 로컬 토큰을 지운다(auth 미첨부)', async () => {
+    const calls = serve(envelope(null))
+    await adminLogout()
+    expect(calls[0].url).toBe('/api/v1/auth/logout')
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].headers.get('Authorization')).toBeNull()
+    expect(bodyOf(calls[0])).toEqual({ refreshToken: 'rt' })
+    expect(getAccessToken()).toBeNull()
+    expect(getRefreshToken()).toBeNull()
+  })
+
+  it('서버 호출이 실패해도 로컬 로그아웃은 진행한다 — 화면 복귀가 네트워크에 안 막힌다', async () => {
+    serve({ isSuccess: false, code: 'COMMON500', message: '서버 에러' }, 500)
+    await adminLogout()
+    expect(getAccessToken()).toBeNull()
+    expect(getRefreshToken()).toBeNull()
   })
 })
 
