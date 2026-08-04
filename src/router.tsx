@@ -35,6 +35,9 @@ import { termsOfService } from './legal/terms'
 import { privacyPolicy } from './legal/privacy'
 import { biometricNotice } from './legal/biometric'
 
+// 계정 삭제·데이터 삭제 안내 (CHMO-588)
+import { AccountDeletionPage, DataDeletionPage } from './pages/DeletionGuidePage'
+
 /**
  * 전체 라우트 정의 (docs/screen-spec.md 화면 매핑).
  * 제작자 경로는 CreatorGuard, 뷰어 경로는 ViewerGuard로 감싼다.
@@ -57,6 +60,11 @@ export const router = createBrowserRouter([
   { path: '/legal/terms', element: <LegalDocPage doc={termsOfService} /> },
   { path: '/legal/privacy', element: <LegalDocPage doc={privacyPolicy} /> },
   { path: '/legal/biometric', element: <LegalDocPage doc={biometricNotice} /> },
+
+  // ── 계정 삭제·데이터 삭제 안내 — Google Play 삭제 URL 요건, 스토어 등록정보에 실리는
+  //    공개 URL이라 가드 밖 (CHMO-588) ──
+  { path: '/account-deletion', element: <AccountDeletionPage /> },
+  { path: '/data-deletion', element: <DataDeletionPage /> },
 
   // ── 제작자(로그인) ──────────────────────────────────
   {
