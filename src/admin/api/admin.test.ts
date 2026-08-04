@@ -7,9 +7,15 @@
  * 매퍼의 키 누락·null 정규화, 시각 'Z' 보정, ADMIN403 → NOT_ADMIN 정규화.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getAdminGroupDetail, getAdminProfile, getAdminStats, listAdminGroups } from './admin'
+import {
+  adminLogin,
+  getAdminGroupDetail,
+  getAdminProfile,
+  getAdminStats,
+  listAdminGroups,
+} from './admin'
 import { ApiRequestError } from '../../api/client'
-import { setAuthTokens } from '../../lib/auth'
+import { getAccessToken, getRefreshToken, setAuthTokens } from '../../lib/auth'
 import {
   BE_ADMIN_GROUP_DETAIL,
   BE_ADMIN_GROUP_ROWS,
@@ -19,7 +25,7 @@ import {
   BE_ERRORS,
   envelope,
 } from '../../test/fixtures/be'
-import { jsonResponse, stubFetch } from '../../test/http'
+import { bodyOf, jsonResponse, stubFetch } from '../../test/http'
 
 function serve(payload: unknown, status = 200) {
   return stubFetch(() => jsonResponse(payload, status))
@@ -27,6 +33,30 @@ function serve(payload: unknown, status = 200) {
 
 beforeEach(() => {
   setAuthTokens({ accessToken: 'at', refreshToken: 'rt' })
+})
+
+describe('어드민 로그인 (POST /auth/login — CHMO-594)', () => {
+  it('토큰 미첨부로 서비스와 같은 계약을 타고, 성공 시 토큰 쌍을 저장한다', async () => {
+    const calls = serve(
+      envelope({ userId: 2, nickname: '스테이징테스트', accessToken: 'new-at', refreshToken: 'new-rt' }),
+    )
+    await adminLogin({ nickname: '스테이징테스트', pin: '1234' })
+    expect(calls[0].url).toBe('/api/v1/auth/login')
+    expect(calls[0].method).toBe('POST')
+    // 로그인 요청에 기존(만료) 토큰이 붙으면 안 된다 — auth: 'none'
+    expect(calls[0].headers.get('Authorization')).toBeNull()
+    expect(bodyOf(calls[0])).toEqual({ nickname: '스테이징테스트', pin: '1234' })
+    expect(getAccessToken()).toBe('new-at')
+    expect(getRefreshToken()).toBe('new-rt')
+  })
+
+  it('AUTH401(자격 오류)은 INVALID_CREDENTIALS로 오고 기존 토큰을 건드리지 않는다', async () => {
+    serve(BE_ERRORS.AUTH401.payload, BE_ERRORS.AUTH401.status)
+    const err = await adminLogin({ nickname: 'x', pin: '0000' }).catch((e: unknown) => e)
+    expect((err as ApiRequestError).code).toBe('INVALID_CREDENTIALS')
+    expect((err as ApiRequestError).message).toBe('닉네임 또는 PIN이 일치하지 않습니다.')
+    expect(getAccessToken()).toBe('at') // beforeEach 세션 그대로 — auth: 'none'이라 401이 토큰을 지우지 않는다
+  })
 })
 
 describe('어드민 프로필 (GET /admin/me)', () => {
