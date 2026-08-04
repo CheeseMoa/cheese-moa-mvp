@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { clearAuthTokens, getAccessToken } from '../lib/auth'
 import { useApi } from '../hooks/useApi'
-import { getAdminProfile } from './api/admin'
+import { adminLogout, getAdminProfile } from './api/admin'
 import { AdminSidebar } from './components/AdminSidebar'
 import { AdminLoginCard } from './components/AdminLoginCard'
 import { AdminErrorMessage, AdminMessage } from './components/AdminMessage'
@@ -97,7 +97,13 @@ export function AdminLayout() {
 
   return (
     <div className="flex h-screen min-w-[1024px] bg-admin-bg font-admin text-[14px] text-admin-text">
-      <AdminSidebar profile={profile.data} />
+      <AdminSidebar
+        profile={profile.data}
+        onLogout={() => {
+          // 서버 무효화는 best-effort(adminLogout이 로컬 정리를 보장) — 완료 후 게이트 재판정
+          void adminLogout().then(rerunGate)
+        }}
+      />
       <main className="flex min-w-0 flex-1 flex-col">
         <Outlet />
       </main>
