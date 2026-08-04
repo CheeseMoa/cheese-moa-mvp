@@ -222,6 +222,29 @@ describe('모임', () => {
     })
   })
 
+  it('학부모 신청에 자녀 동의 버전이 그대로 실린다 — 생략하면 필드째 빠진다 (CHMO-587)', async () => {
+    // childConsentVersion은 GET /agreements의 currentVersion 에코(BE CHMO-586) — 값 변형 금지.
+    const calls = serve(
+      envelope({ groupId: 9, groupName: '햇살반', role: 'PARENT', status: 'PENDING' }),
+    )
+    await joinGroup({
+      joinKey: 'P',
+      password: '7421',
+      childNames: ['김민준'],
+      childConsentVersion: '1.0',
+    })
+    expect(bodyOf(calls[0])).toEqual({
+      joinKey: 'P',
+      password: '7421',
+      childNames: ['김민준'],
+      childConsentVersion: '1.0',
+    })
+
+    // 구계약 BE(카탈로그에 항목 없음)·선생님 키 — undefined는 JSON에서 빠져 종전 계약 그대로다
+    await joinGroup({ joinKey: 'K', password: 'p', childConsentVersion: undefined })
+    expect(bodyOf(calls[1])).toEqual({ joinKey: 'K', password: 'p' })
+  })
+
   it('멤버 내보내기·나가기 — 대상 userId가 본문 없이 경로에 실린다 (BE CHMO-525)', async () => {
     const calls = serve(envelope(null))
 

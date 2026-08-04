@@ -32,8 +32,9 @@ import {
 import { toAgreementStatusResponse } from './serializers'
 import type { AgreementType } from '../../types/api'
 
-/** BE `AgreementType.requireCurrentVersion` 문구 — 구버전 문구를 보여준 FE를 막는다 */
-const STALE_VERSION = '약관 버전이 최신이 아닙니다. 최신 약관을 확인해 주세요.'
+/** BE `AgreementType.requireCurrentVersion` 문구 — 구버전 문구를 보여준 FE를 막는다.
+ * 합류 신청의 자녀 동의 버전 검증(groups.ts — CHMO-586)도 같은 문구를 쓴다 */
+export const STALE_VERSION = '약관 버전이 최신이 아닙니다. 최신 약관을 확인해 주세요.'
 
 /** 요청 본문의 대문자 enum → 카탈로그 항목(미지 값이면 null → 400) */
 function agreementTypeOf(value: unknown) {

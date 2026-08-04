@@ -277,6 +277,12 @@ export type AgreementType =
   | 'marketing'
   /** 아동 보호자 동의 확보 확인 — 회원이 아니라 **모임** 단위(선생님별로 쌓인다) */
   | 'child_consent_attested'
+  /**
+   * 자녀의 사진·얼굴 특징정보 처리 동의 — 동의권자(보호자) **본인**이 학부모 합류 신청에
+   * 남기는 기록(모임 단위, BE CHMO-586). 선생님의 확인(child_consent_attested)과 주체가 다르다.
+   * 수집 경로가 POST /agreements가 아니라 합류 신청 body(childConsentVersion)라는 점도 다르다.
+   */
+  | 'guardian_child_consent'
 
 /** 동의의 적용 범위 — user는 계정 1회, group은 모임마다 */
 export type AgreementScope = 'user' | 'group'
