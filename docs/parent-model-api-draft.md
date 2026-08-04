@@ -82,11 +82,11 @@ joinKey는 "누가 신청할 수 있나(=어떤 role로)"만 정하고, "누가 
 ### POST /groups/join — 즉시 합류 → **신청(PENDING) 생성**으로 변경
 - role은 joinKey 종류에서 파생(링크 2종 — 역할 선택 화면 없음, Q6). **선생님 키도 PENDING**(§0 — CHMO-475).
 - `childNames`: 학부모 joinKey일 때 필수(1개 이상, 자유 텍스트). 시도 제한은 기존 리미터 재사용(Q2).
-- 동의 필드는 문구 확정 후 추가 예정(§7) — body에 `consents` 자리만 고려.
+- `childConsentVersion`: 학부모 joinKey일 때 필수(**확정 — BE CHMO-586·FE CHMO-587**): 자녀 정보 처리 동의(`GUARDIAN_CHILD_CONSENT`)의 버전. `GET /agreements` `currentVersion` 에코이며 누락·구버전은 `VALID400`(신청째 거부). 선생님 키 경로는 무변경.
 
 ```jsonc
 // req
-{ "joinKey": "HAETSAL-P", "password": "7421", "childNames": ["김민준"] }
+{ "joinKey": "HAETSAL-P", "password": "7421", "childNames": ["김민준"], "childConsentVersion": "1.0" }
 // res
 { "groupId": 1, "groupName": "햇살반", "role": "PARENT", "status": "PENDING" }
 ```
@@ -149,8 +149,9 @@ joinKey는 "누가 신청할 수 있나(=어떤 role로)"만 정하고, "누가 
 - `GET /groups/:id/share` (학부모 공유 시트 폐기 — sharePassword는 합류용으로 존속)
 - viewerToken 개념 전체.
 
-## 8. 동의 (자리 예약 — 법률 확정 대기)
-- 저장 요건: 누가·언제·어떤 문구 버전에 동의했는지(법적 증빙). 예상 형태: 합류 신청 body `consents: [{ "type": "THIRD_PARTY", "version": "1.0" }]`. 문구·항목 확정 시 별도 협의.
+## 8. 동의 (자녀 정보 처리 동의 1건 확정 — 나머지는 법률 확정 대기)
+- **자녀 정보 처리 동의는 확정됐다**(BE CHMO-586·FE CHMO-587) — 예상하던 `consents` 배열 대신 합류 신청 body의 **`childConsentVersion` 단일 필드**(§3). BE는 `AgreementType.GUARDIAN_CHILD_CONSENT`(GROUP 스코프, `GET /agreements` 카탈로그에 노출·`agreed`는 모임 단위라 항상 false)로 `UserAgreement`(spaceId=그 모임) 행을 남긴다: 기록 시점은 **신청 시**(승인 전 — 동의 의사표시 시각 기준)·append-only(거절돼도 행은 남는다)·같은 상태 재신청은 멱등(행이 늘지 않는다).
+- 그 외 항목(공통 사진 제3자 제공 등 — 법률 확정 대기, app-copy.md §7 `[[검토필요]]`)은 확정 시 별도 협의.
 
 ---
 

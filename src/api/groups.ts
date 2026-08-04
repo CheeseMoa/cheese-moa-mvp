@@ -60,12 +60,19 @@ export function deleteGroup(groupId: ID | string): Promise<void> {
 /**
  * POST /groups/join — 참여 코드+비밀번호로 **신청(PENDING) 생성**(학부모 전환 §1 승인제 —
  * 즉시 합류가 아니다). role은 joinKey 종류에서 서버가 파생하고(Q6), 학부모 joinKey일 땐
- * childNames(자녀 이름 자유 텍스트, 1개 이상)가 필수다.
+ * childNames(자녀 이름 자유 텍스트, 1개 이상)와 childConsentVersion(자녀 정보 처리 동의 —
+ * BE CHMO-586)이 필수다. 누락·구버전은 VALID400으로 신청 자체가 거부된다.
  */
 export function joinGroup(input: {
   joinKey: string
   password: string
   childNames?: string[]
+  /**
+   * 자녀의 사진·얼굴 특징정보 처리 동의 버전(학부모 키 경로 필수 — CHMO-587). `GET /agreements`
+   * `GUARDIAN_CHILD_CONSENT` 항목의 currentVersion을 그대로 싣는다(하드코딩 금지 — 문서 개정으로
+   * 버전이 오르면 자동으로 새 버전이 전송되게). 카탈로그에 항목이 없는 구계약 BE엔 보내지 않는다.
+   */
+  childConsentVersion?: string
 }): Promise<JoinGroupResult> {
   return apiFetch<RawJoinGroupResult>('/groups/join', { method: 'POST', body: input }).then(
     toJoinGroupResult,
