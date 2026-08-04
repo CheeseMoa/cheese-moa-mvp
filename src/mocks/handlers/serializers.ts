@@ -14,6 +14,8 @@ import { SPECIAL_ALBUM_LABELS } from '../../lib/albumLabels'
 import {
   AGREEMENT_CATALOG,
   albumCountOf,
+  albumMappedPhotosOfEvent,
+  db,
   albumsOfEvent,
   eventCountOf,
   eventsOfGroup,
@@ -555,5 +557,84 @@ export function toAgreementStatusResponse(userId: number) {
         agreed: !!latest?.agreed && latest.version === item.currentVersion,
       }
     }),
+  }
+}
+
+// ── 어드민 (BE admin/dto — CHMO-378 스펙·소스 대조 2026-08-04) ──
+// 어드민 응답에도 시크릿 4종(joinKey·비밀번호·공유 토큰·공유 비밀번호)은 싣지 않는다(AC-6).
+
+/** BE AdminProfileResponse — GET /admin/me (CHMO-377) */
+export function toAdminProfileResponse(user: DbUser) {
+  return { userId: user.id, nickname: user.nickname, role: user.role }
+}
+
+/**
+ * 모임 단위 앨범 매핑 사진 수 — BE AlbumPhotoRepository.countDistinctPhotosBySpaceIds.
+ * 사진은 이벤트 하나에만 속하므로 이벤트별 distinct의 합이 곧 모임 distinct다.
+ */
+function adminGroupPhotoCount(groupId: number): number {
+  return eventsOfGroup(groupId).reduce((sum, e) => sum + albumMappedPhotosOfEvent(e.id).length, 0)
+}
+
+/** BE AdminStatsResponse.RecentGroup — memberCount는 서비스와 같은 ACTIVE 기준 */
+export function toAdminRecentGroup(group: DbGroup) {
+  return {
+    groupId: group.id,
+    name: group.name,
+    memberCount: memberCountOf(group.id),
+    createdAt: group.createdAt,
+  }
+}
+
+/** BE AdminGroupSummaryResponse — 목록 한 행(카운트 전부 파생값) */
+export function toAdminGroupSummary(group: DbGroup) {
+  return {
+    groupId: group.id,
+    name: group.name,
+    memberCount: memberCountOf(group.id),
+    eventCount: eventCountOf(group.id),
+    photoCount: adminGroupPhotoCount(group.id),
+    createdAt: group.createdAt,
+  }
+}
+
+/**
+ * BE AdminGroupDetailResponse — 멤버는 PENDING 포함 spaceUserId 오름차순, 이벤트는 eventId
+ * 내림차순(스펙 §3.3). 생성자는 목에 필드가 없어 최초 선생님 멤버십으로 파생한다
+ * (모임 생성자만 즉시 ACTIVE — 확정 모델과 같은 근거).
+ */
+export function toAdminGroupDetailResponse(group: DbGroup) {
+  const memberships = db.memberships
+    .filter((m) => m.groupId === group.id)
+    .sort((a, b) => a.id - b.id)
+  const owner = memberships.find((m) => m.role === 'teacher' && m.status === 'active')
+  const ownerUser = owner ? db.users.find((u) => u.id === owner.userId) : undefined
+  return {
+    groupId: group.id,
+    name: group.name,
+    createdAt: group.createdAt,
+    ownerUserId: ownerUser?.id ?? null,
+    ownerNickname: ownerUser?.nickname ?? null,
+    memberCount: memberCountOf(group.id),
+    members: memberships.map((m) => ({
+      userId: m.userId,
+      nickname: db.users.find((u) => u.id === m.userId)?.nickname ?? '(알 수 없음)',
+      role: m.role.toUpperCase(),
+      status: m.status.toUpperCase(),
+      joinedAt: m.createdAt,
+    })),
+    events: eventsOfGroup(group.id)
+      .slice()
+      .sort((a, b) => b.id - a.id)
+      .map((e) => ({
+        eventId: e.id,
+        name: e.name,
+        status: e.status.toUpperCase(),
+        eventDate: e.date,
+        photoCount: albumMappedPhotosOfEvent(e.id).length,
+        albumCount: albumCountOf(e.id),
+        createdAt: e.createdAt,
+        publishedAt: e.publishedAt,
+      })),
   }
 }

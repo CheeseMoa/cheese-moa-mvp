@@ -110,6 +110,35 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // ── 관리자(내부 운영자) — CHMO-379 ──────────────────
+  // 코드는 src/admin/ 한 폴더에만 있고(격리 규칙 — admin-spec §2-2) 여기서는 lazy로만 잇는다:
+  // 어드민 번들은 /admin 진입자만 받는다(/dev/components 선례). 가드(GET /admin/me 판정)는
+  // AdminLayout이 소유한다 — 비로그인·비관리자 차단까지 어드민 청크 안의 일이다.
+  {
+    path: '/admin',
+    lazy: async () => ({ Component: (await import('./admin/AdminLayout')).AdminLayout }),
+    children: [
+      {
+        index: true,
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminDashboardPage')).AdminDashboardPage,
+        }),
+      },
+      {
+        path: 'groups',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminGroupsPage')).AdminGroupsPage,
+        }),
+      },
+      {
+        path: 'groups/:groupId',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminGroupDetailPage')).AdminGroupDetailPage,
+        }),
+      },
+    ],
+  },
+
   // ── 개발용 (DEV 전용, 프로덕션 번들 제외) ──
   ...(import.meta.env.DEV
     ? [

@@ -180,23 +180,27 @@
 
 ---
 
-## 4. 필요한 API (초안 — 확정은 CHMO-378)
+## 4. API (확정 — BE CHMO-378, 2026-08-04 develop 머지 · 소스 대조)
 
-전부 `/admin/*` 아래. 기존 응답 봉투(`{isSuccess, code, message, result}`)·숫자 ID 규약을 따른다.
-경로 명칭은 BE 도메인 네이밍(space/moment)을 따를지 BE가 결정한다.
+정본은 BE 리포 `docs/spec/CHMO-378-관리자-조회-API.md`. 전부 `/admin/*` 아래·기존 응답
+봉투·숫자 ID 규약이고, 인증은 회원과 같은 JWT(관리자 role 필요 — CHMO-377 가드).
 
-| 용도 | 초안 | 응답 |
+| 용도 | 확정 | 응답 |
 |---|---|---|
-| 대시보드 요약 | `GET /admin/stats` | 총계 4종 + 최근 7일 3종 + 최근 모임 5개 |
-| 모임 목록 | `GET /admin/spaces?page&size&q&sort` | 모임 + 집계 컬럼, 페이지 정보 |
-| 모임 상세 | `GET /admin/spaces/:id` | 모임 + 멤버 목록 + 이벤트 목록 |
+| 진입 게이트 | `GET /admin/me` | `{userId, nickname, role}` — 관리자 아니면 ADMIN403이라 FE 가드가 이걸로 판정 (CHMO-377) |
+| 대시보드 요약 | `GET /admin/stats` | `totals`(users·groups·events·photos) + `last7Days`(newGroups·newEvents·newPhotos) + `recentGroups` 5개 고정 |
+| 모임 목록 | `GET /admin/groups?page&size&q&sort` | 행: groupId·name·memberCount·eventCount·photoCount·createdAt — **페이지 정보는 봉투의 `pageInfo`**(page·size·hasNext·totalElements·totalPages) |
+| 모임 상세 | `GET /admin/groups/{groupId}` | 기본정보+생성자 + 멤버 목록(**PENDING 포함**, spaceUserId 오름차순) + 이벤트 목록(eventId 내림차순, publishedAt은 미공개 null) |
 
-**설계 주의**
+**확정된 정책** (BE 스펙 정책 결정 표에서 발췌)
 
-- 목록은 전부 페이지네이션 전제.
-- 대시보드 집계를 매 요청마다 `count`로 계산하면 데이터가 늘수록 느려진다. 현재 데이터량에서 측정해보고 캐시·집계 테이블 필요 여부를 판단한다(지금 규모면 불필요할 가능성이 높다).
-- 응답에 학부모 공유 비밀번호를 담지 않는다(§3-3).
-- 비관리자 토큰으로는 전 엔드포인트가 403.
+- 경로는 `/admin/groups` — 티켓 초안의 `spaces`는 내부 명칭이 샌 표기라 폐기(직렬화 경계 밖은 group/event).
+- 멤버 수 = ACTIVE만(서비스 화면과 같은 규칙 — 상세 멤버 행 수와 다를 수 있고 `status`가 설명한다). 사진 수 = 앨범 매핑(AlbumPhoto) distinct — 분류를 거친 사진만. 총 사진(stats)은 photo 행 count.
+- 정렬 화이트리스트 `createdAt`·`name` × `asc`·`desc`(기본 `createdAt,desc`) — **집계 컬럼 정렬(§3-2 '사진 많은 순')은 1차 제외**. `size`는 1~100.
+- 집계 캐시는 안 넣는다(현 규모 count는 ms 단위 — 느려지면 그때 측정).
+- 응답에 시크릿 4종(joinKey·모임 비밀번호·공유 토큰·학부모 공유 비밀번호) 없음(§3-3, AC-6).
+
+**에러**: 무토큰 `COMMON401` → 비관리자 `ADMIN403`(403 — 2026-08-04 실서버 채집) · 상세 없는 모임 `SPACE404` · 목록 파라미터 검증 실패 `COMMON400`.
 
 ---
 
@@ -227,6 +231,6 @@
 | 키 | 내용 |
 |---|---|
 | CHMO-376 | [디자인] IA·화면 설계(피그마) — **완료**, 결과는 §3-0 |
-| CHMO-377 | [BE] 관리자 인증·인가 기반 |
-| CHMO-378 | [BE] 관리자 조회 API |
-| CHMO-379 | [FE] 관리자 페이지 구현 |
+| CHMO-377 | [BE] 관리자 인증·인가 기반 — **완료**(가드 운영 배포 확인 — 2026-08-04 ADMIN403 실채집) |
+| CHMO-378 | [BE] 관리자 조회 API — **완료**(develop 머지 2026-08-04 — 운영 배포·실채집은 대기), 계약은 §4 |
+| CHMO-379 | [FE] 관리자 페이지 구현 — **완료**(`src/admin/` + lazy `/admin` 라우트). 실 BE 실측은 운영 배포 + 관리자 role DB 부여 후 |

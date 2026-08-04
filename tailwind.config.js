@@ -23,6 +23,25 @@ export default {
           ready: '#8C5A2B', // ready: 공개 준비(검토완료)
           published: '#3FA34D', // published: 공개 완료
         },
+        // 관리자(어드민) 전용 팔레트(docs/admin-spec.md §3-0, CHMO-379) — 정보 밀도 우선의
+        // 중립 그레이 베이스. 모바일 cream/brown 토큰을 끌어 쓰지 않는다(이름공간 분리).
+        // 포인트는 기존 primary(#FFC93C)·heading(#4A3415)을 그대로 쓴다.
+        admin: {
+          bg: '#F7F8FA', // 페이지 배경
+          surface: '#FFFFFF', // 카드·사이드바·상단바
+          border: '#E5E7EB', // 구분선·표 행 보더
+          text: '#1F2328', // 본문
+          muted: '#6B7280', // 보조 텍스트·표 헤더·숫자 셀
+          nav: '#FEF6E3', // 활성 메뉴 배경(옅은 치즈)
+          // 이벤트 상태 배지 — review는 서비스 쪽 색 미정이라 중립 회색 잠정(admin-spec §3-0)
+          status: {
+            empty: '#9E978C',
+            analyzing: '#E8890C',
+            review: '#6B7280',
+            ready: '#8C5A2B',
+            published: '#3FA34D',
+          },
+        },
       },
       fontFamily: {
         // 서체는 Jua 한 벌(CHMO-513) — 로고 워드마크와 본문이 같은 얼굴을 쓴다.
@@ -33,6 +52,18 @@ export default {
         // 남기되, **화면의 위계는 크기와 색이 만든다**: 같은 크기·같은 색을 굵기로만 갈라놨던
         // 자리는 크기·자간·색으로 다시 벌려 놨다(섹션 라벨 12px+자간 등).
         sans: ['Jua', 'system-ui', 'sans-serif'],
+        // 어드민 전용 중립 서체(CHMO-379) — 표·숫자 위주 화면이라 Jua(둥근 단일 굵기)가 아니라
+        // 시스템 산세리프를 쓴다(굵기 위계 사용 가능 — 시스템 서체는 실제 볼드 파일이 있어
+        // font-synthesis 차단과 무관하다). 추가 폰트 요청 0건.
+        admin: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Apple SD Gothic Neo',
+          'Pretendard',
+          'Segoe UI',
+          'Malgun Gothic',
+          'sans-serif',
+        ],
       },
       // 그라데이션 토큰(gradient-cheddar/primary/emblem) 폐지 — UI 면은 전부 단색으로 칠한다.
       // 연한 옐로우(구 gradient-primary)는 되살리지 않는다: 음영이 없으면 cream 배경에 묻힌다.
