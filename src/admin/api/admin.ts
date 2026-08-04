@@ -4,7 +4,7 @@
  * 무토큰은 COMMON401. 공유하는 것은 바닥 인프라(api/client)뿐이다(격리 규칙 2).
  */
 import { apiFetch, apiFetchPaged, type BePageInfo } from '../../api/client'
-import { setAuthTokens, setCurrentUserId } from '../../lib/auth'
+import { clearAuthTokens, getRefreshToken, setAuthTokens, setCurrentUserId } from '../../lib/auth'
 import {
   toAdminGroupDetail,
   toAdminGroupRow,
@@ -52,6 +52,29 @@ export async function adminLogin(credentials: AdminCredentials): Promise<void> {
   setAuthTokens(raw)
   // 온보딩 플래그 등 계정 단위 저장의 키 — 서비스 로그인과 같은 규칙(PinLoginForm과 동일)
   setCurrentUserId(raw.userId)
+}
+
+/**
+ * POST /auth/logout — 서버 refreshToken 무효화 후 로컬 토큰 삭제(CHMO-595).
+ * 서비스와 같은 계약: auth 미첨부(만료 accessToken의 재발급 인터셉터 개입 차단 — api/auth.ts
+ * logout과 동일 근거). **서버 호출이 실패해도 로컬 로그아웃은 진행한다** — 화면 복귀가
+ * 네트워크에 볼모잡히면 안 되고, 무효화 못 한 refreshToken도 만료로 죽는다.
+ */
+export async function adminLogout(): Promise<void> {
+  const refreshToken = getRefreshToken()
+  try {
+    if (refreshToken) {
+      await apiFetch<void>('/auth/logout', {
+        method: 'POST',
+        auth: 'none',
+        body: { refreshToken },
+      })
+    }
+  } catch {
+    /* 서버 무효화 실패 무시 — 로컬 로그아웃은 finally가 보장한다 */
+  } finally {
+    clearAuthTokens()
+  }
 }
 
 /**
