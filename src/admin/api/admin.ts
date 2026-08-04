@@ -4,6 +4,7 @@
  * 무토큰은 COMMON401. 공유하는 것은 바닥 인프라(api/client)뿐이다(격리 규칙 2).
  */
 import { apiFetch, apiFetchPaged, type BePageInfo } from '../../api/client'
+import { setAuthTokens, setCurrentUserId } from '../../lib/auth'
 import {
   toAdminGroupDetail,
   toAdminGroupRow,
@@ -21,6 +22,37 @@ import type {
   AdminProfile,
   AdminStats,
 } from './types'
+
+export interface AdminCredentials {
+  nickname: string
+  pin: string
+}
+
+/** BE AuthResponse — user 객체 없는 평면 필드(서비스 auth와 같은 계약) */
+interface RawAuthTokens {
+  userId: number
+  accessToken: string
+  refreshToken: string
+}
+
+/**
+ * POST /auth/login — 어드민 진입용 로그인(CHMO-594). 서비스와 같은 계정·같은 엔드포인트지만
+ * `src/api/auth.ts`를 import하지 않고 직접 부른다(격리 규칙 2 — 공유는 바닥 인프라뿐. 리포를
+ * 가를 때 어드민도 자기 로그인 호출을 가져야 한다). 성공 시 토큰 저장까지 여기서 끝낸다 —
+ * 호출부는 게이트(GET /admin/me) 재판정만 한다.
+ * 가입 동의 게이트(CHMO-479)는 태우지 않는다 — 어드민 진입은 서비스 이용이 아니고,
+ * 그 계정이 서비스 화면으로 로그인하면 그때 걸린다.
+ */
+export async function adminLogin(credentials: AdminCredentials): Promise<void> {
+  const raw = await apiFetch<RawAuthTokens>('/auth/login', {
+    method: 'POST',
+    auth: 'none',
+    body: credentials,
+  })
+  setAuthTokens(raw)
+  // 온보딩 플래그 등 계정 단위 저장의 키 — 서비스 로그인과 같은 규칙(PinLoginForm과 동일)
+  setCurrentUserId(raw.userId)
+}
 
 /**
  * GET /admin/me — 관리자 본인 확인(CHMO-377). 관리자가 아니면 ADMIN403이므로
