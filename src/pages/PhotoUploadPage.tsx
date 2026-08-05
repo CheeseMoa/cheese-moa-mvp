@@ -16,7 +16,7 @@ import {
   MAX_UPLOAD_PICK,
   MAX_UPLOAD_FILE_LABEL,
   UPLOAD_FORMAT_LABEL,
-  uploadContentTypeOf,
+  uploadFileNameFor,
 } from '../lib/upload'
 
 /** S3 PUT 동시 실행 수 — 브라우저의 호스트당 커넥션 한도(≈6)에 맞춘다 */
@@ -132,8 +132,9 @@ export function PhotoUploadPage() {
     if (files.length === 0) return
     // BE는 확장자로 Content-Type을 정하고, 화이트리스트 밖이거나 20MB를 넘는 파일이 하나라도 섞이면
     // presign 배치 전체를 400으로 거절한다 — 한 장 때문에 전부 실패하지 않게 입구에서 거른다.
-    // accept="image/*"는 피커 힌트일 뿐이라 여기서 다시 확인한다.
-    const supported = files.filter((f) => uploadContentTypeOf(f.name))
+    // accept="image/*"는 피커 힌트일 뿐이라 여기서 다시 확인한다. 판정은 이름 확장자 + MIME 폴백
+    // (CHMO-597) — 카메라 촬영본은 확장자 없는 이름으로 와서 이름만 보면 걸러진다.
+    const supported = files.filter((f) => uploadFileNameFor(f.name, f.type) !== null)
     const accepted = supported.filter((f) => isUploadableSize(f.size))
     const notices: string[] = []
     if (supported.length < files.length)
@@ -231,10 +232,14 @@ export function PhotoUploadPage() {
       // 이번 시도에서 새로 받은 키(상태 반영은 비동기라 등록 단계는 이 맵을 본다)
       const freshKeys = new Map<string, string>()
       if (toUpload.length > 0) {
-        // ① presign — 파일 메타(이름·크기)만 보내고 파일별 업로드 URL과 s3Key를 받는다
+        // ① presign — 파일 메타(이름·크기)만 보내고 파일별 업로드 URL과 s3Key를 받는다.
+        // 이름은 보정본(CHMO-597) — 확장자 없는 카메라 촬영본도 BE 화이트리스트를 통과한다.
         const uploads = await presignUploads(
           eventId,
-          toUpload.map((p) => ({ fileName: p.file.name, size: p.file.size })),
+          toUpload.map((p) => ({
+            fileName: uploadFileNameFor(p.file.name, p.file.type) ?? p.file.name,
+            size: p.file.size,
+          })),
         )
         if (uploads.length !== toUpload.length)
           throw new ApiRequestError(
