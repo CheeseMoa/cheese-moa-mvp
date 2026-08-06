@@ -248,7 +248,7 @@ export const authHandlers = [
 
     for (const membership of membershipsOfUser(user.id)) {
       const lastTeacher =
-        membership.role === 'teacher' &&
+        membership.role === 'editor' &&
         membership.status === 'active' &&
         teacherCountOf(membership.groupId) <= 1
       if (lastTeacher) deleteGroupCascade(membership.groupId)

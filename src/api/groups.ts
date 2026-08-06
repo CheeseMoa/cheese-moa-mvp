@@ -22,8 +22,8 @@ import type {
   GroupInviteInfo,
   GroupMember,
   GroupPerson,
-  GroupRole,
   GroupShareInfo,
+  GroupType,
   ID,
   JoinGroupResult,
   JoinRequest,
@@ -39,9 +39,16 @@ export function getGroup(groupId: ID | string, signal?: AbortSignal): Promise<Gr
   return apiFetch<RawGroup>(`/groups/${groupId}`, { signal }).then(toGroup)
 }
 
-/** POST /groups — 모임 생성(학부모 공유 비밀번호는 서버가 자동 발급) */
-export function createGroup(input: { name: string; password: string }): Promise<Group> {
-  return apiFetch<RawGroup>('/groups', { method: 'POST', body: input }).then(toGroup)
+/**
+ * POST /groups — 모임 생성(BE CHMO-599). groupType을 동봉하고 **password는 보내지 않는다** —
+ * 참여 비밀번호는 서버가 자동 발급한다(4자리 PIN, 초대 정보 API로만 노출. 학부모 공유
+ * 비밀번호 자동 발급은 종전대로). 유형은 생성 후 변경 불가(ADR 020).
+ */
+export function createGroup(input: { name: string; groupType: GroupType }): Promise<Group> {
+  return apiFetch<RawGroup>('/groups', {
+    method: 'POST',
+    body: { name: input.name, groupType: input.groupType.toUpperCase() },
+  }).then(toGroup)
 }
 
 /** PATCH /groups/:id — 모임 이름 수정(F2.4 — name만 변경 가능) */
@@ -93,13 +100,15 @@ interface RawGroupInvite {
 
 function toInviteChannel(
   raw: { joinKey: string; password: string },
-  role: GroupRole = 'teacher',
+  // BE 응답 채널 키(teacher/parent — 내부 식별자 유지, ADR 021)이지 role 직렬화 값이 아니다
+  channel: 'teacher' | 'parent' = 'teacher',
 ): GroupInviteChannel {
   // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
   const origin = typeof window === 'undefined' ? '' : window.location.origin
   // 학부모 링크엔 role 마커를 싣는다 — joinKey는 불투명(대소문자 12자)이라 02-1 모달/02-2
-  // 3단계 분기의 유일한 근거가 URL이다(CHMO-445 — 시트 소비는 CHMO-446)
-  const marker = role === 'parent' ? '?role=parent' : ''
+  // 3단계 분기의 유일한 근거가 URL이다(CHMO-445 — 시트 소비는 CHMO-446). 마커 값 'parent'는
+  // FE 링크 계약(JoinPage가 읽는다)이라 role 값 전환(CHMO-604)과 무관하게 유지한다
+  const marker = channel === 'parent' ? '?role=parent' : ''
   return {
     joinKey: raw.joinKey,
     password: raw.password,

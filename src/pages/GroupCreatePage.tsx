@@ -10,6 +10,9 @@ import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
 
 /**
  * 03. 모임 만들기 · node 211:1411 · POST /groups → 모임 상세(05).
+ * 참여 비밀번호 입력란은 없다(CHMO-604 — BE CHMO-599가 요청 password를 무시하고 자동 발급,
+ * 초대 화면에서만 노출). 유형 선택 UI는 CHMO-603 개편 몫 — 그 전까지 이 화면은 현행 흐름
+ * (보호자 동의 확인 게이트)의 의미 그대로 business로 생성한다.
  * 요금제·업그레이드 안내는 노출하지 않는다 — MVP에 결제가 없어 '무료'라는 말이 유료 전환을
  * 예고하는 문구로만 읽힌다(2026-07-29 결정).
  * 보호자 동의 확보 확인 체크는 **서버 기록으로도 남긴다**(CHMO-516) — 그래야 만든 사람이
@@ -20,21 +23,19 @@ export function GroupCreatePage() {
   const toast = useToast()
   const mutate = useMutation()
   const [name, setName] = useState('')
-  const [password, setPassword] = useState('')
   // 보호자 동의 확보 확인 게이트(CHMO-478) — 아동 사진 처리는 법정대리인 동의가 전제(개인정보 보호법 제22조의2)
   const [consentConfirmed, setConsentConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const canSubmit =
-    name.trim().length > 0 && password.trim().length > 0 && consentConfirmed && !submitting
+  const canSubmit = name.trim().length > 0 && consentConfirmed && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
-    await mutate(() => createGroup({ name: name.trim(), password: password.trim() }), {
+    await mutate(() => createGroup({ name: name.trim(), groupType: 'business' }), {
       onSuccess: (group) => {
         // 여기서 체크한 확인을 서버 기록으로 남긴다(CHMO-516). 기다리지 않는다 — 모임은 이미
         // 만들어졌고 이 기록은 업로드 게이트를 미리 통과시켜 두는 용도라 화면을 붙잡을 이유가 없다.
@@ -68,14 +69,6 @@ export function GroupCreatePage() {
             autoComplete="off"
             value={name}
             onChange={(e) => setName(e.target.value)}
-          />
-          <TextField
-            label="비밀번호"
-            placeholder="참여 시 입력할 비밀번호"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
           />
         </div>
         <div className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-card">

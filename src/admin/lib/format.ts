@@ -2,7 +2,7 @@
  * 어드민 표시 포맷·표시명 단일 원천 (CHMO-379).
  * 값이 비면 전부 '—'로 수렴한다 — 표에서 빈 칸은 "안 불렀나"로 읽히고 대시는 "없다"로 읽힌다.
  */
-import type { AdminMemberRole, AdminMemberStatus } from '../api/types'
+import type { AdminMemberStatus } from '../api/types'
 
 /** 천 단위 구분(1,284) — 어드민 숫자 표기 공통 */
 export function formatCount(value: number): string {
@@ -48,9 +48,11 @@ export function eventStatusBadge(status: string): { label: string; token: string
   return EVENT_STATUS_BADGES[status] ?? { label: status, token: 'empty' }
 }
 
-export function memberRoleLabel(role: AdminMemberRole): string {
-  if (role === 'TEACHER') return '선생님'
-  if (role === 'PARENT') return '학부모'
+// 신·구 직렬화 값을 함께 받는다(CHMO-605 리네이밍 — 운영 BE는 main 머지 전까지 구 값) ·
+// 미지 값은 원문 중립 표기(eventStatusBadge와 같은 결)라 파라미터를 string으로 연다
+export function memberRoleLabel(role: string): string {
+  if (role === 'EDITOR' || role === 'TEACHER') return '선생님'
+  if (role === 'VIEWER' || role === 'PARENT') return '학부모'
   return role
 }
 

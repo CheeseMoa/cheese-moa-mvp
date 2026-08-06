@@ -65,21 +65,27 @@ export const groupHandlers = [
     return ok(items)
   }),
 
-  // POST /groups — 모임 만들기(생성자는 ACTIVE TEACHER로 즉시 확정, 학부모 공유 자동 발급) · 화면 03
+  // POST /groups — 모임 만들기(생성자는 ACTIVE EDITOR로 즉시 확정, 시크릿 4종 자동 발급) · 화면 03
+  // groupType은 선택(생략 시 BUSINESS — 기존 FE 호환, BE CHMO-599 AC-2). 참여 비밀번호는
+  // 요청으로 받지 않는다(AC-9 — 구 FE가 보내는 password는 무시, 4자리 PIN 자동 발급).
   http.post(api('/groups'), async ({ request }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ name?: unknown; password?: unknown }>(request)
+    const body = await readJson<{ name?: unknown; groupType?: unknown }>(request)
     const name = requiredString(body?.name)
-    const password = requiredString(body?.password)
     if (!name) return invalidRequest('모임 이름을 입력해 주세요.')
-    if (!password) return invalidRequest('모임 비밀번호를 입력해 주세요.')
+    const rawType = optionalString(body?.groupType)
+    // enum 밖 값은 거부 — BE는 Jackson enum 역직렬화 400(문구 미채집이라 VALID400 계열로 근사)
+    if (rawType !== undefined && rawType !== 'BUSINESS' && rawType !== 'GENERAL')
+      return invalidRequest('모임 유형이 올바르지 않습니다.')
 
     const group: DbGroup = {
       id: nextId('grp'),
       name,
-      password,
+      groupType: rawType === 'GENERAL' ? 'general' : 'business',
+      // 참여 비밀번호도 sharePassword와 같은 4자리 PIN 형식(BE generateNumericPin)
+      password: randomSharePassword(),
       joinKey: randomJoinKey(),
       parentJoinKey: randomJoinKey(),
       share: { token: `shr_${nextId('tok')}`, password: randomSharePassword() },
@@ -89,7 +95,7 @@ export const groupHandlers = [
     const membership = createMembership({
       userId: user.id,
       groupId: group.id,
-      role: 'teacher',
+      role: 'editor',
       status: 'active',
     })
     return created(toGroupDetail(group, membership))
@@ -171,10 +177,13 @@ export const groupHandlers = [
     const parentGroup = teacherGroup ? undefined : db.groups.find((g) => g.parentJoinKey === joinKey)
     const group = teacherGroup ?? parentGroup
     if (!group) return groupNotFound()
-    const role = teacherGroup ? 'teacher' : 'parent'
+    // GENERAL 모임의 학부모 키는 **없는 키 취급**(SPACE404 — BE CHMO-599 AC-6): 일반 모임엔
+    // 학부모 역할 진입로가 없다. 비밀번호 검증보다 앞에 둬 모임의 존재를 드러내지 않는다(ADR 020)
+    if (parentGroup && parentGroup.groupType === 'general') return groupNotFound()
+    const role = teacherGroup ? 'editor' : 'viewer'
 
     // BE JOIN403 — 뷰어 잠금 해제(학부모 비밀번호)도 같은 코드를 쓴다
-    const expected = role === 'teacher' ? group.password : group.share.password
+    const expected = role === 'editor' ? group.password : group.share.password
     if (expected !== password) return errorResponse(403, 'JOIN403', '비밀번호가 일치하지 않습니다.')
 
     // 중복 신청/합류(409)를 childNames 검증(400)보다 먼저 — 뒤에 두면 이미 신청한 학부모의
@@ -190,7 +199,7 @@ export const groupHandlers = [
 
     // 학부모 신청은 자녀 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지 않는다(§2)
     let childNames: string[] = []
-    if (role === 'parent') {
+    if (role === 'viewer') {
       const raw = Array.isArray(body?.childNames) ? body.childNames : []
       childNames = raw.map(requiredString).filter((name): name is string => name !== null)
       // 자녀 이름 검증이 동의 검증보다 앞 — 1/3 프로브(이름·동의 없는 제출)가 이 400으로

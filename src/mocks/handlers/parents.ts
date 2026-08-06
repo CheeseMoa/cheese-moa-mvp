@@ -70,7 +70,7 @@ function parentPhotosGate(user: DbUser, eventId: number | null) {
   const event = findEvent(eventId)
   if (!event) return { error: eventNotFound() }
   settleAnalysis(event.id)
-  const denied = membershipRoleError(user, event.groupId, 'parent', eventNotFound)
+  const denied = membershipRoleError(user, event.groupId, 'viewer', eventNotFound)
   if (denied) return { error: denied }
   // PARENT에겐 published이면서 **아이가 나온** 이벤트만 존재한다(목록 필터와 동일 판정 —
   // CHMO-448 노출 강화, 딥링크로 사진만 조회해도 같은 404 은닉)
@@ -162,7 +162,7 @@ export const parentHandlers = [
     const targetUserId = toId(params.userId)
 
     const isLastActiveTeacher = (target: DbMembership) =>
-      target.role === 'teacher' && target.status === 'active' && teacherCountOf(target.groupId) <= 1
+      target.role === 'editor' && target.status === 'active' && teacherCountOf(target.groupId) <= 1
 
     // 나가기 — 모임 조회보다 멤버십 판정이 먼저다: 멤버십이 없으면 모임 존재 여부를 흘리지 않고
     // SPACE403으로 끝낸다(BE 스펙 "본인 부재는 403" — 멱등 성공은 타인 내보내기 쪽만)
@@ -189,7 +189,7 @@ export const parentHandlers = [
     if (!group || targetUserId === null) return groupNotFound()
     const caller = membershipOf(user.id, group.id)
     if (caller?.status !== 'active') return spaceForbidden()
-    if (caller.role !== 'teacher') return roleForbidden()
+    if (caller.role !== 'editor') return roleForbidden()
     const target = membershipOf(targetUserId, group.id)
     // 이미 없는 멤버는 멱등 성공 — 중복 탭·경쟁 삭제를 오류로 만들지 않는다(BE와 동일)
     if (!target) return ok(null)
@@ -211,7 +211,7 @@ export const parentHandlers = [
     const body = await readPersonParentBody(request)
     if (!body) return invalidRequest('userId와 personId를 보내 주세요.')
     const target = membershipOf(body.userId, group.id)
-    if (target?.status !== 'active' || target.role !== 'parent')
+    if (target?.status !== 'active' || target.role !== 'viewer')
       return invalidRequest('이 모임의 학부모 멤버가 아닙니다.')
     const person = db.persons.find((p) => p.id === body.personId && p.groupId === group.id)
     // BE 코드 미확인 — 인물 없음 404는 채집되지 않았다
@@ -239,7 +239,7 @@ export const parentHandlers = [
     const body = await readPersonParentBody(request)
     if (!body) return invalidRequest('userId와 personId를 보내 주세요.')
     const target = membershipOf(body.userId, group.id)
-    if (target?.status !== 'active' || target.role !== 'parent')
+    if (target?.status !== 'active' || target.role !== 'viewer')
       return invalidRequest('이 모임의 학부모 멤버가 아닙니다.')
     const person = db.persons.find((p) => p.id === body.personId && p.groupId === group.id)
     // BE 코드 미확인 — 없는 매핑 404는 채집되지 않았다

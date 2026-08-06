@@ -69,7 +69,7 @@ export function AlbumSettingsSheet({
   const busyRef = useRef(false)
 
   const busy = saving || linkingUserId !== null || unlinking
-  const parents = (membersApi.data ?? []).filter((m) => m.role === 'parent')
+  const parents = (membersApi.data ?? []).filter((m) => m.role === 'viewer')
   const isLinked = (member: GroupMember) => member.mappings.some((m) => m.personId === personId)
   const linked = parents.filter(isLinked)
   const unlinked = parents.filter((m) => !isLinked(m))

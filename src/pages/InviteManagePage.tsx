@@ -28,17 +28,17 @@ import { formatTimeAgo } from '../lib/timeAgo'
 import { UNNAMED_PERSON_LABEL } from '../lib/albumLabels'
 import type { GroupMember, GroupRole, ID, JoinRequest, PersonMapping } from '../types/api'
 
-/** 라벨은 호칭, 섹션 제목은 명단 명칭 */
-const TAB_KEYS: GroupRole[] = ['teacher', 'parent']
-const TAB_LABEL: Record<GroupRole, string> = { teacher: '선생님', parent: '학부모님' }
-const SECTION_LABEL: Record<GroupRole, string> = { teacher: '선생님', parent: '학부모' }
+/** 라벨은 호칭, 섹션 제목은 명단 명칭 — role 값은 editor/viewer(CHMO-604), 라벨 문구는 화면 티켓 몫 */
+const TAB_KEYS: GroupRole[] = ['editor', 'viewer']
+const TAB_LABEL: Record<GroupRole, string> = { editor: '선생님', viewer: '학부모님' }
+const SECTION_LABEL: Record<GroupRole, string> = { editor: '선생님', viewer: '학부모' }
 /** 명단·신청이 모두 없을 때 — 링크는 바로 위에 있으니 그걸 가리킨다 */
 const EMPTY_COPY: Record<GroupRole, { title: string; description: string }> = {
-  teacher: {
+  editor: {
     title: '아직 선생님이 없어요',
     description: '위 참여 링크를 함께할 선생님께 보내 보세요.',
   },
-  parent: {
+  viewer: {
     title: '아직 학부모님이 없어요',
     description: '위 신청 링크를 학부모님께 보내 보세요.',
   },
@@ -69,7 +69,7 @@ export function InviteManagePage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
   const toast = useToast()
   const mutate = useMutation()
-  const [tab, setTab] = useState<GroupRole>('parent')
+  const [tab, setTab] = useState<GroupRole>('viewer')
   // "(나)" 표기용 — 실패해도 명단은 그대로 보여준다(표기만 생략)
   const meApi = useApi('me', getMe)
   const requestsApi = useApi(`join-requests:${groupId}`, (signal) =>
@@ -265,7 +265,7 @@ export function InviteManagePage() {
                 </h3>
                 <ul className="mt-2 flex flex-col gap-3">
                   {members.map((member) =>
-                    member.role === 'teacher' ? (
+                    member.role === 'editor' ? (
                       <li
                         key={member.userId}
                         className="flex items-baseline justify-between gap-3 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
@@ -389,7 +389,7 @@ export function InviteManagePage() {
         busyLabel="내보내는 중…"
         title={removeTarget ? `'${removeTarget.nickname}'님을 내보낼까요?` : ''}
         description={
-          removeTarget?.role === 'parent'
+          removeTarget?.role === 'viewer'
             ? '이 모임의 사진을 더 이상 볼 수 없고, 아이 연결도 함께 해제돼요. 참여 링크로 다시 신청할 수 있어요.'
             : '이 모임을 더 이상 관리할 수 없어요. 그동안 올린 사진·앨범은 모임에 남아요. 참여 링크로 다시 신청할 수 있어요.'
         }

@@ -181,6 +181,7 @@ export function createFixtures(): Db {
       {
         id: 1,
         name: '햇살반',
+        groupType: 'business',
         password: '482AVX',
         joinKey: 'Haetsal3Kx9q',
         parentJoinKey: 'HaetsalP7d2m',
@@ -190,6 +191,7 @@ export function createFixtures(): Db {
       {
         id: 2,
         name: '달님반',
+        groupType: 'business',
         password: '913BQZ',
         joinKey: 'Dalnim7Qw2pz',
         parentJoinKey: 'DalnimP4k8wq',
@@ -201,29 +203,46 @@ export function createFixtures(): Db {
       {
         id: 3,
         name: '별님반',
+        groupType: 'business',
         password: '274CKD',
         joinKey: 'ByeolJoin5x8',
         parentJoinKey: 'ByeolP9s3xtw',
         share: { token: 'shr_grp3', password: '1946' },
         createdAt: '2026-06-20T09:00:00+09:00',
       },
+      // GENERAL 모임(CHMO-604 — BE CHMO-599): 역할 분리 없음·전원 editor. 시크릿 4종은
+      // BUSINESS와 똑같이 발급되지만 학부모 키(parentJoinKey) 합류는 SPACE404로 닫힌다(AC-6)
+      // — presign 보호자 동의 428 없음(AC-4)과 함께 유형 분기 검증용 시드.
+      {
+        id: 4,
+        name: '주말 등산 모임',
+        groupType: 'general',
+        password: '6205',
+        joinKey: 'HikeGen8Rw3t',
+        parentJoinKey: 'HikeGenP5c1k',
+        share: { token: 'shr_grp4', password: '3712' },
+        createdAt: '2026-07-15T09:00:00+09:00',
+      },
     ],
     // 학부모 전환(CHMO-444): role·승인 상태 보유. PENDING 행이 곧 합류 신청(id = joinRequestId).
     // 햇살반: 선생님 3 + 학부모 active 3(지호네는 미연결) + 대기 신청 1(치즈냥이88) — 초대 관리(20) 시연.
     // 민준아빠는 별님반에 대기 신청도 있다 — 학부모 홈의 active 카드+대기 카드 동시 시연(§7-2).
     memberships: [
-      { id: 1, userId: 1, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-01T09:00:00+09:00' },
-      { id: 2, userId: 2, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-02T09:00:00+09:00' },
-      { id: 3, userId: 3, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-03T09:00:00+09:00' },
-      { id: 4, userId: 1, groupId: 2, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-06-10T09:00:00+09:00' },
-      { id: 5, userId: 2, groupId: 3, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-06-20T09:00:00+09:00' },
-      { id: 6, userId: 4, groupId: 1, role: 'parent', status: 'active', childNames: ['김민준'], createdAt: '2026-07-01T10:10:00+09:00' },
-      { id: 7, userId: 5, groupId: 1, role: 'parent', status: 'active', childNames: ['이서연'], createdAt: '2026-07-01T11:00:00+09:00' },
-      { id: 8, userId: 6, groupId: 1, role: 'parent', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
-      { id: 9, userId: 7, groupId: 1, role: 'parent', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
-      { id: 10, userId: 4, groupId: 3, role: 'parent', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
+      { id: 1, userId: 1, groupId: 1, role: 'editor', status: 'active', childNames: [], createdAt: '2026-05-01T09:00:00+09:00' },
+      { id: 2, userId: 2, groupId: 1, role: 'editor', status: 'active', childNames: [], createdAt: '2026-05-02T09:00:00+09:00' },
+      { id: 3, userId: 3, groupId: 1, role: 'editor', status: 'active', childNames: [], createdAt: '2026-05-03T09:00:00+09:00' },
+      { id: 4, userId: 1, groupId: 2, role: 'editor', status: 'active', childNames: [], createdAt: '2026-06-10T09:00:00+09:00' },
+      { id: 5, userId: 2, groupId: 3, role: 'editor', status: 'active', childNames: [], createdAt: '2026-06-20T09:00:00+09:00' },
+      { id: 6, userId: 4, groupId: 1, role: 'viewer', status: 'active', childNames: ['김민준'], createdAt: '2026-07-01T10:10:00+09:00' },
+      { id: 7, userId: 5, groupId: 1, role: 'viewer', status: 'active', childNames: ['이서연'], createdAt: '2026-07-01T11:00:00+09:00' },
+      { id: 8, userId: 6, groupId: 1, role: 'viewer', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
+      { id: 9, userId: 7, groupId: 1, role: 'viewer', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
+      { id: 10, userId: 4, groupId: 3, role: 'viewer', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
       // 선생님 신청(CHMO-475) — 선생님 키 합류도 승인 대기다. 자녀 이름은 없다(childNames 빈 배열)
-      { id: 11, userId: 8, groupId: 1, role: 'teacher', status: 'pending', childNames: [], createdAt: '2026-07-27T09:20:00+09:00' },
+      { id: 11, userId: 8, groupId: 1, role: 'editor', status: 'pending', childNames: [], createdAt: '2026-07-27T09:20:00+09:00' },
+      // GENERAL 모임(4) — 전원 editor(ADR 020). 이현정(1)이 생성자, 김지은(2)이 합류 멤버
+      { id: 12, userId: 1, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-15T09:00:00+09:00' },
+      { id: 13, userId: 2, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-16T10:00:00+09:00' },
     ],
     // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
     personParents: [

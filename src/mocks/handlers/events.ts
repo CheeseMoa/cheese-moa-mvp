@@ -85,10 +85,10 @@ export const eventHandlers = [
     // 조회 시점에 분석 완료 여부 판정(스펙: 화면 재진입/새로고침으로 확인) — published 증분 분석 포함
     for (const event of events) settleAnalysis(event.id)
     events.sort(byEventRecency)
-    // PARENT는 published 중 **아이(매핑 인물)가 나온 이벤트만**(CHMO-448 노출 강화 — ⚠ BE
+    // VIEWER는 published 중 **아이(매핑 인물)가 나온 이벤트만**(CHMO-448 노출 강화 — ⚠ BE
     // 미협의 제안: 공통만 있는 이벤트는 통째로 은닉, 미연결이면 0개) + 카운트·커버도 노출
     // 사진 기준 직렬화(미발행 누출 방지)
-    if (membership.role === 'parent') {
+    if (membership.role === 'viewer') {
       return ok(
         events
           .filter((e) => e.status === 'published' && parentEventHasMappedChild(e.id, user.id))
@@ -170,7 +170,12 @@ export const eventHandlers = [
     // 아동 보호자 동의 확보 확인 게이트(BE CHMO-514 GuardianConsentGuard) — 모임 단위·선생님별
     // 1회. BE는 이 검사를 선생님 확인 **직후·파일 검증 앞**에 두므로 순서를 그대로 따른다
     // (파일이 규격에 안 맞아도 428이 먼저 온다 — 화면은 모달을 띄우고 presign부터 재시도한다).
-    if (!guardianConsentAttested(user.id, event.groupId))
+    // GENERAL 모임은 게이트 자체가 없다(BE CHMO-599 AC-4 — 성인 모임에 아동 보호자 동의
+    // 확인을 요구하면 허위 법적 기록이 된다, ADR 020).
+    if (
+      findGroup(event.groupId)?.groupType !== 'general' &&
+      !guardianConsentAttested(user.id, event.groupId)
+    )
       return errorResponse(428, 'AGREEMENT428', '아동 보호자 동의 확보 확인이 필요합니다.')
     if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
     // 1회 정책 — 이미 사진이 있는 이벤트는 URL 발급부터 막는다(고아 S3 객체를 만들지 않게)
