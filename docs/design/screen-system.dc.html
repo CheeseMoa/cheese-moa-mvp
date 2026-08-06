@@ -322,7 +322,7 @@
     <div style="display:flex;justify-content:center;margin-top:18px;">
       <div style="background:#3A3128;color:#FFFDF5;font:400 13px/1 Jua,sans-serif;padding:13px 22px;border-radius:999px;box-shadow:0 8px 30px rgba(58,49,40,0.25);">🧀 검토를 완료했어요</div>
     </div>
-    <div class="note">BottomSheet = 상단 radius 24 + 그랩 핸들, 목록형 액션(사진 이동 09-1 등). Toast = text(#3A3128) 배경 다크 필, 하단 중앙 — 하단 고정 CTA 스택(≈100px+safe-area) 바로 위 오프셋이라 버튼을 안 가린다(CHMO-585, 상단 이동 CHMO-429 반전), 치즈 이모지로 톤 유지. ToastProvider로 전역 1개만 노출.</div>
+    <div class="note">BottomSheet = 상단 radius 24 + 그랩 핸들, 목록형 액션(사진 이동 09-1 등). Toast = text(#3A3128) 배경 다크 필, 하단 중앙 — 하단 고정 CTA 스택(≈100px+safe-area) 바로 위 오프셋이라 버튼을 안 가린다(CHMO-585, 상단 이동 CHMO-429 반전). 오프셋 기준은 뷰포트가 아니라 폰 프레임(CHMO-596 — 데스크톱에서 창 기준으로 재면 창 높이 따라 CTA를 덮는다), 치즈 이모지로 톤 유지. ToastProvider로 전역 1개만 노출.</div>
   </div>
 </div>
 

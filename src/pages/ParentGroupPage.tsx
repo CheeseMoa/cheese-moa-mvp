@@ -7,7 +7,9 @@ import { listGroupEvents } from '../api/events'
 import { formatEventDate } from '../lib/eventDate'
 
 /**
- * 18. 학부모 모임 상세 (ACTIVE PARENT) · node 307:26 · CHMO-448
+ * 18. 멤버(구 학부모) 모임 상세 (ACTIVE VIEWER) · node 307:26 · B2C 369:44 · CHMO-448
+ * 워딩 중립화(CHMO-608) — 화면 노출 어휘만 학부모→멤버·선생님→관리자·아이→인물로 교체
+ * (기능·구조 무변경, BE 도메인 주석의 PARENT는 유지).
  * GET /groups(모임명·myMembership — 상세 응답엔 멤버십이 없어 목록에서 읽는다) +
  * GET /groups/:id/events(PARENT엔 published + **아이 등장 이벤트만** 서버 필터 — 노출 강화,
  * FE는 받은 대로 렌더. 미연결이면 서버가 0개를 주므로 빈 상태 문구만 연결 여부로 가른다).
@@ -32,7 +34,7 @@ export function ParentGroupPage() {
   if (membership?.status === 'pending') return <Navigate to="/home" replace />
 
   const linkedNames = membership?.linkedChildNames ?? []
-  const subtitle = linkedNames.length > 0 ? `학부모 · ${linkedNames.join(', ')}` : '학부모'
+  const subtitle = linkedNames.length > 0 ? `멤버 · ${linkedNames.join(', ')}` : '멤버'
 
   return (
     <PhoneShell>
@@ -61,16 +63,16 @@ export function ParentGroupPage() {
                   description={
                     linkedNames.length > 0 ? (
                       <>
-                        아이가 나온 사진이 공개되면
+                        연결된 인물의 사진이 공개되면
                         <br />
                         여기에서 볼 수 있어요.
                       </>
                     ) : (
                       // 미연결(승인 후 기본 경로 §2) — 연결 전엔 서버가 이벤트를 주지 않는다
                       <>
-                        선생님이 아이를 연결하면
+                        관리자가 인물을 연결하면
                         <br />
-                        아이가 나온 이벤트가 보여요.
+                        그 인물이 나온 이벤트가 보여요.
                       </>
                     )
                   }

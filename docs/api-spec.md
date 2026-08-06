@@ -204,9 +204,9 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 오류: `400 VALIDATION_ERROR`, `404 NOT_FOUND`.
 > **이름(`name`)만 변경 가능.** 모임 비밀번호·`joinKey`·멤버 등 다른 필드는 이 엔드포인트로 변경 불가(MVP). `name` 외 필드 전송 시 무시.
 
-#### `POST /groups/join` — 모임 참여(선생님 초대 수락) · 화면 02-1
-요청 `{ "joinKey": "HAETSAL", "password": "482AVX" }`
-응답 `200` → `Group`(합류 후).
+#### `POST /groups/join` — 모임 참여 · 화면 02-1 / 02-2
+요청 `{ "joinKey": "HAETSAL", "password": "482AVX" }` — viewer(멤버) 키는 `childNames`(인물 이름 1개 이상) 필수. `childConsentVersion` 동봉은 폐지(CHMO-607 — 동의는 가입 01-A 일원화, 상세는 `parent-model-api-draft.md` §3).
+응답 `200` → `GroupSummaryResponse` 재사용(role·status는 `myMembership` 중첩 — CHMO-607 소스 대조). role 무관 승인제(CHMO-475)라 신청(PENDING) 생성이고, 일반(GENERAL) 모임 즉시 합류(ACTIVE)는 BE 미구현 — FE는 status로 랜딩을 가른다.
 오류: `403 WRONG_PASSWORD`, `404 NOT_FOUND`, `409 ALREADY_MEMBER`.
 
 #### `GET /groups/:id/invite` — 초대 정보 · 화면 초대(`211:1556`)

@@ -151,21 +151,27 @@ export function toGroup(raw: RawGroup): Group {
 export interface RawJoinGroupResult {
   groupId: ID
   groupName?: string
-  /** 구계약(GroupDetail 형태)의 모임 이름 필드 */
+  /** 실 BE(GroupSummaryResponse)·구계약(GroupDetail 형태)의 모임 이름 필드 */
   name?: string
-  /** 대문자 enum(EDITOR/VIEWER — 구 TEACHER/PARENT 흡수) — joinKey 종류에서 서버가 파생(Q6). 구계약엔 없다 */
+  /** 실 BE 형태 — join 응답은 GroupSummaryResponse라 role·status가 여기에 중첩된다(CHMO-607 대조) */
+  myMembership?: { role?: string; status?: string }
+  /** 초안 평면 형태(구 목 계약) — 대문자 enum(EDITOR/VIEWER — 구 TEACHER/PARENT 흡수) */
   role?: string
-  /** 대문자 enum(PENDING/ACTIVE) — 구계약엔 없다(즉시 합류 = active) */
+  /** 초안 평면 형태 — 대문자 enum(PENDING/ACTIVE) */
   status?: string
 }
 
 export function toJoinGroupResult(raw: RawJoinGroupResult): JoinGroupResult {
+  const role = raw.myMembership?.role ?? raw.role
+  const status = raw.myMembership?.status ?? raw.status
   return {
     groupId: raw.groupId,
     groupName: raw.groupName ?? raw.name ?? '',
-    // 구계약 = 선생님 초대 수락뿐이라 editor/active가 사실과 일치한다
-    role: raw.role !== undefined ? toGroupRole(raw.role) : 'editor',
-    status: (raw.status?.toLowerCase() as MembershipStatus | undefined) ?? 'active',
+    role: role !== undefined ? toGroupRole(role) : 'editor',
+    // 형태 미상(양쪽 다 없음)은 **pending**으로 — 승인제 BE(CHMO-475 배포) 아래에서 join은
+    // 신청 생성이 기본이고, active 오판은 모임 직행(CHMO-607) 후 SPACE403(CHMO-448 실측)으로
+    // 터진다. 홈 랜딩은 어느 계약에서도 안전하다. (종전 'active' 기본은 즉시 합류 구계약 시절 값)
+    status: (status?.toLowerCase() as MembershipStatus | undefined) ?? 'pending',
   }
 }
 

@@ -51,7 +51,6 @@ import {
   toGroupDetail,
   toGroupMemberResponse,
   toGroupSummary,
-  toJoinGroupResponse,
   toJoinRequestResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
@@ -113,6 +112,10 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       // ACTIVE 멤버만(선생님 3 + 학부모 3) — 대기 신청(치즈냥이88)은 세지 않는다
       memberCount: 6,
       eventCount: 4,
+      // 목록 분리 카운트(CHMO-608 — 홈 비즈니스 카드 "관리자 N · 멤버 N")는 ⚠ FE 선행 제안:
+      // 실 BE GroupSummaryResponse엔 아직 없어(상세만 보유) 실서버에선 '인원 N명' 폴백
+      editorCount: 3,
+      viewerCount: 3,
       myMembership: { role: 'editor', status: 'active', claimedChildNames: [] },
     })
     const detail = toGroup(toGroupDetail(group, teacher))
@@ -202,10 +205,12 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toEvent(raw)).toMatchObject({ id: 2, status: 'published', photoCount: visibleCount })
   })
 
-  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3)', () => {
+  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3 · CHMO-607)', () => {
     const group = findGroup(1)!
     const request = membershipOf(7, 1)! // 치즈냥이88 — PENDING 신청
-    expect(toJoinGroupResult(toJoinGroupResponse(group, request))).toEqual({
+    // join 응답은 실 BE처럼 GroupSummaryResponse 재사용(전용 DTO 없음 — role·status는
+    // myMembership 중첩, SpaceController 대조 CHMO-607) — 목록 직렬화기가 곧 join 직렬화기다
+    expect(toJoinGroupResult(toGroupSummary(group, request))).toEqual({
       groupId: 1,
       groupName: '햇살반',
       role: 'viewer',
