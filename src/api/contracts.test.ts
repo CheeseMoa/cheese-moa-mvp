@@ -784,7 +784,8 @@ describe('업로드 3단계 (06-U)', () => {
       excludeEyesClosed: true,
       excludeBlurry: false,
     })
-    expect(result).toEqual({ jobId: BE_REGISTER_PHOTOS.jobId, registeredCount: 2 })
+    // duplicateCount(CHMO-254·606) — 재업로드 시 중복 제외 수. 변환 없이 그대로 통과한다
+    expect(result).toEqual({ jobId: BE_REGISTER_PHOTOS.jobId, registeredCount: 2, duplicateCount: 0 })
   })
 })
 

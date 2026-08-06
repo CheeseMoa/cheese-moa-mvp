@@ -426,10 +426,15 @@ export const BE_PRESIGN_UPLOAD = {
   contentType: 'image/jpeg',
 }
 
-/** POST /events/:id/photos — RegisterPhotosResponse. 등록이 곧 분석 시작이라 jobId가 온다 */
+/**
+ * POST /events/:id/photos — RegisterPhotosResponse. 등록이 곧 분석 시작이라 jobId가 온다.
+ * duplicateCount는 내용 지문 중복으로 제외된 수(CHMO-254) — BE 소스 대조(2026-08-06, CHMO-606)로
+ * 추가했고 실채집 재확인 대상. 재업로드에서만 0보다 클 수 있다.
+ */
 export const BE_REGISTER_PHOTOS = {
   jobId: 'f37f3ad0-3b5b-4b3a-9a6f-3f2f5d0c1e77',
   registeredCount: 2,
+  duplicateCount: 0,
 }
 
 // ── 학부모 뷰어 ──────────────────────────────────────────────

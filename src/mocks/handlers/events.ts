@@ -64,11 +64,9 @@ import {
   uploadExtensionOf,
 } from '../../lib/upload'
 
-const ANALYZING_LOCKED = '분석 중에는 사진을 추가할 수 없습니다.'
-// 업로드·분류는 이벤트당 1회(CHMO-486) — 사진이 이미 있는 이벤트는 presign·등록 모두 거부한다.
-// 화면이 진입을 막지만 딥링크·직접 호출로도 뚫리지 않게 서버(목)에서도 잠근다.
-// BE 코드 미확인 — 실 BE 게이트는 CHMO-485. 전용 코드가 나오면 그 코드로 교체한다.
-const UPLOAD_ONCE_LOCKED = '사진 업로드는 이벤트당 한 번만 할 수 있습니다.'
+// 재업로드 허용(CHMO-606 — BE 소스 대조 2026-08-06): presign·등록 어디에도 1회 게이트·분석중
+// 게이트가 없다(CHMO-485는 미구현으로 폐기 수순). 분석 중 재등록은 새 job이 이전 job을
+// 대체하고(CHMO-460) published는 전이 없이 증분 분석이 돈다(CHMO-216).
 
 export const eventHandlers = [
   // GET /groups/:id/events — 이벤트 목록(최신순, bare 배열, ACTIVE 멤버 전용) · 화면 05·18
@@ -172,9 +170,8 @@ export const eventHandlers = [
     // (파일이 규격에 안 맞아도 428이 먼저 온다 — 화면은 모달을 띄우고 presign부터 재시도한다).
     if (!guardianConsentAttested(user.id, event.groupId))
       return errorResponse(428, 'AGREEMENT428', '아동 보호자 동의 확보 확인이 필요합니다.')
-    if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
-    // 1회 정책 — 이미 사진이 있는 이벤트는 URL 발급부터 막는다(고아 S3 객체를 만들지 않게)
-    if (photoCountOfEvent(event.id) > 0) return invalidRequest(UPLOAD_ONCE_LOCKED)
+    // 상태 게이트 없음(CHMO-606 — BE IssueUploadUrlsUseCase 소스 대조): 사진이 있어도, 분석
+    // 중이어도 URL은 발급된다. 진입 차단은 화면(06-U uploadLocked)의 몫이다.
 
     const body = await readJson<{ files?: { fileName?: unknown; size?: unknown }[] }>(request)
     const files = body?.files
@@ -222,9 +219,6 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = teacherEvent(user, toId(params.id))
     if (event instanceof Response) return event
-    if (event.status === 'analyzing') return invalidRequest(ANALYZING_LOCKED)
-    // 1회 정책 — presign을 우회해 직접 등록해도 막힌다(CHMO-486)
-    if (photoCountOfEvent(event.id) > 0) return invalidRequest(UPLOAD_ONCE_LOCKED)
 
     const body = await readJson<{
       s3Keys?: unknown
@@ -245,9 +239,10 @@ export const eventHandlers = [
     if ((s3Keys as string[]).some((key) => !isObjectUploaded(key)))
       return errorResponse(404, 'PHOTO404', 'S3에 업로드되지 않은 사진이 있습니다.')
 
-    // 위 1회 게이트를 지났으면 사진 0장 이벤트뿐이라 empty → analyzing 전이만 남는다(CHMO-486)
-    if (!transitionEvent(event.id, 'analyzing'))
-      return invalidRequest('지금은 사진을 등록할 수 없는 이벤트입니다.')
+    // BE Moment.startAnalyzing(CHMO-606 소스 대조) — published는 공개 유지를 위해 전이를
+    // 무시하고(무전이 증분 분석, CHMO-216) 그 외는 analyzing으로 간다. 거부 경로가 없다:
+    // 분석 중 재등록도 새 job이 이전 job을 대체한다(CHMO-460 — 아래 startAnalysis가 job 재초기화)
+    if (event.status !== 'published') transitionEvent(event.id, 'analyzing')
 
     const baseIndex = photoCountOfEvent(event.id)
     ;(s3Keys as string[]).forEach((s3Key, i) => {
@@ -273,7 +268,9 @@ export const eventHandlers = [
       excludeEyesClosed: body.excludeEyesClosed !== false,
       excludeBlurry: body.excludeBlurry !== false,
     })
-    return created({ jobId: crypto.randomUUID(), registeredCount: s3Keys.length })
+    // duplicateCount(CHMO-254) — 목은 내용 지문이 없어 중복 판정을 생략한다(항상 0).
+    // 전량 중복 VALID400도 같은 이유로 재현하지 않는다 — 계약 형태만 BE와 맞춘다
+    return created({ jobId: crypto.randomUUID(), registeredCount: s3Keys.length, duplicateCount: 0 })
   }),
 
   // POST /events/:id/analyze — 수동 재분석 트리거(등록 시 자동 발행이 실패한 경우).
@@ -289,9 +286,8 @@ export const eventHandlers = [
     if (pending.length === 0) return invalidRequest('분석할 업로드가 없습니다.')
     const previous = findAnalysisJob(event.id)
     if (previous?.status === 'analyzing') return invalidRequest('이미 분석이 진행 중인 이벤트입니다.')
-    // published 무전이 증분 분석은 폐지됐다(CHMO-486) — 전이 규칙이 그대로 판정한다
-    if (!transitionEvent(event.id, 'analyzing'))
-      return invalidRequest('지금은 분석을 시작할 수 없는 이벤트입니다.')
+    // published는 공개 유지를 위해 무전이(CHMO-216 — 재업로드 복원으로 재도달, CHMO-606)
+    if (event.status !== 'published') transitionEvent(event.id, 'analyzing')
 
     // 재발행이라 옵션은 직전 job의 것을 잇는다(BE도 첫 업로드의 옵션을 재사용)
     startAnalysis(event.id, previous?.options ?? { excludeEyesClosed: true, excludeBlurry: true })

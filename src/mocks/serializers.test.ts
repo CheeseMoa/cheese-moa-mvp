@@ -175,14 +175,14 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
   })
 
   it('학부모 이벤트 목록 — 카운트·커버가 노출 사진 기준이다 (미발행 누출 방지, Q4)', () => {
-    const event = findEvent(2)! // 봄 소풍(published) — 발행 16장 + 발행 대기 4장
+    const event = findEvent(2)! // 봄 소풍(published) — 발행 14장 + 발행 대기 2장(214·215)
     const raw = toParentEventSummary(event, 4) // 민준아빠 — 김민준(앨범 9) 매핑
     const visibleCount = new Set(
       [...photosOfAlbum(9), ...photosOfAlbum(12)]
         .filter((p) => p.reviewed && p.published)
         .map((p) => p.id),
     ).size
-    expect(raw.photoCount).toBe(visibleCount) // 발행 대기 4장(217~220)은 세지 않는다
+    expect(raw.photoCount).toBe(visibleCount) // 발행 대기분은 세지 않는다
     expect(raw.albumCount).toBe(2) // 김민준 + 공통 — 매핑 안 된 인물 앨범은 세지 않는다
     // 커버는 노출 사진에서만 — 미발행 사진이 썸네일로 새면 안 된다
     expect(raw.thumbnailUrl).toContain('picsum')
@@ -287,9 +287,9 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const detail = toEvent(toEventDetail(event))
     expect(detail).toMatchObject({ id: 2, groupId: 1, status: 'published' })
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
-    // 발행 대기(구 CHMO-324) — 상세 전용 필드는 남지만 값은 항상 0이다(CHMO-488):
-    // 전량 검토라야 공개되고 공개 후 사진 추가도 없어 대기가 생길 경로가 없다
-    expect(detail.pendingPublishCount).toBe(0)
+    // 발행 대기 — 상세 전용 필드(CHMO-324). 재업로드 복원(CHMO-606)으로 다시 값을 갖는다:
+    // 시드는 봄 소풍 마지막 2장(214·215)을 검토·미발행으로 둔다(재공개 시연)
+    expect(detail.pendingPublishCount).toBe(2)
     expect(summary.pendingPublishCount).toBeUndefined()
 
     // 05 카드 커버(CHMO-515) — 목록에만 오고 상세엔 없다(BE와 같은 비대칭)
@@ -426,15 +426,15 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
   })
 
   it('뷰어 — 발행(published) 기준 카운트/커버 (CHMO-324)', () => {
-    const event = findEvent(2)! // published, 발행 16장 + 발행 대기 4장(217~220)
+    const event = findEvent(2)! // published, 발행 14장 + 발행 대기 2장(214·215 — CHMO-606 시드)
     const viewerEvent = toViewerEvent(toViewerEventSummary(event))
     expect(viewerEvent).toMatchObject({ id: 2, name: '봄 소풍', date: '2026-05-12' })
-    expect(viewerEvent.photoCount).toBe(16) // 발행 대기 4장은 발행 전이라 제외
+    expect(viewerEvent.photoCount).toBe(14) // 발행 대기 2장은 발행 전이라 제외
     expect(viewerEvent.albumCount).toBe(4)
     expect(viewerEvent.coverThumbnailUrl).toContain('picsum')
     expect(viewerEvent.publishedAt).toBeNull() // 목록 응답엔 publishedAt이 없다
 
-    // 김민준 앨범(9)엔 발행 대기 4장이 붙어 있다 — 앨범 카운트·사진 목록도 발행분만
+    // 앨범 카운트·사진 목록도 발행분만 — 발행 대기가 섞인 앨범이 있어도 새지 않는다
     const viewerAlbum = toViewerAlbum(toViewerAlbumSummary(findAlbum(9)!))
     expect(viewerAlbum).toMatchObject({ id: 9, type: 'person', name: '김민준' })
     expect(viewerAlbum.coverThumbnailUrl).toContain('picsum')
@@ -466,14 +466,16 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(photosOfAlbum(specialAlbum.id).some((p) => !p.reviewed)).toBe(true)
   })
 
-  it('공개된 이벤트 — 발행 대기 없이 뷰어에 전량 노출된다 (CHMO-488)', () => {
-    // 봄 소풍(2)은 전 사진 검토 + 발행 완료 시드 — 새 정책에선 published면 대기가 0이다
-    // (전량 검토라야 공개되고 공개 후 사진 추가도 없다 — CHMO-486). 재공개 버튼이 열릴 여지가 없다
-    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(0)
-    expect(pendingPublishCountOf(2)).toBe(0)
-    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(16)
+  it('공개된 이벤트 — 발행 대기는 뷰어에 새지 않고 재공개로만 나간다 (CHMO-606)', () => {
+    // 봄 소풍(2) 시드: 전 사진 검토 + 2장(214·215)은 미발행 = 발행 대기(재업로드 후 검토를
+    // 마친 상태의 근사 — CHMO-488의 "도달 불가" 전제가 재업로드 복원으로 반전됐다)
+    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(2)
+    expect(pendingPublishCountOf(2)).toBe(2)
+    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(14)
 
-    // 발행 재호출도 새로 나갈 사진이 없다(멱등)
+    // 발행 재호출(재공개) — 대기 2장이 나가고, 한 번 더 부르면 새로 나갈 것이 없다(멱등)
+    expect(publishEventPhotos(2)).toBe(2)
+    expect(pendingPublishCountOf(2)).toBe(0)
     expect(publishEventPhotos(2)).toBe(0)
   })
 

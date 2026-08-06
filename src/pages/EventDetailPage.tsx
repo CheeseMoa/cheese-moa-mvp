@@ -121,9 +121,9 @@ export function EventDetailPage() {
                   <p className="mt-3 text-sm text-muted">아직 사진이 없어요</p>
                 </div>
                 <div className="mt-auto pt-6">
-                  {/* replace로 들어간다 — 업로드는 이벤트당 1회라 06-U는 '지나가는 화면'이고,
-                      06-E 자리를 대신 차지해야 업로드 후 뒤로가기가 모임 상세로 곧장 빠진다.
-                      push로 두면 히스토리에 06-E·06-U가 남아 뒤로가기가 두 번 헛돈다 */}
+                  {/* replace로 들어간다 — 06-U는 히스토리에 남지 않는 '지나가는 화면'이라(CHMO-486
+                      내비 관용) 06-E 자리를 대신 차지해야 업로드 후 뒤로가기가 모임 상세로 곧장
+                      빠진다. push로 두면 히스토리에 06-E·06-U가 남아 뒤로가기가 두 번 헛돈다 */}
                   <Button fullWidth onClick={() => navigate(`${base}/upload`, { replace: true })}>
                     사진 업로드
                   </Button>
@@ -242,7 +242,7 @@ interface EventAlbumGridProps {
  * 분석 완료 상태의 검수 허브. ① 인물·공통 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 공개해도 학부모에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션 · 범례.
  * 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
- * [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
+ * 하단 [＋ 사진 추가]→06-U 재업로드(CHMO-606) · [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
  * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 학부모 연결 — CHMO-400 자리를 CHMO-522가
  * 넓혔다, 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
  */
@@ -372,9 +372,25 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
         </div>
 
         <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
-          {/* "발행 대기 N장" 안내는 없다(CHMO-488) — 재공개 경로가 사라졌다: 전량 검토 완료라야
-              공개되고(하드 게이트) 업로드도 이벤트당 1회라(CHMO-486) 공개 뒤 대기가 생기지 않는다.
-              [＋ 사진 추가]도 같은 이유로 없다 — 더 올릴 사진이 있으면 이벤트를 새로 만든다 */}
+          {/* 재공개 안내(CHMO-606 — CHMO-488 반전 복원): 공개 후 재업로드·검토를 마친 사진은
+              [공개하기]를 다시 눌러야 학부모에게 나간다(BE CHMO-324 로직 존치). 발행 대기가
+              있으면 14로 유도한다. 종전 warn색 대신 muted — 잘못된 상태가 아니라 다음 할 일
+              안내다(안내용 빨간 글씨 금지 톤 규칙) */}
+          {event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
+            <p className="text-center text-xs text-muted">
+              발행 대기 {event.pendingPublishCount}장 · 공개 전 요약보기에서 공개할 수 있어요
+            </p>
+          )}
+          {/* 재업로드 진입(CHMO-606 — CHMO-486 반전): 분류가 끝난 이벤트에 사진을 이어 올린다.
+              replace — 06-U는 히스토리에 남지 않는 지나가는 화면이라(내비 관용) push로 두면
+              업로드 완료 replace가 06-U 자리를 08로 바꿔 뒤로가기가 08→08로 한 번 헛돈다 */}
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={() => navigate(`${base}/upload`, { replace: true })}
+          >
+            ＋ 사진 추가
+          </Button>
           <div className="relative">
             <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
               공개 전 요약보기
