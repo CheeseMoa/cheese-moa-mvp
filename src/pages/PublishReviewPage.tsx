@@ -1,24 +1,30 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { AlbumCard, Button, ConfirmDialog, Header, LoadState, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { getEvent, getReviewSummary, publishEvent } from '../api/events'
+import { getGroup } from '../api/groups'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 
 /**
  * 14. 공개 요약(구 '공개 전 검수' — CHMO-398) · node 211:1723 · GET /events/:id/review-summary · POST /events/:id/publish
- * 공개 직전 최종 확인: 앨범 단위 통계 2칸 + 남은 검토 구획 + 학부모 뷰 프리뷰(08과 같은 앨범 카드
+ * 공개 직전 최종 확인: 앨범 단위 통계 2칸 + 남은 검토 구획 + 멤버 뷰 프리뷰(08과 같은 앨범 카드
  * 그리드, CHMO-346) + [공개하기]. 공개는 되돌리기 어려운 외부 노출이라 항상 확인 다이얼로그로 받는다.
- * 성공 시 05 모임 상세로 복귀(거기서 '공개 완료' 배지·학부모 공유 진입이 보인다).
+ * 성공 시 05 모임 상세로 복귀(거기서 '공개 완료' 배지가 보인다).
+ *
+ * **비즈니스 모임 전용 화면**(CHMO-614) — 일반(GENERAL) 모임엔 검수·공개 단계 자체가 없어
+ * 08이 [공개 전 요약보기]를 그리지 않는다. 남는 유입은 딥링크·뒤로가기뿐이라 안내 화면 없이
+ * 08로 replace한다(06-U 분석중 차단과 같은 관용, CHMO-486): 여기서 할 수 있는 일이
+ * '돌아가기' 하나뿐인 화면을 띄우면 막다른 길이 되고, replace라 히스토리에도 남지 않는다.
  *
  * 공개 게이트(CHMO-488 — 2026-07-28 정책 변경): **전량 검토 완료가 하드 게이트**다.
  * 인물·공통 앨범에 미검토 사진이 1장이라도 남으면 [공개하기]를 잠근다(종전의 경고 후 ?force=true
  * 강행·409 자동 재시도는 폐기). 판정 범위가 인물·공통뿐인 이유는 특수 앨범(분류 애매·품질 제외)엔
  * 검토 UI가 아예 없어(CHMO-357) 게이트에 넣으면 영영 공개할 수 없는 이벤트가 생기기 때문이다.
  * 미리보기도 **발행 대상(전 사진 검토 완료)만** 담는다 — 검수하다 만 앨범은 공개해도 나가지 않아
- * "학부모가 볼 화면"에 섞이면 거짓이 된다. 그래서 검토 범례(점선/갈색)도 없다.
+ * "멤버가 볼 화면"에 섞이면 거짓이 된다. 그래서 검토 범례(점선/갈색)도 없다.
  *
  * 재공개(CHMO-606 — CHMO-488의 '재공개 경로 소멸' 반전): 재업로드가 다시 열려 published에도
  * 미검토·발행 대기가 생긴다. BE는 publish 재호출을 허용하므로(검수 마친 사진 추가 발행,
@@ -56,6 +62,8 @@ export function PublishReviewPage() {
   const summaryApi = useApi(`review-summary:${eventId}`, (signal) =>
     getReviewSummary(eventId, signal),
   )
+  // 모임 유형 — 일반 모임엔 공개 단계가 없어 이 화면이 통째로 없다(CHMO-614)
+  const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
@@ -69,7 +77,7 @@ export function PublishReviewPage() {
   // 공개를 막는 앨범(인물·공통 중 미검토 잔여) — 서버 409 판정과 같은 범위라 화면 잠금과 서버가 어긋나지 않는다
   const blockingAlbums = summary ? sortAlbumsForDisplay(summary.unreviewedAlbums) : []
   const hasUnreviewed = blockingAlbums.length > 0
-  // 발행 대상 앨범(전 사진 검토 완료 + person/common) 존재 여부 — 0개면 공개해도 학부모에겐 빈 이벤트
+  // 발행 대상 앨범(전 사진 검토 완료 + person/common) 존재 여부 — 0개면 공개해도 멤버에겐 빈 이벤트
   const hasVisiblePhotos = !!summary && summary.previewAlbums.length > 0
   // 공개되지 않는 앨범(사진 있는 특수 앨범, CHMO-521) — 미리보기와 같은 순서로 늘어놓는다
   const excludedAlbums = summary ? sortAlbumsForDisplay(summary.excludedAlbums) : []
@@ -114,6 +122,12 @@ export function PublishReviewPage() {
 
   const bothLoading = eventApi.loading || summaryApi.loading
   const anyError = summaryApi.error ?? eventApi.error
+
+  // 일반 모임 가드(CHMO-614) — 유형이 '일반'으로 **밝혀졌을 때만** 나간다. 미도착·조회 실패는
+  // 종전 화면 그대로 두는 쪽이다(08·09와 같은 규칙, CHMO-612·613: 매퍼가 구계약 응답을 business로
+  // 정규화하는 해석과 같고, 곁가지 조회 하나가 실패했다고 비즈니스 모임의 공개를 막지 않는다).
+  // 본문은 event·summary 두 응답을 기다리므로 조회 하나뿐인 유형이 늦어 화면이 번쩍이는 일은 드물다.
+  if (groupApi.data?.groupType === 'general') return <Navigate to={eventPath} replace />
 
   return (
     <PhoneShell>
@@ -175,9 +189,9 @@ export function PublishReviewPage() {
               )}
 
               {/* 섹션 라벨이 문장인 이유 — 위 통계 칸이 이미 `공개될 앨범 N`이라 명사를 반복하면
-                  같은 말이 두 번이다. 08 하단 구획(`공개해도 학부모에게 안 보여요`)과 같은 결 */}
+                  같은 말이 두 번이다. 08 하단 구획(`공개해도 멤버에게 안 보여요`)과 같은 결 */}
               <h2 className="mt-6 text-[12px] tracking-[0.06em] text-muted">
-                {published ? '학부모에게 이렇게 보여요' : '공개하면 이렇게 보여요'}
+                {published ? '멤버에게 이렇게 보여요' : '공개하면 이렇게 보여요'}
               </h2>
               {hasVisiblePhotos ? (
                 // 08과 같은 앨범 카드 — onClick 없이 순수 프리뷰(CHMO-346).
@@ -198,7 +212,7 @@ export function PublishReviewPage() {
                   <br />
                   사진을 검토 완료하고 인물·공통 앨범으로
                   <br />
-                  정리하면 학부모에게 보여요.
+                  정리하면 멤버에게 보여요.
                 </p>
               )}
 
@@ -210,7 +224,7 @@ export function PublishReviewPage() {
               {excludedAlbums.length > 0 && (
                 <div className="mt-3 rounded-xl bg-surface px-4 py-3.5">
                   <p className="text-xs font-bold leading-normal text-heading">
-                    학부모에게는 인물·공통 앨범만 보여요
+                    멤버에게는 인물·공통 앨범만 보여요
                   </p>
                   <p className="mt-1.5 text-xs leading-relaxed text-muted">
                     {/* 가운뎃점은 앨범명 안의 공백과 섞여 한 덩어리로 읽힌다 — 쉼표로 끊는다 */}
@@ -224,7 +238,7 @@ export function PublishReviewPage() {
 
               {published && (
                 <p className="mt-4 text-xs leading-normal text-muted">
-                  이미 공개된 이벤트예요. 학부모가 공유 링크로 볼 수 있어요.
+                  이미 공개된 이벤트예요. 멤버가 사진을 볼 수 있어요.
                 </p>
               )}
             </>
@@ -275,11 +289,13 @@ export function PublishReviewPage() {
           // 보일 사진 0장이 유일하게 남은 경고 — "사진을 볼 수 있어요"라고 안내하면 거짓이 된다.
           // 재공개(published)는 이번에 새로 나갈 장수를 말한다(CHMO-606) — 앨범 수는 이미 나간
           // 것까지 세서 "무엇이 새로 공개되나"에 답하지 못한다
+          // '공유 링크로'는 무로그인 뷰어 시절의 말이라 함께 걷는다 — 지금은 합류·연결된
+          // 멤버의 모임 화면(18)에 뜬다
           !hasVisiblePhotos
-            ? '지금 공개하면 학부모에게 보이는 사진이 없어요. 사진을 인물·공통 앨범으로 정리한 뒤 공개하는 걸 권해요.'
+            ? '지금 공개하면 멤버에게 보이는 사진이 없어요. 사진을 인물·공통 앨범으로 정리한 뒤 공개하는 걸 권해요.'
             : published
-              ? `새로 검토한 사진 ${pendingPublish}장이 학부모에게 공개돼요.`
-              : `앨범 ${summary?.previewAlbums.length ?? 0}개를 학부모가 공유 링크로 볼 수 있어요.`
+              ? `새로 검토한 사진 ${pendingPublish}장이 멤버에게 공개돼요.`
+              : `앨범 ${summary?.previewAlbums.length ?? 0}개를 멤버가 볼 수 있어요.`
         }
         confirmLabel="공개하기"
         onConfirm={handlePublish}
