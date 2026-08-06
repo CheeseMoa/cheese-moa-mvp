@@ -97,7 +97,15 @@ export function toGroupSummary(group: DbGroup, membership: DbMembership) {
     myMembership: toMyMembership(membership),
     ...(membership.status === 'pending' ? { eventCount: 0 } : {}),
     ...(isActiveTeacher
-      ? { memberCount: memberCountOf(group.id), eventCount: eventCountOf(group.id) }
+      ? {
+          memberCount: memberCountOf(group.id),
+          eventCount: eventCountOf(group.id),
+          // ⚠ 분리 카운트는 FE 선행 제안(CHMO-608 — 홈 비즈니스 카드 "관리자 N · 멤버 N"):
+          // 실 BE GroupSummaryResponse엔 아직 없다(2026-08-06 develop 소스 대조 — 상세만
+          // 보유). BE 반영 전 실서버에선 카드가 '인원 N명' 폴백으로 그려진다
+          editorCount: teacherCountOf(group.id),
+          viewerCount: parentCountOf(group.id),
+        }
       : {}),
     ...(isActiveParent
       ? {

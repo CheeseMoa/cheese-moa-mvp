@@ -177,11 +177,29 @@ export function ComponentGalleryPage() {
         </Section>
 
         <Section title="05 · GroupCard / EventCard">
+          {/* 유형 3태(CHMO-608 · B2C 360:12/16/22) — 일반(무배지·단일 카운트) /
+              비즈니스(배지·관리자/멤버 분리) / 승인 대기(뮤트·배지 인라인) */}
           <GroupCard
-            name="햇살반 학부모"
-            memberCount={4}
+            name="제주 가족여행"
+            groupType="general"
+            memberCount={6}
             eventCount={3}
             onClick={() => toast.show('🧀 모임 카드 탭')}
+          />
+          <GroupCard
+            name="햇살반"
+            groupType="business"
+            editorCount={3}
+            viewerCount={12}
+            eventCount={8}
+            onClick={() => toast.show('🧀 모임 카드 탭')}
+          />
+          <GroupCard
+            name="별님반"
+            groupType="business"
+            pending
+            subtitle="신청: 김민준"
+            onClick={() => toast.show('🧀 승인 대기 탭')}
           />
           {/* 커버는 사진이 있는 이벤트만 진다(CHMO-515) — 아래 세 장이 그 규칙의 전부다:
               썸네일 있음 / 사진은 있지만 썸네일 아직 없음(플레이스홀더) / 사진 0장(컴팩트) */}

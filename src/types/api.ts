@@ -182,11 +182,9 @@ export interface EventItem {
    */
   progress?: AnalysisProgress | null
   /**
-   * 발행 대기 수(구 재공개 게이트 CHMO-324·265) — 검토됐지만 아직 발행되지 않은 사진.
-   * **상세 응답에만** 있고 목록엔 없다.
-   * ⚠ **화면은 더 이상 읽지 않는다**(CHMO-488): 전량 검토 완료가 공개의 하드 게이트가 되고
-   * 이벤트당 업로드도 1회(CHMO-486)라 공개 후에 발행 대기가 생길 경로가 사라졌다.
-   * BE(CHMO-487)가 필드를 걷어낼 때까지는 실 BE 응답 그대로 통과시킨다.
+   * 발행 대기 수 — 검토됐지만 아직 발행되지 않은 사진. **상세 응답에만** 있고 목록엔 없다.
+   * 재업로드가 다시 열려(CHMO-606) 공개 후에도 발행 대기가 생긴다 — 08 "발행 대기 N장" 안내와
+   * 14 재공개 활성 판정이 읽는다(CHMO-488의 '더는 안 읽는다'를 반전).
    */
   pendingPublishCount?: number
 }
@@ -344,6 +342,11 @@ export interface RegisterPhotosRequest {
 export interface RegisterPhotosResult {
   jobId: string
   registeredCount: number
+  /**
+   * 같은 이벤트에 이미 있는 동일 사진(내용 지문 일치)이라 등록에서 제외된 수(CHMO-254).
+   * 재업로드에서만 0보다 클 수 있다 — 구채집 픽스처엔 없어 optional(전량 중복은 VALID400).
+   */
+  duplicateCount?: number
 }
 
 // ── 공개 요약(14) ────────────────────────────────────────────

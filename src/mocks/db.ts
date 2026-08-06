@@ -848,16 +848,16 @@ export function deleteGroupCascade(groupId: number): void {
 /**
  * 허용 전이(docs/feature-spec.md 상태머신):
  * empty --analyze--> analyzing --완료--> review --전 사진 reviewed--> ready --publish--> published
- * 업로드·분류는 이벤트당 1회라(CHMO-486) **analyzing으로 돌아오는 엣지는 empty에서만** 있다 —
- * 사진 추가로 인한 review·ready → analyzing 회귀, published 무전이 증분 분석은 폐지됐다.
+ * 재업로드 복원(CHMO-606 — CHMO-486 반전): **review·ready → analyzing 회귀**가 돌아왔다(사진
+ * 추가 = 증분 분석). published는 회귀 엣지 없이도 증분 분석이 돈다 — 공개 유지를 위해 전이
+ * 자체를 안 하고(BE Moment.startAnalyzing 무전이, CHMO-216) 핸들러가 job만 만든다.
  */
 const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   empty: ['analyzing'],
   analyzing: ['review'],
-  // published = force 공개(미검토 존재 시 409 경고 후 ?force=true) — 미검토 사진은 뷰어 비노출이라 안전
-  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장) — 0장이면 업로드가 다시 열린다
-  review: ['ready', 'published', 'empty'],
-  ready: ['review', 'published', 'empty'], // 검토 해제 시 review
+  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장) — 0장이면 첫 업로드 흐름이 다시 열린다
+  review: ['ready', 'published', 'empty', 'analyzing'],
+  ready: ['review', 'published', 'empty', 'analyzing'], // 검토 해제 폐지 후에도 review 회귀는 사진 추가 몫
   // 공개 후 편집·재발행은 상태 전이 없이 진행 — 뷰어 노출은 사진 reviewed && published로 제어(CHMO-324)
   published: [],
 }
@@ -1050,6 +1050,7 @@ export function completeAnalysis(eventId: number): void {
   }
 
   job.status = 'done'
-  // 분류는 이벤트당 1회라 여기 오는 건 analyzing뿐 — analyzing → review로 검수 단계를 연다
+  // analyzing → review로 검수 단계를 연다. published 증분 분석은 전이가 거부돼(published: [])
+  // 공개를 유지한다 — BE completeAnalysis의 무전이와 같은 결과(CHMO-216·606)
   transitionEvent(eventId, 'review')
 }
