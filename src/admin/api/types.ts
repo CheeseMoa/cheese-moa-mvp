@@ -41,8 +41,8 @@ export interface AdminGroupRow {
   createdAt: string
 }
 
-/** BE SpaceRole — 대문자 그대로(표시명은 lib/labels) */
-export type AdminMemberRole = 'TEACHER' | 'PARENT'
+/** BE SpaceRole — 대문자 그대로(표시명은 lib/labels). CHMO-605 리네이밍(구 TEACHER/PARENT) */
+export type AdminMemberRole = 'EDITOR' | 'VIEWER'
 
 /** BE SpaceUserStatus — 상세 멤버 목록은 PENDING(승인 대기 신청)도 포함한다 */
 export type AdminMemberStatus = 'PENDING' | 'ACTIVE'

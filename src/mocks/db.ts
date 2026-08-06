@@ -39,7 +39,13 @@ export interface DbUser {
 export interface DbGroup {
   id: number
   name: string
-  /** 선생님 합류용 모임 비밀번호(초대 화면 전용 노출) */
+  /**
+   * 모임 유형(BE CHMO-599 · ADR 020) — 생성 시 지정·불변. 유형 분기는 두 곳뿐:
+   * GENERAL은 학부모 키 합류가 SPACE404로 닫히고, presign의 보호자 동의 게이트가 없다.
+   * 시크릿 4종(joinKey·parentJoinKey·비밀번호 2종)은 GENERAL에도 그대로 발급된다.
+   */
+  groupType: 'business' | 'general'
+  /** 선생님 합류용 모임 비밀번호(초대 화면 전용 노출) — 생성 시 자동 발급(CHMO-599, 요청으로 받지 않는다) */
   password: string
   /** 선생님용 참여 코드 — 어느 링크로 합류했는지가 role을 정한다(학부모 전환 Q6) */
   joinKey: string
@@ -54,7 +60,8 @@ export interface DbGroup {
   createdAt: ISODateTime
 }
 
-export type DbMemberRole = 'teacher' | 'parent'
+/** 저장 값도 BE와 같이 중립어(CHMO-605 — 구 teacher/parent). 직렬화는 대문자 EDITOR/VIEWER */
+export type DbMemberRole = 'editor' | 'viewer'
 export type DbMembershipStatus = 'pending' | 'active'
 
 /**
@@ -333,7 +340,7 @@ export function membershipOf(userId: number, groupId: number): DbMembership | un
 /** 제작자 액션(업로드·검수·공개·설정·초대·매핑)의 관문 — 학부모 차단은 서버 강제(§6) */
 export function isActiveTeacher(userId: number, groupId: number): boolean {
   const membership = membershipOf(userId, groupId)
-  return membership?.status === 'active' && membership.role === 'teacher'
+  return membership?.status === 'active' && membership.role === 'editor'
 }
 
 /**
@@ -587,13 +594,14 @@ export function memberCountOf(groupId: number): number {
   return activeMembersOfGroup(groupId).length
 }
 
-/** 카운트 분리(§7-3) — "선생님 3 · 학부모 12". 합산 memberCount는 선생님에게 무의미 */
+/** 카운트 분리(§7-3) — "선생님 3 · 학부모 12". 합산 memberCount는 선생님에게 무의미.
+ * 함수명은 내부 식별자라 유지(ADR 021 관례 — BE findTeacherMoment와 같은 결): teacher=EDITOR */
 export function teacherCountOf(groupId: number): number {
-  return activeMembersOfGroup(groupId).filter((m) => m.role === 'teacher').length
+  return activeMembersOfGroup(groupId).filter((m) => m.role === 'editor').length
 }
 
 export function parentCountOf(groupId: number): number {
-  return activeMembersOfGroup(groupId).filter((m) => m.role === 'parent').length
+  return activeMembersOfGroup(groupId).filter((m) => m.role === 'viewer').length
 }
 
 export function eventCountOf(groupId: number): number {

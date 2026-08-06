@@ -27,7 +27,17 @@ export interface GroupShare {
 
 // 학부모 전환(CHMO-444 · docs/parent-model-api-draft.md) — role은 모임 멤버십 단위(user×group).
 // 계정 유형은 나누지 않고, 어느 초대 링크(joinKey 2종)로 합류했는지가 role을 정한다(Q6).
-export type GroupRole = 'teacher' | 'parent'
+// 값은 BE 직렬화 값 EDITOR/VIEWER의 소문자 정규화(CHMO-604 — 구 TEACHER/PARENT, ADR 021).
+// editor = 편집 전권(구 선생님) · viewer = 열람 전용(구 학부모). 화면 라벨(선생님/학부모)은 별개다.
+export type GroupRole = 'editor' | 'viewer'
+
+/**
+ * 모임 유형(BE CHMO-599 · ADR 020) — 생성 시 지정, 이후 변경 불가.
+ * business = 역할 분리·승인제·검수/공개·아동 보호자 동의 가드가 있는 사업자용(구 유치원).
+ * general = 전원 editor(역할 분리 없음) — 학부모 키 합류가 닫히고 presign 동의 게이트가 없다.
+ * 유형 도입 전 응답(구계약)은 매퍼가 business로 정규화한다(BE 백필과 같은 의미).
+ */
+export type GroupType = 'business' | 'general'
 /** 합류는 역할 무관 승인제(§1) — 신청(pending) 후 선생님 승인으로 active */
 export type MembershipStatus = 'pending' | 'active'
 
@@ -48,13 +58,15 @@ export interface MyMembership {
 export interface Group {
   id: ID
   name: string
+  /** 모임 유형(목록·상세·생성·이름변경 응답 전부 포함 — 구계약 생략은 매퍼가 business 정규화) */
+  groupType: GroupType
   /** 내 멤버십(role·승인 상태) — 실 BE 미배포 응답엔 없어 undefined(기존 제작자 동작 유지) */
   myMembership?: MyMembership
-  /** ACTIVE 멤버 수 — PARENT·PENDING 응답엔 멤버 정보가 없다(§7-3 미노출) */
+  /** ACTIVE 멤버 수 — VIEWER·PENDING 응답엔 멤버 정보가 없다(§7-3 미노출) */
   memberCount?: number
-  /** 상세 카운트 분리(§7-3 — "선생님 3 · 학부모 12") — memberCount는 과도기 병행 */
-  teacherCount?: number
-  parentCount?: number
+  /** 상세 카운트 분리(§7-3 — "선생님 3 · 학부모 12") — memberCount는 과도기 병행. CHMO-605 개명 */
+  editorCount?: number
+  viewerCount?: number
   /** BE 상세(GroupDetailResponse)엔 없음 — 상세 화면은 이벤트 목록 길이로 파생(CHMO-192) */
   eventCount?: number
   createdAt: ISODateTime

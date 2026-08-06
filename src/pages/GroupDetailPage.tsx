@@ -164,8 +164,8 @@ export function GroupDetailPage() {
   const eventCount = group?.eventCount ?? (eventsApi.data ? events.length : null)
   // §7-3 카운트 분리 표기 — 구계약 상세(분리 필드 없음)는 기존 '인원 N명' 합산으로 폴백
   const memberPart =
-    group?.teacherCount !== undefined && group?.parentCount !== undefined
-      ? `선생님 ${group.teacherCount} · 학부모 ${group.parentCount}`
+    group?.editorCount !== undefined && group?.viewerCount !== undefined
+      ? `선생님 ${group.editorCount} · 학부모 ${group.viewerCount}`
       : group?.memberCount !== undefined
         ? `인원 ${group.memberCount}명`
         : null

@@ -79,10 +79,10 @@ export function HomePage() {
                             // childNames가 빈 배열이라(CHMO-475) 어떤 자격으로 신청했는지만 밝힌다
                             membership && membership.claimedChildNames.length > 0
                             ? `신청: ${membership.claimedChildNames.join(', ')}`
-                            : membership?.role === 'parent'
+                            : membership?.role === 'viewer'
                               ? '학부모로 참여 신청'
                               : '선생님으로 참여 신청'
-                          : membership?.role === 'parent'
+                          : membership?.role === 'viewer'
                             ? '학부모 · 참여 중'
                             : undefined
                       }
@@ -90,8 +90,8 @@ export function HomePage() {
                         // PENDING은 모임 API를 추가 호출하지 않는다(§7-2 — 목록 응답 하나로
                         // 끝): 상세로 보내지 않고 안내 토스트만
                         if (pending) toast.show('선생님 승인을 기다리고 있어요')
-                        // ACTIVE PARENT는 학부모 모임 상세(18)로 — TEACHER·구계약(멤버십 없음)은 기존 05
-                        else if (membership?.role === 'parent') navigate(`/parent/groups/${g.id}`)
+                        // ACTIVE VIEWER는 학부모 모임 상세(18)로 — EDITOR·구계약(멤버십 없음)은 기존 05
+                        else if (membership?.role === 'viewer') navigate(`/parent/groups/${g.id}`)
                         else navigate(`/groups/${g.id}`)
                       }}
                     />
