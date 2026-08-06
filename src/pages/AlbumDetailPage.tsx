@@ -49,12 +49,18 @@ import type { ID } from '../types/api'
  * [검토 완료]는 **되돌릴 수 없다**(CHMO-488 — 검토 해제 폐기): 확인 다이얼로그로 한 번 받는다.
  * CHMO-413에서 뺐던 다이얼로그를 되살린 것 — 그때의 근거("되돌릴 수 있는 표시")가 정책상 사라졌다.
  * 공개된(published) 이벤트에서의 이동도 확인을 받는다(CHMO-488): 옮긴 사진이 발행 상태를 유지해
- * 학부모 화면에 **즉시** 반영되므로, 오탭 한 번이 곧 잘못된 노출이 된다(미공개 이벤트는 그대로 즉시 이동).
+ * 멤버 화면에 **즉시** 반영되므로, 오탭 한 번이 곧 잘못된 노출이 된다(미공개 이벤트는 그대로 즉시 이동).
  * 일반 모드 사진 탭 = 라이트박스 크게 보기(CHMO-242) — 검수 배지(검토 상태·눈감음/흔들림) + 저장/삭제/옮기기.
  * 삭제·옮기기 대상은 pendingDelete/pendingMove(ID[])로 들고 선택모드·라이트박스가 같은 다이얼로그·시트를 공유한다.
  * (사진 단위 '검토' 액션은 BE API 미도입 — api-spec: 앨범 일괄만. 필요 시 후속 스토리.)
  * uncertain(분류가 어려워요) 앨범은 검토 UI(라이트박스 배지·[검토 완료])를 노출하지 않는다 — 검토·발행
  * 대상이 인물·공통뿐이라(CHMO-357, 08 카드 규칙과 동일) 대신 분류 사유·애매 얼굴 bbox를 보여준다(CHMO-412).
+ *
+ * **모임 유형 분기(CHMO-613)** — 일반(GENERAL) 모임엔 검수·공개 단계가 없어(ADR 020) 이 화면에서
+ * 검토라는 개념이 통째로 빠진다: [검토 완료] 버튼·확인 다이얼로그·다음 미검토 앨범 이어가기(reviewFlow)·
+ * 라이트박스 검수 배지·코치 힌트(album-review)가 없고 하단은 [다운로드] 하나다. 공개가 없으니
+ * 이동 전 노출 확인(CHMO-488)도 물을 것이 없다. 사진 보기·선택·삭제·이동(09-1)·앨범 설정·삭제는
+ * 유형과 무관하다 — 전원 동등한 권한이라 막을 이유가 없다(08과 같은 결, CHMO-612).
  */
 export function AlbumDetailPage() {
   const { albumId = '' } = useParams<{ albumId: string }>()
@@ -83,13 +89,22 @@ function AlbumDetailView() {
   // 이벤트 상태는 이동 확인(공개 후 즉시 노출 경고 — CHMO-488)에만 쓴다. 앨범 응답엔 없어 따로 읽고,
   // 실패해도 화면을 막지 않는다(미상이면 경고 없이 종전 동작 — 안 겪을 일을 겪은 척하지 않는다).
   const eventApi = useApi(`event:${eventId}`, (signal) => getEvent(eventId, signal))
-  // 모임 유형은 앨범 설정 시트의 멤버 연결 섹션 유무를 가른다(CHMO-610 — 일반 모임엔 연결이 없다).
+  // 모임 유형은 검토 UI 전반(CHMO-613)과 앨범 설정 시트의 멤버 연결 섹션(CHMO-610)을 가른다.
   // 시트를 열 때 조회하면 섹션이 한 박자 늦게 나타났다 사라지므로 진입할 때 미리 읽어 둔다.
   const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
+  // 검수·공개가 있는 유형인가(CHMO-613). 유형 미도착·조회 실패는 business로 본다 — 매퍼가 구계약
+  // 응답을 business로 정규화하는 것과 같은 해석이고(08도 같은 규칙, CHMO-612), 곁가지 조회 하나가
+  // 실패했다고 비즈니스 모임의 검토 동선을 잠그지 않는다
+  const business = groupApi.data?.groupType !== 'general'
   // 검토를 마치면 다음 미검토 앨범으로 바로 넘어가므로(CHMO-521) 이벤트의 앨범 목록이 필요하다.
   // 완료 시점에 조회하면 그 대기가 이동 앞에 붙어, 08에서 막 넘어온 지금 미리 읽어 둔다.
   // 실패해도 화면을 막지 않는다 — 다음 앨범을 모를 뿐이라 종전처럼 08로 복귀한다.
-  const albumsApi = useApi(`event-albums:${eventId}`, (signal) => listEventAlbums(eventId, signal))
+  // 일반 모임은 검토 자체가 없어 이 목록을 쓸 일이 없다: 유형이 도착하기 전엔 business로 보고 미리
+  // 읽되(비즈니스 검토 동선에 한 라운드트립을 얹지 않는 쪽), 일반으로 밝혀지면 key가 null이 되며
+  // useApi가 그 요청을 취소한다.
+  const albumsApi = useApi(business ? `event-albums:${eventId}` : null, (signal) =>
+    listEventAlbums(eventId, signal),
+  )
 
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<ID>>(new Set())
@@ -110,8 +125,9 @@ function AlbumDetailView() {
   const album = albumApi.data?.album
   const photos = albumApi.data?.photos ?? []
   const eventPath = `/groups/${groupId}/events/${eventId}`
-  // 공개된 이벤트 = 이동이 곧 학부모 화면 변경(발행 상태를 유지한 채 옮겨진다 — BE CHMO-487 AC-4)
-  const eventPublished = eventApi.data?.status === 'published'
+  // 공개된 이벤트 = 이동이 곧 멤버 화면 변경(발행 상태를 유지한 채 옮겨진다 — BE CHMO-487 AC-4).
+  // 일반 모임은 공개 단계가 없어 status가 무엇이든 확인할 노출이 없다(CHMO-613)
+  const eventPublished = business && eventApi.data?.status === 'published'
   // 검토 상태는 손에 있는 사진 목록으로 직접 판정 — 계약상 optional인 unreviewedPhotoCount에 의존하지 않고
   // 0장 앨범이 공허하게 '완료'로 잡히는 것도 막는다
   const allReviewed = photos.length > 0 && photos.every((p) => p.reviewed)
@@ -252,6 +268,10 @@ function AlbumDetailView() {
   // 일반 모드 [다운로드] 노출은 person/common만 — ZIP 폐지(CHMO-473)로 기술 제약(BE ZIP
   // ALBUM404)은 사라졌지만, 품질 제외 앨범의 일괄 저장 노출은 별도 결정 전까지 기존 규칙 유지
   const bulkSaveEligible = album?.type === 'person' || album?.type === 'common'
+  // 일반 모드 하단 바에 무엇이 남는가 — 비즈니스는 [검토 완료](uncertain은 검토 대상이 아니라 제외,
+  // CHMO-357) + 조건부 [다운로드]고, 일반 모임은 [다운로드] 하나뿐이라(CHMO-613) 그마저 없으면
+  // 바가 통째로 비어 자리만 차지한다. 선택모드 바(저장·삭제·옮기기)는 유형과 무관하게 유지
+  const bottomBarVisible = selectMode || (business ? album?.type !== 'uncertain' : bulkSaveEligible)
 
   const handleSave = (targets: typeof photos) => {
     if (save.state.phase === 'ready') {
@@ -439,9 +459,9 @@ function AlbumDetailView() {
           </div>
         )}
 
-        {/* uncertain 앨범은 검토·발행 대상이 아니라(인물·공통만 — CHMO-357) 일반 모드 하단 바가
-            통째로 비므로 숨긴다([다운로드]도 특수 앨범엔 없음). 선택모드 바(저장·삭제·옮기기)는 유지 */}
-        {album && hasPhotos && (selectMode || album.type !== 'uncertain') && (
+        {/* 남는 버튼이 하나도 없으면 바를 그리지 않는다(bottomBarVisible) — uncertain 앨범은 검토·발행
+            대상이 아니고(CHMO-357) 일반 모임은 [검토 완료]가 없어(CHMO-613) 특수 앨범에서 바가 빈다 */}
+        {album && hasPhotos && bottomBarVisible && (
           <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             {selectMode ? (
               save.state.phase !== 'idle' ? (
@@ -488,10 +508,12 @@ function AlbumDetailView() {
               )
             ) : (
               <>
-                {/* 앨범 전체 저장(미검토 포함) — 개별 요청 파이프라인(CHMO-473, ZIP 폐지) */}
+                {/* 앨범 전체 저장(미검토 포함) — 개별 요청 파이프라인(CHMO-473, ZIP 폐지).
+                    일반 모임에선 이게 유일한 CTA라 primary — 색이 위계를 만드는 규칙(CHMO-530)에서
+                    혼자 남은 secondary는 할 일이 없는 화면처럼 읽힌다(08 [＋ 사진 추가] 선례) */}
                 {bulkSaveEligible && (
                   <Button
-                    variant="secondary"
+                    variant={business ? 'secondary' : 'primary'}
                     className="flex-1 gap-1.5 whitespace-nowrap !px-2"
                     disabled={save.busy}
                     onClick={() => handleSave(photos)}
@@ -504,32 +526,36 @@ function AlbumDetailView() {
                     )}
                   </Button>
                 )}
-                <div className="relative flex-1">
-                  <Button
-                    fullWidth
-                    className="!px-2"
-                    disabled={locked || allReviewed}
-                    onClick={() => setReviewOpen(true)}
-                  >
-                    {allReviewed ? '검토 완료됨' : '검토 완료'}
-                  </Button>
-                  {/* 코치 힌트(CHMO-565) — '검토'와 '전량 검토 = 공개 게이트'(CHMO-488)라는 이 앱의
-                      낯선 개념 둘을, 그 개념이 처음 실행되는 버튼 곁에서 계정당 1회 말한다.
-                      이미 다 검토된 앨범에선 안 띄운다 — 눌러 볼 버튼이 죽어 있는데 누르라고
-                      가리키면 안내가 거짓이 된다 */}
-                  {!allReviewed && (
-                    <CoachHint
-                      id="album-review"
-                      arrow="down"
-                      tail="right"
-                      className="bottom-full right-0 mb-1.5 w-max"
+                {/* 검토는 비즈니스 모임만(CHMO-613) — 일반 모임엔 검수·공개 단계가 없어
+                    [검토 완료]도, 그 개념을 처음 알리는 코치 힌트도 가리킬 대상이 없다 */}
+                {business && (
+                  <div className="relative flex-1">
+                    <Button
+                      fullWidth
+                      className="!px-2"
+                      disabled={locked || allReviewed}
+                      onClick={() => setReviewOpen(true)}
                     >
-                      다 봤으면 검토 완료를 눌러 주세요.
-                      <br />
-                      모든 앨범을 검토해야 공개할 수 있어요
-                    </CoachHint>
-                  )}
-                </div>
+                      {allReviewed ? '검토 완료됨' : '검토 완료'}
+                    </Button>
+                    {/* 코치 힌트(CHMO-565) — '검토'와 '전량 검토 = 공개 게이트'(CHMO-488)라는 이 앱의
+                        낯선 개념 둘을, 그 개념이 처음 실행되는 버튼 곁에서 계정당 1회 말한다.
+                        이미 다 검토된 앨범에선 안 띄운다 — 눌러 볼 버튼이 죽어 있는데 누르라고
+                        가리키면 안내가 거짓이 된다 */}
+                    {!allReviewed && (
+                      <CoachHint
+                        id="album-review"
+                        arrow="down"
+                        tail="right"
+                        className="bottom-full right-0 mb-1.5 w-max"
+                      >
+                        다 봤으면 검토 완료를 눌러 주세요.
+                        <br />
+                        모든 앨범을 검토해야 공개할 수 있어요
+                      </CoachHint>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -546,8 +572,11 @@ function AlbumDetailView() {
           disabled={locked || pendingDelete !== null || pendingMove !== null}
           info={(photo) => (
             <>
-              {/* uncertain은 검토 대상이 아니라 배지 대신 분류 사유가 주인공이다(08 카드도 배지 없음) */}
-              {album?.type !== 'uncertain' && (
+              {/* 검수 배지는 비즈니스 모임의 인물·공통 앨범에서만 — uncertain은 검토 대상이 아니라
+                  배지 대신 분류 사유가 주인공이고(08 카드도 배지 없음), 일반 모임은 검토라는 개념
+                  자체가 없어 reviewed 값이 와도 읽지 않는다(CHMO-613). 품질 칩(눈감음·흔들림)은
+                  검토와 무관한 사진 사실이라 유형과 상관없이 남는다 */}
+              {business && album?.type !== 'uncertain' && (
                 <Badge variant={photo.reviewed ? 'reviewed' : 'unreviewed'} />
               )}
               {/* 품질 플래그는 중립 칩 — 사진 상태를 알려줄 뿐 위험하거나 잘못된 게 아니다.
@@ -646,7 +675,8 @@ function AlbumDetailView() {
           sourceAlbumId={albumId}
           sourceAlbumType={album.type}
           photoIds={pendingMove}
-          // 공개된 이벤트에선 이동이 곧 학부모 화면 변경 — 대상 탭 후 한 번 더 확인받는다(CHMO-488)
+          // 공개된 이벤트에선 이동이 곧 멤버 화면 변경 — 대상 탭 후 한 번 더 확인받는다(CHMO-488).
+          // 일반 모임은 공개가 없어 언제나 즉시 이동한다(eventPublished가 유형까지 본다 — CHMO-613)
           confirmImmediateExposure={eventPublished}
           onMoved={handleMoved}
           onCreated={handleCreated}
