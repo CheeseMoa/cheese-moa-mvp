@@ -3,46 +3,51 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, TextField, useToast } from '../components/ui'
+import { cx } from '../lib/cx'
 import { useMutation } from '../hooks/useMutation'
-import { attestGuardianConsent } from '../api/agreements'
 import { createGroup } from '../api/groups'
-import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
+import type { GroupType } from '../types/api'
 
 /**
- * 03. 모임 만들기 · node 211:1411 · POST /groups → 모임 상세(05).
- * 참여 비밀번호 입력란은 없다(CHMO-604 — BE CHMO-599가 요청 password를 무시하고 자동 발급,
- * 초대 화면에서만 노출). 유형 선택 UI는 CHMO-603 개편 몫 — 그 전까지 이 화면은 현행 흐름
- * (보호자 동의 확인 게이트)의 의미 그대로 business로 생성한다.
+ * 03. 모임 만들기 · node 375:5(유형 선택) · 375:19/375:32(이름 입력) · POST /groups → 모임 상세(05).
+ * 유형(일반/비즈니스)을 먼저 고르고 이름만 적는 2단계 — 한 라우트 안 단계 state(02-2 관용).
+ * 참여 비밀번호 입력란은 없다(BE CHMO-599 — 서버 자동 발급·초대 화면에서만 노출)라 생성 완료
+ * 토스트가 비밀번호의 행방을 알린다(CHMO-603 AC — 랜딩한 05 하단 [초대 관리]가 그 자리다).
+ * 보호자 동의 확인 게이트·생성 직후 attestation 자동 전송은 뺐다(CHMO-603 — 체크 없이 자동
+ * 전송만 남기면 허위 기록이 된다. BUSINESS 첫 업로드의 428 모달(CHMO-516)이 확인을 이어받는다).
  * 요금제·업그레이드 안내는 노출하지 않는다 — MVP에 결제가 없어 '무료'라는 말이 유료 전환을
  * 예고하는 문구로만 읽힌다(2026-07-29 결정).
- * 보호자 동의 확보 확인 체크는 **서버 기록으로도 남긴다**(CHMO-516) — 그래야 만든 사람이
- * 첫 업로드에서 같은 확인을 두 번 읽지 않는다(업로드 게이트는 BE CHMO-514).
  */
+
+const GROUP_TYPE_CARDS: Array<{ type: GroupType; emoji: string; name: string; examples: string }> = [
+  { type: 'general', emoji: '🧀', name: '일반 모임', examples: '가족 여행, 친구 모임' },
+  { type: 'business', emoji: '🏢', name: '비즈니스 모임', examples: '유치원, 여행사, 학원' },
+]
+
+const NAME_PLACEHOLDER: Record<GroupType, string> = {
+  general: '예) 제주 가족여행',
+  business: '예) 햇살반',
+}
+
 export function GroupCreatePage() {
   const navigate = useNavigate()
   const toast = useToast()
   const mutate = useMutation()
+  const [groupType, setGroupType] = useState<GroupType | null>(null)
   const [name, setName] = useState('')
-  // 보호자 동의 확보 확인 게이트(CHMO-478) — 아동 사진 처리는 법정대리인 동의가 전제(개인정보 보호법 제22조의2)
-  const [consentConfirmed, setConsentConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const canSubmit = name.trim().length > 0 && consentConfirmed && !submitting
+  const canSubmit = name.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!canSubmit) return
+    if (!groupType || !canSubmit) return
     setSubmitting(true)
     setError(null)
-    await mutate(() => createGroup({ name: name.trim(), groupType: 'business' }), {
+    await mutate(() => createGroup({ name: name.trim(), groupType }), {
       onSuccess: (group) => {
-        // 여기서 체크한 확인을 서버 기록으로 남긴다(CHMO-516). 기다리지 않는다 — 모임은 이미
-        // 만들어졌고 이 기록은 업로드 게이트를 미리 통과시켜 두는 용도라 화면을 붙잡을 이유가 없다.
-        // 실패해도 조용히 넘긴다: 첫 업로드에서 확인 모달이 뜨는 것이 안전망이다(이중 확인은
-        // 이 호출이 성공하는 평소 경로에서만 사라진다).
-        void attestGuardianConsent(group.id).catch(() => undefined)
-        toast.show('🧀 모임을 만들었어요')
+        toast.show('🧀 모임을 만들었어요 · 참여 비밀번호는 초대 관리에서 확인해요')
         // 상세에서 뒤로가기가 작성 폼으로 돌아오지 않게 폼 히스토리를 교체
         navigate(`/groups/${group.id}`, { replace: true })
       },
@@ -53,39 +58,74 @@ export function GroupCreatePage() {
     })
   }
 
+  // 1단계 — 유형 선택: 카드 탭이 곧 다음(별도 CTA 없음)
+  if (!groupType) {
+    return (
+      <PhoneShell>
+        <Header backTo="/home" backLabel="홈" title="모임 만들기" />
+        <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
+          <div className="grid grid-cols-2 gap-4">
+            {GROUP_TYPE_CARDS.map((card) => (
+              <button
+                key={card.type}
+                type="button"
+                onClick={() => setGroupType(card.type)}
+                // 나란한 두 카드라 blur 30(shadow-card)은 사이 16px을 뿌옇게 채운다 — stack 그림자(CHMO-532 결)
+                className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-border bg-white p-4 shadow-card-stack transition active:scale-[0.99]"
+              >
+                <span aria-hidden="true" className="text-[28px] leading-none">
+                  {card.emoji}
+                </span>
+                <span className="mt-5 text-[15px] text-heading">{card.name}</span>
+                <span className="mt-2.5 text-xs text-muted">{card.examples}</span>
+              </button>
+            ))}
+          </div>
+        </main>
+      </PhoneShell>
+    )
+  }
+
+  // 2단계 — 이름 입력: 유형 pill + 이름 필드뿐(비밀번호·동의 게이트 없음)
   return (
     <PhoneShell>
       {/* 제출 중 이탈하면 모임은 생성되는데 이동·토스트가 없어 중복 생성을 유발 — 뒤로가기 차단 */}
-      <Header backTo="/home" backLabel="홈" title="모임 만들기" backDisabled={submitting} />
+      <Header
+        onBack={() => {
+          setGroupType(null)
+          setError(null)
+        }}
+        backLabel="모임 만들기"
+        title="모임 만들기"
+        backDisabled={submitting}
+      />
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5"
+        className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-4"
       >
-        <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
-          <TextField
-            label="모임 이름"
-            placeholder="예) 햇살반 학부모"
-            autoComplete="off"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <div className="mt-4 rounded-2xl border border-border bg-white p-4 shadow-card">
-          <p className="text-xs leading-relaxed text-muted">{GUARDIAN_CONSENT_COPY.intro}</p>
-          <label className="mt-3 flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={consentConfirmed}
-              onChange={(e) => setConsentConfirmed(e.target.checked)}
-              className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
-            />
-            {/* 06-U 확인 모달과 같은 문장 — 서버에 남는 기록이 하나라 문구도 하나여야 한다 */}
-            <span className="text-sm leading-relaxed text-text">
-              {GUARDIAN_CONSENT_COPY.statement}
-            </span>
-          </label>
-        </div>
+        <span
+          className={cx(
+            'self-start rounded-full px-2.5 py-1 text-[11px] font-bold',
+            groupType === 'business' ? 'bg-primary/20 text-heading' : 'bg-black/[.06] text-muted',
+          )}
+        >
+          {groupType === 'business' ? '비즈니스 모임' : '일반 모임'}
+        </span>
+        <TextField
+          className="mt-4"
+          label="모임 이름"
+          placeholder={NAME_PLACEHOLDER[groupType]}
+          autoComplete="off"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {groupType === 'business' ? (
+          <p className="mt-3 text-[13px] leading-relaxed text-muted">
+            멤버 신청을 승인하고, 검토한 사진만 공개하는 모임이에요.
+          </p>
+        ) : null}
         {error ? (
           <p role="alert" className="mt-3 text-sm text-warn">
             {error}
