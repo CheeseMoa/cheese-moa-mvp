@@ -9,7 +9,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { attestGuardianConsent, listAgreements, submitAgreements } from './agreements'
 import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
-import { deleteAccount, getMe, login, signup } from './auth'
+import {
+  deleteAccount,
+  exchangeSocialCode,
+  exchangeSocialSignup,
+  getMe,
+  login,
+  signup,
+} from './auth'
 import {
   createPersonAlbum,
   deletePhotos,
@@ -903,6 +910,33 @@ describe('인증 · 프로필', () => {
         { type: 'FACE_DATA', version: '1.0', agreed: true },
       ],
     })
+  })
+
+  // 소셜 가입 유예(CHMO-602 · BE CHMO-598의 소셜판) — 콜백 signup=true 분기가 이 함수를 탄다.
+  // 동봉 규칙은 signup과 동일: MARKETING 미동봉·모임 스코프 항목 배제·버전 원천은 FE 문구
+  it('소셜 가입 exchange는 코드에 필수 동의 4종을 동봉한다', async () => {
+    const calls = serve(envelope(BE_AUTH))
+
+    await exchangeSocialSignup('otc-123')
+
+    expect(calls[0].url).toBe('/api/v1/auth/social/exchange')
+    expect(bodyOf(calls[0])).toEqual({
+      code: 'otc-123',
+      agreements: [
+        { type: 'AGE_14_OVER', version: '1.0', agreed: true },
+        { type: 'TERMS_OF_SERVICE', version: '1.0', agreed: true },
+        { type: 'PRIVACY_POLICY', version: '1.0', agreed: true },
+        { type: 'FACE_DATA', version: '1.0', agreed: true },
+      ],
+    })
+  })
+
+  it('기존 유저 소셜 exchange는 코드만 — agreements 키 자체가 실리지 않는다', async () => {
+    const calls = serve(envelope(BE_AUTH))
+
+    await exchangeSocialCode('otc-123')
+
+    expect(bodyOf(calls[0])).toEqual({ code: 'otc-123' })
   })
 
   it('BE 프로필의 userId를 id로 옮긴다', async () => {

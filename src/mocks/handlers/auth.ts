@@ -21,6 +21,9 @@ import {
 } from '../db'
 import { persistUser, removePersistedUser, updatePersistedUser } from '../persist'
 import { agreementTypeOf, STALE_VERSION } from './agreements'
+// 닉네임 매핑이 lib에 있는 이유: 가입 유예 분기(socialLoginStartUrl의 signup=true 부착)가
+// 같은 원천으로 "이 프로바이더의 목 계정이 이미 있나"를 판정한다(CHMO-602)
+import { SOCIAL_MOCK_NICKNAMES } from '../../lib/mockSocial'
 import type { AgreementType } from '../../types/api'
 import {
   api,
@@ -59,14 +62,6 @@ function nicknameConflict() {
   return errorResponse(409, 'AUTH409', '이미 사용 중인 닉네임입니다.')
 }
 
-/** 소셜 로그인 목 계정 닉네임 — provider별 1개 고정 (CHMO-359) */
-const SOCIAL_MOCK_NICKNAMES: Record<string, string> = {
-  kakao: '카카오테스트',
-  google: '구글테스트',
-  naver: '네이버테스트',
-  apple: '애플테스트',
-}
-
 const SOCIAL_CODE_PREFIX = 'mock-social-'
 
 /**
@@ -91,6 +86,50 @@ function authResponse(user: DbUser) {
   }
 }
 
+/** 동의 목록 형태 검사(@NotEmpty) — 두 가입 경로(signup·소셜 exchange)가 같은 문구를 쓴다 */
+function agreementItemsOf(value: unknown) {
+  return Array.isArray(value) && value.length > 0
+    ? (value as { type?: unknown; version?: unknown; agreed?: unknown }[])
+    : null
+}
+
+type AgreementRow = { type: AgreementType; version: string; agreed: boolean }
+
+/**
+ * 가입 동의 항목 검증 (CHMO-600·602) — POST /auth/signup과 소셜 가입 exchange가 같은 규칙을
+ * 탄다. 한 항목이라도 거절되면 아무것도 저장하지 않는다(BE fail-fast) — 검증만 하고 기록할 행을
+ * 돌려주며, 저장은 호출부가 계정 생성과 함께 한다. 항목별 규칙은 POST /agreements와 같고,
+ * 가입은 최초 기록이라 "필수 USER 항목 전부 동의"의 완전성을 추가로 본다(스코프→버전→미동의→완전성).
+ */
+function validateAgreementItems(
+  items: { type?: unknown; version?: unknown; agreed?: unknown }[],
+):
+  | { error: ReturnType<typeof invalidRequest>; submissions?: never }
+  | { error?: never; submissions: AgreementRow[] } {
+  const submissions: AgreementRow[] = []
+  const agreedTypes = new Set<AgreementType>()
+  for (const item of items) {
+    const catalog = agreementTypeOf(item?.type)
+    if (!catalog) return { error: invalidRequest('동의 항목은 필수입니다.') }
+    const version = requiredString(item?.version)
+    if (!version) return { error: invalidRequest('약관 버전은 필수입니다.') }
+    if (typeof item?.agreed !== 'boolean') return { error: invalidRequest('동의 여부는 필수입니다.') }
+
+    if (catalog.scope !== 'user')
+      return { error: invalidRequest('모임 단위 동의 항목은 가입 시 제출할 수 없습니다.') }
+    if (version !== catalog.currentVersion) return { error: invalidRequest(STALE_VERSION) }
+    if (catalog.required && !item.agreed)
+      return { error: invalidRequest('필수 동의 항목은 동의해야 합니다.') }
+    if (item.agreed) agreedTypes.add(catalog.type)
+    submissions.push({ type: catalog.type, version: catalog.currentVersion, agreed: item.agreed })
+  }
+  for (const catalog of AGREEMENT_CATALOG) {
+    if (catalog.scope === 'user' && catalog.required && !agreedTypes.has(catalog.type))
+      return { error: invalidRequest(`필수 동의 항목이 누락되었습니다: ${catalog.type.toUpperCase()}`) }
+  }
+  return { submissions }
+}
+
 export const authHandlers = [
   // POST /auth/signup — 계정 생성 + 필수 동의 동봉(BE CHMO-598: 유저·동의 행이 한 트랜잭션.
   // agreements 없는 종전 요청은 VALID400 — FE 선반영이 배포 게이트인 이유).
@@ -102,35 +141,14 @@ export const authHandlers = [
     )
     const nickname = requiredString(body?.nickname)
     if (!nickname) return invalidRequest('닉네임을 입력해 주세요.')
-    const items = body?.agreements
-    if (!Array.isArray(items) || items.length === 0)
-      return invalidRequest('약관 동의 목록은 필수입니다.')
+    const items = agreementItemsOf(body?.agreements)
+    if (!items) return invalidRequest('약관 동의 목록은 필수입니다.')
     const pin = normalizePin(body?.pin)
     if (!pin) return invalidPin()
 
-    // 한 항목이라도 거절되면 아무것도 저장하지 않는다(BE fail-fast) — 검증을 다 돌고 저장은 뒤에.
-    // 항목별 규칙은 POST /agreements와 같고, 가입은 최초 기록이라 "필수 USER 항목 전부 동의"의
-    // 완전성을 추가로 본다
-    const submissions: { type: AgreementType; version: string; agreed: boolean }[] = []
-    const agreedTypes = new Set<AgreementType>()
-    for (const item of items as { type?: unknown; version?: unknown; agreed?: unknown }[]) {
-      const catalog = agreementTypeOf(item?.type)
-      if (!catalog) return invalidRequest('동의 항목은 필수입니다.')
-      const version = requiredString(item?.version)
-      if (!version) return invalidRequest('약관 버전은 필수입니다.')
-      if (typeof item?.agreed !== 'boolean') return invalidRequest('동의 여부는 필수입니다.')
-
-      if (catalog.scope !== 'user')
-        return invalidRequest('모임 단위 동의 항목은 가입 시 제출할 수 없습니다.')
-      if (version !== catalog.currentVersion) return invalidRequest(STALE_VERSION)
-      if (catalog.required && !item.agreed) return invalidRequest('필수 동의 항목은 동의해야 합니다.')
-      if (item.agreed) agreedTypes.add(catalog.type)
-      submissions.push({ type: catalog.type, version: catalog.currentVersion, agreed: item.agreed })
-    }
-    for (const catalog of AGREEMENT_CATALOG) {
-      if (catalog.scope === 'user' && catalog.required && !agreedTypes.has(catalog.type))
-        return invalidRequest(`필수 동의 항목이 누락되었습니다: ${catalog.type.toUpperCase()}`)
-    }
+    const validated = validateAgreementItems(items)
+    if (validated.error) return validated.error
+    const { submissions } = validated
 
     if (nicknameTaken(nickname)) return nicknameConflict()
 
@@ -156,11 +174,15 @@ export const authHandlers = [
     return ok(authResponse(user))
   }),
 
-  // POST /auth/social/exchange — 소셜 콜백 일회용 코드 → 토큰 쌍 (CHMO-359)
-  // 목 모드의 코드는 socialLoginStartUrl이 만든 `mock-social-<provider>` — 프로바이더별 고정
-  // 계정을 find-or-create 한다(실 BE의 "소셜 신원으로 가입 또는 로그인"과 같은 의미).
+  // POST /auth/social/exchange — 소셜 콜백 일회용 코드 → 토큰 쌍 (CHMO-359 · 가입 유예 CHMO-602)
+  // 목 모드의 코드는 socialLoginStartUrl이 만든 `mock-social-<provider>-…` — 프로바이더별 고정
+  // 계정. 기존 계정이면 코드만으로 로그인하고, 계정이 없으면(콜백 URL에 signup=true가 실렸던
+  // 방문) 이 호출이 곧 가입이라 동의 동봉이 필수다(BE CHMO-598의 소셜판 — 유저·동의 행이 한
+  // 트랜잭션, 검증 실패 VALID400은 코드를 소비하지 않아 동의 폼이 같은 코드로 재시도한다).
+  // 가입 대기 코드 TTL(10분)은 목이 흉내 내지 않는다 — 만료 OAUTH401의 화면 경로는 재사용
+  // 401이 같은 코드를 태운다. 검증 순서·문구는 BE 실채집 전이라 SignupUseCase 대조다.
   http.post(api('/auth/social/exchange'), async ({ request }) => {
-    const body = await readJson<{ code?: unknown }>(request)
+    const body = await readJson<{ code?: unknown; agreements?: unknown }>(request)
     const code = requiredString(body?.code)
     const provider = code ? providerFromMockCode(code) : null
     const nickname = provider ? SOCIAL_MOCK_NICKNAMES[provider] : undefined
@@ -168,14 +190,22 @@ export const authHandlers = [
     if (!nickname || !code || spentSocialCodes.has(code)) {
       return errorResponse(401, 'OAUTH401', '소셜 로그인에 실패했습니다. 다시 시도해 주세요.')
     }
-    spentSocialCodes.add(code)
     let user = db.users.find((u) => u.nickname === nickname)
     if (!user) {
+      const items = agreementItemsOf(body?.agreements)
+      if (!items) return invalidRequest('약관 동의 목록은 필수입니다.')
+      const validated = validateAgreementItems(items)
+      if (validated.error) return validated.error
       // 소셜 계정은 PIN이 없다 — 빈 문자열은 PIN_RE에 걸려 닉네임+PIN 로그인으로는 진입 불가
       user = { id: nextId('usr'), nickname, pin: '', role: 'USER' as const, createdAt: nowIso() }
       db.users.push(user)
-      persistUser(user) // 새로고침(재시드) 후에도 발급된 토큰의 주인이 남게
+      // 보존이 곧 "가입됨" 판정 원천(lib/mockSocial) — 다음 로그인부터 signup=true가 안 실린다
+      persistUser(user)
+      // 동의 행도 가입과 함께 기록 — 로그인 직후 게이트(CHMO-479)를 부르지 않아도 pass 상태다
+      for (const submission of validated.submissions) recordAgreement({ userId: user.id, ...submission })
     }
+    // 기존 계정에 agreements가 실려 와도 무시하고 로그인 — 판정 원천(persist)이 어긋난 잔재다
+    spentSocialCodes.add(code)
     return ok(authResponse(user))
   }),
 
