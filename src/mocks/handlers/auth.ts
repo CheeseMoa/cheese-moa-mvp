@@ -4,6 +4,7 @@
 import { http } from 'msw'
 import { PIN_RE } from '../../lib/pin'
 import {
+  AGREEMENT_CATALOG,
   db,
   deleteGroupCascade,
   issueAccessToken,
@@ -11,6 +12,7 @@ import {
   membershipsOfUser,
   nextId,
   nowIso,
+  recordAgreement,
   removeMembershipCascade,
   resolveUserFromRefreshToken,
   revokeRefreshToken,
@@ -18,6 +20,8 @@ import {
   type DbUser,
 } from '../db'
 import { persistUser, removePersistedUser, updatePersistedUser } from '../persist'
+import { agreementTypeOf, STALE_VERSION } from './agreements'
+import type { AgreementType } from '../../types/api'
 import {
   api,
   created,
@@ -50,9 +54,9 @@ function invalidPin() {
   return errorResponse(400, 'AUTH400', 'PIN은 4자리 숫자여야 합니다.')
 }
 
-/** BE 코드 미확인 — 닉네임 중복 409는 채집되지 않았다 */
+/** 닉네임 중복 — BE AUTH409(ErrorStatus.NICKNAME_TAKEN 소스 대조, 2026-08-06 — 실서버 미채집) */
 function nicknameConflict() {
-  return errorResponse(409, 'NICKNAME_TAKEN', '이미 사용 중인 닉네임입니다.')
+  return errorResponse(409, 'AUTH409', '이미 사용 중인 닉네임입니다.')
 }
 
 /** 소셜 로그인 목 계정 닉네임 — provider별 1개 고정 (CHMO-359) */
@@ -88,19 +92,54 @@ function authResponse(user: DbUser) {
 }
 
 export const authHandlers = [
-  // POST /auth/signup — 계정 생성 · 화면 01-2
+  // POST /auth/signup — 계정 생성 + 필수 동의 동봉(BE CHMO-598: 유저·동의 행이 한 트랜잭션.
+  // agreements 없는 종전 요청은 VALID400 — FE 선반영이 배포 게이트인 이유).
+  // 화면 호출부 없음(CHMO-557 — 01-2 삭제) · 계약 고정용. 검증 순서는 BE SignupUseCase 그대로:
+  // bean(닉네임·목록 @NotEmpty·항목 @Valid) → PIN → 동의(스코프→버전→미동의→완전성) → 닉네임 중복
   http.post(api('/auth/signup'), async ({ request }) => {
-    const body = await readJson<{ nickname?: unknown; pin?: unknown }>(request)
+    const body = await readJson<{ nickname?: unknown; pin?: unknown; agreements?: unknown }>(
+      request,
+    )
     const nickname = requiredString(body?.nickname)
     if (!nickname) return invalidRequest('닉네임을 입력해 주세요.')
+    const items = body?.agreements
+    if (!Array.isArray(items) || items.length === 0)
+      return invalidRequest('약관 동의 목록은 필수입니다.')
     const pin = normalizePin(body?.pin)
     if (!pin) return invalidPin()
+
+    // 한 항목이라도 거절되면 아무것도 저장하지 않는다(BE fail-fast) — 검증을 다 돌고 저장은 뒤에.
+    // 항목별 규칙은 POST /agreements와 같고, 가입은 최초 기록이라 "필수 USER 항목 전부 동의"의
+    // 완전성을 추가로 본다
+    const submissions: { type: AgreementType; version: string; agreed: boolean }[] = []
+    const agreedTypes = new Set<AgreementType>()
+    for (const item of items as { type?: unknown; version?: unknown; agreed?: unknown }[]) {
+      const catalog = agreementTypeOf(item?.type)
+      if (!catalog) return invalidRequest('동의 항목은 필수입니다.')
+      const version = requiredString(item?.version)
+      if (!version) return invalidRequest('약관 버전은 필수입니다.')
+      if (typeof item?.agreed !== 'boolean') return invalidRequest('동의 여부는 필수입니다.')
+
+      if (catalog.scope !== 'user')
+        return invalidRequest('모임 단위 동의 항목은 가입 시 제출할 수 없습니다.')
+      if (version !== catalog.currentVersion) return invalidRequest(STALE_VERSION)
+      if (catalog.required && !item.agreed) return invalidRequest('필수 동의 항목은 동의해야 합니다.')
+      if (item.agreed) agreedTypes.add(catalog.type)
+      submissions.push({ type: catalog.type, version: catalog.currentVersion, agreed: item.agreed })
+    }
+    for (const catalog of AGREEMENT_CATALOG) {
+      if (catalog.scope === 'user' && catalog.required && !agreedTypes.has(catalog.type))
+        return invalidRequest(`필수 동의 항목이 누락되었습니다: ${catalog.type.toUpperCase()}`)
+    }
+
     if (nicknameTaken(nickname)) return nicknameConflict()
 
     // 신규 가입 기본 role = USER(BE와 동일 — 관리자 지정은 DB 직접 변경뿐, admin-spec §2-3)
     const user = { id: nextId('usr'), nickname, pin, role: 'USER' as const, createdAt: nowIso() }
     db.users.push(user)
     persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
+    // 동의 행도 가입과 함께 기록 — 로그인 직후 게이트(GET /agreements, CHMO-479)가 pass로 지난다
+    for (const submission of submissions) recordAgreement({ userId: user.id, ...submission })
     return created(authResponse(user))
   }),
 

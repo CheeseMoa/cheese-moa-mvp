@@ -20,7 +20,9 @@
  * + 2026-08-03 BE 소스 대조(MOMENT409 — ErrorStatus.MOMENT_ANALYZING. 모임 삭제·마지막 선생님
  *   나가기의 분석 중 가드, CHMO-564 스펙 확인. 실서버 채집은 BE 배포 후)
  * + 2026-08-04 실서버 채집(ADMIN403 — 비관리자 토큰의 `/admin/*` 호출. CHMO-377 가드 배포 확인,
- *   CHMO-379 착수 프로브).
+ *   CHMO-379 착수 프로브)
+ * + 2026-08-06 BE 소스 대조(AUTH409 — ErrorStatus.NICKNAME_TAKEN. 가입 동의 동봉 CHMO-600 착수 중
+ *   확인 — CHMO-598 스펙 문서의 USER409 표기는 소스와 달라 소스를 따른다. 실서버 채집은 미완).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -28,6 +30,8 @@ const BE_CODE_MAP: Record<string, string> = {
   AUTH400: 'INVALID_PIN',
   /** 로그인 실패(401) — "닉네임 또는 PIN이 일치하지 않습니다." (토큰 무효와 구분됨) */
   AUTH401: 'INVALID_CREDENTIALS',
+  /** 닉네임 중복(409) — "이미 사용 중인 닉네임입니다." 가입·PATCH /me 공용(BE NICKNAME_TAKEN) */
+  AUTH409: 'NICKNAME_TAKEN',
   /** 인증 필요/토큰 무효(401) — "인증이 필요합니다." */
   COMMON401: 'UNAUTHORIZED',
   /** 모임 참여 비밀번호 불일치(403) */
