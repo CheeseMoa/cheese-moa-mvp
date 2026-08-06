@@ -39,3 +39,6 @@ bugfix/
 
 # 로컬 테스트용 얼굴 사진 (LFW 연구용 데이터셋 — 커밋·배포 금지)
 test-data/
+
+# 스토리 병행용 git worktree (로컬 체크아웃 — 리포에 담을 내용이 아니다)
+.claude/worktrees/
