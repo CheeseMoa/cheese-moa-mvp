@@ -9,7 +9,7 @@ import { BottomSheet, Button, IconCheck, LoadState, useToast } from './ui'
 
 interface ChildLinkSheetProps {
   groupId: ID | string
-  /** 연결 대상 학부모(20 멤버 카드의 [연결]/[+ 연결]) — 신청 원문·기존 매핑을 함께 보여준다 */
+  /** 연결 대상 멤버(20 멤버 카드의 [연결]/[+ 연결]) — 신청 원문·기존 매핑을 함께 보여준다 */
   member: GroupMember
   onClose: () => void
   /** 연결 성공(1명 이상) — 부모가 시트를 닫고(언마운트) 멤버 목록 refetch */
@@ -17,7 +17,8 @@ interface ChildLinkSheetProps {
 }
 
 /**
- * 20-1 아이 연결 바텀시트 · node 307:25 · POST /groups/:id/person-parents (CHMO-447).
+ * 20-1 인물 연결 바텀시트 · node 307:25 · POST /groups/:id/person-parents (CHMO-447).
+ * 워딩은 관리자/멤버/인물로 중립화됐고(CHMO-610) 파일·prop 이름은 내부 식별자라 그대로다(ADR 021).
  * 모임 인물 앨범(전 이벤트 합산 — listGroupPersons 파생)을 가로 스크롤로 골라 매핑을 만든다.
  * 승인·매핑 분리 확정(§1)이라 승인과 무관하게 언제든 열 수 있고, 다대다(다자녀·부모 2인)라
  * **여러 명을 한 번에 선택**할 수 있다 — 매핑 API는 1건 단위라 선택분을 순차 호출하고,
@@ -90,10 +91,10 @@ export function ChildLinkSheet({ groupId, member, onClose, onLinked }: ChildLink
       onClose={() => {
         if (!busy) onClose()
       }}
-      title="아이와 연결하기"
+      title="인물 연결"
       subtitle={
         member.childNames.length > 0
-          ? `${member.nickname} · "${member.childNames.join(', ')} 학부모입니다"`
+          ? `${member.nickname} · '${member.childNames.join(', ')}' 사진 신청`
           : member.nickname
       }
     >
@@ -162,7 +163,7 @@ export function ChildLinkSheet({ groupId, member, onClose, onLinked }: ChildLink
             })}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted">
-            연결하면 모든 이벤트에서 아이의 앨범과 공통 사진이 보여요.
+            연결하면 모든 이벤트에서 그 인물의 앨범과 공통 사진이 보여요.
           </p>
           <Button
             fullWidth
