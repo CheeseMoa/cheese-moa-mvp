@@ -190,9 +190,10 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 > 빈 배열이면 홈 빈 상태(`211:1396`) 렌더.
 
 #### `POST /groups` — 모임 만들기 · 화면 03
-요청 `{ "name": "햇살반", "password": "482AVX" }`
-응답 `201` → `Group`(생성자는 자동 멤버).
+요청 `{ "name": "햇살반", "groupType": "BUSINESS" }` — `groupType`은 `BUSINESS`|`GENERAL`(선택 — 생략 시 BUSINESS), 생성 후 변경 불가(ADR 020).
+응답 `201` → `Group`(생성자는 자동 멤버 · `groupType` 포함 — 목록/상세/이름변경 응답도 동일).
 오류: `400 VALIDATION_ERROR`.
+> **참여 비밀번호는 요청으로 받지 않는다**(BE CHMO-599 — 4자리 PIN 자동 발급, `GET /groups/:id/invite`로만 노출. 구 FE가 보내는 `password`는 무시).
 
 #### `GET /groups/:id` — 모임 상세 · 화면 05
 응답 `200` → `Group`.
