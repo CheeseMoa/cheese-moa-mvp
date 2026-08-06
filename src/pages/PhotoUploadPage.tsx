@@ -74,7 +74,9 @@ async function registrationLanded(eventId: string, photoCountBefore: number): Pr
  * **등록이 곧 분석 시작**이라 analyze는 부르지 않는다(CHMO-194 — 부르면 같은 사진이 두 job으로 발행된다).
  * 완료 확인은 재진입/새로고침(자동 폴링 없음 — MVP).
  * ①에서 `AGREEMENT428`이 오면 이 모임의 보호자 동의 확보 확인이 없는 것이다(CHMO-516) —
- * 확인 모달 → 기록 → ①부터 재시도로 받는다(모임 단위·선생님별 1회라 다음 업로드엔 안 뜬다).
+ * 확인 모달 → 기록 → ①부터 재시도로 받는다(모임 단위·관리자별 1회라 다음 업로드엔 안 뜬다).
+ * **이 게이트는 비즈니스 모임에만 있다**(CHMO-611 · BE CHMO-599 AC-4) — 일반 모임엔 428이
+ * 오지 않으므로 화면은 유형을 묻지 않고, 428 분기는 비즈니스 안전망으로 그대로 둔다.
  */
 export function PhotoUploadPage() {
   const { groupId = '', eventId = '' } = useParams<{ groupId: string; eventId: string }>()
@@ -346,7 +348,7 @@ export function PhotoUploadPage() {
 
   /**
    * 확인 기록(POST /groups/:id/agreements) → 업로드 재시도.
-   * 확인은 모임 단위·선생님별 1회라 이 모임의 다음 업로드엔 모달이 뜨지 않는다.
+   * 확인은 모임 단위·관리자별 1회라 이 모임의 다음 업로드엔 모달이 뜨지 않는다.
    */
   const handleConsentConfirm = async () => {
     if (consentBusy) return
@@ -407,11 +409,8 @@ export function PhotoUploadPage() {
             {/* 카운트·품질 토글 — 업로드 전 설정이라 스크롤을 따라올 필요가 없어 일반 흐름에 둔다.
                 CHMO-369의 상단 sticky는 철회: 실기기 WebKit에서 하단 CTA처럼 떠서 사진이 비쳤다(CHMO-424) */}
             <div className="pb-3 pt-3">
-              {/* 아동 사진 고지 배너(CHMO-478) — 얼굴 인식 처리 사실 + 보호자 동의 전제 안내 */}
-              <p className="mb-3 rounded-2xl bg-surface px-4 py-3 text-xs leading-relaxed text-muted">
-                업로드한 사진은 얼굴 인식으로 인물별 분류됩니다. 보호자 동의를 받은 아이의 사진만
-                올려 주세요.
-              </p>
+              {/* 얼굴 인식 고지 배너(CHMO-478)는 걷어냈다(CHMO-611) — 법적 동의·고지는 가입(01-A)
+                  1회가 소유한다(group-type-proposal §1·§2). 일반 모임에는 사실도 아니었다 */}
               <p className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center rounded-full bg-primary/[.15] px-3 py-1 text-xs font-bold text-heading">
                   선택됨 {selectedCount}장
