@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, Header, TextField, useToast } from '../components/ui'
+import { Button, Header, IconBuilding, IconPeople, TextField, useToast } from '../components/ui'
 import { cx } from '../lib/cx'
 import { useMutation } from '../hooks/useMutation'
 import { createGroup } from '../api/groups'
@@ -19,9 +19,33 @@ import type { GroupType } from '../types/api'
  * 예고하는 문구로만 읽힌다(2026-07-29 결정).
  */
 
-const GROUP_TYPE_CARDS: Array<{ type: GroupType; emoji: string; name: string; examples: string }> = [
-  { type: 'general', emoji: '🧀', name: '일반 모임', examples: '가족 여행, 친구 모임' },
-  { type: 'business', emoji: '🏢', name: '비즈니스 모임', examples: '유치원, 여행사, 학원' },
+/**
+ * 유형 선택 카드 — 이모지(🧀/🏢) 대신 프로젝트 라인 아이콘 세트를 쓴다: 두 이모지가 음식/건물로
+ * 그림 계열이 다른 데다 OS마다 모양이 달라, 나란히 놓으면 한 벌로 안 읽힌다.
+ * 아이콘 타일 색이 유형 위계를 대신한다 — 일반은 중립(surface), 비즈니스는 옐로우 틴트로
+ * 05 헤더 배지·02 카드 배지·03 2단계 pill과 같은 처방(primary/20 계열)을 잇는다.
+ */
+const GROUP_TYPE_CARDS: Array<{
+  type: GroupType
+  Icon: typeof IconPeople
+  name: string
+  examples: string
+  tile: string
+}> = [
+  {
+    type: 'general',
+    Icon: IconPeople,
+    name: '일반 모임',
+    examples: '가족 여행 · 친구 모임',
+    tile: 'bg-surface text-heading',
+  },
+  {
+    type: 'business',
+    Icon: IconBuilding,
+    name: '비즈니스 모임',
+    examples: '유치원 · 학원 · 여행사',
+    tile: 'bg-primary/25 text-heading',
+  },
 ]
 
 const NAME_PLACEHOLDER: Record<GroupType, string> = {
@@ -64,20 +88,34 @@ export function GroupCreatePage() {
       <PhoneShell>
         <Header backTo="/home" backLabel="홈" title="모임 만들기" />
         <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
-          <div className="grid grid-cols-2 gap-4">
+          {/* 정사각 2-up에서 세로 리스트로(홈 모임 카드와 같은 문법) — 정사각은 가운데가 비고
+              이름·예시가 바닥에 눌려 위계가 죽는다. 가로가 넓어져 예시 줄도 잘리지 않는다 */}
+          <div className="flex flex-col gap-3">
             {GROUP_TYPE_CARDS.map((card) => (
               <button
                 key={card.type}
                 type="button"
                 onClick={() => setGroupType(card.type)}
-                // 나란한 두 카드라 blur 30(shadow-card)은 사이 16px을 뿌옇게 채운다 — stack 그림자(CHMO-532 결)
-                className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-border bg-white p-4 shadow-card-stack transition active:scale-[0.99]"
+                // 세로로 쌓이는 카드라 blur 30(shadow-card)은 사이 12px을 뿌옇게 채운다(CHMO-532)
+                className="group flex w-full items-center gap-3.5 rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack transition active:scale-[0.99]"
               >
-                <span aria-hidden="true" className="text-[28px] leading-none">
-                  {card.emoji}
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    // 누르는 동안 타일이 옐로우로 차오른다 — 두 카드가 같은 피드백을 준다
+                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors group-active:bg-primary',
+                    card.tile,
+                  )}
+                >
+                  <card.Icon size={26} />
                 </span>
-                <span className="mt-5 text-[15px] text-heading">{card.name}</span>
-                <span className="mt-2.5 text-xs text-muted">{card.examples}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[17px] text-heading">{card.name}</span>
+                  <span className="mt-1 block text-[13px] text-muted">{card.examples}</span>
+                </span>
+                <span className="shrink-0 text-lg text-[#C9C2B4]" aria-hidden="true">
+                  ›
+                </span>
               </button>
             ))}
           </div>
