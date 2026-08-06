@@ -51,7 +51,6 @@ import {
   toGroupDetail,
   toGroupMemberResponse,
   toGroupSummary,
-  toJoinGroupResponse,
   toJoinRequestResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
@@ -202,10 +201,12 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toEvent(raw)).toMatchObject({ id: 2, status: 'published', photoCount: visibleCount })
   })
 
-  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3)', () => {
+  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3 · CHMO-607)', () => {
     const group = findGroup(1)!
     const request = membershipOf(7, 1)! // 치즈냥이88 — PENDING 신청
-    expect(toJoinGroupResult(toJoinGroupResponse(group, request))).toEqual({
+    // join 응답은 실 BE처럼 GroupSummaryResponse 재사용(전용 DTO 없음 — role·status는
+    // myMembership 중첩, SpaceController 대조 CHMO-607) — 목록 직렬화기가 곧 join 직렬화기다
+    expect(toJoinGroupResult(toGroupSummary(group, request))).toEqual({
       groupId: 1,
       groupName: '햇살반',
       role: 'viewer',

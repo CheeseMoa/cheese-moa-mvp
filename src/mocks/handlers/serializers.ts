@@ -136,17 +136,6 @@ export function toGroupDetail(group: DbGroup, membership: DbMembership) {
   }
 }
 
-/** BE JoinGroupResponse(초안 §3) — 즉시 합류가 아니라 신청 생성 결과 */
-export function toJoinGroupResponse(group: DbGroup, membership: DbMembership) {
-  return {
-    groupId: group.id,
-    groupName: group.name,
-    groupType: group.groupType.toUpperCase(),
-    role: membership.role.toUpperCase(),
-    status: membership.status.toUpperCase(),
-  }
-}
-
 /** BE JoinRequestResponse(초안 §3) — PENDING 멤버십 행이 곧 신청이다 */
 export function toJoinRequestResponse(membership: DbMembership, user: DbUser) {
   return {

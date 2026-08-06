@@ -494,14 +494,13 @@ export const AGREEMENT_CATALOG: AgreementCatalogItem[] = [
   { type: 'face_data', currentVersion: '1.0', required: true, scope: 'user' },
   { type: 'marketing', currentVersion: '1.0', required: false, scope: 'user' },
   { type: 'child_consent_attested', currentVersion: '1.0', required: true, scope: 'group' },
+  // 자녀 정보 처리 동의(BE CHMO-586) — 합류 신청의 동의 검증·기록은 폐지됐지만(CHMO-607 —
+  // 동의는 가입 01-A 일원화) BE 카탈로그엔 항목이 남아 있어 목도 유지한다(BE 폐지 시 함께 정리)
   { type: 'guardian_child_consent', currentVersion: '1.0', required: true, scope: 'group' },
 ]
 
 /** 아동 보호자 동의 확보 확인 항목 — 업로드 게이트가 요구하는 그 항목 */
 export const GUARDIAN_CONSENT_TYPE: AgreementType = 'child_consent_attested'
-
-/** 자녀 정보 처리 동의 항목 — 보호자 본인이 학부모 합류 신청으로 남긴다(BE CHMO-586) */
-export const GUARDIAN_CHILD_CONSENT_TYPE: AgreementType = 'guardian_child_consent'
 
 export function agreementCatalogOf(type: AgreementType): AgreementCatalogItem | undefined {
   return AGREEMENT_CATALOG.find((item) => item.type === type)

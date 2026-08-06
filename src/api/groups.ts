@@ -65,21 +65,19 @@ export function deleteGroup(groupId: ID | string): Promise<void> {
 }
 
 /**
- * POST /groups/join — 참여 코드+비밀번호로 **신청(PENDING) 생성**(학부모 전환 §1 승인제 —
- * 즉시 합류가 아니다). role은 joinKey 종류에서 서버가 파생하고(Q6), 학부모 joinKey일 땐
- * childNames(자녀 이름 자유 텍스트, 1개 이상)와 childConsentVersion(자녀 정보 처리 동의 —
- * BE CHMO-586)이 필수다. 누락·구버전은 VALID400으로 신청 자체가 거부된다.
+ * POST /groups/join — 참여 코드+비밀번호로 합류. role은 joinKey 종류에서 서버가 파생하고(Q6),
+ * viewer(학부모) joinKey일 땐 childNames(인물 이름 자유 텍스트, 1개 이상)가 필수다.
+ * 현행 BE는 role 무관 승인제라 **신청(PENDING) 생성**이고, 일반(GENERAL) 모임의 즉시 합류는
+ * BE 미구현 — 화면은 응답 status로 분기한다(active=모임 직행, CHMO-607).
+ *
+ * childConsentVersion 동봉은 폐지했다(CHMO-607 — 동의는 가입 01-A 1회로 일원화, 정본
+ * group-type-proposal §1). ⚠ BE CHMO-586 검증 폐지가 선행/동시가 아니면 viewer 신청이
+ * VALID400으로 막힌다 — BE 폐지 티켓과 배포 게이트.
  */
 export function joinGroup(input: {
   joinKey: string
   password: string
   childNames?: string[]
-  /**
-   * 자녀의 사진·얼굴 특징정보 처리 동의 버전(학부모 키 경로 필수 — CHMO-587). `GET /agreements`
-   * `GUARDIAN_CHILD_CONSENT` 항목의 currentVersion을 그대로 싣는다(하드코딩 금지 — 문서 개정으로
-   * 버전이 오르면 자동으로 새 버전이 전송되게). 카탈로그에 항목이 없는 구계약 BE엔 보내지 않는다.
-   */
-  childConsentVersion?: string
 }): Promise<JoinGroupResult> {
   return apiFetch<RawJoinGroupResult>('/groups/join', { method: 'POST', body: input }).then(
     toJoinGroupResult,
@@ -98,21 +96,16 @@ interface RawGroupInvite {
   password?: string
 }
 
-function toInviteChannel(
-  raw: { joinKey: string; password: string },
-  // BE 응답 채널 키(teacher/parent — 내부 식별자 유지, ADR 021)이지 role 직렬화 값이 아니다
-  channel: 'teacher' | 'parent' = 'teacher',
-): GroupInviteChannel {
+function toInviteChannel(raw: { joinKey: string; password: string }): GroupInviteChannel {
   // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
   const origin = typeof window === 'undefined' ? '' : window.location.origin
-  // 학부모 링크엔 role 마커를 싣는다 — joinKey는 불투명(대소문자 12자)이라 02-1 모달/02-2
-  // 3단계 분기의 유일한 근거가 URL이다(CHMO-445 — 시트 소비는 CHMO-446). 마커 값 'parent'는
-  // FE 링크 계약(JoinPage가 읽는다)이라 role 값 전환(CHMO-604)과 무관하게 유지한다
-  const marker = channel === 'parent' ? '?role=parent' : ''
+  // joinUrl은 마커 없는 경로형 원형이다 — 유형·역할·모임 정보 마커는 lib/joinLink가 계약을
+  // 소유하고, 공유 화면(GroupInviteLinks)이 모임 컨텍스트를 알아야 동봉할 수 있어 거기서
+  // 파생한다(CHMO-607 — 종전 ?role=parent 마커도 그리로 이관).
   return {
     joinKey: raw.joinKey,
     password: raw.password,
-    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}${marker}`,
+    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
   }
 }
 
@@ -130,7 +123,7 @@ export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promi
     if (raw.teacher) {
       return {
         teacher: toInviteChannel(raw.teacher),
-        parent: raw.parent ? toInviteChannel(raw.parent, 'parent') : null,
+        parent: raw.parent ? toInviteChannel(raw.parent) : null,
       }
     }
     return {
