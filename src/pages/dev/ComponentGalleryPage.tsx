@@ -218,6 +218,14 @@ export function ComponentGalleryPage() {
             cover={{ url: null }}
           />
           <EventCard name="새 이벤트" status="empty" meta="오늘 · 사진 0장" />
+          {/* 일반 모임 카드(CHMO-609) — 검수 문맥 배지를 걷어 '분류중'만 남는다. 같은
+              status='empty'인 바로 위 카드와 나란히 두면 NEW가 사라진 차이가 그대로 보인다 */}
+          <EventCard
+            name="북한산 둘레길"
+            status="empty"
+            groupType="general"
+            meta="7월 19일 · 사진 0장"
+          />
         </Section>
 
         <Section title="06 · AlbumCard — 검토 테두리 규칙">
@@ -238,6 +246,22 @@ export function ComponentGalleryPage() {
             <AlbumCard album={{ type: 'eyes_closed', name: '눈감은 사진', photoCount: 6 }} />
           </div>
           <p className="text-[11px] text-muted">테두리: 갈색 실선=검토완료 · 회색 점선=미검토</p>
+          {/* 무검토 모드(CHMO-612) — 일반 모임엔 검수 단계가 없어 카드가 말할 상태가 없다.
+              위 두 장과 검토 수치는 같지만(0 / 12) 카드는 서로 구분되지 않는다 */}
+          <div className="grid grid-cols-2 gap-3.5">
+            <AlbumCard
+              album={{ type: 'person', name: '이현정', photoCount: 16, unreviewedPhotoCount: 0 }}
+              review={false}
+              onClick={() => toast.show('🧀 앨범 카드 탭')}
+            />
+            <AlbumCard
+              album={{ type: 'person', name: '김지은', photoCount: 12, unreviewedPhotoCount: 12 }}
+              review={false}
+            />
+          </div>
+          <p className="text-[11px] text-muted">
+            review=false(일반 모임): 균일한 중립 카드 — 테두리 규칙·검토 배지 없음
+          </p>
         </Section>
 
         <Section title="07 · PhotoTile / PhotoGrid">

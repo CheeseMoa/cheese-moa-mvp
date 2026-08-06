@@ -4,33 +4,43 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
+import { buildJoinPath, type JoinLinkInfo } from '../lib/joinLink'
+import type { JoinGroupResult } from '../types/api'
 import { Button, Modal, TextField, useToast } from './ui'
 
 interface JoinGroupModalProps {
   open: boolean
-  /** 스크림·ESC로 닫을 때. 신청 성공 시에는 호출되지 않고 홈(02)으로 이동한다 */
+  /** 스크림·ESC로 닫을 때. 합류 성공 시에는 호출되지 않고 랜딩 규칙(아래)을 따른다 */
   onClose: () => void
   /** 초대 링크(/join/:joinKey) 진입 시 참여 코드 고정 — 코드 입력 필드 대신 안내로 표시 */
   fixedJoinKey?: string
+  /** 초대 링크가 동봉한 모임 정보(lib/joinLink 마커 — 유형·모임명·카운트, CHMO-607) */
+  linkInfo?: JoinLinkInfo
   /** 홈 모달 진입의 신청 성공 후속(목록 refetch 등) — 미지정이면 onClose로 닫기만 한다 */
   onJoined?: () => void
 }
 
 /**
- * 02-1. 모임 참여 모달 (node 211:1520 · POST /groups/join).
- * 홈의 [모임 참여하기](코드 직접 입력)와 초대 링크 진입(코드 고정) 공용.
+ * 02-1. 모임 참여 모달 (node 371:31 · POST /groups/join).
+ * 초대 링크 진입(코드 고정)이 주 경로고, 잘못된 링크(코드 공백)의 직접 입력 폴백을 겸한다.
  *
- * 학부모 전환(CHMO-444)으로 참여는 즉시 합류가 아니라 **신청(PENDING) 생성**이다 — 성공 시
- * 모임 상세가 아니라 홈으로 간다(승인 전엔 모임 접근 불가). 단 구계약 실 BE(즉시 합류)가
- * 아직 배포돼 있어, 응답 status가 active면 토스트 문구만 "참여했어요"로 갈린다(공존 구간).
+ * 링크 마커의 유형이 **일반(general)이면 참여 모달**이다(CHMO-607 — 모임명·"멤버 N · 이벤트 N"
+ * 표시 + 비밀번호 → [참여하기]. 표시 정보는 링크 동봉 스냅샷이라 없으면 그 줄만 생략).
+ * 일반 모임 즉시 합류는 BE 미구현(현행 승인제 유지 — CHMO-599)이라 응답 status로 랜딩을
+ * 가른다: **active면 모임 화면 직행, pending이면 홈**(승인 대기 카드). 직행은 명시적 active에만
+ * 열린다 — 형태 미상 응답은 매퍼가 pending으로 좁혀(CHMO-448 SPACE403 실측 재발 방지) 홈으로.
  *
- * 이 모달은 **선생님 코드 전용 경로**(학부모 코드는 02-2로 인계)인데, 선생님 합류도
- * 승인제로 통일되면서(CHMO-475) 문구를 "참여"에서 "참여 신청"으로 바꿨다 — 비밀번호를
- * 맞게 넣어도 바로 못 들어간다는 사실을 누르기 전에 알려야 한다.
- * 학부모 코드를 마커 없이 넣으면(수동 입력 등) 서버 400(자녀 이름 필요)으로 감지해
- * 02-2 3단계(ParentJoinPage)로 인계한다(CHMO-445).
+ * 마커가 없거나 비즈니스 editor(관리자) 키면 종전 **참여 신청 모달**(CHMO-475 승인제 문구).
+ * viewer(멤버) 코드를 마커 없이 넣으면(수동 입력 등) 서버 400(인물 이름 필요)으로 감지해
+ * 02-2 단일 화면(ParentJoinPage)으로 인계한다(CHMO-445 관용 — 안전망으로 유지).
  */
-export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGroupModalProps) {
+export function JoinGroupModal({
+  open,
+  onClose,
+  fixedJoinKey,
+  linkInfo,
+  onJoined,
+}: JoinGroupModalProps) {
   const navigate = useNavigate()
   const toast = useToast()
   const mutate = useMutation()
@@ -38,6 +48,8 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isGeneral = linkInfo?.groupType === 'general'
 
   // 닫았다 다시 열 때 이전 입력·에러가 남지 않게 초기화
   useEffect(() => {
@@ -52,39 +64,49 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
   const joinKey = (fixedJoinKey ?? joinKeyInput).trim()
   const canSubmit = joinKey.length > 0 && password.trim().length > 0 && !submitting
 
+  // 02-1 표시용 메타 — 링크가 동봉한 값만(스냅샷). 둘 다 없으면 줄 자체를 걷는다
+  const metaParts = [
+    linkInfo?.memberCount !== undefined ? `멤버 ${linkInfo.memberCount}` : null,
+    linkInfo?.eventCount !== undefined ? `이벤트 ${linkInfo.eventCount}개` : null,
+  ].filter((part): part is string => part !== null)
+
+  const finishJoined = (result: JoinGroupResult) => {
+    if (result.status === 'active') {
+      toast.show('🧀 모임에 참여했어요')
+      // 즉시 합류(active)는 모임 화면 직행 — 초대 링크 진입이라 참여 화면은 히스토리에서 교체
+      navigate(`/groups/${result.groupId}`, { replace: true })
+      return
+    }
+    toast.show(`🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 · 승인되면 이용할 수 있어요`)
+    // 승인 전엔 모임 접근 불가(SPACE403) — 홈(승인 대기 카드)이 어느 계약에서도 안전한 랜딩이다.
+    // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
+    // 홈 모달 진입(잘못된 링크 폴백)은 닫고 목록 갱신
+    if (fixedJoinKey !== undefined) navigate('/home', { replace: true })
+    else (onJoined ?? onClose)()
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
     await mutate(() => joinGroup({ joinKey, password: password.trim() }), {
-      onSuccess: (result) => {
-        toast.show(
-          result.status === 'active'
-            ? '🧀 모임에 참여했어요'
-            : `🧀 ${result.groupName || '모임'}에 참여 신청을 보냈어요 · 승인되면 이용할 수 있어요`,
-        )
-        // 성공 후 랜딩은 status와 무관하게 **홈**(모임 카드) — active여도 상세로 직행하지 않는다.
-        // 구계약(즉시 합류) 응답 형태로 승인제 BE가 응답하는 과도기에 상세 직행이 권한 오류
-        // ("권한이 없는 스페이스")로 터진 실측 반영: 홈은 어느 계약에서도 안전하다.
-        // 초대 링크 진입은 참여 화면을 히스토리에서 교체(뒤로가기 시 빈 모달 재등장 방지),
-        // 홈 모달 진입은 닫고 목록 갱신
-        // 둘러보기 갈래 힌트·fromJoin 미루기 신호는 자동 투어와 함께 소멸(CHMO-565) — 홈은
-        // 이 방문에 아무것도 덮지 않으므로 그냥 보낸다
-        if (fixedJoinKey !== undefined) navigate('/home', { replace: true })
-        else (onJoined ?? onClose)()
-      },
-      // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다(JoinPage와 동일)
+      onSuccess: finishJoined,
+      // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다
+      // (JoinPage와 동일). 마커까지 되살려야 복귀 후에도 같은 갈래·같은 표시 정보가 선다
       redirect: {
-        state: fixedJoinKey !== undefined ? { returnTo: `/join/${fixedJoinKey}` } : undefined,
+        state:
+          fixedJoinKey !== undefined
+            ? { returnTo: buildJoinPath(fixedJoinKey, linkInfo ?? {}) }
+            : undefined,
       },
       // WRONG_PASSWORD·NOT_FOUND·ALREADY_MEMBER 메시지는 사용자 노출 가능한 한국어
       onError: (msg, err) => {
-        // 400 = 자녀 이름 필요 = 학부모 코드(코드·비밀번호는 채워 보냈으므로 다른 400 원인이
-        // 없다 — 목 VALID400 · BE 코드 미확인이라 status로 판별) → 02-2 3단계로 인계.
-        // 입력한 비밀번호는 state로 넘겨 1/3에 프리필한다(CHMO-445)
+        // 400 = 인물 이름 필요 = viewer(멤버) 코드(코드·비밀번호는 채워 보냈으므로 다른 400
+        // 원인이 없다 — 목 VALID400 · BE 코드 미확인이라 status로 판별) → 02-2 단일 화면 인계.
+        // 입력한 비밀번호는 state로 넘겨 프리필한다(CHMO-445)
         if (err instanceof ApiRequestError && err.status === 400) {
-          navigate(`/join/${encodeURIComponent(joinKey)}?role=parent`, {
+          navigate(buildJoinPath(joinKey, { groupType: 'business', role: 'viewer' }), {
             replace: fixedJoinKey !== undefined,
             state: { password: password.trim() },
           })
@@ -102,13 +124,32 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
       onClose={() => {
         if (!submitting) onClose()
       }}
-      title="모임 참여 신청"
+      title={isGeneral ? '모임 참여' : '모임 참여 신청'}
     >
-      <p className="mt-1.5 text-[13px] text-muted">
-        초대받은 모임의 비밀번호를 입력하세요.
-        <br />
-        모임의 선생님이 승인하면 이용할 수 있어요.
-      </p>
+      {isGeneral ? (
+        // 일반 모임(02-1) — 어느 모임에 들어가는지부터 말한다(안내 문구 없음 — 회색 보조 문구 최소화)
+        <div className="mt-1.5">
+          {linkInfo?.groupName ? (
+            <p className="text-lg font-bold leading-snug text-text">{linkInfo.groupName}</p>
+          ) : null}
+          {metaParts.length > 0 ? (
+            <p className="mt-1 text-[13px] text-muted">{metaParts.join(' · ')}</p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[13px] text-muted">
+          {linkInfo?.groupName ? (
+            <>
+              <span className="font-bold text-text">{linkInfo.groupName}</span> 모임의 비밀번호를
+              입력하세요.
+            </>
+          ) : (
+            '초대받은 모임의 비밀번호를 입력하세요.'
+          )}
+          <br />
+          모임 관리자가 승인하면 이용할 수 있어요.
+        </p>
+      )}
       <form onSubmit={handleSubmit} noValidate className="mt-3.5 flex flex-col gap-3.5">
         {fixedJoinKey === undefined ? (
           <TextField
@@ -118,14 +159,10 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
             value={joinKeyInput}
             onChange={(e) => setJoinKeyInput(e.target.value)}
           />
-        ) : (
-          <p className="text-[13px] text-muted">
-            참여 코드: <span className="font-bold text-text">{joinKey}</span>
-          </p>
-        )}
+        ) : null}
         <TextField
           label="비밀번호"
-          placeholder="비밀번호 입력"
+          placeholder="참여 비밀번호 입력"
           type="password"
           autoComplete="off"
           value={password}
@@ -137,7 +174,13 @@ export function JoinGroupModal({ open, onClose, fixedJoinKey, onJoined }: JoinGr
           </p>
         ) : null}
         <Button type="submit" fullWidth disabled={!canSubmit} className="mt-1">
-          {submitting ? '신청 중…' : '참여 신청'}
+          {isGeneral
+            ? submitting
+              ? '참여 중…'
+              : '참여하기'
+            : submitting
+              ? '신청 중…'
+              : '참여 신청'}
         </Button>
       </form>
     </Modal>

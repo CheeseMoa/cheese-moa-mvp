@@ -1,7 +1,8 @@
 import { useApi } from '../hooks/useApi'
 import { getInviteInfo } from '../api/groups'
-import type { GroupInviteChannel, GroupRole, GroupType } from '../types/api'
+import type { Group, GroupInviteChannel, GroupRole } from '../types/api'
 import { copyToClipboard } from '../lib/clipboard'
+import { buildJoinUrl } from '../lib/joinLink'
 import { shareOrCopy } from '../lib/share'
 import { Button, IconShare, InlineRetry, useToast } from './ui'
 
@@ -59,10 +60,12 @@ const GENERAL_COPY: RoleCopy = {
 interface ChannelContentProps {
   channel: GroupInviteChannel
   copy: RoleCopy
+  /** 마커를 동봉한 공유용 링크(lib/joinLink) — 복사·공유·표시 전부 이 링크를 쓴다 */
+  joinUrl: string
 }
 
 /** 안내 문구 + 비밀번호 카드 + [⧉ 링크복사] + 카카오톡 공유 (와이어프레임 307:21) */
-function ChannelContent({ channel, copy }: ChannelContentProps) {
+function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
   const toast = useToast()
 
   const copyText = async (text: string, doneMessage: string) => {
@@ -74,7 +77,7 @@ function ChannelContent({ channel, copy }: ChannelContentProps) {
   const handleShare = async () => {
     const outcome = await shareOrCopy({
       text: copy.share(channel.password),
-      url: channel.joinUrl,
+      url: joinUrl,
     })
     if (outcome === 'shared' || outcome === 'canceled') return
     toast.show(
@@ -103,11 +106,11 @@ function ChannelContent({ channel, copy }: ChannelContentProps) {
               ⧉
             </span>
           </button>
-          <Button size="sm" onClick={() => void copyText(channel.joinUrl, copy.copyDone)}>
+          <Button size="sm" onClick={() => void copyText(joinUrl, copy.copyDone)}>
             ⧉ 링크복사
           </Button>
         </div>
-        <p className="mt-1.5 truncate text-xs text-muted">{displayUrl(channel.joinUrl)}</p>
+        <p className="mt-1.5 truncate text-xs text-muted">{displayUrl(joinUrl)}</p>
       </div>
       <button
         type="button"
@@ -130,8 +133,15 @@ interface GroupInviteLinksProps {
   groupId: string
   /** 지금 보고 있는 탭 — 이 역할의 채널을 보여준다(일반 모임은 탭이 없어 무시된다) */
   role: GroupRole
-  /** 모임 유형(CHMO-610) — general이면 역할 구분 없이 초대 링크 1종 */
-  groupType: GroupType
+  /**
+   * 링크 마커(유형·모임명·멤버 수) 원천 — joinKey→모임 정보 조회 API가 없어 합류 화면이
+   * 보여줄 정보를 링크에 동봉한다(CHMO-607, lib/joinLink). 도착 전·조회 실패면 마커 없는
+   * 링크로 열화된다(합류 자체는 그대로 동작 — 마커 없는 링크는 신청 모달 폴백).
+   * **유형 분기의 원천이기도 하다**(CHMO-610) — general이면 채널·문구가 1종으로 수렴한다.
+   */
+  group?: Group
+  /** 이벤트 수 — 상세 응답에 없어(CHMO-192) 호출부가 이벤트 목록 길이로 파생해 준다 */
+  eventCount?: number
 }
 
 /**
@@ -147,14 +157,18 @@ interface GroupInviteLinksProps {
  * 조회 키에 role을 넣지 않는다 — 두 역할이 한 응답에 함께 오므로 탭을 바꿔도 재조회가 없다.
  * 섹션 제목까지 이 컴포넌트가 소유한다 — 채널이 없을 때 제목만 남아 빈 섹션이 되지 않게.
  */
-export function GroupInviteLinks({ groupId, role, groupType }: GroupInviteLinksProps) {
+export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInviteLinksProps) {
   const { data, error, refetch } = useApi(`invite:${groupId}`, (signal) =>
     getInviteInfo(groupId, signal),
   )
-  const general = groupType === 'general'
+  // 일반 모임엔 역할이 없다 — 채널·문구·링크 마커를 전부 관리자(editor) 기준으로 수렴시킨다.
+  // 호출부의 탭 상태(기본 viewer)가 그대로 새면 죽은 학부모 키 링크가 만들어진다(GENERAL의
+  // viewer 합류는 SPACE404 — BE CHMO-599 AC-6). 유형 미상은 business로 본다(매퍼와 같은 해석).
+  const general = group?.groupType === 'general'
+  const effectiveRole: GroupRole = general ? 'editor' : role
   // 초대 응답 채널 키는 teacher/parent 그대로다(BE 내부 식별자 유지 — ADR 021)
-  const channel = !general && role === 'viewer' ? data?.parent : data?.teacher
-  const copy = general ? GENERAL_COPY : ROLE_COPY[role]
+  const channel = effectiveRole === 'viewer' ? data?.parent : data?.teacher
+  const copy = general ? GENERAL_COPY : ROLE_COPY[effectiveRole]
 
   // 링크를 못 불러와도 대기 신청·명단은 가리지 않는다 — 이 화면의 나머지 일은 그대로 할 수 있다
   if (error)
@@ -174,11 +188,22 @@ export function GroupInviteLinks({ groupId, role, groupType }: GroupInviteLinksP
   // 같은 탭에 신청·명단이 살아 있어서 탭을 없애면 승인·연결을 할 수 없다)
   if (!channel) return null
 
+  // 합류 화면(02-1·02-2)이 보여줄 정보를 링크에 동봉 — 값은 공유 시점 스냅샷(CHMO-607).
+  // 카운트는 일반 모임 02-1만 소비하지만 계약상 유형 무관 동봉한다(마커는 있으면 그리는 값).
+  // role은 effectiveRole이다 — 일반 모임에서 죽은 viewer 마커가 실리지 않게(CHMO-610).
+  const joinUrl = buildJoinUrl(window.location.origin, channel.joinKey, {
+    groupType: group?.groupType,
+    role: effectiveRole,
+    groupName: group?.name,
+    memberCount: group?.memberCount,
+    eventCount,
+  })
+
   return (
     <section className="mb-6">
       <h3 className="text-[12px] tracking-[0.06em] text-muted">{copy.linkLabel}</h3>
       <div className="mt-2">
-        <ChannelContent channel={channel} copy={copy} />
+        <ChannelContent channel={channel} copy={copy} joinUrl={joinUrl} />
       </div>
     </section>
   )

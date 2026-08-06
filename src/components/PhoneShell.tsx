@@ -11,6 +11,9 @@ interface PhoneShellProps {
  * 셸은 보이는 뷰포트에 딱 맞는 고정 높이(h-dvh)다 — 문서 스크롤이 생기지 않아 주소창
  * 상태와 무관하게 하단 액션이 항상 보인다. 스크롤은 각 화면의 콘텐츠 영역(overflow-y-auto)이
  * 소유한다(CHMO-396). 100vh는 주소창이 숨겨진 큰 뷰포트 기준이라 쓰지 않는다.
+ *
+ * 프레임 치수(h-dvh / sm:my-6 sm:h-[844px] / max-w-phone)는 ToastProvider의 고스트 프레임이
+ * 복제한다(CHMO-596 — 토스트를 프레임 기준으로 앵커링) — 여기를 바꾸면 그쪽도 함께 바꾼다.
  */
 export function PhoneShell({ children }: PhoneShellProps) {
   return (

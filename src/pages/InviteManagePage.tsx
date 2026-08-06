@@ -17,6 +17,7 @@ import {
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { getMe } from '../api/auth'
+import { listGroupEvents } from '../api/events'
 import {
   getGroup,
   listGroupMembers,
@@ -86,7 +87,9 @@ export function InviteManagePage() {
   const [tab, setTab] = useState<GroupRole>('viewer')
   // "(나)" 표기용 — 실패해도 명단은 그대로 보여준다(표기만 생략)
   const meApi = useApi('me', getMe)
-  // 유형이 화면 구성을 가른다(일반=라이트) — 05에서 이미 읽은 값이지만 캐시가 없어 다시 읽는다
+  // 모임은 두 가지 원천이다: ① 화면 구성을 가르는 **유형**(일반=라이트, CHMO-610) ② 초대 링크
+  // 마커(유형·모임명·카운트 — joinKey→모임 정보 조회 API가 없어 링크에 동봉한다, CHMO-607).
+  // ①이 골격을 정하므로 이 조회만은 실패를 넘기지 않는다(아래 LoadState).
   const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
   const group = groupApi.data
   const business = group?.groupType === 'business'
@@ -97,6 +100,8 @@ export function InviteManagePage() {
   const membersApi = useApi(`group-members:${groupId}`, (signal) =>
     listGroupMembers(groupId, signal),
   )
+  // 링크 마커의 이벤트 수 — 실패해도 초대는 막지 않는다(그 마커만 빠진 링크로 열화)
+  const eventsApi = useApi(`group-events:${groupId}`, (signal) => listGroupEvents(groupId, signal))
 
   // 신청 승인/거절 — 처리 중인 신청 id(카드 버튼·거절 다이얼로그 공용 busy)
   const [busyRequestId, setBusyRequestId] = useState<ID | null>(null)
@@ -238,7 +243,12 @@ export function InviteManagePage() {
           <>
             {/* ① 부르기 — 멤버 조회 밖에 둔다(CHMO-520). 링크 복사가 이 화면의 첫 번째 일인데,
                 명단 조회가 일시 실패했다고 링크까지 못 꺼내면 초대 자체가 막힌다 */}
-            <GroupInviteLinks groupId={groupId} role={tab} groupType={group.groupType} />
+            <GroupInviteLinks
+              groupId={groupId}
+              role={tab}
+              group={group}
+              eventCount={eventsApi.data?.length}
+            />
 
             {membersApi.data ? (
               <>

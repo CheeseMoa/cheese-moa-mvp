@@ -4,18 +4,15 @@
  */
 import { http } from 'msw'
 import {
-  agreementCatalogOf,
   createMembership,
   db,
   deleteGroupCascade,
   findGroup,
-  GUARDIAN_CHILD_CONSENT_TYPE,
   hasAnalyzingEvent,
   membershipOf,
   membershipsOfUser,
   nextId,
   nowIso,
-  recordAgreement,
   type DbGroup,
 } from '../db'
 import {
@@ -34,8 +31,7 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { STALE_VERSION } from './agreements'
-import { shareUrlOf, toGroupDetail, toGroupSummary, toJoinGroupResponse } from './serializers'
+import { shareUrlOf, toGroupDetail, toGroupSummary } from './serializers'
 
 function randomJoinKey(): string {
   // 실 BE는 대소문자 혼합 12자를 발급하고 대소문자를 구분해 매칭한다(채집 예: Fh1TDIk81EPP — CHMO-285)
@@ -167,7 +163,6 @@ export const groupHandlers = [
       joinKey?: unknown
       password?: unknown
       childNames?: unknown
-      childConsentVersion?: unknown
     }>(request)
     const joinKey = requiredString(body?.joinKey)
     const password = requiredString(body?.password)
@@ -197,40 +192,15 @@ export const groupHandlers = [
         existing.status === 'active' ? '이미 참여 중인 모임입니다.' : '이미 참여 신청한 모임입니다.',
       )
 
-    // 학부모 신청은 자녀 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지 않는다(§2)
+    // viewer(멤버/학부모) 신청은 인물 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지
+    // 않는다(§2). 이 400은 마커 없는 링크를 02-1 모달이 02-2로 인계하는 감지 신호이기도 하다.
+    // 자녀 정보 처리 동의(childConsentVersion — BE CHMO-586) 검증은 폐지했다(CHMO-607 —
+    // 동의는 가입 01-A 1회로 일원화. ⚠ BE 폐지 티켓 배포 전까지 실 BE는 이 검증이 남아 있다)
     let childNames: string[] = []
     if (role === 'viewer') {
       const raw = Array.isArray(body?.childNames) ? body.childNames : []
       childNames = raw.map(requiredString).filter((name): name is string => name !== null)
-      // 자녀 이름 검증이 동의 검증보다 앞 — 1/3 프로브(이름·동의 없는 제출)가 이 400으로
-      // 학부모 코드를 감지하는 흐름 유지. BE 검증 순서·문구는 미채집(CHMO-586 배포 전)
       if (childNames.length === 0) return invalidRequest('아이 이름을 입력해 주세요.')
-
-      // 자녀 정보 처리 동의(BE CHMO-586) — 동의권자(보호자) 본인의 기록이라 신청 필수.
-      // 누락·구버전이면 신청째 거부(VALID400 — 티켓 확정, 문구는 BE 미채집이라 추정)
-      const consentVersion = requiredString(body?.childConsentVersion)
-      if (!consentVersion) return invalidRequest('자녀 정보 처리 동의는 필수입니다.')
-      const consentCatalog = agreementCatalogOf(GUARDIAN_CHILD_CONSENT_TYPE)
-      if (consentVersion !== consentCatalog?.currentVersion) return invalidRequest(STALE_VERSION)
-
-      // 기록은 신청 시(승인 전 — 동의 의사표시 시각이 기준·append-only라 거절돼도 남는다).
-      // 같은 모임 재신청(거절 후)이 같은 상태면 행을 늘리지 않는다(멱등 — BE AC)
-      const already = db.agreements.some(
-        (row) =>
-          row.userId === user.id &&
-          row.type === GUARDIAN_CHILD_CONSENT_TYPE &&
-          row.groupId === group.id &&
-          row.version === consentVersion &&
-          row.agreed,
-      )
-      if (!already)
-        recordAgreement({
-          userId: user.id,
-          type: GUARDIAN_CHILD_CONSENT_TYPE,
-          version: consentVersion,
-          agreed: true,
-          groupId: group.id,
-        })
     }
 
     const membership = createMembership({
@@ -240,7 +210,9 @@ export const groupHandlers = [
       status: 'pending',
       childNames,
     })
-    return created(toJoinGroupResponse(group, membership))
+    // 실 BE join 응답은 GroupSummaryResponse 재사용(SpaceController 대조 — 전용 DTO 없음,
+    // role·status는 myMembership에 중첩) — 목록 직렬화기를 그대로 쓴다(CHMO-607)
+    return created(toGroupSummary(group, membership))
   }),
 
   // GET /groups/:id/invite — 초대 정보 2종(TEACHER 전용 — PARENT는 ROLE403, Q3) · 화면 05-2
