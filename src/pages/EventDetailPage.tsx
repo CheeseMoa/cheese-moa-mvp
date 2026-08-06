@@ -22,7 +22,7 @@ import { createPersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 import { hasSeenCoachHint } from '../lib/onboarding'
-import type { Album, AnalysisProgress, EventItem } from '../types/api'
+import type { Album, AnalysisProgress, EventItem, GroupType } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
@@ -70,12 +70,11 @@ export function EventDetailPage() {
     const timer = setTimeout(() => setKick(null), 30_000)
     return () => clearTimeout(timer)
   }, [kick])
-  // 뒤로가기 '‹ 모임명'은 빈/분석중 분기에서만 쓰인다(08 그리드는 '이벤트 목록' 고정).
-  // 그리드 이벤트에선 group 요청을 아예 보내지 않는다 — 불필요한 라운드트립 제거
-  const needsGroupName = !!event && (event.status === 'empty' || analysisActive)
-  const groupApi = useApi(needsGroupName ? `group:${groupId}` : null, (signal) =>
-    getGroup(groupId, signal),
-  )
+  // 모임 조회는 상태와 무관하게 항상 보낸다(CHMO-612) — 종전엔 뒤로가기 '‹ 모임명'이 필요한
+  // 빈/분석중 분기에서만 불렀지만, 08 그리드가 **모임 유형**으로 검토·공개 UI를 가르게 되면서
+  // 그리드에도 이 응답이 필요해졌다. 이벤트 조회와 나란히(마운트 시점) 나가므로 앨범 목록보다
+  // 먼저 도착한다 — 카드가 그려질 땐 유형이 정해져 있다.
+  const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
 
   // 분석중 자동 폴링 — 2초마다 진행률·상태를 다시 확인하고(BE 요청 주기), 완료되면 앨범
   // 그리드로 자연 전환. 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
@@ -93,7 +92,14 @@ export function EventDetailPage() {
 
   // 08. 이벤트 상세 = 앨범 그리드(검수 허브) — 분석 완료 시 여기로 자연 전환
   if (event && event.status !== 'empty' && !analysisActive) {
-    return <EventAlbumGrid event={event} groupId={groupId} onEventUpdated={eventApi.refetch} />
+    return (
+      <EventAlbumGrid
+        event={event}
+        groupId={groupId}
+        groupType={groupApi.data?.groupType}
+        onEventUpdated={eventApi.refetch}
+      />
+    )
   }
 
   return (
@@ -233,6 +239,8 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
 interface EventAlbumGridProps {
   event: EventItem
   groupId: string
+  /** 모임 유형(CHMO-612) — 도착 전(undefined)은 business로 본다(매퍼의 구계약 정규화와 같은 해석) */
+  groupType?: GroupType
   /** 이벤트명 수정 후 이벤트 상세 갱신(refetch) */
   onEventUpdated: () => void
 }
@@ -240,13 +248,18 @@ interface EventAlbumGridProps {
 /**
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
  * 분석 완료 상태의 검수 허브. ① 인물·공통 = 3열 메인 그리드(커버+검토 테두리/배지) ·
- * ② 공개해도 학부모에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션 · 범례.
+ * ② 공개해도 멤버에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션.
  * 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
  * 하단 [＋ 사진 추가]→06-U 재업로드(CHMO-606) · [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
  * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 학부모 연결 — CHMO-400 자리를 CHMO-522가
  * 넓혔다, 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
+ *
+ * **모임 유형 분기(CHMO-612)** — 일반(GENERAL) 모임엔 검수·공개 단계가 없어(ADR 020) 이 화면이
+ * 관리 도구가 아니라 구경 화면이 된다: 검토 테두리·배지, [공개 전 요약보기], publish-gate 힌트,
+ * 발행 대기 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
+ * 설정·09 진입은 유형과 무관하다(전원 동일 권한이라 막을 이유가 없다).
  */
-function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps) {
+function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbumGridProps) {
   const navigate = useNavigate()
   const albumsApi = useApi(`event-albums:${event.id}`, (signal) =>
     listEventAlbums(event.id, signal),
@@ -260,6 +273,10 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
   // 한 힌트를 지킨다. 마운트 시점에 한 번 읽는다: 같은 방문에서 album-grid 힌트가 '뜰 때'
   // 기록을 남겨도 이 값은 안 바뀌어 두 힌트가 겹치지 않고, 다음 방문부터 이쪽 차례가 된다
   const [gateHintTurn] = useState(() => hasSeenCoachHint('album-grid'))
+  // 검수·공개가 있는 유형인가(CHMO-612). 유형 미도착·조회 실패는 business로 본다 —
+  // 매퍼가 구계약 응답을 business로 정규화하는 것과 같은 해석이고(types/api.ts), 곁가지 조회
+  // 하나가 실패했다고 비즈니스 모임의 공개 동선을 잠그지 않는다
+  const business = groupType !== 'general'
 
   const base = `/groups/${groupId}/events/${event.id}`
 
@@ -314,6 +331,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                       key={album.id}
                       album={album}
                       coverUrl={album.coverThumbnailUrl ?? undefined}
+                      review={business}
                       onClick={() => navigate(`${base}/albums/${album.id}`)}
                       // 인물 앨범만 ✎ — 공통은 고정 라벨이고 연결할 아이도 없다(personId 없음)
                       onSettings={album.type === 'person' ? () => setAlbumTarget(album) : undefined}
@@ -323,13 +341,14 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                   // 화면을 처음 만나는 순간이 이 앱의 가장 낯선 지점이다: 사진을 직접 올린
                   // 사람은 분류가 끝나 여기 도착하고, 나중에 합류한 사람도 앨범이 이미 찬 이
                   // 화면을 처음 본다 — 둘 다 "여기서 뭘 해야 하지?"가 같은 자리에서 생긴다.
-                  // 첫 카드에만 붙이고, 앨범이 하나도 없으면 안 뜬다(빈 그리드엔 누를 것이 없다)
+                  // 첫 카드에만 붙이고, 앨범이 하나도 없으면 안 뜬다(빈 그리드엔 누를 것이 없다).
+                  // 문구는 유형 무관 — '아이별'은 유치원 어휘라 등산 모임에선 틀린 말이 된다(CHMO-608 아이→인물)
                   if (i !== 0) return card
                   return (
                     <div key={album.id} className="relative">
                       {card}
                       <CoachHint id="album-grid" className="left-0 top-full mt-1.5 w-max">
-                        사진이 아이별로 나뉘었어요.
+                        사진이 인물별로 나뉘었어요.
                         <br />
                         앨범을 눌러 확인해 보세요
                       </CoachHint>
@@ -343,10 +362,13 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
 
               {hiddenAlbums.length > 0 && (
                 <section className="mt-6">
-                  {/* 라벨이 문장인 이유 — 선생님은 이 앨범들을 지금 이 화면에서 보고 있어서
-                      '공개 제외' 같은 명사만으론 누구에게 안 보이는지가 빠진다 */}
+                  {/* 비즈니스 라벨이 문장인 이유 — 관리자는 이 앨범들을 지금 이 화면에서 보고
+                      있어서 '공개 제외' 같은 명사만으론 누구에게 안 보이는지가 빠진다(CHMO-523).
+                      일반 모임엔 공개 단계가 없어 그 문장이 성립하지 않는다(아무도 이 앨범을
+                      기다리지 않는다) — 남는 사실은 "AI가 인물로 못 묶은 사진"뿐이라 명사로 줄인다.
+                      '학부모'→'멤버'는 CHMO-608 워딩 중립화(관리자/멤버)와 같은 줄 */}
                   <h2 className="text-[12px] tracking-[0.06em] text-muted">
-                    공개해도 학부모에게 안 보여요
+                    {business ? '공개해도 멤버에게 안 보여요' : '분류에서 제외된 사진'}
                   </h2>
                   <div className="mt-2 grid grid-cols-3 gap-2.5">
                     {hiddenAlbums.map((album) => (
@@ -354,6 +376,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
                         key={album.id}
                         album={album}
                         coverUrl={album.coverThumbnailUrl ?? undefined}
+                        review={business}
                         onClick={() => navigate(`${base}/albums/${album.id}`)}
                       />
                     ))}
@@ -373,40 +396,50 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
 
         <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
           {/* 재공개 안내(CHMO-606 — CHMO-488 반전 복원): 공개 후 재업로드·검토를 마친 사진은
-              [공개하기]를 다시 눌러야 학부모에게 나간다(BE CHMO-324 로직 존치). 발행 대기가
+              [공개하기]를 다시 눌러야 멤버에게 나간다(BE CHMO-324 로직 존치). 발행 대기가
               있으면 14로 유도한다. 종전 warn색 대신 muted — 잘못된 상태가 아니라 다음 할 일
               안내다(안내용 빨간 글씨 금지 톤 규칙) */}
-          {event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
+          {business && event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
             <p className="text-center text-xs text-muted">
               발행 대기 {event.pendingPublishCount}장 · 공개 전 요약보기에서 공개할 수 있어요
             </p>
           )}
           {/* 재업로드 진입(CHMO-606 — CHMO-486 반전): 분류가 끝난 이벤트에 사진을 이어 올린다.
               replace — 06-U는 히스토리에 남지 않는 지나가는 화면이라(내비 관용) push로 두면
-              업로드 완료 replace가 06-U 자리를 08로 바꿔 뒤로가기가 08→08로 한 번 헛돈다 */}
+              업로드 완료 replace가 06-U 자리를 08로 바꿔 뒤로가기가 08→08로 한 번 헛돈다.
+              일반 모임에선 이게 유일한 CTA라 primary — 색이 위계를 만드는 규칙(CHMO-530)에서
+              혼자 남은 secondary는 할 일이 없는 화면처럼 읽힌다 */}
           <Button
-            variant="secondary"
+            variant={business ? 'secondary' : 'primary'}
             fullWidth
             onClick={() => navigate(`${base}/upload`, { replace: true })}
           >
             ＋ 사진 추가
           </Button>
-          <div className="relative">
-            <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
-              공개 전 요약보기
-            </Button>
-            {/* 공개 게이트 힌트(CHMO-578) — "모든 앨범 검토 완료 = 공개 조건"(CHMO-488)은 화면
-                어디에도 미리 나오지 않아 14에 가서야 잠긴 버튼으로 알게 된다. 게이트가 실행되는
-                문(공개 요약 진입 버튼) 곁에서 계정당 1회 미리 말한다. 공개된 이벤트에선 지난
-                단계 안내라 안 띄우고, 앨범 0개면 검토할 대상이 없어 안 띄운다 */}
-            {gateHintTurn && event.status !== 'published' && mainAlbums.length > 0 && (
-              <CoachHint id="publish-gate" arrow="down" className="bottom-full left-0 mb-1.5 w-max">
-                모든 앨범을 검토 완료하면
-                <br />
-                학부모에게 공개할 수 있어요
-              </CoachHint>
-            )}
-          </div>
+          {/* 공개 동선은 비즈니스 모임만(CHMO-612) — 일반 모임엔 검수·공개 단계가 없어
+              14 공개 요약도, 그 게이트를 미리 알리는 힌트도 가리킬 대상이 없다 */}
+          {business && (
+            <div className="relative">
+              <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
+                공개 전 요약보기
+              </Button>
+              {/* 공개 게이트 힌트(CHMO-578) — "모든 앨범 검토 완료 = 공개 조건"(CHMO-488)은 화면
+                  어디에도 미리 나오지 않아 14에 가서야 잠긴 버튼으로 알게 된다. 게이트가 실행되는
+                  문(공개 요약 진입 버튼) 곁에서 계정당 1회 미리 말한다. 공개된 이벤트에선 지난
+                  단계 안내라 안 띄우고, 앨범 0개면 검토할 대상이 없어 안 띄운다 */}
+              {gateHintTurn && event.status !== 'published' && mainAlbums.length > 0 && (
+                <CoachHint
+                  id="publish-gate"
+                  arrow="down"
+                  className="bottom-full left-0 mb-1.5 w-max"
+                >
+                  모든 앨범을 검토 완료하면
+                  <br />
+                  멤버에게 공개할 수 있어요
+                </CoachHint>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
@@ -425,7 +458,7 @@ function EventAlbumGrid({ event, groupId, onEventUpdated }: EventAlbumGridProps)
           open
           onClose={() => setCreateOpen(false)}
           title="앨범 만들기"
-          label="아이 이름"
+          label="인물 이름"
           placeholder="예: 김치즈"
           prefill={false}
           initialName=""
@@ -471,7 +504,7 @@ function CreateAlbumTile({ onClick }: { onClick: () => void }) {
         <IconPlus size={26} />
       </span>
       <span className="mt-2 block text-sm font-bold text-text">앨범 만들기</span>
-      <span className="mt-0.5 block text-[11px] text-muted">아이 추가</span>
+      <span className="mt-0.5 block text-[11px] text-muted">인물 추가</span>
     </button>
   )
 }

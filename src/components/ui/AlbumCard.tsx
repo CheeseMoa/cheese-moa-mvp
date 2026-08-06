@@ -24,6 +24,13 @@ interface AlbumCardProps {
    * 그 화면이 세는 수가 다르면 카드가 그걸 말해야 한다(08은 전체 장수, 14 미검토는 잔여).
    */
   metaText?: string
+  /**
+   * 검토 상태 표시 여부(CHMO-612) — false면 테두리·배지가 균일한 **중립 카드**가 된다.
+   * 일반(GENERAL) 모임은 검수·공개 단계 자체가 없어(ADR 020) 카드가 말할 상태가 없다:
+   * 검토 표시를 그대로 두면 아무도 끄지 않을 '미검토' 점선이 영영 남아 할 일처럼 읽힌다.
+   * 검토 수치(unreviewedPhotoCount)는 응답에 계속 오지만 화면이 읽지 않을 뿐이다.
+   */
+  review?: boolean
 }
 
 /**
@@ -37,13 +44,26 @@ interface AlbumCardProps {
  * 색·점선 여부만으로는 두 상태가 같아 보인다. **채움 유무**가 작은 크기에서 가장 멀리서 읽히는
  * 차이라, 다 한 것은 도장 찍히듯 면이 차고 남은 것은 빈 윤곽으로 남는다(같은 문법: 05 모임 색면 ↔
  * 이벤트 흰 카드, CHMO-515). 색은 새로 만들지 않고 기존 `surface` 토큰을 쓴다.
+ *
+ * `review={false}`(일반 모임, CHMO-612)면 위 규칙이 통째로 빠지고 균일한 중립 카드가 된다.
  */
-export function AlbumCard({ album, coverUrl, onClick, onSettings, metaText }: AlbumCardProps) {
+export function AlbumCard({
+  album,
+  coverUrl,
+  onClick,
+  onSettings,
+  metaText,
+  review = true,
+}: AlbumCardProps) {
   const reviewable = album.type === 'person' || album.type === 'common'
   // 사진 0장이면 unreviewedPhotoCount === 0이 공허하게 참 → '검토완료' 오표시. 사진이 있을 때만 완료로 본다
   const reviewed = album.photoCount > 0 && album.unreviewedPhotoCount === 0
-  const stateCls =
-    reviewed && album.type !== 'uncertain'
+  // 중립 카드의 실선 색은 05 이벤트 카드가 쓰는 중간 톤 라인(CHMO-532)을 그대로 쓴다 —
+  // 점선 #C9C2B4는 '미검토'라는 뜻이 붙어 있어 검토 없는 화면에 가져올 수 없고, border 토큰
+  // (#E6E0D4)은 흰 카드 ↔ cream 배경(명도차 1% 미만)에서 경계가 서지 않는다(같은 티켓의 실측).
+  const stateCls = !review
+    ? 'border-2 border-[#D8CFBB] bg-white'
+    : reviewed && album.type !== 'uncertain'
       ? 'border-2 border-accent bg-surface'
       : 'border-2 border-dashed border-[#C9C2B4] bg-white'
   const meta =
@@ -66,7 +86,7 @@ export function AlbumCard({ album, coverUrl, onClick, onSettings, metaText }: Al
       <span className="text-[11px] text-muted">{meta}</span>
       {/* 0장 앨범(CHMO-418 — 비어도 남는다)은 검토할 사진이 없어 배지를 숨긴다(BE reviewStatus는
           REVIEWED지만 공허한 '검토완료'도 '미검토'도 오표시 — 테두리는 점선(미완료 결) 유지) */}
-      {reviewable && album.photoCount > 0 && album.unreviewedPhotoCount !== undefined && (
+      {review && reviewable && album.photoCount > 0 && album.unreviewedPhotoCount !== undefined && (
         <Badge variant={reviewed ? 'reviewed' : 'unreviewed'} size="sm" />
       )}
     </span>

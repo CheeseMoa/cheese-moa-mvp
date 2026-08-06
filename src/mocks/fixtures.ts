@@ -3,16 +3,18 @@
  *
  * 구성:
  * - 유저 7(선생님 이현정 id 1 = 기본 로그인 계정, PIN 1234 · 학부모 시연 민준아빠 id 4, PIN 1111)
- * - 모임 3: 햇살반(이벤트 4종 상태 시연) · 달님반(빈 모임) · 별님반(미가입 → 참여 플로우용)
+ * - 모임 4: 햇살반(이벤트 4종 상태 시연) · 달님반(빈 모임) · 별님반(미가입 → 참여 플로우용) ·
+ *   주말 등산 모임(GENERAL — 유형 분기 시연, CHMO-604·612)
  * - 멤버십은 role(teacher/parent)·승인 상태(pending/active)·신청 자녀 이름을 갖는다(CHMO-444)
  * - 이벤트 4(햇살반): review / published / analyzing / empty — 상태별 화면 시연
+ *   + 이벤트 5(주말 등산 모임): review — 08이 검토 UI 없이 그려지는지 확인용(CHMO-612)
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
  * - 검토는 사진 단위(reviewed) — 이벤트 1은 앨범 1 사진만, 이벤트 2는 전 사진 검토 + 발행 완료
  *   (발행 대기 = reviewed·미발행 상태는 두지 않는다 — 재공개 경로 폐지로 도달 불가, CHMO-488)
  *
  * ID는 BE(int64)와 동일하게 숫자 — 리소스 종류별 대역으로 가독성 유지:
- * 유저·모임·이벤트·인물 1~, 앨범 1~12, 사진은 이벤트별 100 단위(101~·201~·301~).
+ * 유저·모임·이벤트·인물 1~, 앨범 1~17, 사진은 이벤트별 100 단위(101~·201~·301~·401~).
  * 신규 발급(nextId)은 1001부터라 시드와 충돌하지 않는다.
  *
  * createFixtures()는 **호출마다 모든 객체를 새로 만든다** — 재시드가 이전 세션의
@@ -153,9 +155,31 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
   // 이벤트 3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
   const poolPhotos = makePhotos(300, 3, 20, '2026-06-27T10:00:00+09:00')
 
+  // 이벤트 5 「북한산 가을 산행」 — GENERAL 모임(4)의 분류 완료 이벤트(CHMO-612 유형 분기 시연).
+  // 08이 검토 UI 없이 균일한 카드로 그려지는지, 하단 구획 라벨이 "분류에서 제외된 사진"으로
+  // 바뀌는지 보려면 특수 앨범이 섞인 완료 이벤트가 하나 있어야 한다(BUSINESS 시드로는 못 본다).
+  const hikeAlbums = [
+    album(13, 5, 'person', 5),
+    album(14, 5, 'person', 6),
+    album(15, 5, 'common'),
+    album(16, 5, 'uncertain'),
+    album(17, 5, 'eyes_closed'),
+  ]
+  const hikePhotos = makePhotos(400, 5, 18, '2026-07-19T10:00:00+09:00')
+  distribute(hikePhotos, {
+    person: hikeAlbums.slice(0, 2),
+    common: hikeAlbums[2],
+    uncertain: hikeAlbums[3],
+    eyesClosed: hikeAlbums[4],
+  })
+  assignCovers(hikeAlbums, hikePhotos)
+  // 검토 플래그는 BUSINESS와 똑같이 온다(BE 무변경) — 일부만 검토된 상태로 둬서 "값은 있지만
+  // 화면이 읽지 않는다"를 확인한다. 같은 데이터가 BUSINESS 모임이면 갈색 실선 카드가 된다
+  for (const photo of hikePhotos) if (photo.albumIds.includes(13)) photo.reviewed = true
+
   return {
-    albums: [...sportsAlbums, ...picnicAlbums],
-    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
+    albums: [...sportsAlbums, ...picnicAlbums, ...hikeAlbums],
+    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos, ...hikePhotos],
   }
 }
 
@@ -287,12 +311,26 @@ export function createFixtures(): Db {
         createdAt: '2026-07-01T09:00:00+09:00',
         publishedAt: null,
       },
+      // GENERAL 모임(4)의 이벤트 — 08 유형 분기 시연(CHMO-612). 일반 모임엔 공개 단계가 없어
+      // published로 가지 않는다(검토·공개 UI가 없으니 도달 경로 자체가 없다)
+      {
+        id: 5,
+        groupId: 4,
+        name: '북한산 가을 산행',
+        date: '2026-07-19',
+        status: 'review',
+        createdAt: '2026-07-19T09:00:00+09:00',
+        publishedAt: null,
+      },
     ],
     persons: [
       { id: 1, groupId: 1, name: '김민준' },
       { id: 2, groupId: 1, name: '이서연' },
       { id: 3, groupId: 1, name: '박하린' },
       { id: 4, groupId: 1, name: '최지우' },
+      // GENERAL 모임(4)의 인물 — 유치원이 아니라 친구·가족이라 이름도 그 결로
+      { id: 5, groupId: 4, name: '이현정' },
+      { id: 6, groupId: 4, name: '김지은' },
     ],
     albums,
     photos,
@@ -325,6 +363,14 @@ export function createFixtures(): Db {
         // 진행률 분모 = 물놀이 미분류 사진 20장(poolPhotos)과 일치해야 함(CHMO-287)
         total: 20,
         options: { excludeEyesClosed: true, excludeBlurry: true },
+      },
+      {
+        eventId: 5,
+        status: 'done',
+        startedAt: Date.now(),
+        total: 18,
+        // 흔들림 앨범은 두지 않았다 — 특수 앨범이 하나만 있어도 하단 구획은 보인다
+        options: { excludeEyesClosed: true, excludeBlurry: false },
       },
     ],
     // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다

@@ -238,6 +238,22 @@ export function ComponentGalleryPage() {
             <AlbumCard album={{ type: 'eyes_closed', name: '눈감은 사진', photoCount: 6 }} />
           </div>
           <p className="text-[11px] text-muted">테두리: 갈색 실선=검토완료 · 회색 점선=미검토</p>
+          {/* 무검토 모드(CHMO-612) — 일반 모임엔 검수 단계가 없어 카드가 말할 상태가 없다.
+              위 두 장과 검토 수치는 같지만(0 / 12) 카드는 서로 구분되지 않는다 */}
+          <div className="grid grid-cols-2 gap-3.5">
+            <AlbumCard
+              album={{ type: 'person', name: '이현정', photoCount: 16, unreviewedPhotoCount: 0 }}
+              review={false}
+              onClick={() => toast.show('🧀 앨범 카드 탭')}
+            />
+            <AlbumCard
+              album={{ type: 'person', name: '김지은', photoCount: 12, unreviewedPhotoCount: 12 }}
+              review={false}
+            />
+          </div>
+          <p className="text-[11px] text-muted">
+            review=false(일반 모임): 균일한 중립 카드 — 테두리 규칙·검토 배지 없음
+          </p>
         </Section>
 
         <Section title="07 · PhotoTile / PhotoGrid">
