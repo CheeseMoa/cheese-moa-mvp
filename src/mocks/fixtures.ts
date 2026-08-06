@@ -287,6 +287,18 @@ export function createFixtures(): Db {
         createdAt: '2026-07-01T09:00:00+09:00',
         publishedAt: null,
       },
+      // GENERAL 모임(4)의 빈 이벤트 — 05 유형 분기 목 시연용(CHMO-609): 일반 모임 카드엔
+      // NEW 배지가 없고('분류중'만 남는 규칙), 여기서 업로드를 시작하면 GENERAL이라
+      // 보호자 동의 428 게이트도 없다(CHMO-604 AC-4).
+      {
+        id: 5,
+        groupId: 4,
+        name: '북한산 둘레길',
+        date: '2026-07-19',
+        status: 'empty',
+        createdAt: '2026-07-19T09:00:00+09:00',
+        publishedAt: null,
+      },
     ],
     persons: [
       { id: 1, groupId: 1, name: '김민준' },
