@@ -252,7 +252,7 @@ interface EventAlbumGridProps {
  *
  * **모임 유형 분기(CHMO-612)** — 일반(GENERAL) 모임엔 검수·공개 단계가 없어(ADR 020) 이 화면이
  * 관리 도구가 아니라 구경 화면이 된다: 검토 테두리·배지, [공개 전 요약보기], publish-gate 힌트,
- * 발행 대기 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
+ * 재공개 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
  * 설정·09 진입은 유형과 무관하다(전원 동일 권한이라 막을 이유가 없다).
  */
 function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbumGridProps) {
@@ -286,6 +286,12 @@ function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbu
   // 범례를 공유하는 자리에 섞여 "이것도 검토해야 하나"로 읽혔다. 섹션 안 카드는 전부 점선이다.
   const mainAlbums = albums.filter((a) => a.visibleToViewer !== false)
   const hiddenAlbums = albums.filter((a) => a.visibleToViewer === false)
+  // 공개 후 들어온 미검토 사진 수(CHMO-615) — 재공개 안내의 앞 단계다. 공개는 전량 검토가
+  // 하드 게이트라(CHMO-488) 공개 시점엔 인물·공통에 미검토가 0장이었으므로, published 이벤트에
+  // 남은 미검토는 **공개 뒤에 이어 올린 사진**뿐이다. 범위를 게이트와 같은 인물·공통으로 두고
+  // (특수 앨범은 검토 UI가 없어 영영 미검토다 — CHMO-357) `unreviewedPhotoCount`가 없으면
+  // 세지 않는다(계약상 optional — 값이 없다고 미검토로 단정하지 않는 reviewFlow와 같은 태도).
+  const unreviewedPhotoCount = mainAlbums.reduce((sum, a) => sum + (a.unreviewedPhotoCount ?? 0), 0)
 
   return (
     <PhoneShell>
@@ -391,15 +397,26 @@ function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbu
         </div>
 
         <div className="flex flex-col gap-3 px-5 pb-safe-9 pt-4">
-          {/* 재공개 안내(CHMO-606 — CHMO-488 반전 복원): 공개 후 재업로드·검토를 마친 사진은
-              [공개하기]를 다시 눌러야 멤버에게 나간다(BE CHMO-324 로직 존치). 발행 대기가
-              있으면 14로 유도한다. 종전 warn색 대신 muted — 잘못된 상태가 아니라 다음 할 일
-              안내다(안내용 빨간 글씨 금지 톤 규칙) */}
-          {business && event.status === 'published' && (event.pendingPublishCount ?? 0) > 0 && (
-            <p className="text-center text-xs text-muted">
-              발행 대기 {event.pendingPublishCount}장 · 공개 전 요약보기에서 공개할 수 있어요
-            </p>
-          )}
+          {/* 재공개 안내(CHMO-606 — CHMO-488 반전 복원): 공개 후 이어 올린 사진은 두 단계를
+              거쳐야 멤버에게 나간다 — ① 검토 → ② [공개하기] 재호출(BE CHMO-324 로직 존치).
+              그래서 두 줄이다(CHMO-615): 발행 대기(pendingPublishCount)만 알리면 ①을 아직 안 한
+              구간이 통째로 침묵해, 사진을 막 올리고 돌아온 08이 "할 일 없음"처럼 보인다.
+              둘 다 있으면 순서대로 함께 뜬다 — 다른 사실이고 할 일도 다르다(검토 vs 공개).
+              warn색이 아니라 muted — 잘못된 상태가 아니라 다음 할 일 안내다(빨간 글씨 금지 톤 규칙) */}
+          {business &&
+            event.status === 'published' &&
+            (unreviewedPhotoCount > 0 || (event.pendingPublishCount ?? 0) > 0) && (
+              <div className="flex flex-col gap-1 text-center text-xs text-muted">
+                {unreviewedPhotoCount > 0 && (
+                  <p>공개 후 추가된 사진 {unreviewedPhotoCount}장 · 검토하면 공개할 수 있어요</p>
+                )}
+                {(event.pendingPublishCount ?? 0) > 0 && (
+                  <p>
+                    발행 대기 {event.pendingPublishCount}장 · 공개 전 요약보기에서 공개할 수 있어요
+                  </p>
+                )}
+              </div>
+            )}
           {/* 재업로드 진입(CHMO-606 — CHMO-486 반전): 분류가 끝난 이벤트에 사진을 이어 올린다.
               replace — 06-U는 히스토리에 남지 않는 지나가는 화면이라(내비 관용) push로 두면
               업로드 완료 replace가 06-U 자리를 08로 바꿔 뒤로가기가 08→08로 한 번 헛돈다.
