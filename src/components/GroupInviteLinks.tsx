@@ -12,14 +12,19 @@ function displayUrl(url: string): string {
 }
 
 interface RoleCopy {
-  /** 섹션 제목 — 선생님은 바로 합류, 학부모님은 신청이라 링크의 이름부터 다르다 */
+  /** 섹션 제목 — 관리자는 바로 합류, 멤버는 신청이라 링크의 이름부터 다르다 */
   linkLabel: string
   notice: string | null
   copyDone: string
   share: (password: string) => string
 }
 
-/** 역할별 문안 — 채널 데이터(joinKey·비밀번호·링크)는 API 계층이, 문구는 여기가 소유한다 */
+/**
+ * 문안 3종 — 채널 데이터(joinKey·비밀번호·링크)는 API 계층이, 문구는 여기가 소유한다.
+ * 비즈니스는 역할별 2종, 일반 모임은 역할이 없어 1종이다(CHMO-610).
+ * 유치원 어휘(선생님·학부모·자녀)는 걷어내고 관리자/멤버/인물로 중립화했다 — 같은 링크가
+ * 유치원에도 동호회에도 나가므로, 받는 사람이 자기 모임 얘기로 읽혀야 한다.
+ */
 const ROLE_COPY: Record<GroupRole, RoleCopy> = {
   editor: {
     linkLabel: '참여 링크',
@@ -30,15 +35,26 @@ const ROLE_COPY: Record<GroupRole, RoleCopy> = {
   },
   viewer: {
     linkLabel: '신청 링크',
-    notice:
-      '학부모님은 참여 신청 후 선생님 승인이 필요해요 · 승인된 자녀와 공통 사진만 볼 수 있어요',
+    notice: '멤버는 참여 신청 후 관리자 승인이 필요해요 · 연결된 인물과 공통 사진만 볼 수 있어요',
     copyDone: '🧀 신청 링크를 복사했어요',
-    // 이 문안이 곧 학부모 온보딩이다(CHMO-565) — 키즈노트·하이클래스류 도메인 관행처럼 사용법은
-    // 앱이 아니라 선생님(초대 메시지)이 전한다. 앞으로 일어날 일 세 가지를 순서로 말하고,
+    // 이 문안이 곧 멤버 온보딩이다(CHMO-565) — 키즈노트·하이클래스류 도메인 관행처럼 사용법은
+    // 앱이 아니라 관리자(초대 메시지)가 전한다. 앞으로 일어날 일 세 가지를 순서로 말하고,
     // 카톡에서 잘리지 않게 안내는 3줄을 넘기지 않는다
     share: (password) =>
-      `🧀 치즈모아에서 아이 사진을 만나보세요!\n1. 아래 링크로 참여 신청\n2. 선생님 승인 후 참여 완료\n3. 공개되면 우리 아이 사진만 보여드려요\n비밀번호: ${password}`,
+      `🧀 치즈모아에서 사진을 만나보세요!\n1. 아래 링크로 참여 신청\n2. 관리자 승인 후 참여 완료\n3. 공개되면 연결된 인물의 사진을 볼 수 있어요\n비밀번호: ${password}`,
   },
+}
+
+/**
+ * 일반 모임 — 승인도 역할도 없어 링크가 하나뿐이다. 안내 한 줄이 그 사실을 말한다
+ * (기다릴 일이 없다는 게 초대하는 쪽이 알아야 할 유일한 차이다).
+ */
+const GENERAL_COPY: RoleCopy = {
+  linkLabel: '초대 링크',
+  notice: '링크와 비밀번호가 함께 전달돼요. 받은 사람은 바로 멤버가 돼요.',
+  copyDone: '🧀 초대 링크를 복사했어요',
+  share: (password) =>
+    `🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${password}`,
 }
 
 interface ChannelContentProps {
@@ -115,12 +131,13 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
 
 interface GroupInviteLinksProps {
   groupId: string
-  /** 지금 보고 있는 탭 — 이 역할의 채널을 보여준다 */
+  /** 지금 보고 있는 탭 — 이 역할의 채널을 보여준다(일반 모임은 탭이 없어 무시된다) */
   role: GroupRole
   /**
    * 링크 마커(유형·모임명·멤버 수) 원천 — joinKey→모임 정보 조회 API가 없어 합류 화면이
    * 보여줄 정보를 링크에 동봉한다(CHMO-607, lib/joinLink). 도착 전·조회 실패면 마커 없는
    * 링크로 열화된다(합류 자체는 그대로 동작 — 마커 없는 링크는 신청 모달 폴백).
+   * **유형 분기의 원천이기도 하다**(CHMO-610) — general이면 채널·문구가 1종으로 수렴한다.
    */
   group?: Group
   /** 이벤트 수 — 상세 응답에 없어(CHMO-192) 호출부가 이벤트 목록 길이로 파생해 준다 */
@@ -129,9 +146,13 @@ interface GroupInviteLinksProps {
 
 /**
  * 20 초대 화면의 '부르기' 섹션 · GET /groups/:id/invite (CHMO-520).
- * CHMO-446의 통합 초대 시트(05-2) 본문을 그대로 이관한 것이다 — 시트와 20이 선생님/학부모님
- * 세그먼트 탭을 각자 한 벌씩 갖고 있던 중복을 없애면서, 탭 하나가 그 역할의 부르기(이 섹션)·
+ * CHMO-446의 통합 초대 시트(05-2) 본문을 그대로 이관한 것이다 — 시트와 20이 역할 세그먼트
+ * 탭을 각자 한 벌씩 갖고 있던 중복을 없애면서, 탭 하나가 그 역할의 부르기(이 섹션)·
  * 기다림(대기 신청)·들어온 사람(명단)을 통째로 바꾸게 됐다.
+ *
+ * **일반 모임은 채널이 하나다**(CHMO-610): 역할이 없어 탭도 없고, 합류가 즉시라 '신청 링크'라는
+ * 것 자체가 없다. 채널은 관리자(editor)와 같은 것을 쓰되 문구만 갈린다 — 초대 응답 채널 키
+ * teacher/parent는 BE 내부 식별자라 유형과 무관하게 그대로다(ADR 021).
  *
  * 조회 키에 role을 넣지 않는다 — 두 역할이 한 응답에 함께 오므로 탭을 바꿔도 재조회가 없다.
  * 섹션 제목까지 이 컴포넌트가 소유한다 — 채널이 없을 때 제목만 남아 빈 섹션이 되지 않게.
@@ -140,9 +161,14 @@ export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInvi
   const { data, error, refetch } = useApi(`invite:${groupId}`, (signal) =>
     getInviteInfo(groupId, signal),
   )
+  // 일반 모임엔 역할이 없다 — 채널·문구·링크 마커를 전부 관리자(editor) 기준으로 수렴시킨다.
+  // 호출부의 탭 상태(기본 viewer)가 그대로 새면 죽은 학부모 키 링크가 만들어진다(GENERAL의
+  // viewer 합류는 SPACE404 — BE CHMO-599 AC-6). 유형 미상은 business로 본다(매퍼와 같은 해석).
+  const general = group?.groupType === 'general'
+  const effectiveRole: GroupRole = general ? 'editor' : role
   // 초대 응답 채널 키는 teacher/parent 그대로다(BE 내부 식별자 유지 — ADR 021)
-  const channel = role === 'viewer' ? data?.parent : data?.teacher
-  const copy = ROLE_COPY[role]
+  const channel = effectiveRole === 'viewer' ? data?.parent : data?.teacher
+  const copy = general ? GENERAL_COPY : ROLE_COPY[effectiveRole]
 
   // 링크를 못 불러와도 대기 신청·명단은 가리지 않는다 — 이 화면의 나머지 일은 그대로 할 수 있다
   if (error)
@@ -162,15 +188,12 @@ export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInvi
   // 같은 탭에 신청·명단이 살아 있어서 탭을 없애면 승인·연결을 할 수 없다)
   if (!channel) return null
 
-  // 일반(GENERAL) 모임의 viewer 키는 합류가 막혀 있다(SPACE404 — BE CHMO-599 AC-6) — 죽은
-  // 링크를 만들어 주지 않는다. 20 화면의 일반 모임 라이트 개편(역할 탭 제거)은 후속 티켓 몫
-  if (role === 'viewer' && group?.groupType === 'general') return null
-
   // 합류 화면(02-1·02-2)이 보여줄 정보를 링크에 동봉 — 값은 공유 시점 스냅샷(CHMO-607).
-  // 카운트는 일반 모임 02-1만 소비하지만 계약상 유형 무관 동봉한다(마커는 있으면 그리는 값)
+  // 카운트는 일반 모임 02-1만 소비하지만 계약상 유형 무관 동봉한다(마커는 있으면 그리는 값).
+  // role은 effectiveRole이다 — 일반 모임에서 죽은 viewer 마커가 실리지 않게(CHMO-610).
   const joinUrl = buildJoinUrl(window.location.origin, channel.joinKey, {
     groupType: group?.groupType,
-    role,
+    role: effectiveRole,
     groupName: group?.name,
     memberCount: group?.memberCount,
     eventCount,

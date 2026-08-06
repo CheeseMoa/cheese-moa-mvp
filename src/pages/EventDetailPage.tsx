@@ -72,8 +72,9 @@ export function EventDetailPage() {
   }, [kick])
   // 모임 조회는 상태와 무관하게 항상 보낸다(CHMO-612) — 종전엔 뒤로가기 '‹ 모임명'이 필요한
   // 빈/분석중 분기에서만 불렀지만, 08 그리드가 **모임 유형**으로 검토·공개 UI를 가르게 되면서
-  // 그리드에도 이 응답이 필요해졌다. 이벤트 조회와 나란히(마운트 시점) 나가므로 앨범 목록보다
-  // 먼저 도착한다 — 카드가 그려질 땐 유형이 정해져 있다.
+  // 그리드에도 이 응답이 필요해졌다(앨범 설정 시트의 멤버 연결 섹션도 같은 값을 본다 — CHMO-610).
+  // 이벤트 조회와 나란히(마운트 시점) 나가므로 앨범 목록보다 먼저 도착한다 — 카드가 그려질 땐
+  // 유형이 정해져 있다.
   const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
 
   // 분석중 자동 폴링 — 2초마다 진행률·상태를 다시 확인하고(BE 요청 주기), 완료되면 앨범
@@ -139,9 +140,7 @@ export function EventDetailPage() {
               <>
                 {/* 분석중 — 2초 자동 폴링(위 effect). 진행률 따라 쥐가 치즈로 다가가고, 완료되면 앨범 그리드로 자연 전환 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-6 py-14 text-center">
-                  <p className="text-[19px] text-heading">
-                    AI가 사진을 분류하고 있어요
-                  </p>
+                  <p className="text-[19px] text-heading">AI가 사진을 분류하고 있어요</p>
                   <ChaseProgress progress={event.progress ?? null} />
                   <p className="mt-4 text-[13px] leading-relaxed text-muted">
                     완료되면 아이별 앨범이 자동으로 열려요.
@@ -217,10 +216,7 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
         </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${percent ?? 0}%` }}
-        />
+        <div className="h-full rounded-full bg-primary" style={{ width: `${percent ?? 0}%` }} />
       </div>
       {progress ? (
         <p className="mt-3 text-sm font-bold text-heading">
@@ -239,7 +235,7 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
 interface EventAlbumGridProps {
   event: EventItem
   groupId: string
-  /** 모임 유형(CHMO-612) — 도착 전(undefined)은 business로 본다(매퍼의 구계약 정규화와 같은 해석) */
+  /** 모임 유형(CHMO-612 · 앨범 설정 시트의 멤버 연결 섹션도 소비 — CHMO-610) — 도착 전(undefined)은 business로 본다(매퍼의 구계약 정규화와 같은 해석) */
   groupType?: GroupType
   /** 이벤트명 수정 후 이벤트 상세 갱신(refetch) */
   onEventUpdated: () => void
@@ -251,7 +247,7 @@ interface EventAlbumGridProps {
  * ② 공개해도 멤버에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션.
  * 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
  * 하단 [＋ 사진 추가]→06-U 재업로드(CHMO-606) · [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
- * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 학부모 연결 — CHMO-400 자리를 CHMO-522가
+ * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 멤버 연결 — CHMO-400 자리를 CHMO-522가
  * 넓혔다, 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
  *
  * **모임 유형 분기(CHMO-612)** — 일반(GENERAL) 모임엔 검수·공개 단계가 없어(ADR 020) 이 화면이
@@ -472,7 +468,7 @@ function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbu
         />
       )}
 
-      {/* 앨범 설정(이름 수정 + 학부모 연결) — 09 헤더 [✎ 앨범 설정]과 같은 시트·같은 API.
+      {/* 앨범 설정(이름 수정 + 멤버 연결) — 09 헤더 [✎ 앨범 설정]과 같은 시트·같은 API.
           이 화면은 앨범 목록만 refetch — 다른 이벤트의 같은 인물 앨범은 다음 진입 시 갱신된 이름으로
           조회된다(이름·연결 모두 모임 단위 personId라 전 이벤트에 걸쳐 적용).
           삭제는 주지 않는다 — 카드 이름 줄 탭에서 앨범이 사라지는 동작까지 열지 않는다(09에만) */}
@@ -480,6 +476,7 @@ function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbu
         <AlbumSettingsSheet
           groupId={groupId}
           album={albumTarget}
+          groupType={groupType}
           onClose={() => setAlbumTarget(null)}
           onUpdated={albumsApi.refetch}
         />
