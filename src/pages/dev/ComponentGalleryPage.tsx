@@ -16,9 +16,11 @@ import {
   EventStatusBadge,
   GroupCard,
   Header,
+  IconBuilding,
   IconClose,
   IconDownload,
   IconFolderMove,
+  IconPeople,
   IconShare,
   IconTrash,
   InlineRetry,
@@ -111,6 +113,16 @@ export function ComponentGalleryPage() {
               <IconClose />
             </span>
             <span className="text-xs text-muted">저장 · 공유 · 옮기기 · 삭제 · 닫기 (currentColor)</span>
+          </div>
+          {/* 03 유형 선택 카드 타일 — 실제 렌더 크기(26)와 타일 색까지 같이 본다 */}
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface text-heading">
+              <IconPeople size={26} />
+            </span>
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/25 text-heading">
+              <IconBuilding size={26} />
+            </span>
+            <span className="text-xs text-muted">03 유형 선택 — 일반(사람 둘) · 비즈니스(건물)</span>
           </div>
           <div className="flex gap-2.5">
             <Button variant="warn" className="flex-1 gap-1.5 !px-2">
