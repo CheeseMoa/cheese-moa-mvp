@@ -27,7 +27,7 @@ export function ParentGroupPage() {
   const events = eventsApi.data ?? []
 
   // role 분기 안전망 — 홈 카드가 분기하지만 딥링크·새로고침으로 직접 와도 제자리로 보낸다
-  if (group && (!membership || membership.role === 'teacher'))
+  if (group && (!membership || membership.role === 'editor'))
     return <Navigate to={`/groups/${groupId}`} replace />
   if (membership?.status === 'pending') return <Navigate to="/home" replace />
 

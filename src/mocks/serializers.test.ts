@@ -104,19 +104,30 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
 
   it('모임 — 목록엔 eventCount, 상세엔 없다 (선생님 시점)', () => {
     const group = findGroup(1)!
-    const teacher = membershipOf(1, 1)! // 이현정 — 햇살반 ACTIVE TEACHER
+    const teacher = membershipOf(1, 1)! // 이현정 — 햇살반 ACTIVE EDITOR
     expect(toGroup(toGroupSummary(group, teacher))).toMatchObject({
       id: 1,
       name: '햇살반',
+      // 유형은 전 모임 응답에 항상 실린다(BE CHMO-599 AC-8) — 시드 1~3은 business
+      groupType: 'business',
       // ACTIVE 멤버만(선생님 3 + 학부모 3) — 대기 신청(치즈냥이88)은 세지 않는다
       memberCount: 6,
       eventCount: 4,
-      myMembership: { role: 'teacher', status: 'active', claimedChildNames: [] },
+      myMembership: { role: 'editor', status: 'active', claimedChildNames: [] },
     })
     const detail = toGroup(toGroupDetail(group, teacher))
     expect(detail.eventCount).toBeUndefined()
-    // 카운트 분리(§7-3) — 상세는 teacherCount/parentCount를 준다(memberCount는 과도기 병행)
-    expect(detail).toMatchObject({ teacherCount: 3, parentCount: 3, memberCount: 6 })
+    // 카운트 분리(§7-3) — 상세는 editorCount/viewerCount를 준다(CHMO-605 개명 · memberCount는 과도기 병행)
+    expect(detail).toMatchObject({ editorCount: 3, viewerCount: 3, memberCount: 6 })
+  })
+
+  it('GENERAL 모임 — groupType이 직렬화·매퍼를 지나 general로 도착한다 (CHMO-604)', () => {
+    const group = findGroup(4)! // 주말 등산 모임 — GENERAL 시드
+    const editor = membershipOf(1, 4)! // 전원 editor(ADR 020)
+    const mapped = toGroup(toGroupSummary(group, editor))
+    expect(mapped.groupType).toBe('general')
+    // GENERAL엔 학부모가 없다 — viewerCount는 항상 0(ADR 020, FE는 editorCount를 멤버 수로 쓴다)
+    expect(toGroup(toGroupDetail(group, editor))).toMatchObject({ editorCount: 2, viewerCount: 0 })
   })
 
   it('모임 — PARENT·PENDING 응답엔 멤버 정보가 없다 (§7-3 미노출)', () => {
@@ -126,7 +137,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // linkedChildNames는 §4 매핑 파생(CHMO-448) — 민준아빠는 인물 1(김민준)에 연결돼 있다
     const parent = toGroup(toGroupSummary(group, membershipOf(4, 1)!))
     expect(parent.myMembership).toEqual({
-      role: 'parent',
+      role: 'viewer',
       status: 'active',
       claimedChildNames: ['김민준'],
       linkedChildNames: ['김민준'],
@@ -136,7 +147,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // 상세도 멤버 관련 필드 전부 생략
     const parentDetail = toGroup(toGroupDetail(group, membershipOf(4, 1)!))
     expect(parentDetail.memberCount).toBeUndefined()
-    expect(parentDetail.teacherCount).toBeUndefined()
+    expect(parentDetail.editorCount).toBeUndefined()
 
     // 미연결(지호네) — 아이 등장 이벤트만 세므로(CHMO-448 노출 강화) published가 있어도 0
     const unlinked = toGroup(toGroupSummary(group, membershipOf(6, 1)!))
@@ -145,7 +156,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // PENDING(치즈냥이88) — 신청 원문만 실린다(홈 비활성 카드 §7-2). 승인 전엔 매핑이 없어 연결도 빈 배열
     const pending = toGroup(toGroupSummary(group, membershipOf(7, 1)!))
     expect(pending.myMembership).toEqual({
-      role: 'parent',
+      role: 'viewer',
       status: 'pending',
       claimedChildNames: ['김민준'],
       linkedChildNames: [],
@@ -160,7 +171,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const pendingTeacher = { ...membershipOf(1, 1)!, status: 'pending' as const }
     const pendingTeacherSummary = toGroup(toGroupSummary(group, pendingTeacher))
     expect(pendingTeacherSummary.myMembership).toEqual({
-      role: 'teacher',
+      role: 'editor',
       status: 'pending',
       claimedChildNames: [],
       linkedChildNames: [],
@@ -168,10 +179,10 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(pendingTeacherSummary.memberCount).toBeUndefined()
     expect(pendingTeacherSummary.eventCount).toBe(0)
 
-    // 승인 전(PENDING)이면 role이 teacher여도 상세 카운트를 주지 않는다 — 목록과 게이트 동일
+    // 승인 전(PENDING)이면 role이 editor여도 상세 카운트를 주지 않는다 — 목록과 게이트 동일
     const pendingTeacherDetail = toGroupDetail(group, pendingTeacher)
     expect('memberCount' in pendingTeacherDetail).toBe(false)
-    expect('teacherCount' in pendingTeacherDetail).toBe(false)
+    expect('editorCount' in pendingTeacherDetail).toBe(false)
   })
 
   it('학부모 이벤트 목록 — 카운트·커버가 노출 사진 기준이다 (미발행 누출 방지, Q4)', () => {
@@ -197,7 +208,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toJoinGroupResult(toJoinGroupResponse(group, request))).toEqual({
       groupId: 1,
       groupName: '햇살반',
-      role: 'parent',
+      role: 'viewer',
       status: 'pending',
     })
 
@@ -206,7 +217,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       id: 9,
       userId: 7,
       nickname: '치즈냥이88',
-      role: 'parent',
+      role: 'viewer',
       childNames: ['김민준'],
       createdAt: '2026-07-25T09:10:00+09:00',
     })
@@ -225,7 +236,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(linked).toEqual({
       userId: 4,
       nickname: '민준아빠',
-      role: 'parent',
+      role: 'viewer',
       childNames: ['김민준'],
       mappings: [{ personId: 1, personName: '김민준' }],
     })
@@ -242,7 +253,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(teacher).toEqual({
       userId: 1,
       nickname: '이현정',
-      role: 'teacher',
+      role: 'editor',
       childNames: [],
       mappings: [],
     })
@@ -747,9 +758,9 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
     expect(detail.memberCount).toBe(6)
     // ACTIVE 6 + 대기 신청 2(치즈냥이88 학부모·신입쌤 선생님) — 운영자는 신청도 봐야 한다
     expect(detail.members).toHaveLength(8)
-    expect(detail.members[0]).toMatchObject({ nickname: '이현정', role: 'TEACHER', status: 'ACTIVE' })
+    expect(detail.members[0]).toMatchObject({ nickname: '이현정', role: 'EDITOR', status: 'ACTIVE' })
     expect(detail.members[6]).toMatchObject({ nickname: '치즈냥이88', status: 'PENDING' })
-    expect(detail.members[7]).toMatchObject({ nickname: '신입쌤', role: 'TEACHER', status: 'PENDING' })
+    expect(detail.members[7]).toMatchObject({ nickname: '신입쌤', role: 'EDITOR', status: 'PENDING' })
 
     expect(detail.events.map((e) => e.eventId)).toEqual([4, 3, 2, 1])
     expect(detail.events[0]).toMatchObject({ name: '가을 발표회 준비', status: 'EMPTY', photoCount: 0 })

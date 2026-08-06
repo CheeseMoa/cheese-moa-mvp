@@ -20,14 +20,14 @@ interface RoleCopy {
 
 /** 역할별 문안 — 채널 데이터(joinKey·비밀번호·링크)는 API 계층이, 문구는 여기가 소유한다 */
 const ROLE_COPY: Record<GroupRole, RoleCopy> = {
-  teacher: {
+  editor: {
     linkLabel: '참여 링크',
     notice: null,
     copyDone: '🧀 참여 링크를 복사했어요',
     share: (password) =>
       `🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${password}`,
   },
-  parent: {
+  viewer: {
     linkLabel: '신청 링크',
     notice:
       '학부모님은 참여 신청 후 선생님 승인이 필요해요 · 승인된 자녀와 공통 사진만 볼 수 있어요',
@@ -129,7 +129,8 @@ export function GroupInviteLinks({ groupId, role }: GroupInviteLinksProps) {
   const { data, error, refetch } = useApi(`invite:${groupId}`, (signal) =>
     getInviteInfo(groupId, signal),
   )
-  const channel = role === 'parent' ? data?.parent : data?.teacher
+  // 초대 응답 채널 키는 teacher/parent 그대로다(BE 내부 식별자 유지 — ADR 021)
+  const channel = role === 'viewer' ? data?.parent : data?.teacher
   const copy = ROLE_COPY[role]
 
   // 링크를 못 불러와도 대기 신청·명단은 가리지 않는다 — 이 화면의 나머지 일은 그대로 할 수 있다

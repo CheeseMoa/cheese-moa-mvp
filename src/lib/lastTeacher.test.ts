@@ -17,23 +17,23 @@ const member = (userId: number, role: GroupRole): GroupMember => ({
  */
 describe('isLastActiveTeacher', () => {
   it('선생님이 나 혼자면 마지막 선생님이다 — 학부모 수는 무관', () => {
-    expect(isLastActiveTeacher([member(1, 'teacher')], 1)).toBe(true)
+    expect(isLastActiveTeacher([member(1, 'editor')], 1)).toBe(true)
     expect(
-      isLastActiveTeacher([member(1, 'teacher'), member(2, 'parent'), member(3, 'parent')], 1),
+      isLastActiveTeacher([member(1, 'editor'), member(2, 'viewer'), member(3, 'viewer')], 1),
     ).toBe(true)
   })
 
   it('다른 선생님이 남으면 내 나가기는 모임을 지우지 않는다', () => {
-    expect(isLastActiveTeacher([member(1, 'teacher'), member(2, 'teacher')], 1)).toBe(false)
+    expect(isLastActiveTeacher([member(1, 'editor'), member(2, 'editor')], 1)).toBe(false)
   })
 
   it('유일한 선생님이 내가 아니면 false — 내가 학부모로 있는 모임', () => {
-    expect(isLastActiveTeacher([member(1, 'teacher'), member(2, 'parent')], 2)).toBe(false)
+    expect(isLastActiveTeacher([member(1, 'editor'), member(2, 'viewer')], 2)).toBe(false)
   })
 
   it('선생님 0명·빈 목록·내가 목록에 없음은 전부 false — 목록은 ACTIVE 전용이라 내가 ACTIVE 선생님이면 반드시 목록에 있다', () => {
     expect(isLastActiveTeacher([], 1)).toBe(false)
-    expect(isLastActiveTeacher([member(2, 'parent')], 1)).toBe(false)
-    expect(isLastActiveTeacher([member(2, 'teacher')], 1)).toBe(false)
+    expect(isLastActiveTeacher([member(2, 'viewer')], 1)).toBe(false)
+    expect(isLastActiveTeacher([member(2, 'editor')], 1)).toBe(false)
   })
 })

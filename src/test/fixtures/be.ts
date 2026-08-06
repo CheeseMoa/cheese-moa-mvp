@@ -544,7 +544,8 @@ export const BE_ADMIN_PAGE_INFO = {
   totalPages: 1,
 }
 
-/** GET /admin/groups/:groupId — AdminGroupDetailResponse(멤버 PENDING 포함·publishedAt null 가능) */
+/** GET /admin/groups/:groupId — AdminGroupDetailResponse(멤버 PENDING 포함·publishedAt null 가능).
+ * 멤버 role은 CHMO-605 리네이밍 값(EDITOR/VIEWER — BE 스펙 대조, 실서버 채집 후 교체) */
 export const BE_ADMIN_GROUP_DETAIL = {
   groupId: 45,
   name: '치즈유치원',
@@ -556,14 +557,14 @@ export const BE_ADMIN_GROUP_DETAIL = {
     {
       userId: 3,
       nickname: '김선생',
-      role: 'TEACHER',
+      role: 'EDITOR',
       status: 'ACTIVE',
       joinedAt: '2026-08-01T10:00:00',
     },
     {
       userId: 9,
       nickname: '민준아빠',
-      role: 'PARENT',
+      role: 'VIEWER',
       status: 'PENDING',
       joinedAt: '2026-08-02T09:30:00',
     },
