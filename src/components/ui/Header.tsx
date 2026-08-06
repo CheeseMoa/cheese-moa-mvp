@@ -6,6 +6,8 @@ import { Cheddar } from './Cheddar'
 interface HeaderProps {
   /** 현재 화면 타이틀. 홈형에서 생략하면 워드마크 '치즈모아' */
   title?: string
+  /** 타이틀 곁 배지 슬롯(서브형 전용 — 05 '비즈니스' 배지, CHMO-609). 이름이 길면 배지가 아니라 이름이 줄어든다 */
+  titleBadge?: ReactNode
   /** 뒤로가기 목적지 — 지정하면 서브형(‹ 라벨 + 중앙 타이틀), 없으면 홈형(체다 로고) */
   backTo?: string
   /** 뒤로가기 라벨(상위 화면명, 예: '이벤트 상세') */
@@ -22,7 +24,7 @@ interface HeaderProps {
  * 화면 상단 헤더 (dc.html §01).
  * 홈형 = 체다 로고 + 워드마크 + 우측 슬롯 · 서브형 = 뒤로가기(accent) + 중앙 타이틀 + 우측 슬롯.
  */
-export function Header({ title, backTo, backLabel, backDisabled, onBack, right }: HeaderProps) {
+export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onBack, right }: HeaderProps) {
   if (backTo || onBack) {
     const backClass = cx(
       'justify-self-start truncate text-[15px] font-medium',
@@ -47,7 +49,10 @@ export function Header({ title, backTo, backLabel, backDisabled, onBack, right }
             ‹ {backLabel ?? '뒤로'}
           </button>
         )}
-        <h1 className="truncate text-[17px] font-bold text-text">{title}</h1>
+        <h1 className="flex min-w-0 items-center justify-center gap-1.5 text-[17px] font-bold text-text">
+          <span className="min-w-0 truncate">{title}</span>
+          {titleBadge}
+        </h1>
         <div className="justify-self-end">{right}</div>
       </header>
     )

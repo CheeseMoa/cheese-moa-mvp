@@ -7,7 +7,8 @@
  *   주말 등산 모임(GENERAL — 유형 분기 시연, CHMO-604·612)
  * - 멤버십은 role(teacher/parent)·승인 상태(pending/active)·신청 자녀 이름을 갖는다(CHMO-444)
  * - 이벤트 4(햇살반): review / published / analyzing / empty — 상태별 화면 시연
- *   + 이벤트 5(주말 등산 모임): review — 08이 검토 UI 없이 그려지는지 확인용(CHMO-612)
+ *   + 주말 등산 모임(GENERAL): 이벤트 5 empty(05 카드·업로드 게이트 확인, CHMO-609) ·
+ *     이벤트 6 review(08이 검토 UI 없이 그려지는지 확인, CHMO-612)
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
  * - 검토는 사진 단위(reviewed) — 이벤트 1은 앨범 1 사진만, 이벤트 2는 전 사진 검토 + 발행 완료
@@ -155,17 +156,18 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
   // 이벤트 3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
   const poolPhotos = makePhotos(300, 3, 20, '2026-06-27T10:00:00+09:00')
 
-  // 이벤트 5 「북한산 가을 산행」 — GENERAL 모임(4)의 분류 완료 이벤트(CHMO-612 유형 분기 시연).
+  // 이벤트 6 「북한산 가을 산행」 — GENERAL 모임(4)의 분류 완료 이벤트(CHMO-612 유형 분기 시연).
   // 08이 검토 UI 없이 균일한 카드로 그려지는지, 하단 구획 라벨이 "분류에서 제외된 사진"으로
   // 바뀌는지 보려면 특수 앨범이 섞인 완료 이벤트가 하나 있어야 한다(BUSINESS 시드로는 못 본다).
+  // 같은 모임의 이벤트 5는 빈 이벤트라(CHMO-609) 08에 도달하지 못한다.
   const hikeAlbums = [
-    album(13, 5, 'person', 5),
-    album(14, 5, 'person', 6),
-    album(15, 5, 'common'),
-    album(16, 5, 'uncertain'),
-    album(17, 5, 'eyes_closed'),
+    album(13, 6, 'person', 5),
+    album(14, 6, 'person', 6),
+    album(15, 6, 'common'),
+    album(16, 6, 'uncertain'),
+    album(17, 6, 'eyes_closed'),
   ]
-  const hikePhotos = makePhotos(400, 5, 18, '2026-07-19T10:00:00+09:00')
+  const hikePhotos = makePhotos(400, 6, 18, '2026-06-21T10:00:00+09:00')
   distribute(hikePhotos, {
     person: hikeAlbums.slice(0, 2),
     common: hikeAlbums[2],
@@ -311,15 +313,28 @@ export function createFixtures(): Db {
         createdAt: '2026-07-01T09:00:00+09:00',
         publishedAt: null,
       },
-      // GENERAL 모임(4)의 이벤트 — 08 유형 분기 시연(CHMO-612). 일반 모임엔 공개 단계가 없어
-      // published로 가지 않는다(검토·공개 UI가 없으니 도달 경로 자체가 없다)
+      // GENERAL 모임(4)의 빈 이벤트 — 05 유형 분기 목 시연용(CHMO-609): 일반 모임 카드엔
+      // NEW 배지가 없고('분류중'만 남는 규칙), 여기서 업로드를 시작하면 GENERAL이라
+      // 보호자 동의 428 게이트도 없다(CHMO-604 AC-4).
       {
         id: 5,
         groupId: 4,
-        name: '북한산 가을 산행',
+        name: '북한산 둘레길',
         date: '2026-07-19',
-        status: 'review',
+        status: 'empty',
         createdAt: '2026-07-19T09:00:00+09:00',
+        publishedAt: null,
+      },
+      // GENERAL 모임(4)의 분류 완료 이벤트 — 08 유형 분기 시연(CHMO-612). 빈 이벤트(5)와
+      // 나란히 둔다: 05는 빈 카드를, 08은 이 이벤트를 봐야 한다. 일반 모임엔 공개 단계가
+      // 없어 published로 가지 않는다(검토·공개 UI가 없으니 도달 경로 자체가 없다)
+      {
+        id: 6,
+        groupId: 4,
+        name: '북한산 가을 산행',
+        date: '2026-06-21',
+        status: 'review',
+        createdAt: '2026-06-21T09:00:00+09:00',
         publishedAt: null,
       },
     ],
@@ -365,7 +380,7 @@ export function createFixtures(): Db {
         options: { excludeEyesClosed: true, excludeBlurry: true },
       },
       {
-        eventId: 5,
+        eventId: 6,
         status: 'done',
         startedAt: Date.now(),
         total: 18,
