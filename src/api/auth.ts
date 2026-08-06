@@ -7,6 +7,7 @@
 import { apiFetch } from './client'
 import { toUser, type RawUser } from './mappers'
 import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
+import { isMockSocialRegistered } from '../lib/mockSocial'
 import type { AuthResponse, User } from '../types/api'
 
 export interface Credentials {
@@ -36,10 +37,13 @@ export type SocialProvider = 'kakao' | 'google' | 'naver' | 'apple'
  * 건너뛰고 콜백 라우트로 직행한다 — exchange 계약은 목 핸들러가 검증한다.
  * 목 코드에 매번 다른 꼬리를 붙이는 이유: 실 BE의 코드는 1회 소진이라 목도 그렇게 흉내 내는데,
  * 고정 문자열이면 두 번째 로그인이 "재사용"으로 막힌다.
+ * `signup=true`(가입 유예 — CHMO-602): 실 BE는 미가입 소셜 신원이면 계정을 만들지 않고 이
+ * 마커를 실어 보낸다. 목은 그 프로바이더의 목 계정 존재 여부(persist 보존소)로 같은 판정을 한다.
  */
 export function socialLoginStartUrl(provider: SocialProvider): string {
   if (import.meta.env.VITE_ENABLE_MSW === 'true') {
-    return `/auth/callback?code=mock-social-${provider}-${crypto.randomUUID()}`
+    const signup = isMockSocialRegistered(provider) ? '' : '&signup=true'
+    return `/auth/callback?code=mock-social-${provider}-${crypto.randomUUID()}${signup}`
   }
   const origin = import.meta.env.VITE_API_ORIGIN ?? 'https://api.cheese-moa.com'
   return `${origin}/auth/social/${provider}`
@@ -73,6 +77,32 @@ export async function exchangeSocialCode(code: string): Promise<AuthResponse> {
     method: 'POST',
     auth: 'none',
     body: { code },
+  })
+  return toAuthResponse(raw)
+}
+
+/**
+ * POST /auth/social/exchange — 신규 가입(콜백 `signup=true`, CHMO-602 · BE CHMO-598의 소셜판).
+ * 콜백에서 계정이 생성되지 않고 이 호출이 곧 가입이라, 가입과 필수 동의 기록이 한 트랜잭션이
+ * 되도록 `agreements`를 동봉한다 — signup()과 같은 이유·같은 원천(가입 전이라 토큰이 없어
+ * 서버 카탈로그를 못 읽으므로 버전은 FE 문구, CHMO-517)이고 MARKETING도 같은 결정으로 싣지
+ * 않는다(정본 §1.1 — 화면에 그리지 않는 항목의 거부 기록을 만들지 않는다).
+ * 호출 전 동의 수집(01-C 인라인 동의 폼)이 먼저다 — 필수 미동의·버전 불일치는 VALID400이고
+ * 이때 코드는 소비되지 않아 같은 화면에서 재시도할 수 있다. 가입 대기 코드의 TTL은 10분 —
+ * 만료·재사용은 OAUTH401이라 재로그인부터다.
+ */
+export async function exchangeSocialSignup(code: string): Promise<AuthResponse> {
+  const raw = await apiFetch<RawAuthResponse>('/auth/social/exchange', {
+    method: 'POST',
+    auth: 'none',
+    body: {
+      code,
+      agreements: SIGNUP_AGREEMENT_ITEMS.map((item) => ({
+        type: item.type.toUpperCase(),
+        version: item.version,
+        agreed: true,
+      })),
+    },
   })
   return toAuthResponse(raw)
 }

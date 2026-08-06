@@ -8,8 +8,9 @@
  * - localStorage 불가 환경(프라이빗 모드, Node 테스트)에서는 조용히 세션 한정으로 동작.
  */
 import { db, syncIdCounter, type DbUser } from './db'
-
-const USERS_KEY = 'cheesemoa.mock.users'
+// 키가 lib에 있는 이유: 소셜 가입 유예 분기(api/auth.ts socialLoginStartUrl)가 "이 프로바이더의
+// 목 계정이 이미 있나"를 이 보존소로 판정한다(CHMO-602 — mocks를 import하면 번들에 딸려 온다)
+import { MOCK_USERS_STORAGE_KEY as USERS_KEY } from '../lib/mockSocial'
 
 function readStore(): DbUser[] {
   try {
