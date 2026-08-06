@@ -113,6 +113,10 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       // ACTIVE 멤버만(선생님 3 + 학부모 3) — 대기 신청(치즈냥이88)은 세지 않는다
       memberCount: 6,
       eventCount: 4,
+      // 목록 분리 카운트(CHMO-608 — 홈 비즈니스 카드 "관리자 N · 멤버 N")는 ⚠ FE 선행 제안:
+      // 실 BE GroupSummaryResponse엔 아직 없어(상세만 보유) 실서버에선 '인원 N명' 폴백
+      editorCount: 3,
+      viewerCount: 3,
       myMembership: { role: 'editor', status: 'active', claimedChildNames: [] },
     })
     const detail = toGroup(toGroupDetail(group, teacher))

@@ -22,7 +22,9 @@ export function BrandHero({ onSymbolTap }: BrandHeroProps) {
         <Cheddar size={88} />
       </span>
       <h1 className="mt-4 text-[32px] leading-tight text-heading">치즈모아</h1>
-      <p className="mt-1 text-sm text-muted">사진 정리부터 공유까지 한 번에</p>
+      {/* 서브카피 중립화(CHMO-608 · B2C 359:11) — 서비스 정의가 "유치원 도구"에서
+          "모임 사진 자동 정리 일반 도구"로 바뀌었다(group-type-proposal §2) */}
+      <p className="mt-1 text-sm text-muted">모임 사진을 올리면, 사람별로 자동 정리</p>
     </section>
   )
 }

@@ -10,13 +10,17 @@ import { listGroups } from '../api/groups'
  * 카드 내 모임 설정 ⚙도 미표시 확정 — 모임 설정은 모임 상세(05)의 ⚙로 일원화(screen-spec 02).
  *
  * 학부모 전환(CHMO-445) — 카드가 myMembership을 소비한다: PENDING은 비활성 대기 카드
- * (배지 + "신청: {자녀}" + 탭 시 토스트 — §7-2 확정: 대기 전용 화면 없음, 모임 API 추가 호출
- * 없음), ACTIVE PARENT는 "학부모 · 참여 중" 서브텍스트. myMembership이 없는 응답
+ * (배지 + "신청: {이름}" + 탭 시 토스트 — §7-2 확정: 대기 전용 화면 없음, 모임 API 추가 호출
+ * 없음), ACTIVE VIEWER는 "멤버 · 참여 중" 서브텍스트. myMembership이 없는 응답
  * (구계약 실 BE)은 기존 제작자 카드 그대로다.
  *
- * 승인제가 role 무관으로 통일되면서(CHMO-475) **선생님 신청도 이 대기 카드로 온다** — 자녀
- * 이름이 없는 대기 항목이 생겼고, 실 BE가 대기 항목에 eventCount 0을 실어 주므로 카드가
- * 카운트로 폴백하지 않도록 GroupCard가 pending일 때 카운트 줄을 잠근다.
+ * 승인제가 role 무관으로 통일되면서(CHMO-475) **관리자(EDITOR) 신청도 이 대기 카드로 온다** —
+ * 인물 이름이 없는 대기 항목이 생겼고, 실 BE가 대기 항목에 eventCount 0을 실어 주므로 카드가
+ * 카운트로 폴백하지 않도록 GroupCard가 pending일 때 카운트 줄을 잠근다. 대기 부연 문구
+ * ('선생님으로/학부모로 참여 신청')는 CHMO-608에서 제거 — '승인 대기중' 배지가 이미 상태를 말한다.
+ *
+ * 유형 분기(CHMO-608 · B2C 360:5) — 카드가 groupType을 소비한다: business만 '비즈니스' 배지
+ * + 관리자/멤버 분리 카운트(editorCount/viewerCount), 일반은 배지 없이 "이벤트 N개 · 멤버 N".
  *
  * 둘러보기(00-T)는 삭제됐다(CHMO-578 — 자동 노출 폐지(CHMO-565)를 거쳐 설정 진입점까지 제거):
  * 첫 로그인은 아무것도 덮지 않는 내 홈이고, 안내는 실제 화면의 코치 힌트가 그 자리에서 1회 맡는다.
@@ -70,26 +74,28 @@ export function HomePage() {
                   <li key={g.id}>
                     <GroupCard
                       name={g.name}
+                      groupType={g.groupType}
                       memberCount={g.memberCount}
+                      editorCount={g.editorCount}
+                      viewerCount={g.viewerCount}
                       eventCount={g.eventCount}
                       pending={pending}
                       subtitle={
                         pending
-                          ? // 학부모 신청은 원문(자녀 이름)이 가장 많은 정보를 준다. 선생님 신청은
-                            // childNames가 빈 배열이라(CHMO-475) 어떤 자격으로 신청했는지만 밝힌다
+                          ? // 신청 원문(인물 이름)만 남긴다 — '승인 대기중' 배지가 이미 상태를
+                            // 말하므로 부연('~로 참여 신청')은 걷어냈다(CHMO-608). 관리자(EDITOR)
+                            // 신청은 이름이 없어(빈 배열, CHMO-475) 서브텍스트 없이 배지만 남는다
                             membership && membership.claimedChildNames.length > 0
                             ? `신청: ${membership.claimedChildNames.join(', ')}`
-                            : membership?.role === 'viewer'
-                              ? '학부모로 참여 신청'
-                              : '선생님으로 참여 신청'
+                            : undefined
                           : membership?.role === 'viewer'
-                            ? '학부모 · 참여 중'
+                            ? '멤버 · 참여 중'
                             : undefined
                       }
                       onClick={() => {
                         // PENDING은 모임 API를 추가 호출하지 않는다(§7-2 — 목록 응답 하나로
                         // 끝): 상세로 보내지 않고 안내 토스트만
-                        if (pending) toast.show('선생님 승인을 기다리고 있어요')
+                        if (pending) toast.show('관리자 승인을 기다리고 있어요')
                         // ACTIVE VIEWER는 학부모 모임 상세(18)로 — EDITOR·구계약(멤버십 없음)은 기존 05
                         else if (membership?.role === 'viewer') navigate(`/parent/groups/${g.id}`)
                         else navigate(`/groups/${g.id}`)
