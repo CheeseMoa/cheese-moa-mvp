@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { attestGuardianConsent, listAgreements, submitAgreements } from './agreements'
 import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
-import { deleteAccount, getMe, login } from './auth'
+import { deleteAccount, getMe, login, signup } from './auth'
 import {
   createPersonAlbum,
   deletePhotos,
@@ -882,6 +882,26 @@ describe('인증 · 프로필', () => {
       userId: 4,
       accessToken: '<access-jwt>',
       refreshToken: '<refresh-token>',
+    })
+  })
+
+  it('가입은 필수 동의 4종을 대문자 enum으로 동봉한다 — BE CHMO-598(없으면 VALID400)', async () => {
+    const calls = serve(envelope(BE_AUTH), 201)
+
+    await signup({ nickname: '치즈', pin: '1234' })
+
+    // 정확 일치로 고정하는 두 가지: MARKETING을 싣지 않는다(정본 §1.1 — 화면에 없는 항목의
+    // 거부 기록을 만들지 않는다) · 모임 스코프 항목이 섞이지 않는다(BE VALID400).
+    // 버전 원천은 FE 문구(src/legal — CHMO-517)라 문구 개정 시 BE AgreementType과 함께 올린다.
+    expect(bodyOf(calls[0])).toEqual({
+      nickname: '치즈',
+      pin: '1234',
+      agreements: [
+        { type: 'AGE_14_OVER', version: '1.0', agreed: true },
+        { type: 'TERMS_OF_SERVICE', version: '1.0', agreed: true },
+        { type: 'PRIVACY_POLICY', version: '1.0', agreed: true },
+        { type: 'FACE_DATA', version: '1.0', agreed: true },
+      ],
     })
   })
 

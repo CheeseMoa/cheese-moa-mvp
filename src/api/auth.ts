@@ -6,6 +6,7 @@
  */
 import { apiFetch } from './client'
 import { toUser, type RawUser } from './mappers'
+import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
 import type { AuthResponse, User } from '../types/api'
 
 export interface Credentials {
@@ -87,15 +88,27 @@ export async function login(credentials: Credentials): Promise<AuthResponse> {
 }
 
 /**
- * POST /auth/signup — 계정 생성(성공 시 바로 로그인 상태).
+ * POST /auth/signup — 계정 생성(성공 시 바로 로그인 상태). 가입과 필수 동의 기록이 한 트랜잭션이라
+ * `agreements` 동봉이 필수다(BE CHMO-598 — 없으면 VALID400. 가입 후 별도 제출이면 그 사이 앱 종료
+ * 시 동의 없는 계정이 남는다). 가입 전이라 토큰이 없어 `GET /agreements`를 못 부르므로 항목·버전의
+ * 원천은 FE 문구(SIGNUP_AGREEMENT_ITEMS — CHMO-517)이고, 필수 4종을 전부 agreed:true로 싣는다.
+ * MARKETING은 싣지 않는다 — 화면에 그리지 않는 항목의 거부 기록을 만들지 않는다(정본 §1.1,
+ * BE 완전성 검증은 필수 항목만 본다).
  * 화면 호출부 없음(CHMO-557 — 01-2 삭제) · BE 엔드포인트가 살아 있어 계약 테스트 고정용으로 잔존
- * (CHMO-473 zip 전례). BE가 걷어내면 목·픽스처와 함께 삭제한다.
+ * (CHMO-473 zip 전례). 가입 화면이 부활하면 이 호출 전에 체크 수집이 먼저다(01-A 관용).
  */
 export async function signup(credentials: Credentials): Promise<AuthResponse> {
   const raw = await apiFetch<RawAuthResponse>('/auth/signup', {
     method: 'POST',
     auth: 'none',
-    body: credentials,
+    body: {
+      ...credentials,
+      agreements: SIGNUP_AGREEMENT_ITEMS.map((item) => ({
+        type: item.type.toUpperCase(),
+        version: item.version,
+        agreed: true,
+      })),
+    },
   })
   return toAuthResponse(raw)
 }
