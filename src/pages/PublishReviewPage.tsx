@@ -20,6 +20,10 @@ import { sortAlbumsForDisplay } from '../lib/albumSort'
  * 미리보기도 **발행 대상(전 사진 검토 완료)만** 담는다 — 검수하다 만 앨범은 공개해도 나가지 않아
  * "학부모가 볼 화면"에 섞이면 거짓이 된다. 그래서 검토 범례(점선/갈색)도 없다.
  *
+ * 재공개(CHMO-606 — CHMO-488의 '재공개 경로 소멸' 반전): 재업로드가 다시 열려 published에도
+ * 미검토·발행 대기가 생긴다. BE는 publish 재호출을 허용하므로(검수 마친 사진 추가 발행,
+ * publishedAt은 최초만 — CHMO-324 존치) 발행 대기가 있으면 [공개하기]를 다시 활성한다.
+ *
  * 진입은 08 [공개 전 요약보기] 외에 **09에서 직행**도 있다(CHMO-521) — 마지막 앨범을 검토
  * 완료하면 다음 차례가 공개라 여기로 온다. 그 사람은 특수 앨범을 검토 동선에서 한 번도 못
  * 봤으므로(CHMO-357), 미리보기 아래에 "그 앨범들은 공개 대상이 아니다"를 이름·장수로 밝힌다.
@@ -69,13 +73,20 @@ export function PublishReviewPage() {
   const hasVisiblePhotos = !!summary && summary.previewAlbums.length > 0
   // 공개되지 않는 앨범(사진 있는 특수 앨범, CHMO-521) — 미리보기와 같은 순서로 늘어놓는다
   const excludedAlbums = summary ? sortAlbumsForDisplay(summary.excludedAlbums) : []
-  // 미검토 구획·게이트 문장은 공개 전에만 — 게이트 이전에 force로 나간 과거 데이터에
-  // "공개할 수 없어요"라고 안내하면 거짓이 된다(공개는 이미 끝났다)
-  const showBlocking = hasUnreviewed && !published
-  // 서버 정책과 동일: review/ready에서만 공개 가능 — published 재진입은 '공개 완료됨'으로 잠그고
-  // (재공개 경로 폐지 — CHMO-488), empty/analyzing 딥링크(고아 사진 한계 — api-spec 기록)도
-  // 눌리면 항상 400이라 버튼을 잠근다
-  const publishable = event?.status === 'review' || event?.status === 'ready'
+  // 미검토 구획·게이트 문장은 published에서도 보여준다(CHMO-606 — CHMO-488 반전): 재업로드가
+  // 열려 공개 후에도 미검토가 실제로 생기고, "마저 검토하면 공개할 수 있어요"가 재공개를
+  // 잠근 이유로 다시 참이 된다
+  const showBlocking = hasUnreviewed
+  // 발행 대기(검토됐지만 미발행) — published 재공개가 "누르면 실제로 뭔가 나가는" 상태인지 판정
+  const pendingPublish = event?.pendingPublishCount ?? 0
+  // 서버 정책과 동일: review/ready 첫 공개 + published 재공개(BE는 재호출을 허용한다 — 그동안
+  // 검수를 마친 사진의 추가 발행, CHMO-324 존치·CHMO-606 재활성). published는 발행 대기가
+  // 있을 때만 활성 — 나갈 게 없는 재공개는 아무것도 안 하는 버튼이 된다.
+  // empty/analyzing 딥링크(고아 사진 한계 — api-spec 기록)는 눌리면 항상 400이라 잠근다
+  const publishable =
+    event?.status === 'review' ||
+    event?.status === 'ready' ||
+    (published && pendingPublish > 0)
   // 미검토가 남으면 하드 게이트 — 서버가 어차피 409를 주므로 화면에서 먼저 잠근다
   const canPublish =
     !!summary && summary.photoCount > 0 && publishable && !hasUnreviewed && !publishing
@@ -86,7 +97,7 @@ export function PublishReviewPage() {
     await mutate(() => publishEvent(eventId), {
       onSuccess: () => {
         setConfirmOpen(false)
-        toast.show('🧀 이벤트를 공개했어요')
+        toast.show(published ? '🧀 새 사진을 공개했어요' : '🧀 이벤트를 공개했어요')
         navigate(`/groups/${groupId}`)
       },
       onError: (msg) => {
@@ -242,8 +253,10 @@ export function PublishReviewPage() {
                 앨범 {blockingAlbums.length}개를 마저 검토하면 공개할 수 있어요
               </p>
             )}
+            {/* published 라벨 분기(CHMO-606): 발행 대기·미검토가 남았으면 아직 할 일이 있는
+                '공개하기'(재공개), 전부 나갔으면 '공개 완료됨' 잠금 */}
             <Button fullWidth disabled={!canPublish} onClick={() => setConfirmOpen(true)}>
-              {published ? '공개 완료됨' : '공개하기'}
+              {published && pendingPublish === 0 && !hasUnreviewed ? '공개 완료됨' : '공개하기'}
             </Button>
           </div>
         )}
@@ -259,10 +272,14 @@ export function PublishReviewPage() {
         title={`'${event?.name ?? '이 이벤트'}'을 공개할까요?`}
         description={
           // 미검토 분기는 없다 — 게이트에 걸리면 버튼 자체가 잠겨 여기까지 오지 못한다(CHMO-488).
-          // 보일 사진 0장이 유일하게 남은 경고 — "사진을 볼 수 있어요"라고 안내하면 거짓이 된다
+          // 보일 사진 0장이 유일하게 남은 경고 — "사진을 볼 수 있어요"라고 안내하면 거짓이 된다.
+          // 재공개(published)는 이번에 새로 나갈 장수를 말한다(CHMO-606) — 앨범 수는 이미 나간
+          // 것까지 세서 "무엇이 새로 공개되나"에 답하지 못한다
           !hasVisiblePhotos
             ? '지금 공개하면 학부모에게 보이는 사진이 없어요. 사진을 인물·공통 앨범으로 정리한 뒤 공개하는 걸 권해요.'
-            : `앨범 ${summary?.previewAlbums.length ?? 0}개를 학부모가 공유 링크로 볼 수 있어요.`
+            : published
+              ? `새로 검토한 사진 ${pendingPublish}장이 학부모에게 공개돼요.`
+              : `앨범 ${summary?.previewAlbums.length ?? 0}개를 학부모가 공유 링크로 볼 수 있어요.`
         }
         confirmLabel="공개하기"
         onConfirm={handlePublish}

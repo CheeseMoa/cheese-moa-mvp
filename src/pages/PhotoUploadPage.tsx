@@ -60,9 +60,10 @@ async function registrationLanded(eventId: string, photoCountBefore: number): Pr
 
 /**
  * 06-U. 사진 업로드 · node 211:1584
- * **업로드·분류는 이벤트당 1회**(CHMO-486) — 사진이 이미 등록된 이벤트는 진입 자체를 막는다.
- * 08에 [＋ 사진 추가]가 없고 이 화면은 빈 이벤트에서만 열리지만, 딥링크·뒤로가기로도 들어올 수
- * 있어 화면이 직접 판정한다(서버 게이트는 CHMO-485).
+ * **재업로드 허용**(CHMO-606 — CHMO-486 1회 정책 반전): 사진이 있는 이벤트도 08 [＋ 사진 추가]로
+ * 다시 들어와 이어 올린다. 분석 중에만 진입을 막는다 — BE는 분석 중 등록도 새 job으로 대체하지만
+ * (CHMO-460) 화면은 돌고 있는 분류를 덮어쓰는 동선을 열지 않는다. 같은 사진을 다시 올리면 BE가
+ * 내용 지문으로 걸러 duplicateCount로 알려 준다(CHMO-254 — 전량 중복이면 VALID400).
  * 선택은 MAX_UPLOAD_PICK(100장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
  * 해제 강요 제거, CHMO-397). 이 상한은 **BE 계약 상한(500, 2026-07-28 실측)과 별개**로 웹이 스스로
  * 거는 값이다(CHMO-497) — 브라우저는 고른 파일을 전부 디코드해야 하고, 500장 규모는 앱의 네이티브
@@ -117,9 +118,8 @@ export function PhotoUploadPage() {
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트의 사진 추가는 상태
   // 전이 없는 증분 분석이라(CHMO-215·216) 상세 응답의 progress로만 진행을 알 수 있다(CHMO-442).
   const analysisActive = !!event && (event.status === 'analyzing' || event.progress != null)
-  // 업로드는 이벤트당 1회(CHMO-486) — 분석 중이거나 이미 사진이 등록된 이벤트면 피커를 열지
-  // 않는다. photoCount는 분석 커밋 시점에 올라가므로 분석중 판정과 함께 봐야 공백이 없다.
-  const uploadLocked = !!event && (analysisActive || event.photoCount > 0)
+  // 재업로드 허용(CHMO-606) — 분석 중에만 잠근다. 사진이 있는 이벤트도 이어 올릴 수 있다.
+  const uploadLocked = !!event && analysisActive
   // 피커 분기(스크롤 밖 하단 CTA 액션바가 있는 상태) — 이때는 main이 아니라 바가 바닥 여백을 소유한다
   const showPicker = !!event && !uploadLocked
   const selectedCount = photos.filter((p) => p.selected).length
@@ -290,14 +290,18 @@ export function PhotoUploadPage() {
       setPhotos((prev) =>
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
       )
-      toast.show('🧀 사진 분류를 시작했어요')
+      toast.show(
+        registered.duplicateCount
+          ? `🧀 사진 분류를 시작했어요 · 이미 있는 사진 ${registered.duplicateCount}장은 제외했어요`
+          : '🧀 사진 분류를 시작했어요',
+      )
       // '분석 시작' 킥(CHMO-443) — 등록 직후엔 AI 첫 진행률 메시지 전이라 progress가 잠깐 null이고,
-      // 상세의 단발 조회가 분석 시작을 놓칠 수 있다. 1회 정책으로 업로드는 empty 이벤트에서만
-      // 일어나 status만으로 판정될 여지가 생겼지만, 등록 응답 시점에 analyzing이 보장되는지는
-      // 실 BE로 확인 전이라 킥을 유지한다(확인 후 정리 — CHMO-486 범위).
+      // 상세의 단발 조회가 분석 시작을 놓칠 수 있다. published 재업로드는 상태 전이도 없어
+      // (CHMO-216) 킥 없이는 분석 시작을 알 길이 없다 — 재업로드 복원으로 다시 필수(CHMO-606).
       // expected는 완료 판정용: 사진은 분석 커밋 시점에야 photoCount에 반영된다(실서버 실측).
-      // replace — 업로드가 끝난 06-U는 다시 열 수 없는 화면이라(1회 정책) 히스토리에 남기지
-      // 않는다. 남기면 이벤트 상세에서 뒤로가기가 '이미 올렸어요' 안내로 떨어진다(CHMO-486)
+      // registeredCount만 더한다 — 중복으로 걸러진 사진(duplicateCount)은 photoCount를 안 늘린다.
+      // replace — 06-U는 히스토리에 남지 않는 지나가는 화면이다(CHMO-486의 내비 관용 유지).
+      // 남기면 이벤트 상세에서 뒤로가기가 빈 업로드 화면으로 헛돈다
       navigate(eventPath, {
         replace: true,
         state: {
@@ -326,8 +330,8 @@ export function PhotoUploadPage() {
         return
       }
       // 등록 요청은 서버에 닿았는데 응답만 유실됐을 수 있다(타임아웃·통신 끊김·앱 전환).
-      // 업로드가 이벤트당 1회라 재시도는 서버가 거부하고(CHMO-485) 화면이 "실패"로 굳는다 —
-      // 실제로 등록·분류가 시작됐으면 에러 대신 상세로 인계한다(CHMO-486).
+      // 재시도하면 이미 등록된 사진이 전량 중복으로 걸러져 VALID400이 되고(CHMO-254) 화면이
+      // "실패"로 굳는다 — 실제로 등록·분류가 시작됐으면 에러 대신 상세로 인계한다(CHMO-486).
       if (registerAttempted && (await registrationLanded(eventId, photoCountBefore))) {
         if (!alive.current) return
         toast.show('🧀 사진 분류를 시작했어요')
@@ -393,10 +397,10 @@ export function PhotoUploadPage() {
             notFoundLabel="모임으로"
           />
         ) : uploadLocked ? (
-          // 업로드 불가(분석중 또는 1회 소진) — 안내 화면 대신 이벤트 상세로 곧장 넘긴다.
+          // 분석 중 업로드 불가 — 안내 화면 대신 이벤트 상세로 곧장 넘긴다.
           // 여기서 할 수 있는 일이 '돌아가기' 하나뿐이라 화면을 띄우면 뒤로가기가 막다른 길에
           // 부딪히는 느낌만 준다. replace라 히스토리에도 남지 않아 뒤로가기가 헛돌지 않는다.
-          // 이벤트 상세가 분석중·앨범 그리드를 알아서 갈라 보여주므로 안내도 그쪽이 더 정확하다.
+          // 이벤트 상세의 분석중 화면이 진행률과 함께 기다리라고 말해 주므로 안내도 그쪽이 정확하다.
           <Navigate to={eventPath} replace />
         ) : (
           <>
@@ -421,12 +425,12 @@ export function PhotoUploadPage() {
                   [DEV] 미리보기 {previewTiming.count}장 준비 {previewTiming.ms}ms
                 </p>
               ) : null}
-              {/* 캡으로 해제 상태 사진이 남았을 때만. 업로드는 이벤트당 1회라 "다음에 이어
-                  올리세요"는 거짓 안내가 된다(CHMO-486) — 지금 못 올린다는 사실을 그대로 알린다 */}
+              {/* 캡으로 해제 상태 사진이 남았을 때만 — 재업로드가 열려 있어(CHMO-606) 이어
+                  올리기 안내가 다시 사실이 됐다(CHMO-486의 "거짓 안내" 제거를 반전) */}
               {selectedCount >= MAX_UPLOAD_PICK && photos.some((p) => !p.selected) && (
                 <p className="mt-2 text-xs font-bold leading-relaxed text-heading">
-                  선택되지 않은 사진은 올라가지 않아요. 업로드는 이벤트당 한 번이라 지금 올릴
-                  사진을 모두 골라 주세요
+                  선택되지 않은 사진은 이번에 올라가지 않아요. 분류가 끝나면 [＋ 사진 추가]로
+                  이어 올릴 수 있어요
                 </p>
               )}
 

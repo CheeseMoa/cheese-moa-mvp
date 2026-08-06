@@ -140,14 +140,15 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
     // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
   })
   assignCovers(picnicAlbums, picnicPhotos)
-  // 공개된 이벤트 — 전 사진 검토 + 발행 완료.
-  // **발행 대기(reviewed·미발행)는 시드에 두지 않는다**(CHMO-488): 전량 검토라야 공개되고
-  // 공개 후 사진 추가도 없으니(CHMO-486) 도달할 수 없는 상태다. 남겨 두면 되살릴 UI가 없는
-  // "영영 안 보이는 사진"이 시연 데이터에 박힌다(종전 재공개 게이트 시연분 216~219 제거).
+  // 공개된 이벤트 — 전 사진 검토 완료, 대부분 발행 완료.
   for (const photo of picnicPhotos) {
     photo.reviewed = true
     photo.published = true
   }
+  // 발행 대기 시연 복원(CHMO-606 — CHMO-488의 "도달 불가" 전제 반전): 재업로드가 열려 공개 후
+  // 추가·검토된 사진이 실제로 생긴다. 마지막 2장을 검토·미발행으로 둬 08 "발행 대기 2장" 안내와
+  // 14 [공개하기] 재활성(재공개)을 목에서 볼 수 있게 한다(뷰어·학부모 화면엔 아직 안 보인다).
+  for (const photo of picnicPhotos.slice(-2)) photo.published = false
 
   // 이벤트 3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
   const poolPhotos = makePhotos(300, 3, 20, '2026-06-27T10:00:00+09:00')
