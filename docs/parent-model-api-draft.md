@@ -82,13 +82,15 @@ joinKey는 "누가 신청할 수 있나(=어떤 role로)"만 정하고, "누가 
 ### POST /groups/join — 즉시 합류 → **신청(PENDING) 생성**으로 변경
 - role은 joinKey 종류에서 파생(링크 2종 — 역할 선택 화면 없음, Q6). **선생님 키도 PENDING**(§0 — CHMO-475).
 - `childNames`: 학부모 joinKey일 때 필수(1개 이상, 자유 텍스트). 시도 제한은 기존 리미터 재사용(Q2).
-- `childConsentVersion`: 학부모 joinKey일 때 필수(**확정 — BE CHMO-586·FE CHMO-587**): 자녀 정보 처리 동의(`GUARDIAN_CHILD_CONSENT`)의 버전. `GET /agreements` `currentVersion` 에코이며 누락·구버전은 `VALID400`(신청째 거부). 선생님 키 경로는 무변경.
+- ~~`childConsentVersion`~~ **폐지(CHMO-607, 2026-08-06)** — 자녀 정보 처리 동의 동봉(BE CHMO-586·FE CHMO-587)은 법적 동의를 가입(01-A) 1회로 일원화하며 걷었다(정본 `group-type-proposal.md` §1). ⚠ **BE 검증 폐지 티켓과 배포 게이트**: BE develop엔 이 검증이 남아 있어(JoinGroupRequest 소스 대조) BE가 먼저(또는 동시에) 걷지 않으면 viewer 신청이 전부 VALID400.
+- 응답은 초안의 평면 형태가 아니라 **실 BE가 `GroupSummaryResponse`를 재사용한다**(SpaceController 소스 대조, CHMO-607) — role·status는 `myMembership`에 중첩. FE 매퍼가 중첩·평면(구 목 계약) 둘 다 흡수하고, 형태 미상은 pending으로 좁힌다(직행 오판 방지 — CHMO-448 실측).
 
 ```jsonc
 // req
-{ "joinKey": "HAETSAL-P", "password": "7421", "childNames": ["김민준"], "childConsentVersion": "1.0" }
-// res
-{ "groupId": 1, "groupName": "햇살반", "role": "PARENT", "status": "PENDING" }
+{ "joinKey": "HAETSAL-P", "password": "7421", "childNames": ["김민준"] }
+// res — GroupSummaryResponse 재사용(발췌)
+{ "groupId": 1, "name": "햇살반", "groupType": "BUSINESS",
+  "myMembership": { "role": "VIEWER", "status": "PENDING", "claimedChildNames": ["김민준"], "linkedChildNames": [] } }
 ```
 
 ### GET /groups/:id/join-requests?status=PENDING — 신설, TEACHER 전용
