@@ -193,16 +193,16 @@ export function createFixtures(): Db {
     users: [
       // 이현정은 관리자 겸용(CHMO-379) — role은 /admin/*에만 쓰이고 서비스 화면은 그대로다
       // (관리자도 평범한 유저로 모임 생성·검수·공개를 한다 — admin-spec §2-3 테스트 계정 겸용).
-      { id: 1, nickname: '이현정', pin: '1234', role: 'ADMIN', createdAt: '2026-06-01T10:00:00+09:00' },
-      { id: 2, nickname: '김지은', pin: '2580', role: 'USER', createdAt: '2026-06-01T10:05:00+09:00' },
-      { id: 3, nickname: '박수민', pin: '4715', role: 'USER', createdAt: '2026-06-02T09:00:00+09:00' },
+      { id: 1, nickname: '이현정', pin: '1234', role: 'ADMIN', createdAt: '2026-06-01T10:00:00+09:00', pushEnabled: true },
+      { id: 2, nickname: '김지은', pin: '2580', role: 'USER', createdAt: '2026-06-01T10:05:00+09:00', pushEnabled: true },
+      { id: 3, nickname: '박수민', pin: '4715', role: 'USER', createdAt: '2026-06-02T09:00:00+09:00', pushEnabled: true },
       // 학부모 전환(CHMO-444) 시연 계정 — 4는 학부모 화면(연결됨+대기), 6은 미연결 기본 경로(§2)
-      { id: 4, nickname: '민준아빠', pin: '1111', role: 'USER', createdAt: '2026-07-01T10:00:00+09:00' },
-      { id: 5, nickname: '서연맘', pin: '2222', role: 'USER', createdAt: '2026-07-01T10:05:00+09:00' },
-      { id: 6, nickname: '지호네', pin: '3333', role: 'USER', createdAt: '2026-07-02T09:00:00+09:00' },
-      { id: 7, nickname: '치즈냥이88', pin: '4444', role: 'USER', createdAt: '2026-07-25T09:00:00+09:00' },
+      { id: 4, nickname: '민준아빠', pin: '1111', role: 'USER', createdAt: '2026-07-01T10:00:00+09:00', pushEnabled: true },
+      { id: 5, nickname: '서연맘', pin: '2222', role: 'USER', createdAt: '2026-07-01T10:05:00+09:00', pushEnabled: true },
+      { id: 6, nickname: '지호네', pin: '3333', role: 'USER', createdAt: '2026-07-02T09:00:00+09:00', pushEnabled: true },
+      { id: 7, nickname: '치즈냥이88', pin: '4444', role: 'USER', createdAt: '2026-07-25T09:00:00+09:00', pushEnabled: true },
       // 선생님 승인제(CHMO-475) 시연 — 선생님 키로 신청만 해 둔 대기 상태(20 선생님 탭)
-      { id: 8, nickname: '신입쌤', pin: '5555', role: 'USER', createdAt: '2026-07-27T09:00:00+09:00' },
+      { id: 8, nickname: '신입쌤', pin: '5555', role: 'USER', createdAt: '2026-07-27T09:00:00+09:00', pushEnabled: true },
     ],
     groups: [
       {
@@ -403,6 +403,9 @@ export function createFixtures(): Db {
         options: { excludeEyesClosed: true, excludeBlurry: false },
       },
     ],
+    // 푸시 기기는 앱에서 등록되는 값이라 시드가 없다(CHMO-667) — 목 모드에서도
+    // POST /me/devices를 실제로 타야 행이 생긴다(브라우저에선 브리지가 없어 영영 비어 있다)
+    devices: [],
     // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다
     uploadedKeys: [],
   }

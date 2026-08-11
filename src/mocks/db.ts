@@ -34,6 +34,24 @@ export interface DbUser {
   pin: string
   role: DbUserRole
   createdAt: ISODateTime
+  /**
+   * 푸시 수신 허용 (CHMO-667 · BE CHMO-664) — 계정 단위 수신 거부.
+   * 거부한 사람만 false라 기본값·구보존분 정규화 모두 true다.
+   */
+  pushEnabled: boolean
+}
+
+/**
+ * 등록된 푸시 기기 (CHMO-667) — 한 계정에 여러 기기.
+ * **토큰이 곧 기기 식별자**라 (userId, token) 쌍이 아니라 token 하나로 찾는다:
+ * 같은 기기에 다른 계정이 로그인하면 그 토큰의 주인이 갈아치워져야 이전 계정의 알림이
+ * 남의 기기로 가지 않는다(실 BE도 같은 판정 — 등록이 멱등인 이유).
+ */
+export interface DbDevice {
+  userId: number
+  token: string
+  platform: string
+  createdAt: ISODateTime
 }
 
 export interface DbGroup {
@@ -179,6 +197,8 @@ export interface Db {
   photos: DbPhoto[]
   agreements: DbAgreement[]
   analysisJobs: DbAnalysisJob[]
+  /** 등록된 푸시 기기 (CHMO-667) */
+  devices: DbDevice[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
 }
@@ -194,6 +214,7 @@ export const db: Db = {
   photos: [],
   agreements: [],
   analysisJobs: [],
+  devices: [],
   uploadedKeys: [],
 }
 
@@ -209,7 +230,30 @@ export function seedDb(data: Db): void {
   db.photos = data.photos
   db.agreements = data.agreements
   db.analysisJobs = data.analysisJobs
+  db.devices = data.devices
   db.uploadedKeys = data.uploadedKeys
+}
+
+// ── 푸시 기기 (CHMO-667) ─────────────────────────────────────
+
+/**
+ * 토큰 등록 — 멱등. 같은 토큰이 이미 있으면 **주인을 갈아치운다**:
+ * 한 기기에 계정 A가 로그아웃하고 B가 로그인하면 그 토큰은 이제 B의 것이고,
+ * 그러지 않으면 A 앞으로 온 알림이 B의 화면에 뜬다.
+ */
+export function registerDevice(userId: number, token: string, platform: string): void {
+  const existing = db.devices.find((d) => d.token === token)
+  if (existing) {
+    existing.userId = userId
+    existing.platform = platform
+    return
+  }
+  db.devices.push({ userId, token, platform, createdAt: nowIso() })
+}
+
+/** 해제 — 없는 토큰도 조용히 통과(멱등). 남의 토큰은 지우지 않는다 */
+export function unregisterDevice(userId: number, token: string): void {
+  db.devices = db.devices.filter((d) => !(d.token === token && d.userId === userId))
 }
 
 // ── 업로드 오브젝트 (S3 시뮬 — CHMO-194) ─────────────────────

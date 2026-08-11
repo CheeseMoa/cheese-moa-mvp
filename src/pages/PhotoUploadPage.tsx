@@ -10,6 +10,7 @@ import { attestGuardianConsent } from '../api/agreements'
 import { ApiRequestError, toErrorMessage } from '../api/client'
 import { getEvent, presignUploads, registerPhotos, uploadToPresignedUrl } from '../api/events'
 import { trackEvent } from '../lib/analytics'
+import { requestPushPermissionAfterUpload } from '../lib/push'
 import { runWithConcurrency } from '../lib/concurrency'
 import { createPreviewThumbnail } from '../lib/previewThumb'
 import {
@@ -293,6 +294,13 @@ export function PhotoUploadPage() {
         count: registered.registeredCount,
         duplicate_count: registered.duplicateCount ?? 0,
       })
+      // 알림 권한 프롬프트 (CHMO-667) — 앱에서 계정당 1회. **이 자리인 이유**: 사진을 올려
+      // 두고 분류를 기다리는 지금이 "끝나면 알려드릴 테니 앱을 닫으셔도 돼요"가 사실이 되는
+      // 유일한 순간이다(앱 첫 실행에 물으면 근거가 없고, iOS는 그 거부가 영구적이다).
+      // await하지 않는다 — OS 다이얼로그를 언제 누를지 모르는데 그걸 기다리면 아래 이동이
+      // 막힌다. 프롬프트는 OS 레이어라 화면이 바뀌어도(분류중 진행률) 그대로 떠 있고,
+      // 도착지가 곧 "기다리는 화면"이라 문맥도 오히려 맞는다. 실패·거부는 모듈이 삼킨다.
+      void requestPushPermissionAfterUpload()
       const registeredKeys = new Set(pending.map((p) => p.key))
       setPhotos((prev) =>
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),

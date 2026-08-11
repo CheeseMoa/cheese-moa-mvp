@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
 import { ToastProvider } from './components/ui'
 import { initAnalytics, trackScreen } from './lib/analytics'
+import { startPushTokenSync } from './lib/push'
 import './index.css'
 
 /**
@@ -54,6 +55,13 @@ async function main() {
     startAnalytics()
   } catch (err) {
     console.error('[analytics] 초기화 실패 — 추적 없이 계속 진행합니다.', err)
+  }
+  // FCM 토큰 회전 구독 (CHMO-667) — 앱 생애 1회. 브라우저에선 이벤트가 오지 않아 무해하고,
+  // 해제할 일이 없어(앱이 살아 있는 내내 유효) 반환된 구독 해제 함수를 버린다
+  try {
+    startPushTokenSync()
+  } catch (err) {
+    console.error('[push] 토큰 동기화 구독 실패 — 알림 없이 계속 진행합니다.', err)
   }
   renderApp()
 }

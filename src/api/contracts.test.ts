@@ -16,7 +16,9 @@ import {
   getMe,
   login,
   signup,
+  updatePushEnabled,
 } from './auth'
+import { registerDevice, unregisterDevice } from './devices'
 import {
   createPersonAlbum,
   deletePhotos,
@@ -1051,13 +1053,51 @@ describe('인증 · 프로필', () => {
     expect(bodyOf(calls[0])).toEqual({ code: 'otc-123' })
   })
 
-  it('BE 프로필의 userId를 id로 옮긴다', async () => {
+  it('BE 프로필의 userId를 id로 옮긴다 — pushEnabled 없는 구계약은 수신 허용', async () => {
+    // 실채집 픽스처(2026-07-09)엔 pushEnabled가 없다 — BE CHMO-664 배포 전 계약.
+    // 이걸 '거부'로 읽으면 설정 토글이 꺼진 채로 뜬다(CHMO-667)
     serve(envelope(BE_USER))
     await expect(getMe()).resolves.toEqual({
       id: 4,
       nickname: 'FE연동테스트',
       createdAt: '2026-07-09T09:50:37.543598Z',
+      pushEnabled: true,
     })
+  })
+
+  it('pushEnabled=false는 그대로 읽는다 (CHMO-667 — 수신 거부한 계정)', async () => {
+    serve(envelope({ ...BE_USER, pushEnabled: false }))
+    await expect(getMe()).resolves.toMatchObject({ pushEnabled: false })
+  })
+
+  it('알림 받기 토글 — PATCH /me에 pushEnabled만 싣는다 (이름을 건드리지 않는다)', async () => {
+    const calls = serve(envelope({ ...BE_USER, pushEnabled: false }))
+
+    await expect(updatePushEnabled(false)).resolves.toMatchObject({ pushEnabled: false })
+
+    expect(calls[0].url).toBe('/api/v1/me')
+    expect(calls[0].method).toBe('PATCH')
+    // nickname·pin 키가 아예 없어야 한다 — undefined는 JSON.stringify가 생략한다
+    expect(bodyOf(calls[0])).toEqual({ pushEnabled: false })
+  })
+
+  it('푸시 기기 등록 — POST /me/devices {token, platform}', async () => {
+    const calls = serve(envelope(null))
+
+    await registerDevice({ token: 'fcm-token-abc', platform: 'ios' })
+
+    expect(calls[0].url).toBe('/api/v1/me/devices')
+    expect(calls[0].method).toBe('POST')
+    expect(bodyOf(calls[0])).toEqual({ token: 'fcm-token-abc', platform: 'ios' })
+  })
+
+  it('푸시 기기 해제 — 토큰을 경로에 인코딩해 싣는다 (`/`가 섞이면 경로가 갈라진다)', async () => {
+    const calls = serve(envelope(null))
+
+    await unregisterDevice('fcm/token+with=chars')
+
+    expect(calls[0].url).toBe('/api/v1/me/devices/fcm%2Ftoken%2Bwith%3Dchars')
+    expect(calls[0].method).toBe('DELETE')
   })
 
   it('계정 삭제 — DELETE /me (실 BE 확정 경로, CHMO-524 · 초안 /users/me 폐기, CHMO-575)', async () => {

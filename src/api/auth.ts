@@ -162,9 +162,26 @@ export function getMe(signal?: AbortSignal): Promise<User> {
   return apiFetch<RawUser>('/me', { signal }).then(toUser)
 }
 
-/** PATCH /me — pin은 undefined면 요청 본문에서 빠진다(JSON.stringify가 생략) */
-export function updateMe(input: { nickname: string; pin?: string }): Promise<User> {
+/**
+ * PATCH /me — undefined인 필드는 요청 본문에서 빠진다(JSON.stringify가 생략).
+ * 그래서 부분 수정이 성립한다: 이름만·수신 거부만 각각 보낼 수 있다.
+ */
+export function updateMe(input: {
+  nickname?: string
+  pin?: string
+  /** 푸시 수신 허용 (CHMO-667 · BE CHMO-664) */
+  pushEnabled?: boolean
+}): Promise<User> {
   return apiFetch<RawUser>('/me', { method: 'PATCH', body: input }).then(toUser)
+}
+
+/**
+ * 설정 '알림 받기' 토글 (CHMO-667) — 이름을 건드리지 않으려고 pushEnabled만 싣는다.
+ * ⚠ BE는 PATCH /me의 nickname을 **선택**으로 받아야 한다(필수면 이 호출이 VALID400).
+ * 서버 수신 거부라 기기가 아니라 계정 단위다 — 끄면 등록된 모든 기기에서 알림이 멈춘다.
+ */
+export function updatePushEnabled(pushEnabled: boolean): Promise<User> {
+  return updateMe({ pushEnabled })
 }
 
 /**
