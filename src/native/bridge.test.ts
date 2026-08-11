@@ -4,7 +4,6 @@ import {
   __resetBridgeStateForTest,
   callBridge,
   getCapabilities,
-  getPushPermission,
   getPushToken,
   hasCapability,
   isNativeApp,
@@ -293,9 +292,10 @@ describe('푸시 (계약 §2.5 — CHMO-667)', () => {
     const pending = requestPushPermission()
     // 기본 시한(5s)을 한참 넘겨도 TIMEOUT으로 죽지 않는다
     await vi.advanceTimersByTimeAsync(60_000)
-    resolveCall!(okEnvelope({ status: 'granted' }))
+    // 허용 왕복은 토큰을 함께 준다 — 웹은 이 토큰으로 바로 등록한다
+    resolveCall!(okEnvelope({ status: 'granted', token: 'fcm-tok' }))
 
-    await expect(pending).resolves.toEqual({ status: 'granted' })
+    await expect(pending).resolves.toEqual({ status: 'granted', token: 'fcm-tok' })
   })
 
   it('권한 거부는 에러가 아니라 결과다 — status로 온다', async () => {
@@ -303,15 +303,28 @@ describe('푸시 (계약 §2.5 — CHMO-667)', () => {
     const w = stubWindow()
     w.flutter_inappwebview!.callHandler.mockResolvedValue(okEnvelope({ status: 'denied' }))
 
-    await expect(getPushPermission()).resolves.toEqual({ status: 'denied' })
+    await expect(getPushToken()).resolves.toEqual({ status: 'denied' })
   })
 
-  it('토큰 없음은 null이다 — 권한 미허용·발급 전은 실패가 아니다', async () => {
+  it('허용됐어도 토큰이 없을 수 있다 — status만 오고 토큰은 이벤트로 따라온다', async () => {
     stubApp()
     const w = stubWindow()
-    w.flutter_inappwebview!.callHandler.mockResolvedValue(okEnvelope({ token: null }))
+    // iOS APNs 등록 전 — 실패가 아니라 "아직 없다"
+    w.flutter_inappwebview!.callHandler.mockResolvedValue(okEnvelope({ status: 'granted' }))
 
-    await expect(getPushToken()).resolves.toEqual({ token: null })
+    await expect(getPushToken()).resolves.toEqual({ status: 'granted' })
+  })
+
+  it('getPushToken은 창을 열지 않는다 — 상태 조회 경로라 기본 시한을 탄다', async () => {
+    vi.useFakeTimers()
+    stubApp()
+    const w = stubWindow()
+    w.flutter_inappwebview!.callHandler.mockReturnValue(new Promise(() => {}))
+
+    const pending = getPushToken()
+    const assertion = expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(6000)
+    await assertion
   })
 
   it('웹 단독에서는 UNSUPPORTED — 브라우저엔 푸시 수신 경로가 없다 (AC-4)', async () => {
