@@ -250,6 +250,19 @@ export function createFixtures(): Db {
         share: { token: 'shr_grp4', password: '3712' },
         createdAt: '2026-07-15T09:00:00+09:00',
       },
+      // 유저 1 미가입 GENERAL — **즉시 합류(active) 시연용**(CHMO-672). 3(별님반)의 일반 모임
+      // 짝이다: 3으로 참여하면 승인 대기 카드, 5로 참여하면 모임 상세 직행. 유저 1이 이미
+      // 멤버인 4로는 이 갈래를 볼 수 없어(409) 따로 둔다 — 미가입 모임이라 홈 목록엔 안 뜬다.
+      {
+        id: 5,
+        name: '동네 러닝크루',
+        groupType: 'general',
+        password: '5183',
+        joinKey: 'RunCrew4Jm7v',
+        parentJoinKey: 'RunCrewP2h9d',
+        share: { token: 'shr_grp5', password: '8264' },
+        createdAt: '2026-08-01T09:00:00+09:00',
+      },
     ],
     // 학부모 전환(CHMO-444): role·승인 상태 보유. PENDING 행이 곧 합류 신청(id = joinRequestId).
     // 햇살반: 선생님 3 + 학부모 active 3(지호네는 미연결) + 대기 신청 1(치즈냥이88) — 초대 관리(20) 시연.
@@ -270,6 +283,8 @@ export function createFixtures(): Db {
       // GENERAL 모임(4) — 전원 editor(ADR 020). 이현정(1)이 생성자, 김지은(2)이 합류 멤버
       { id: 12, userId: 1, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-15T09:00:00+09:00' },
       { id: 13, userId: 2, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-16T10:00:00+09:00' },
+      // 유저 1 미가입 GENERAL(5) — 기존 멤버 하나를 둬야 합류 후 명단·카운트가 빈칸이 아니다
+      { id: 14, userId: 3, groupId: 5, role: 'editor', status: 'active', childNames: [], createdAt: '2026-08-01T09:00:00+09:00' },
     ],
     // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
     personParents: [
