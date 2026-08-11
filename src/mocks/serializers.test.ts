@@ -739,7 +739,6 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
     const row = toAdminGroupRow(toAdminGroupSummary(findGroup(1)!))
     expect(row).toEqual({
       groupId: 1,
-      name: '햇살반',
       memberCount: 6, // ACTIVE만 — 대기 신청 2건(치즈냥이88·신입쌤)은 세지 않는다
       eventCount: 4,
       // 운동회 28 + 봄 소풍 16 — 분석 중인 물놀이 20장은 앨범 매핑 전이라 제외(BE AlbumPhoto 기준)
@@ -755,13 +754,13 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
       recentGroups: [toAdminRecentGroup(findGroup(3)!)],
     })
     expect(stats.recentGroups).toEqual([
-      { groupId: 3, name: '별님반', memberCount: 1, createdAt: '2026-06-20T09:00:00+09:00' },
+      { groupId: 3, memberCount: 1, createdAt: '2026-06-20T09:00:00+09:00' },
     ])
   })
 
   it('모임 상세 — 멤버는 PENDING 포함 신청 순, 이벤트는 최신(id 역순)·대문자 상태', () => {
     const detail = toAdminGroupDetail(toAdminGroupDetailResponse(findGroup(1)!))
-    expect(detail.name).toBe('햇살반')
+    expect(detail.groupId).toBe(1)
     expect(detail.ownerNickname).toBe('이현정') // 최초 ACTIVE 선생님 = 생성자 파생
     expect(detail.memberCount).toBe(6)
     // ACTIVE 6 + 대기 신청 2(치즈냥이88 학부모·신입쌤 선생님) — 운영자는 신청도 봐야 한다
@@ -781,6 +780,17 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
       publishedAt: '2026-05-14T18:00:00+09:00',
     })
     expect(detail.events[3]).toMatchObject({ name: '6.15 운동회 오전', status: 'REVIEW', photoCount: 28 })
+  })
+
+  it('어드민 응답에 모임 이름이 없다(CHMO-668) — 이벤트 이름은 모임 이름이 아니라 존치', () => {
+    const group = findGroup(1)!
+    const serialized = JSON.stringify([
+      toAdminGroupSummary(group),
+      toAdminGroupDetailResponse(group),
+      toAdminRecentGroup(group),
+    ])
+    expect(serialized).not.toContain(group.name)
+    expect(toAdminGroupDetailResponse(group).events[0].name).toBe('가을 발표회 준비')
   })
 
   it('어드민 응답에 시크릿 4종이 없다(AC-6 — joinKey·비밀번호·공유 토큰·공유 비밀번호)', () => {

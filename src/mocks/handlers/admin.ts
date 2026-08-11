@@ -49,7 +49,11 @@ function intParam(url: URL, name: string, fallback: number): number | null {
   return Number.isInteger(value) ? value : null
 }
 
-/** BE 정렬 화이트리스트(createdAt·name × asc·desc) — 밖은 null(COMMON400) */
+/**
+ * BE 정렬 화이트리스트(createdAt·name × asc·desc) — 밖은 null(COMMON400).
+ * 이름은 응답에서 빠졌어도(CHMO-668) 서버 내부 기준으로는 그대로 동작한다 — 목도 BE를 따라
+ * 계속 받아 준다(FE 화면은 안 보낸다 — CHMO-670).
+ */
 function groupComparator(sort: string): ((a: number, b: number) => number) | null {
   const parts = sort.split(',')
   if (parts.length !== 2) return null
@@ -124,6 +128,7 @@ export const adminHandlers = [
 
     for (const event of db.events) settleAnalysis(event.id)
 
+    // 이름 검색도 정렬과 같다 — 값은 안 내려가지만 필터 동작은 BE 그대로(FE는 안 보낸다)
     const q = url.searchParams.get('q')?.trim().toLowerCase()
     const matched = db.groups
       .filter((g) => !q || g.name.toLowerCase().includes(q))

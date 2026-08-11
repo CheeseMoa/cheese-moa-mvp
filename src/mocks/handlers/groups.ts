@@ -207,7 +207,11 @@ export const groupHandlers = [
       userId: user.id,
       groupId: group.id,
       role,
-      status: 'pending',
+      // GENERAL 모임의 joinKey 합류는 **승인제를 우회해 즉시 ACTIVE**(BE CHMO-618 — 링크를
+      // 받으면 바로 참여하는 게 일반 모임의 정의다). BUSINESS는 role 무관 승인제 그대로
+      // (CHMO-475). 목이 늘 pending을 주던 동안 02-1의 '참여하기 → 05 직행' 갈래는
+      // 잠들어 있어 화면으로 확인할 수 없었다(CHMO-672).
+      status: group.groupType === 'general' ? 'active' : 'pending',
       childNames,
     })
     // 실 BE join 응답은 GroupSummaryResponse 재사용(SpaceController 대조 — 전용 DTO 없음,

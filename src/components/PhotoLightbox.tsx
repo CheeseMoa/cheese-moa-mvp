@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { IconClose, IconDownload } from './ui'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { usePhotoSave } from '../hooks/usePhotoSave'
+import { usePhotoZoom } from '../hooks/usePhotoZoom'
 import { cx } from '../lib/cx'
 import type { FaceBbox, ID } from '../types/api'
 
@@ -41,7 +42,8 @@ const SWIPE_MIN_X = 48
 /**
  * 사진 크게 보기 공용 라이트박스(09 제작자 검수 · 16 뷰어, CHMO-242) — iOS 사진 앱풍
  * 라이트 크롬: 흰 배경 풀블리드 + 상단 ✕/카운터·하단 아이콘 툴바(반투명 blur 바).
- * 좌우 스와이프·←/→ 키로 이동(끝에서 멈춤), [저장]은 앨범 저장 파이프라인(usePhotoSave,
+ * 좌우 스와이프·←/→ 키로 이동(끝에서 멈춤), 핀치·더블탭으로 확대(usePhotoZoom, CHMO-671 —
+ * 확대 중에는 손가락 끌기가 팬이라 사진 이동이 멈춘다), [저장]은 앨범 저장 파이프라인(usePhotoSave,
  * CHMO-473 — iOS는 공유 시트 '이미지 저장', 그 외는 blob 다운로드). 확인 다이얼로그 등
  * z-40 오버레이를 위에 띄우려면 호출부 JSX에서 라이트박스보다 뒤에 두면 된다(DOM 순서).
  */
@@ -67,37 +69,50 @@ export function PhotoLightbox<T extends LightboxPhoto>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoId])
 
-  // bbox 환산 재료 — 원본 자연 크기(naturalWidth/Height)와 이미지가 그려지는 프레임 크기
+  // 그려진 사진 영역 환산 재료 — 원본 자연 크기(naturalWidth/Height)와 프레임 크기.
+  // bbox 오버레이(CHMO-412)와 줌 팬 한계(CHMO-671)가 같은 사각형을 쓴다.
   const imgRef = useRef<HTMLImageElement | null>(null)
-  const frameRef = useRef<HTMLDivElement | null>(null)
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const [frame, setFrame] = useState<{ w: number; h: number } | null>(null)
-  const bboxEnabled = faceBboxes != null
 
   useEscapeKey(!disabled, onClose)
 
   // 사진 전환 시 자연 크기 갱신 — 캐시된 이미지는 onLoad 전에 이미 complete일 수 있어 직접 읽는다
   useEffect(() => {
-    if (!bboxEnabled) return
     const img = imgRef.current
     if (img && img.complete && img.naturalWidth > 0) {
       setNatural({ w: img.naturalWidth, h: img.naturalHeight })
     } else {
       setNatural(null)
     }
-  }, [bboxEnabled, photo?.id])
+  }, [photo?.id])
 
-  // 프레임 크기 추적 — 데스크톱 창 리사이즈에도 bbox가 사진에 붙어 있게
+  // object-contain으로 그려진 실제 이미지 영역(레터박스 제외)을 프레임 안에서 역산한다
+  const fit = useMemo(() => {
+    if (!natural || !frame || natural.w <= 0 || natural.h <= 0) return null
+    const scale = Math.min(frame.w / natural.w, frame.h / natural.h)
+    const width = natural.w * scale
+    const height = natural.h * scale
+    return { left: (frame.w - width) / 2, top: (frame.h - height) / 2, width, height }
+  }, [natural, frame])
+
+  const zoom = usePhotoZoom({ enabled: !disabled, resetKey: photoId, fit })
+
+  // 프레임 크기 추적 — 데스크톱 창 리사이즈에도 bbox·확대 위치가 사진에 붙어 있게
   useEffect(() => {
-    if (!bboxEnabled) return
-    const el = frameRef.current
+    const el = zoom.frameRef.current
     if (!el) return
-    const update = () => setFrame({ w: el.clientWidth, h: el.clientHeight })
+    const update = () =>
+      setFrame((prev) =>
+        prev?.w === el.clientWidth && prev?.h === el.clientHeight
+          ? prev
+          : { w: el.clientWidth, h: el.clientHeight },
+      )
     update()
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [bboxEnabled])
+  }, [zoom.frameRef])
 
   const go = (delta: number) => {
     const next = index + delta
@@ -124,7 +139,13 @@ export function PhotoLightbox<T extends LightboxPhoto>({
 
   if (!photo) return null
 
+  // 좌우 스와이프로 사진 이동 — 손가락이 둘 이상이거나 확대 중이면 줌 제스처의 몫이다.
+  // 확대 중에 같은 손가락 끌기는 팬이고, 1x로 돌아오면 이동이 그대로 살아난다.
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || zoom.isZoomed()) {
+      touchStart.current = null
+      return
+    }
     const t = e.touches[0]
     touchStart.current = { x: t.clientX, y: t.clientY }
   }
@@ -132,7 +153,7 @@ export function PhotoLightbox<T extends LightboxPhoto>({
   const handleTouchEnd = (e: React.TouchEvent) => {
     const start = touchStart.current
     touchStart.current = null
-    if (!start || disabled) return
+    if (!start || disabled || e.touches.length > 0 || zoom.isZoomed()) return
     const t = e.changedTouches[0]
     const dx = t.clientX - start.x
     const dy = t.clientY - start.y
@@ -156,15 +177,7 @@ export function PhotoLightbox<T extends LightboxPhoto>({
           ? '사진 앱에 저장'
           : '저장'
 
-  // object-contain으로 그려진 실제 이미지 영역(레터박스 제외)을 프레임 안에서 역산한다
   const boxes = faceBboxes?.(photo)
-  let paintedRect: { left: number; top: number; width: number; height: number } | null = null
-  if (boxes?.length && natural && frame && natural.w > 0 && natural.h > 0) {
-    const scale = Math.min(frame.w / natural.w, frame.h / natural.h)
-    const width = natural.w * scale
-    const height = natural.h * scale
-    paintedRect = { left: (frame.w - width) / 2, top: (frame.h - height) / 2, width, height }
-  }
 
   return (
     <div
@@ -181,42 +194,50 @@ export function PhotoLightbox<T extends LightboxPhoto>({
         {/* 사진 — 풀블리드 contain, 상/하단 바 높이만큼 패딩으로 비켜난다.
             key=사진 id — 이동 시 이전 원본이 그대로 보이는 잔상 방지(새 img로 교체) */}
         <div onClick={(e) => e.stopPropagation()} className="absolute inset-0 pb-24 pt-12">
-          <div ref={frameRef} className="relative h-full w-full">
-            <img
-              key={photo.id}
-              ref={imgRef}
-              src={photo.url}
-              alt=""
-              onLoad={(e) =>
-                bboxEnabled &&
-                setNatural({
-                  w: e.currentTarget.naturalWidth,
-                  h: e.currentTarget.naturalHeight,
-                })
-              }
-              className="h-full w-full object-contain"
-            />
-            {/* 애매 얼굴 bbox 오버레이 — 원본 px → 그려진 이미지 영역 비율로 환산(CHMO-412) */}
-            {paintedRect && natural && boxes && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute overflow-hidden"
-                style={paintedRect}
-              >
-                {boxes.map((box, i) => (
-                  <div
-                    key={i}
-                    className="absolute rounded-md border-2 border-primary shadow-[0_0_0_1.5px_rgba(255,255,255,0.75)]"
-                    style={{
-                      left: `${(box.x / natural.w) * 100}%`,
-                      top: `${(box.y / natural.h) * 100}%`,
-                      width: `${(box.w / natural.w) * 100}%`,
-                      height: `${(box.h / natural.h) * 100}%`,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+          {/* 줌 제스처의 기준 박스 — touch-none이라야 브라우저가 페이지 줌으로 먼저 가져가지 않는다.
+              확대된 사진은 이 박스 안에 갇혀 상·하단 바를 침범하지 않는다 */}
+          <div
+            ref={zoom.frameRef}
+            {...zoom.handlers}
+            className="relative h-full w-full touch-none overflow-hidden"
+          >
+            {/* 사진과 bbox를 한 래퍼에 담아 함께 확대·이동한다(원점은 좌상단 — 훅 계산 전제) */}
+            <div
+              ref={zoom.contentRef}
+              className="relative h-full w-full origin-top-left will-change-transform"
+            >
+              <img
+                key={photo.id}
+                ref={imgRef}
+                src={photo.url}
+                alt=""
+                draggable={false}
+                onLoad={(e) =>
+                  setNatural({
+                    w: e.currentTarget.naturalWidth,
+                    h: e.currentTarget.naturalHeight,
+                  })
+                }
+                className="h-full w-full object-contain"
+              />
+              {/* 애매 얼굴 bbox 오버레이 — 원본 px → 그려진 이미지 영역 비율로 환산(CHMO-412) */}
+              {fit && natural && !!boxes?.length && (
+                <div aria-hidden className="pointer-events-none absolute overflow-hidden" style={fit}>
+                  {boxes.map((box, i) => (
+                    <div
+                      key={i}
+                      className="absolute rounded-md border-2 border-primary shadow-[0_0_0_1.5px_rgba(255,255,255,0.75)]"
+                      style={{
+                        left: `${(box.x / natural.w) * 100}%`,
+                        top: `${(box.y / natural.h) * 100}%`,
+                        width: `${(box.w / natural.w) * 100}%`,
+                        height: `${(box.h / natural.h) * 100}%`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

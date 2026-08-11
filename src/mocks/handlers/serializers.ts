@@ -569,6 +569,8 @@ export function toAgreementStatusResponse(userId: number) {
 
 // ── 어드민 (BE admin/dto — CHMO-378 스펙·소스 대조 2026-08-04) ──
 // 어드민 응답에도 시크릿 4종(joinKey·비밀번호·공유 토큰·공유 비밀번호)은 싣지 않는다(AC-6).
+// **모임 이름도 싣지 않는다**(BE CHMO-668) — 어드민은 모임을 groupId로만 식별한다.
+// 이벤트 이름·닉네임은 모임 이름이 아니라 그대로 둔다(BE PR #203과 같은 경계).
 
 /** BE AdminProfileResponse — GET /admin/me (CHMO-377) */
 export function toAdminProfileResponse(user: DbUser) {
@@ -587,7 +589,6 @@ function adminGroupPhotoCount(groupId: number): number {
 export function toAdminRecentGroup(group: DbGroup) {
   return {
     groupId: group.id,
-    name: group.name,
     memberCount: memberCountOf(group.id),
     createdAt: group.createdAt,
   }
@@ -597,7 +598,6 @@ export function toAdminRecentGroup(group: DbGroup) {
 export function toAdminGroupSummary(group: DbGroup) {
   return {
     groupId: group.id,
-    name: group.name,
     memberCount: memberCountOf(group.id),
     eventCount: eventCountOf(group.id),
     photoCount: adminGroupPhotoCount(group.id),
@@ -618,7 +618,6 @@ export function toAdminGroupDetailResponse(group: DbGroup) {
   const ownerUser = owner ? db.users.find((u) => u.id === owner.userId) : undefined
   return {
     groupId: group.id,
-    name: group.name,
     createdAt: group.createdAt,
     ownerUserId: ownerUser?.id ?? null,
     ownerNickname: ownerUser?.nickname ?? null,

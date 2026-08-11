@@ -515,6 +515,7 @@ export const BE_AGREEMENTS = {
 // ── 관리자 (CHMO-377·378 — BE 스펙 문서 §3·admin/dto 소스 대조 2026-08-04) ──
 // 실서버 채집은 관리자 role 부여(DB 직접 변경) 후에만 가능하다 — 가드 403만 채집됐고
 // 성공 응답은 BE 스펙 문서의 예시·DTO 레코드 정의에서 옮겼다(계약은 형태지 값이 아니다).
+// 모임 이름은 응답 3곳 어디에도 없다(BE CHMO-668 / PR #203 — 이벤트 이름·닉네임은 존치).
 
 /** GET /admin/me — AdminProfileResponse */
 export const BE_ADMIN_PROFILE = { userId: 3, nickname: '김선생', role: 'ADMIN' }
@@ -523,16 +524,13 @@ export const BE_ADMIN_PROFILE = { userId: 3, nickname: '김선생', role: 'ADMIN
 export const BE_ADMIN_STATS = {
   totals: { users: 123, groups: 45, events: 210, photos: 8123 },
   last7Days: { newGroups: 3, newEvents: 12, newPhotos: 950 },
-  recentGroups: [
-    { groupId: 45, name: '치즈유치원', memberCount: 8, createdAt: '2026-08-01T10:00:00' },
-  ],
+  recentGroups: [{ groupId: 45, memberCount: 8, createdAt: '2026-08-01T10:00:00' }],
 }
 
 /** GET /admin/groups — result(bare 배열). pageInfo는 봉투에 나란히 실린다(아래) */
 export const BE_ADMIN_GROUP_ROWS = [
   {
     groupId: 45,
-    name: '치즈유치원',
     memberCount: 8,
     eventCount: 12,
     photoCount: 830,
@@ -553,7 +551,6 @@ export const BE_ADMIN_PAGE_INFO = {
  * 멤버 role은 CHMO-605 리네이밍 값(EDITOR/VIEWER — BE 스펙 대조, 실서버 채집 후 교체) */
 export const BE_ADMIN_GROUP_DETAIL = {
   groupId: 45,
-  name: '치즈유치원',
   createdAt: '2026-08-01T10:00:00',
   ownerUserId: 3,
   ownerNickname: '김선생',
