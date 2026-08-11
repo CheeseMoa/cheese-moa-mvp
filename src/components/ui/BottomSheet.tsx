@@ -16,6 +16,13 @@ interface BottomSheetProps {
    * 기본(false)은 종전 동작 그대로: 시트 어디를 끌어도 닫히고 내부 가로 스크롤만 공존한다.
    */
   bodyScrollable?: boolean
+  /**
+   * 프레임을 거의 다 먹는 시트(03 유형 선택) — 콘텐츠 높이가 아니라 프레임 높이에서 상단
+   * 인셋만 뺀 만큼을 차지한다. 화면 자체가 시트인 화면용: 위로 남긴 56px에 어두워진 뒤
+   * 배경이 비쳐 "덮은 화면"이 보이고, 본문은 flex-1이라 카드를 세로 중앙에 놓을 수 있다.
+   * 제목도 이땐 화면 제목급(20px)으로 키운다 — 목록형 시트의 16px은 전체화면에서 눌린다.
+   */
+  fullHeight?: boolean
   children: ReactNode
 }
 
@@ -58,6 +65,7 @@ export function BottomSheet({
   title,
   subtitle,
   bodyScrollable = false,
+  fullHeight = false,
   children,
 }: BottomSheetProps) {
   useEscapeKey(open, onClose)
@@ -151,17 +159,32 @@ export function BottomSheet({
           onPointerCancel={handlePointerEnd}
           /* 스크롤 본문 시트는 세로 팬을 브라우저에 남긴다 — pan-x면 자손 스크롤까지 막힌다 */
           style={{ touchAction: bodyScrollable ? undefined : 'pan-x' }}
-          className="select-none rounded-t-[24px] bg-cream px-5 pb-safe-6 pt-3"
+          className={cx(
+            'select-none rounded-t-[24px] bg-cream px-5 pb-safe-6 pt-3',
+            // 상단 56px은 스크림에 남긴다 — 어두워진 뒤 배경이 그만큼 비쳐 깊이가 생긴다
+            fullHeight && 'flex h-[calc(100%-56px)] flex-col',
+          )}
         >
           <div className="mx-auto h-1 w-11 rounded-full bg-border" aria-hidden="true" />
-          {title && <h2 className="mt-4 text-base font-bold text-text">{title}</h2>}
-          {subtitle && <p className="mt-1 text-xs text-muted">{subtitle}</p>}
+          {title &&
+            (fullHeight ? (
+              <h2 className="mt-5 text-[20px] text-heading">{title}</h2>
+            ) : (
+              <h2 className="mt-4 text-base font-bold text-text">{title}</h2>
+            ))}
+          {subtitle && (
+            <p className={cx('text-muted', fullHeight ? 'mt-2 text-[13px]' : 'mt-1 text-xs')}>
+              {subtitle}
+            </p>
+          )}
           <div
             data-sheet-body={bodyScrollable ? '' : undefined}
             className={cx(
               'mt-2',
               // 프레임을 넘기지 않게 본문만 스크롤 — 핸들·제목은 위에 남아 끌어내려 닫기가 살아 있다
               bodyScrollable && 'max-h-[68dvh] overflow-y-auto overscroll-contain',
+              // min-h-0이 없으면 flex 자식이 콘텐츠 높이 아래로 안 줄어 세로 중앙 정렬이 깨진다
+              fullHeight && 'min-h-0 flex-1',
             )}
           >
             {children}
