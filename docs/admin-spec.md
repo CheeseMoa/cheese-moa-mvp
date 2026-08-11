@@ -161,19 +161,19 @@
 
 | 컬럼 | 비고 |
 |---|---|
-| 모임명 | 상세로 링크 |
+| 모임 | `모임 #45` — 상세로 링크. **이름이 아니라 groupId**(CHMO-668·670) |
 | 멤버 수 | |
 | 이벤트 수 | |
 | 사진 수 | |
 | 생성일 | |
 
-- 검색: 모임명
-- 정렬: 최신순(기본) / 사진 많은 순
+- 검색: **없음**(CHMO-670) — BE는 `q`(모임명 부분 일치)를 계속 받지만, 이름을 화면에 안 보여주는 이상 검색 결과가 맞는지 확인할 방법이 없다. 같은 이유로 `이름순` 정렬도 뺐다.
+- 정렬: 최신순(기본) / 오래된순 — 사진 많은 순은 BE 화이트리스트 밖(§4)
 - **페이지네이션 필수** — 전체 조회는 데이터가 늘면 그대로 장애가 된다
 
 ### 3-3. 모임 상세
 
-- **헤더**: 모임명, 생성일, 멤버 수
+- **헤더**: `모임 #45`(이름 없음 — CHMO-668), 생성일, 멤버 수, 이벤트·사진 수, 생성자 닉네임
 - **멤버 목록**: 닉네임, 합류일
 - **이벤트 목록**: 이름, 날짜, 상태(빈/분석중/검수중/공개), 사진 수, 앨범 수, 공개일
 
@@ -189,15 +189,16 @@
 | 용도 | 확정 | 응답 |
 |---|---|---|
 | 진입 게이트 | `GET /admin/me` | `{userId, nickname, role}` — 관리자 아니면 ADMIN403이라 FE 가드가 이걸로 판정 (CHMO-377) |
-| 대시보드 요약 | `GET /admin/stats` | `totals`(users·groups·events·photos) + `last7Days`(newGroups·newEvents·newPhotos) + `recentGroups` 5개 고정 |
-| 모임 목록 | `GET /admin/groups?page&size&q&sort` | 행: groupId·name·memberCount·eventCount·photoCount·createdAt — **페이지 정보는 봉투의 `pageInfo`**(page·size·hasNext·totalElements·totalPages) |
-| 모임 상세 | `GET /admin/groups/{groupId}` | 기본정보+생성자 + 멤버 목록(**PENDING 포함**, spaceUserId 오름차순) + 이벤트 목록(eventId 내림차순, publishedAt은 미공개 null) |
+| 대시보드 요약 | `GET /admin/stats` | `totals`(users·groups·events·photos) + `last7Days`(newGroups·newEvents·newPhotos) + `recentGroups` 5개 고정(행: groupId·memberCount·createdAt) |
+| 모임 목록 | `GET /admin/groups?page&size&q&sort` | 행: groupId·memberCount·eventCount·photoCount·createdAt — **페이지 정보는 봉투의 `pageInfo`**(page·size·hasNext·totalElements·totalPages) |
+| 모임 상세 | `GET /admin/groups/{groupId}` | 기본정보(groupId·createdAt·카운트)+생성자 + 멤버 목록(**PENDING 포함**, spaceUserId 오름차순) + 이벤트 목록(eventId 내림차순, publishedAt은 미공개 null) |
 
 **확정된 정책** (BE 스펙 정책 결정 표에서 발췌)
 
 - 경로는 `/admin/groups` — 티켓 초안의 `spaces`는 내부 명칭이 샌 표기라 폐기(직렬화 경계 밖은 group/event).
 - 멤버 수 = ACTIVE만(서비스 화면과 같은 규칙 — 상세 멤버 행 수와 다를 수 있고 `status`가 설명한다). 사진 수 = 앨범 매핑(AlbumPhoto) distinct — 분류를 거친 사진만. 총 사진(stats)은 photo 행 count.
-- 정렬 화이트리스트 `createdAt`·`name` × `asc`·`desc`(기본 `createdAt,desc`) — **집계 컬럼 정렬(§3-2 '사진 많은 순')은 1차 제외**. `size`는 1~100.
+- **모임 이름은 어드민 응답 3곳(stats.recentGroups·목록·상세) 어디에도 없다**(BE CHMO-668 / PR #203, 2026-08-11) — 어드민은 모임을 groupId로만 식별한다. 이벤트 이름·멤버 닉네임·생성자 닉네임은 모임 이름이 아니라 존치. 화면은 전부 `모임 #{groupId}` 표기(FE `admin/lib/format.ts` `groupLabel` 단일 원천, CHMO-670).
+- 정렬 화이트리스트 `createdAt`·`name` × `asc`·`desc`(기본 `createdAt,desc`) — **집계 컬럼 정렬(§3-2 '사진 많은 순')은 1차 제외**. `size`는 1~100. 검색 `q`·정렬 `name`은 BE가 계속 받지만(값만 걷고 동작은 유지) **FE는 보내지 않는다**(§3-2).
 - 집계 캐시는 안 넣는다(현 규모 count는 ms 단위 — 느려지면 그때 측정).
 - 응답에 시크릿 4종(joinKey·모임 비밀번호·공유 토큰·학부모 공유 비밀번호) 없음(§3-3, AC-6).
 

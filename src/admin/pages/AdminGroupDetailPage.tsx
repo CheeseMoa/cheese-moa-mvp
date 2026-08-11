@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import {
   formatCount,
   formatDate,
+  groupLabel,
   memberRoleLabel,
   memberStatusLabel,
 } from '../lib/format'
@@ -102,7 +103,8 @@ export function AdminGroupDetailPage() {
               모임
             </Link>
             <span className="font-normal text-admin-muted">/</span>
-            <span>{detail.data?.name ?? '…'}</span>
+            {/* 이름 대신 groupId 표기라 응답을 기다릴 필요가 없다 — URL이 이미 갖고 있다 */}
+            <span>{groupLabel(groupId ?? '')}</span>
           </>
         }
         right="조회 전용"
@@ -127,7 +129,7 @@ export function AdminGroupDetailPage() {
         ) : (
           <>
             <section className="rounded-xl border border-admin-border bg-admin-surface px-5 py-4">
-              <h1 className="text-lg font-bold">{detail.data.name}</h1>
+              <h1 className="text-lg font-bold">{groupLabel(detail.data.groupId)}</h1>
               <p className="mt-1.5 text-[13px] text-admin-muted">
                 생성일 <Strong>{formatDate(detail.data.createdAt)}</Strong>
                 <Dot /> 멤버 <Strong>{formatCount(detail.data.memberCount)}명</Strong>

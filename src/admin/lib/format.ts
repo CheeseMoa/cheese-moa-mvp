@@ -4,6 +4,14 @@
  */
 import type { AdminMemberStatus } from '../api/types'
 
+/**
+ * 모임 표시명 — 어드민 응답엔 모임 이름이 없다(BE CHMO-668). 표 첫 칸·상세 제목·브레드크럼이
+ * 전부 이 한 형태(`모임 #45`)를 쓴다: 행을 짚어 말할 단서이자 상세 URL의 그 값이다.
+ */
+export function groupLabel(groupId: number | string): string {
+  return `모임 #${groupId}`
+}
+
 /** 천 단위 구분(1,284) — 어드민 숫자 표기 공통 */
 export function formatCount(value: number): string {
   return value.toLocaleString('ko-KR')
