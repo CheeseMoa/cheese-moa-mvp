@@ -29,6 +29,7 @@ import {
   renameGroup,
 } from '../api/groups'
 import { createEvent, listGroupEvents } from '../api/events'
+import { trackEvent } from '../lib/analytics'
 import { formatEventDate } from '../lib/eventDate'
 import { isLastActiveTeacher } from '../lib/lastTeacher'
 import type { Group, ID } from '../types/api'
@@ -578,6 +579,7 @@ function CreateEventModal({ open, onClose, groupId }: CreateEventModalProps) {
     setError(null)
     await mutate(() => createEvent(groupId, { name: name.trim() }), {
       onSuccess: (event) => {
+        trackEvent('event_create_success')
         toast.show('🧀 이벤트를 만들었어요')
         navigate(`/groups/${groupId}/events/${event.id}`)
       },

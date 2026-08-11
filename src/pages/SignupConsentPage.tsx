@@ -6,6 +6,7 @@ import { Button, LoadState } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { listAgreements, submitAgreements } from '../api/agreements'
+import { trackEvent } from '../lib/analytics'
 import { evaluateConsentGate } from '../lib/consentGate'
 import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
 
@@ -52,7 +53,11 @@ export function SignupConsentPage() {
           })),
         ),
       {
-        onSuccess: () => navigate(returnTo, { replace: true }),
+        onSuccess: () => {
+          // 가입 동의를 지나야 서비스가 열린다 — 여기서 이탈하면 계정이 있어도 아무것도 못 한다
+          trackEvent('signup_consent_submit')
+          navigate(returnTo, { replace: true })
+        },
         onError: (msg) => {
           setError(msg)
           setSubmitting(false)

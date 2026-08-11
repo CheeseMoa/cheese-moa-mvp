@@ -5,6 +5,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, Header, IconClose, TextField, useToast } from '../components/ui'
 import { useMutation } from '../hooks/useMutation'
 import { joinGroup } from '../api/groups'
+import { trackEvent } from '../lib/analytics'
 import { buildJoinPath } from '../lib/joinLink'
 import type { JoinGroupResult } from '../types/api'
 
@@ -64,6 +65,8 @@ export function ParentJoinPage({ joinKey, groupName }: ParentJoinPageProps) {
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
+    // 인물 이름은 개인정보라 싣지 않는다 — 몇 명을 적었는지(개수)만
+    trackEvent('join_submit', { flow: 'member', name_count: names.length })
     await mutate(() => joinGroup({ joinKey, password: password.trim(), childNames: names }), {
       onSuccess: finishJoined,
       redirect: { state: { returnTo } },
