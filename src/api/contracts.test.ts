@@ -16,7 +16,7 @@ import {
   getMe,
   login,
   signup,
-  updatePushEnabled,
+  updatePushSetting,
 } from './auth'
 import { registerDevice, unregisterDevice } from './devices'
 import {
@@ -1070,25 +1070,26 @@ describe('인증 · 프로필', () => {
     await expect(getMe()).resolves.toMatchObject({ pushEnabled: false })
   })
 
-  it('알림 받기 토글 — PATCH /me에 pushEnabled만 싣는다 (이름을 건드리지 않는다)', async () => {
-    const calls = serve(envelope({ ...BE_USER, pushEnabled: false }))
+  it('알림 받기 토글 — PATCH /me/push-settings, 요청·응답 필드는 enabled', async () => {
+    // GET /me는 pushEnabled로 주는데 이 엔드포인트만 enabled다 — BE가 그렇게 냈다
+    const calls = serve(envelope({ enabled: false }))
 
-    await expect(updatePushEnabled(false)).resolves.toMatchObject({ pushEnabled: false })
+    await expect(updatePushSetting(false)).resolves.toBe(false)
 
-    expect(calls[0].url).toBe('/api/v1/me')
+    expect(calls[0].url).toBe('/api/v1/me/push-settings')
     expect(calls[0].method).toBe('PATCH')
-    // nickname·pin 키가 아예 없어야 한다 — undefined는 JSON.stringify가 생략한다
-    expect(bodyOf(calls[0])).toEqual({ pushEnabled: false })
+    expect(bodyOf(calls[0])).toEqual({ enabled: false })
   })
 
-  it('푸시 기기 등록 — POST /me/devices {token, platform}', async () => {
+  it('푸시 기기 등록 — platform을 BE enum 대문자로 올려 보낸다 (소문자면 400)', async () => {
     const calls = serve(envelope(null))
 
     await registerDevice({ token: 'fcm-token-abc', platform: 'ios' })
 
     expect(calls[0].url).toBe('/api/v1/me/devices')
     expect(calls[0].method).toBe('POST')
-    expect(bodyOf(calls[0])).toEqual({ token: 'fcm-token-abc', platform: 'ios' })
+    // FE 내부 값은 브리지 UA가 주는 소문자지만 BE DevicePlatform은 IOS|ANDROID다
+    expect(bodyOf(calls[0])).toEqual({ token: 'fcm-token-abc', platform: 'IOS' })
   })
 
   it('푸시 기기 해제 — 토큰을 경로에 인코딩해 싣는다 (`/`가 섞이면 경로가 갈라진다)', async () => {

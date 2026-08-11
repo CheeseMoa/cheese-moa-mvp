@@ -5,7 +5,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, ConfirmDialog, Header, LoadState, TextField, Toggle, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { deleteAccount, getMe, logout, updateMe, updatePushEnabled } from '../api/auth'
+import { deleteAccount, getMe, logout, updateMe, updatePushSetting } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
 import {
@@ -93,9 +93,9 @@ export function SettingsPage() {
     if (pushBusy) return
     setPushBusy(true)
     setPushOn(next)
-    await mutate(() => updatePushEnabled(next), {
-      onSuccess: (updated) => {
-        setPushOn(updated.pushEnabled)
+    await mutate(() => updatePushSetting(next), {
+      onSuccess: (enabled) => {
+        setPushOn(enabled)
         setPushBusy(false)
       },
       onError: (msg) => {
