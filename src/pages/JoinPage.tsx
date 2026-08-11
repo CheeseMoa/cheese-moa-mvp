@@ -1,17 +1,26 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { JoinGroupModal } from '../components/JoinGroupModal'
+import { InAppBrowserGuide } from '../components/InAppBrowserGuide'
 import { ParentJoinPage } from './ParentJoinPage'
 import { useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { findMyGroupByJoinKey } from '../api/groups'
 import { isAuthenticated } from '../lib/auth'
+import {
+  detectInAppBrowser,
+  hasDismissedInAppGuide,
+  markInAppGuideDismissed,
+} from '../lib/inAppBrowser'
 import { parseJoinLinkInfo } from '../lib/joinLink'
 
 /**
  * 02-1. 모임 참여 (초대 링크 진입) · node 371:31 · POST /groups/join.
  * 참여는 로그인 전제 — 미로그인이면 returnTo를 실어 로그인으로 보내고, 완료 후 이 링크로 복귀한다.
+ *
+ * 단 **카카오톡 인앱 브라우저면 그보다 먼저 앱 유도(02-K)가 선다**(CHMO-661) — 그 웹뷰는
+ * 딥링크를 가로채지 않고 구글 로그인도 거부해, 로그인으로 보내면 돌아올 길이 없다.
  *
  * 갈래는 링크 마커가 정한다(lib/joinLink — joinKey는 불투명이라 진입 시점 근거가 URL뿐, CHMO-607):
  * viewer(멤버) 키 → 02-2 단일 화면(ParentJoinPage) · 그 외(일반·비즈니스 관리자·마커 없음) →
@@ -38,10 +47,18 @@ export function JoinPage() {
   const linkInfo = parseJoinLinkInfo(searchParams)
   const isViewerLink = linkInfo.role === 'viewer'
 
+  // 카카오톡 인앱 브라우저면 합류보다 먼저 앱·브라우저 유도가 선다(CHMO-661) — 딥링크가
+  // 발동하지 않는 환경이고 구글 로그인도 막혀, 여기서부터 태우면 로그인에서 멈춘다.
+  const [guideDismissed, setGuideDismissed] = useState(hasDismissedInAppGuide)
+  const showInAppGuide = detectInAppBrowser() !== null && !guideDismissed
+
   // 이미 멤버인지 사전 감지 — 목록 응답엔 joinKey가 없어(시크릿 미노출, CHMO-192)
   // 내 모임들의 초대 정보로 대조한다. 조회 실패 시에는 기존처럼 모달을 띄운다(참여를 막지 않음)
+  // 안내가 서 있는 동안은 조회하지 않는다 — 뒤에서 모임 상세로 튕겨 안내가 사라지면 안 된다
   const { data: memberGroup, loading } = useApi(
-    authed && fixedJoinKey && !isViewerLink ? `member-group:${fixedJoinKey}` : null,
+    authed && fixedJoinKey && !isViewerLink && !showInAppGuide
+      ? `member-group:${fixedJoinKey}`
+      : null,
     (signal) => findMyGroupByJoinKey(fixedJoinKey ?? '', signal),
   )
 
@@ -52,6 +69,20 @@ export function JoinPage() {
     toast.show('🧀 이미 참여 중인 모임이에요')
     navigate(`/groups/${memberGroup.id}`, { replace: true })
   }, [memberGroup, navigate, toast])
+
+  // 로그인 리다이렉트보다 앞이다 — 인앱 브라우저에서 로그인 화면으로 보내면 소셜 로그인이
+  // 거부(disallowed_useragent)돼 되돌아올 길이 없다
+  if (showInAppGuide) {
+    return (
+      <InAppBrowserGuide
+        groupName={linkInfo.groupName}
+        onContinue={() => {
+          markInAppGuideDismissed()
+          setGuideDismissed(true)
+        }}
+      />
+    )
+  }
 
   if (!authed) {
     // 마커(유형·모임명·카운트)를 잃으면 로그인 복귀 후 갈래·표시 정보가 사라진다 — 쿼리째 보존

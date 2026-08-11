@@ -15,6 +15,12 @@
       "env": { "VITE_ENABLE_MSW": "true" }
     },
     {
+      "name": "preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
+      "port": 4173
+    },
+    {
       "name": "dev-msw-alt",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--", "--port", "5197"],
