@@ -26,8 +26,13 @@ function readStore(): DbUser[] {
           typeof (u as DbUser)?.nickname === 'string' &&
           typeof (u as DbUser)?.pin === 'string',
       )
-      // role 도입(CHMO-379) 이전 보존분은 필드가 없다 — BE 마이그레이션과 같은 기본값 USER
-      .map((u) => ({ ...u, role: u.role === 'ADMIN' ? ('ADMIN' as const) : ('USER' as const) }))
+      // role 도입(CHMO-379) 이전 보존분은 필드가 없다 — BE 마이그레이션과 같은 기본값 USER.
+      // pushEnabled(CHMO-667)도 같은 결: 거부한 사람만 false라 없으면 수신 허용으로 읽는다
+      .map((u) => ({
+        ...u,
+        role: u.role === 'ADMIN' ? ('ADMIN' as const) : ('USER' as const),
+        pushEnabled: u.pushEnabled !== false,
+      }))
   } catch {
     return []
   }

@@ -16,7 +16,9 @@ import {
   getMe,
   login,
   signup,
+  updatePushSetting,
 } from './auth'
+import { registerDevice, unregisterDevice } from './devices'
 import {
   createPersonAlbum,
   deletePhotos,
@@ -1051,13 +1053,52 @@ describe('인증 · 프로필', () => {
     expect(bodyOf(calls[0])).toEqual({ code: 'otc-123' })
   })
 
-  it('BE 프로필의 userId를 id로 옮긴다', async () => {
+  it('BE 프로필의 userId를 id로 옮긴다 — pushEnabled 없는 구계약은 수신 허용', async () => {
+    // 실채집 픽스처(2026-07-09)엔 pushEnabled가 없다 — BE CHMO-664 배포 전 계약.
+    // 이걸 '거부'로 읽으면 설정 토글이 꺼진 채로 뜬다(CHMO-667)
     serve(envelope(BE_USER))
     await expect(getMe()).resolves.toEqual({
       id: 4,
       nickname: 'FE연동테스트',
       createdAt: '2026-07-09T09:50:37.543598Z',
+      pushEnabled: true,
     })
+  })
+
+  it('pushEnabled=false는 그대로 읽는다 (CHMO-667 — 수신 거부한 계정)', async () => {
+    serve(envelope({ ...BE_USER, pushEnabled: false }))
+    await expect(getMe()).resolves.toMatchObject({ pushEnabled: false })
+  })
+
+  it('알림 받기 토글 — PATCH /me/push-settings, 요청·응답 필드는 enabled', async () => {
+    // GET /me는 pushEnabled로 주는데 이 엔드포인트만 enabled다 — BE가 그렇게 냈다
+    const calls = serve(envelope({ enabled: false }))
+
+    await expect(updatePushSetting(false)).resolves.toBe(false)
+
+    expect(calls[0].url).toBe('/api/v1/me/push-settings')
+    expect(calls[0].method).toBe('PATCH')
+    expect(bodyOf(calls[0])).toEqual({ enabled: false })
+  })
+
+  it('푸시 기기 등록 — platform을 BE enum 대문자로 올려 보낸다 (소문자면 400)', async () => {
+    const calls = serve(envelope(null))
+
+    await registerDevice({ token: 'fcm-token-abc', platform: 'ios' })
+
+    expect(calls[0].url).toBe('/api/v1/me/devices')
+    expect(calls[0].method).toBe('POST')
+    // FE 내부 값은 브리지 UA가 주는 소문자지만 BE DevicePlatform은 IOS|ANDROID다
+    expect(bodyOf(calls[0])).toEqual({ token: 'fcm-token-abc', platform: 'IOS' })
+  })
+
+  it('푸시 기기 해제 — 토큰을 경로에 인코딩해 싣는다 (`/`가 섞이면 경로가 갈라진다)', async () => {
+    const calls = serve(envelope(null))
+
+    await unregisterDevice('fcm/token+with=chars')
+
+    expect(calls[0].url).toBe('/api/v1/me/devices/fcm%2Ftoken%2Bwith%3Dchars')
+    expect(calls[0].method).toBe('DELETE')
   })
 
   it('계정 삭제 — DELETE /me (실 BE 확정 경로, CHMO-524 · 초안 /users/me 폐기, CHMO-575)', async () => {

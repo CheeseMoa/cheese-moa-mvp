@@ -53,10 +53,19 @@ export interface RawUser {
   userId: ID
   nickname: string
   createdAt: ISODateTime
+  /** CHMO-667 — 푸시 수신 거부(BE CHMO-664). 구계약 응답엔 없다 */
+  pushEnabled?: boolean
 }
 
 export function toUser(raw: RawUser): User {
-  return { id: raw.userId, nickname: raw.nickname, createdAt: raw.createdAt }
+  return {
+    id: raw.userId,
+    nickname: raw.nickname,
+    createdAt: raw.createdAt,
+    // 거부한 사람만 false — 키가 없는 구계약 응답을 '거부'로 읽으면 설정 토글이
+    // 꺼진 채로 뜨고, 그걸 켜는 순간 있지도 않은 필드를 PATCH하게 된다
+    pushEnabled: raw.pushEnabled ?? true,
+  }
 }
 
 // ── Group ────────────────────────────────────────────────────

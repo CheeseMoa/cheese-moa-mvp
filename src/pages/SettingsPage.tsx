@@ -5,9 +5,19 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, ConfirmDialog, Header, LoadState, TextField, Toggle, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { deleteAccount, getMe, logout, updateMe } from '../api/auth'
+import { deleteAccount, getMe, logout, updateMe, updatePushSetting } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
+import {
+  forgetPushTokenAfterAccountDelete,
+  isPushSupported,
+  pushAllowed,
+  pushPermissionStatus,
+  requestPushPermissionNow,
+  unregisterPushOnLogout,
+} from '../lib/push'
+import { openAppSettings } from '../native/bridge'
+import type { PushPermissionStatus } from '../native/types'
 
 // 약관·정책 전문 링크 (CHMO-478) — 라우트는 가드 밖 /legal/*
 const LEGAL_LINKS = [
@@ -45,13 +55,66 @@ export function SettingsPage() {
   // 이용 통계 수집 토글(CHMO-662) — 처리방침 §12 '거부 방법'이 이 토글을 가리킨다.
   // 서버 상태가 아니라 기기 플래그(lib/analytics 소유)라 즉시 반영·실패 없음.
   const [analyticsOn, setAnalyticsOn] = useState(() => !isAnalyticsOptedOut())
+  // 알림 받기(CHMO-667) — 세 값이 각각 다른 층이다: 셸 지원 여부·OS 권한·서버 수신 거부.
+  // 앞의 둘은 브리지 왕복이라 도착 전엔 섹션을 그리지 않는다(브라우저에선 영영 false)
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushPermission, setPushPermission] = useState<PushPermissionStatus | null>(null)
+  const [pushOn, setPushOn] = useState(true)
+  const [pushBusy, setPushBusy] = useState(false)
 
   useEffect(() => {
     if (me) {
       setSavedNickname(me.nickname)
       setNickname(me.nickname)
+      setPushOn(me.pushEnabled)
     }
   }, [me])
+
+  // 앱 여부·OS 권한 조회. 화면을 떠난 뒤 도착한 응답은 버린다(마운트 1회 — 설정 앱에 다녀온
+  // 뒤의 최신 권한은 화면 재진입에서 다시 읽힌다)
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const supported = await isPushSupported()
+      if (!alive) return
+      setPushSupported(supported)
+      if (!supported) return
+      const status = await pushPermissionStatus()
+      if (alive) setPushPermission(status)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  /**
+   * 서버 수신 거부 전환. 낙관적으로 먼저 뒤집고 실패하면 되돌린다 —
+   * 토글은 즉시 반응해야 하는 컨트롤이라 왕복을 기다리며 멈춰 있으면 안 눌린 것처럼 보인다.
+   */
+  /** [알림 켜기] — OS 권한 창을 열고 결과로 이 섹션을 다시 그린다(허용 시 토큰 등록은 모듈이) */
+  const handlePushEnable = async () => {
+    if (pushBusy) return
+    setPushBusy(true)
+    setPushPermission(await requestPushPermissionNow())
+    setPushBusy(false)
+  }
+
+  const handlePushToggle = async (next: boolean) => {
+    if (pushBusy) return
+    setPushBusy(true)
+    setPushOn(next)
+    await mutate(() => updatePushSetting(next), {
+      onSuccess: (enabled) => {
+        setPushOn(enabled)
+        setPushBusy(false)
+      },
+      onError: (msg) => {
+        setPushOn(!next)
+        toast.show(msg)
+        setPushBusy(false)
+      },
+    })
+  }
 
   // 변경 없음(이름 그대로)이면 저장할 것이 없다 — 비활성
   const dirty = savedNickname !== null && nickname.trim() !== savedNickname
@@ -84,6 +147,8 @@ export function SettingsPage() {
     setDeletingAccount(true)
     await mutate(() => deleteAccount(), {
       onSuccess: () => {
+        // 기기 토큰 행은 계정과 함께 서버에서 사라졌다 — 로컬 흔적만 지운다(CHMO-667)
+        forgetPushTokenAfterAccountDelete()
         clearAuthTokens()
         toast.show('계정을 삭제했어요')
         navigate('/', { replace: true })
@@ -99,6 +164,9 @@ export function SettingsPage() {
   const handleLogout = async () => {
     if (loggingOut) return
     setLoggingOut(true)
+    // 이 기기의 푸시 해제가 먼저다(CHMO-667) — 인증이 필요한 호출이라 토큰을 지운 뒤엔 못 부른다.
+    // 실패해도 로그아웃은 그대로 진행한다(아래 서버 무효화와 같은 관용 — 모듈이 삼킨다)
+    await unregisterPushOnLogout()
     // 서버에서 refreshToken을 무효화한 뒤 로컬 토큰 삭제 — 서버 호출이 실패해도 로컬 로그아웃은 진행
     const refreshToken = getRefreshToken()
     if (refreshToken) {
@@ -121,8 +189,11 @@ export function SettingsPage() {
         title="설정"
         backDisabled={submitting || loggingOut || deletingAccount}
       />
+      {/* 자식마다 shrink-0 — 세로 flex 컨테이너라 내용이 넘치면 스크롤이 아니라 자식이 먼저 줄어든다.
+          카드 두 장(약관·지원)은 overflow-hidden이라 min-height:auto 보호를 못 받아 그 축소를 혼자
+          떠안고 행이 잘렸다(이용 통계 섹션이 늘며 드러난 문제). shrink-0이면 넘치는 만큼 main이 스크롤한다 */}
       <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
-        <h2 className="text-xl font-bold text-text">프로필 편집</h2>
+        <h2 className="shrink-0 text-xl font-bold text-text">프로필 편집</h2>
         {loading || loadError ? (
           <LoadState
             loading={loading}
@@ -132,7 +203,7 @@ export function SettingsPage() {
             unauthorizedTo="/login"
           />
         ) : (
-          <form onSubmit={handleSubmit} noValidate className="mt-4">
+          <form onSubmit={handleSubmit} noValidate className="mt-4 shrink-0">
             <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-card">
               {/* 라벨만 '이름'(소셜 표시명 이름 전환, CHMO-440) — 데이터 필드는 BE 계약 그대로 nickname */}
               <TextField
@@ -165,7 +236,7 @@ export function SettingsPage() {
         {/* 약관·정책 — 프로필 로딩/실패와 무관하게 항상 접근 가능 (CHMO-478) */}
         <nav
           aria-label="약관·정책"
-          className="mt-5 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card"
+          className="mt-5 shrink-0 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card"
         >
           {LEGAL_LINKS.map(({ to, label }) => (
             <Link
@@ -180,11 +251,70 @@ export function SettingsPage() {
             </Link>
           ))}
         </nav>
+        {/* 신고·문의 — App Store 1.2 연락 창구(CHMO-526). 서버 신고 큐 없이 mailto 한 줄이 전부라
+            메일 앱으로 바로 넘긴다. 주소는 스토어 등록정보의 지원 이메일과 반드시 같아야 한다 */}
+        <nav
+          aria-label="지원"
+          className="mt-5 shrink-0 overflow-hidden rounded-2xl border border-border bg-white shadow-card"
+        >
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface"
+          >
+            신고·문의
+            <span aria-hidden className="text-muted">
+              ›
+            </span>
+          </a>
+        </nav>
+        {/* 알림 받기(CHMO-667) — 앱에서만 그린다(AC-4: 브라우저엔 수신 경로가 없어 토글도 없다).
+            OS 권한과 서버 수신 거부는 다른 층이라 화면도 갈라진다: 권한이 없으면 토글을 켜 봐야
+            알림이 안 오므로 토글 대신 설정 앱으로 보낸다(브리지 openAppSettings).
+            약관·통계 섹션과 달리 프로필(me) 도착을 기다리는 이유: 토글이 보여 주는 값이
+            서버 상태(pushEnabled)라, 못 읽은 채 그리면 실제와 반대인 스위치를 내놓게 된다.
+            자리는 이용 통계 토글 바로 위 — 켜고 끄는 스위치 둘을 목록 끝에 나란히 둔다 */}
+        {pushSupported && me ? (
+          <section
+            aria-label="알림"
+            className="mt-5 shrink-0 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[15px] text-text">알림 받기</p>
+              {pushPermission && pushAllowed(pushPermission) ? (
+                <Toggle
+                  checked={pushOn}
+                  disabled={pushBusy}
+                  onChange={(next) => void handlePushToggle(next)}
+                />
+              ) : pushPermission === 'notDetermined' ? (
+                // 아직 안 물어본 기기 — 설정 앱으로 보내지 않고 여기서 바로 묻는다
+                <Button variant="secondary" size="sm" onClick={() => void handlePushEnable()}>
+                  알림 켜기
+                </Button>
+              ) : (
+                // denied — 앱이 프롬프트를 다시 못 띄운다(복구는 OS 설정뿐)
+                <Button variant="secondary" size="sm" onClick={() => void openAppSettings()}>
+                  설정 열기
+                </Button>
+              )}
+            </div>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+              {pushPermission && pushAllowed(pushPermission)
+                ? '참여 신청이 오거나 사진 분류가 끝나면 알려드려요.'
+                : pushPermission === 'notDetermined'
+                  ? '참여 신청이 오거나 사진 분류가 끝나면 알려드려요.'
+                  : '휴대폰 설정에서 치즈모아 알림을 켜면 참여 신청·분류 완료를 알려드려요.'}
+            </p>
+          </section>
+        ) : null}
         {/* 이용 통계 수집 거부(CHMO-662) — 처리방침 §12(자동 수집 장치)의 법정 필수 기재
-            '거부 방법'의 실체. 문구·위치를 바꾸면 처리방침 §12·§9(국외 이전)도 같이 고친다 */}
+            '거부 방법'의 실체. 라벨 '이용 통계 수집'을 바꾸면 처리방침 §12③·§9③(국외 이전 거부
+            방법)도 같이 고친다 — 두 조문이 이 라벨을 문자 그대로 인용한다.
+            자리는 문서·문의 링크 아래 = 설정 목록의 끝. 법정 기재대로 설정 화면에서 바로 끌 수는
+            있어야 하므로 하위 화면으로 묻지 않되, 설명을 한 줄로 줄여 시각적 무게만 낮췄다 */}
         <section
           aria-label="이용 통계"
-          className="mt-5 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
+          className="mt-5 shrink-0 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] text-text">이용 통계 수집</p>
@@ -197,29 +327,12 @@ export function SettingsPage() {
             />
           </div>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-            어떤 화면이 많이 쓰이는지 익명으로 수집해 서비스 개선에 써요. 계정·사진과 연결되지
-            않고, 꺼도 이용에 제한이 없어요.
+            익명으로 수집하며 계정·사진과 연결되지 않아요.
           </p>
         </section>
-        {/* 신고·문의 — App Store 1.2 연락 창구(CHMO-526). 서버 신고 큐 없이 mailto 한 줄이 전부라
-            메일 앱으로 바로 넘긴다. 주소는 스토어 등록정보의 지원 이메일과 반드시 같아야 한다 */}
-        <nav
-          aria-label="지원"
-          className="mt-5 overflow-hidden rounded-2xl border border-border bg-white shadow-card"
-        >
-          <a
-            href={`mailto:${SUPPORT_EMAIL}`}
-            className="flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface"
-          >
-            신고·문의
-            <span aria-hidden className="text-muted">
-              ›
-            </span>
-          </a>
-        </nav>
         {/* 로그아웃은 앱 유일의 로그아웃 표면 — 프로필 로딩/실패 중에도 항상 접근 가능해야 한다.
             계정 삭제도 같은 이유로 폼 밖(App Store 5.1.1(v) — 심사자가 설정에서 바로 찾는다) */}
-        <div className="mt-auto flex flex-col gap-3 pt-6">
+        <div className="mt-auto flex shrink-0 flex-col gap-3 pt-6">
           <Button
             variant="secondary"
             fullWidth

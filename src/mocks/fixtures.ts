@@ -193,16 +193,16 @@ export function createFixtures(): Db {
     users: [
       // 이현정은 관리자 겸용(CHMO-379) — role은 /admin/*에만 쓰이고 서비스 화면은 그대로다
       // (관리자도 평범한 유저로 모임 생성·검수·공개를 한다 — admin-spec §2-3 테스트 계정 겸용).
-      { id: 1, nickname: '이현정', pin: '1234', role: 'ADMIN', createdAt: '2026-06-01T10:00:00+09:00' },
-      { id: 2, nickname: '김지은', pin: '2580', role: 'USER', createdAt: '2026-06-01T10:05:00+09:00' },
-      { id: 3, nickname: '박수민', pin: '4715', role: 'USER', createdAt: '2026-06-02T09:00:00+09:00' },
+      { id: 1, nickname: '이현정', pin: '1234', role: 'ADMIN', createdAt: '2026-06-01T10:00:00+09:00', pushEnabled: true },
+      { id: 2, nickname: '김지은', pin: '2580', role: 'USER', createdAt: '2026-06-01T10:05:00+09:00', pushEnabled: true },
+      { id: 3, nickname: '박수민', pin: '4715', role: 'USER', createdAt: '2026-06-02T09:00:00+09:00', pushEnabled: true },
       // 학부모 전환(CHMO-444) 시연 계정 — 4는 학부모 화면(연결됨+대기), 6은 미연결 기본 경로(§2)
-      { id: 4, nickname: '민준아빠', pin: '1111', role: 'USER', createdAt: '2026-07-01T10:00:00+09:00' },
-      { id: 5, nickname: '서연맘', pin: '2222', role: 'USER', createdAt: '2026-07-01T10:05:00+09:00' },
-      { id: 6, nickname: '지호네', pin: '3333', role: 'USER', createdAt: '2026-07-02T09:00:00+09:00' },
-      { id: 7, nickname: '치즈냥이88', pin: '4444', role: 'USER', createdAt: '2026-07-25T09:00:00+09:00' },
+      { id: 4, nickname: '민준아빠', pin: '1111', role: 'USER', createdAt: '2026-07-01T10:00:00+09:00', pushEnabled: true },
+      { id: 5, nickname: '서연맘', pin: '2222', role: 'USER', createdAt: '2026-07-01T10:05:00+09:00', pushEnabled: true },
+      { id: 6, nickname: '지호네', pin: '3333', role: 'USER', createdAt: '2026-07-02T09:00:00+09:00', pushEnabled: true },
+      { id: 7, nickname: '치즈냥이88', pin: '4444', role: 'USER', createdAt: '2026-07-25T09:00:00+09:00', pushEnabled: true },
       // 선생님 승인제(CHMO-475) 시연 — 선생님 키로 신청만 해 둔 대기 상태(20 선생님 탭)
-      { id: 8, nickname: '신입쌤', pin: '5555', role: 'USER', createdAt: '2026-07-27T09:00:00+09:00' },
+      { id: 8, nickname: '신입쌤', pin: '5555', role: 'USER', createdAt: '2026-07-27T09:00:00+09:00', pushEnabled: true },
     ],
     groups: [
       {
@@ -250,6 +250,19 @@ export function createFixtures(): Db {
         share: { token: 'shr_grp4', password: '3712' },
         createdAt: '2026-07-15T09:00:00+09:00',
       },
+      // 유저 1 미가입 GENERAL — **즉시 합류(active) 시연용**(CHMO-672). 3(별님반)의 일반 모임
+      // 짝이다: 3으로 참여하면 승인 대기 카드, 5로 참여하면 모임 상세 직행. 유저 1이 이미
+      // 멤버인 4로는 이 갈래를 볼 수 없어(409) 따로 둔다 — 미가입 모임이라 홈 목록엔 안 뜬다.
+      {
+        id: 5,
+        name: '동네 러닝크루',
+        groupType: 'general',
+        password: '5183',
+        joinKey: 'RunCrew4Jm7v',
+        parentJoinKey: 'RunCrewP2h9d',
+        share: { token: 'shr_grp5', password: '8264' },
+        createdAt: '2026-08-01T09:00:00+09:00',
+      },
     ],
     // 학부모 전환(CHMO-444): role·승인 상태 보유. PENDING 행이 곧 합류 신청(id = joinRequestId).
     // 햇살반: 선생님 3 + 학부모 active 3(지호네는 미연결) + 대기 신청 1(치즈냥이88) — 초대 관리(20) 시연.
@@ -270,6 +283,8 @@ export function createFixtures(): Db {
       // GENERAL 모임(4) — 전원 editor(ADR 020). 이현정(1)이 생성자, 김지은(2)이 합류 멤버
       { id: 12, userId: 1, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-15T09:00:00+09:00' },
       { id: 13, userId: 2, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-16T10:00:00+09:00' },
+      // 유저 1 미가입 GENERAL(5) — 기존 멤버 하나를 둬야 합류 후 명단·카운트가 빈칸이 아니다
+      { id: 14, userId: 3, groupId: 5, role: 'editor', status: 'active', childNames: [], createdAt: '2026-08-01T09:00:00+09:00' },
     ],
     // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
     personParents: [
@@ -388,6 +403,9 @@ export function createFixtures(): Db {
         options: { excludeEyesClosed: true, excludeBlurry: false },
       },
     ],
+    // 푸시 기기는 앱에서 등록되는 값이라 시드가 없다(CHMO-667) — 목 모드에서도
+    // POST /me/devices를 실제로 타야 행이 생긴다(브라우저에선 브리지가 없어 영영 비어 있다)
+    devices: [],
     // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다
     uploadedKeys: [],
   }

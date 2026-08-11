@@ -10,6 +10,7 @@ import { listAgreements } from '../api/agreements'
 import { ApiRequestError } from '../api/client'
 import { toFeErrorCode } from '../api/errors'
 import { consumeSocialReturnTo, setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { registerPushOnLogin } from '../lib/push'
 import { evaluateConsentGate } from '../lib/consentGate'
 import { postLoginDestination } from '../lib/onboarding'
 import type { AuthResponse } from '../types/api'
@@ -35,6 +36,9 @@ function completeLogin(tokens: AuthResponse): string {
   setAuthTokens(tokens)
   // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
   setCurrentUserId(tokens.userId)
+  // 이 기기의 푸시 토큰 등록(CHMO-667) — 이미 권한을 허용한 기기만 해당하고 권한을 묻지는
+  // 않는다. 기다리지 않는다: 알림은 보조 수단이라 브리지 왕복이 복귀를 늦추면 안 된다
+  void registerPushOnLogin()
   return postLoginDestination(consumeSocialReturnTo())
 }
 

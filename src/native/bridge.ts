@@ -8,9 +8,11 @@
 import {
   BRIDGE_SCHEMA_VERSION,
   type BridgeProgressEvent,
+  type BridgePushTokenEvent,
   type BridgeRequest,
   type CapabilitiesResult,
   type NativeAppInfo,
+  type PushPermissionResult,
   type SavePhotosParams,
   type SavePhotosResult,
   type SocialLoginParams,
@@ -171,18 +173,40 @@ export interface BridgeProgress {
   total: number
 }
 
-/** 셸의 진행 이벤트 구독. 반환값을 호출하면 해제. 창 컨텍스트가 없으면 no-op. */
-export function subscribeBridgeProgress(opId: string, onProgress: (p: BridgeProgress) => void): () => void {
+/** 셸 이벤트 구독 공통부(계약 §2.3) — 창 컨텍스트가 없으면 no-op 해제 함수를 준다 */
+function subscribeBridgeEvent(onDetail: (detail: Record<string, unknown>) => void): () => void {
   const host = bridgeHost()
   if (!host) return () => {}
   const listener = (ev: Event) => {
-    const detail = (ev as CustomEvent).detail as Partial<BridgeProgressEvent> | undefined
-    if (!detail || detail.type !== 'progress' || detail.opId !== opId) return
-    if (typeof detail.done !== 'number' || typeof detail.total !== 'number') return
-    onProgress({ done: detail.done, total: detail.total })
+    const detail = (ev as CustomEvent).detail as unknown
+    if (detail && typeof detail === 'object') onDetail(detail as Record<string, unknown>)
   }
   host.addEventListener(EVENT_NAME, listener)
   return () => host.removeEventListener(EVENT_NAME, listener)
+}
+
+/** 셸의 진행 이벤트 구독. 반환값을 호출하면 해제. 창 컨텍스트가 없으면 no-op. */
+export function subscribeBridgeProgress(opId: string, onProgress: (p: BridgeProgress) => void): () => void {
+  return subscribeBridgeEvent((raw) => {
+    const detail = raw as Partial<BridgeProgressEvent>
+    if (detail.type !== 'progress' || detail.opId !== opId) return
+    if (typeof detail.done !== 'number' || typeof detail.total !== 'number') return
+    onProgress({ done: detail.done, total: detail.total })
+  })
+}
+
+/**
+ * FCM 토큰 회전 구독 (CHMO-667). 진행 이벤트와 달리 `opId`가 없다 —
+ * 특정 호출에 딸린 스트림이 아니라 앱이 살아 있는 동안 아무 때나 오는 브로드캐스트다.
+ * 빈 문자열은 무시한다(토큰이 사라진 상태를 등록 호출로 옮기지 않는다).
+ */
+export function subscribeBridgePushToken(onToken: (token: string) => void): () => void {
+  return subscribeBridgeEvent((raw) => {
+    const detail = raw as Partial<BridgePushTokenEvent>
+    if (detail.type !== 'pushToken') return
+    if (typeof detail.token !== 'string' || detail.token === '') return
+    onToken(detail.token)
+  })
 }
 
 // capability는 세션당 1회 조회 — 실패는 캐시하지 않는다(일시 실패가 기능을 영영 숨기지 않게).
@@ -230,4 +254,26 @@ export function savePhotos(params: SavePhotosParams): Promise<SavePhotosResult> 
 /** 권한 거부(PERMISSION_DENIED + detail.canOpenSettings) 안내 CTA용 */
 export function openAppSettings(): Promise<void> {
   return callBridge<void>('openAppSettings')
+}
+
+// ── 푸시 (CHMO-667 · 셸 CHMO-666) ────────────────────────────────────────
+// 메서드는 둘이지만 capability는 `push` 하나다 — 한 기능이라 셸이 그렇게 묶었다(계약 §2.5).
+// 권한 거부는 예외가 아니라 `status`다: 사용자가 답을 준 정상 왕복이라 PERMISSION_DENIED로
+// 던지지 않는다(그렇게 오면 통신 실패와 구분이 안 되고, 설정 화면은 상태를 상시 읽어야 한다).
+
+/**
+ * OS 알림 권한 **창을 연다**. 사용자가 다이얼로그를 언제 누를지 모르므로 시간 제한이 없다
+ * (socialLogin·savePhotos와 같은 이유). Android 13+ `POST_NOTIFICATIONS`도 이 호출이 연다.
+ * 셸은 앱 첫 실행에 자동으로 부르지 않는다 — **시점은 웹이 정한다**(06-U 업로드 직후).
+ */
+export function requestPushPermission(): Promise<PushPermissionResult> {
+  return callBridge<PushPermissionResult>('requestPushPermission', undefined, { timeoutMs: 0 })
+}
+
+/**
+ * **창을 열지 않고** 현재 권한 상태와 토큰만 본다 — 설정 화면 표시, 앱 재실행 후 재등록 경로.
+ * 허용됐어도 토큰이 없을 수 있다(iOS APNs 등록 전 — 그때는 `pushToken` 이벤트로 따라온다).
+ */
+export function getPushToken(): Promise<PushPermissionResult> {
+  return callBridge<PushPermissionResult>('getPushToken')
 }

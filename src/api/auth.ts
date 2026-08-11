@@ -168,6 +168,23 @@ export function updateMe(input: { nickname: string; pin?: string }): Promise<Use
 }
 
 /**
+ * PATCH /me/push-settings — 설정 '알림 받기' 토글 (CHMO-667 · BE CHMO-664).
+ *
+ * 프로필과 **다른 엔드포인트**다(2026-08-11 BE 소스 대조 — 초안의 `PATCH /me` 필드 추가안은
+ * 폐기). 덕분에 이름을 건드릴 일이 없어 부분 수정 걱정도 사라졌다.
+ * 요청·응답 모두 필드명이 `enabled`인데 `GET /me`는 `pushEnabled`로 준다 — BE가 그렇게 냈다.
+ *
+ * 계정 단위 수신 거부라 끄면 **등록된 모든 기기**에서 알림이 멈춘다(기기 단위가 아니다).
+ */
+export async function updatePushSetting(enabled: boolean): Promise<boolean> {
+  const raw = await apiFetch<{ enabled: boolean }>('/me/push-settings', {
+    method: 'PATCH',
+    body: { enabled },
+  })
+  return raw.enabled
+}
+
+/**
  * DELETE /me — 계정 삭제(회원 탈퇴 — App Store 5.1.1(v), CHMO-526 · 실계약 정합 CHMO-575).
  * 경로는 GET/PATCH /me 관례를 따른 실 BE 확정값(CHMO-524 PR #166 — 티켓 초안 /users/me 폐기).
  * 파기 범위(ADR 019): 마지막 ACTIVE 선생님인 모임은 모임째 삭제, 그 외 모임은 멤버십만 정리,

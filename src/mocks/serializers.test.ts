@@ -98,6 +98,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       id: 1,
       nickname: '이현정',
       createdAt: '2026-06-01T10:00:00+09:00',
+      pushEnabled: true,
     })
   })
 

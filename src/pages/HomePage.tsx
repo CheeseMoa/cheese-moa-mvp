@@ -1,6 +1,16 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { ButtonLink, EmptyState, GroupCard, Header, LoadState, useToast } from '../components/ui'
+import { JoinGroupModal } from '../components/JoinGroupModal'
+import {
+  Button,
+  ButtonLink,
+  EmptyState,
+  GroupCard,
+  Header,
+  LoadState,
+  useToast,
+} from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { listGroups } from '../api/groups'
 
@@ -24,11 +34,16 @@ import { listGroups } from '../api/groups'
  *
  * 둘러보기(00-T)는 삭제됐다(CHMO-578 — 자동 노출 폐지(CHMO-565)를 거쳐 설정 진입점까지 제거):
  * 첫 로그인은 아무것도 덮지 않는 내 홈이고, 안내는 실제 화면의 코치 힌트가 그 자리에서 1회 맡는다.
+ *
+ * 참여 진입점은 되살아났다(CHMO-672 — CHMO-513 반전). 일반(B2C) 모임은 링크를 받으면 바로
+ * 참여하는 구조인데(CHMO-618) 대화방에서는 링크가 아니라 **코드만 구두로 전달되는 일**이 흔하고,
+ * 링크를 잃은 사람에게는 앱 안에 들어갈 문이 하나도 없었다.
  */
 export function HomePage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { data, error, loading, refetch } = useApi('groups', listGroups)
+  const [joinOpen, setJoinOpen] = useState(false)
 
   const groups = data ?? []
 
@@ -60,10 +75,14 @@ export function HomePage() {
           ) : groups.length === 0 ? (
             <EmptyState
               title="아직 모임이 없어요"
-              // 참여 안내를 붙이지 않는다(CHMO-513) — 모임 참여는 링크로만 이뤄지고 홈에는
-              // 그 경로가 없다. 종전 "초대받은 모임에 참여해 보세요"는 앱 안에 방법이 없어
-              // 사실과 달라졌다
-              description="첫 모임을 만들어 보세요."
+              // 참여 안내가 돌아왔다(CHMO-672) — 아래 [모임 참여하기]가 실제 경로라 다시 사실이다
+              description={
+                <>
+                  첫 모임을 만들거나
+                  <br />
+                  받은 참여 코드로 참여해 보세요.
+                </>
+              }
             />
           ) : (
             <ul className="flex flex-col gap-3">
@@ -107,16 +126,29 @@ export function HomePage() {
             </ul>
           )}
 
-          {/* 하단은 [＋ 모임 만들기] 하나뿐이다(CHMO-513) — 모임 참여는 링크로만 이뤄진다:
-              받은 링크를 누르면 02-1(선생님)·02-2(학부모)로 곧장 들어가므로 홈에서 참여 코드를
-              손으로 넣는 문은 닫았다. 링크 진입 화면과 02-1 모달 자체는 그대로 산다 */}
-          <div className="mt-auto pt-6">
+          {/* 두 버튼은 나란히가 아니라 세로로 쌓는다(CHMO-672) — 390px에서 버튼 하나가 170px인데
+              `＋ 모임 만들기`가 이미 그 폭을 거의 채워(05 하단 실측, CHMO-530) 라벨이 잘린다.
+              위계는 색이 만든다: 만들기 primary · 참여 secondary */}
+          <div className="mt-auto flex flex-col gap-3 pt-6">
             <ButtonLink to="/groups/new" fullWidth>
               ＋ 모임 만들기
             </ButtonLink>
+            <Button variant="secondary" fullWidth onClick={() => setJoinOpen(true)}>
+              모임 참여하기
+            </Button>
           </div>
         </div>
       </main>
+
+      <JoinGroupModal
+        open={joinOpen}
+        onClose={() => setJoinOpen(false)}
+        // 신청(PENDING)으로 끝나면 홈에 남는다 — 목록을 다시 불러 대기 카드가 바로 보이게(CHMO-444)
+        onJoined={() => {
+          setJoinOpen(false)
+          refetch()
+        }}
+      />
     </PhoneShell>
   )
 }
