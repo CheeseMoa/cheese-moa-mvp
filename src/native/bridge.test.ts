@@ -4,14 +4,18 @@ import {
   __resetBridgeStateForTest,
   callBridge,
   getCapabilities,
+  getPushPermission,
+  getPushToken,
   hasCapability,
   isNativeApp,
   nativeAppInfo,
   newOpId,
   openAppSettings,
+  requestPushPermission,
   savePhotos,
   socialLogin,
   subscribeBridgeProgress,
+  subscribeBridgePushToken,
 } from './bridge'
 
 /**
@@ -252,6 +256,70 @@ describe('진행 이벤트 구독 (계약 §2.3)', () => {
 
   it('newOpId는 호출마다 다른 값을 준다', () => {
     expect(newOpId()).not.toBe(newOpId())
+  })
+
+  it('pushToken 이벤트는 opId 없이 온다 — 형식 불량·빈 토큰은 무시 (CHMO-667)', () => {
+    stubApp()
+    const w = stubWindow()
+    const seen: string[] = []
+    const unsubscribe = subscribeBridgePushToken((token) => seen.push(token))
+
+    const fire = (detail: unknown) => w.dispatchEvent(new CustomEvent('cheesemoa:event', { detail }))
+    fire({ v: 1, type: 'pushToken', token: 'tok-1' })
+    fire({ v: 1, type: 'progress', opId: 'op1', done: 1, total: 2 }) // 다른 타입 — 무시
+    fire({ v: 1, type: 'pushToken', token: '' }) // 빈 토큰 — 등록할 것이 없다
+    fire({ v: 1, type: 'pushToken' }) // token 누락 — 무시
+    fire({ v: 1, type: 'pushToken', token: 'tok-2' })
+
+    unsubscribe()
+    fire({ v: 1, type: 'pushToken', token: 'tok-3' })
+
+    expect(seen).toEqual(['tok-1', 'tok-2'])
+  })
+})
+
+describe('푸시 (계약 §2.5 — CHMO-667)', () => {
+  it('권한 요청은 시간 제한이 없다 — OS 다이얼로그를 언제 누를지 모른다', async () => {
+    vi.useFakeTimers()
+    stubApp()
+    const w = stubWindow()
+    let resolveCall: ((value: unknown) => void) | undefined
+    w.flutter_inappwebview!.callHandler.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCall = resolve
+      }),
+    )
+
+    const pending = requestPushPermission()
+    // 기본 시한(5s)을 한참 넘겨도 TIMEOUT으로 죽지 않는다
+    await vi.advanceTimersByTimeAsync(60_000)
+    resolveCall!(okEnvelope({ status: 'granted' }))
+
+    await expect(pending).resolves.toEqual({ status: 'granted' })
+  })
+
+  it('권한 거부는 에러가 아니라 결과다 — status로 온다', async () => {
+    stubApp()
+    const w = stubWindow()
+    w.flutter_inappwebview!.callHandler.mockResolvedValue(okEnvelope({ status: 'denied' }))
+
+    await expect(getPushPermission()).resolves.toEqual({ status: 'denied' })
+  })
+
+  it('토큰 없음은 null이다 — 권한 미허용·발급 전은 실패가 아니다', async () => {
+    stubApp()
+    const w = stubWindow()
+    w.flutter_inappwebview!.callHandler.mockResolvedValue(okEnvelope({ token: null }))
+
+    await expect(getPushToken()).resolves.toEqual({ token: null })
+  })
+
+  it('웹 단독에서는 UNSUPPORTED — 브라우저엔 푸시 수신 경로가 없다 (AC-4)', async () => {
+    stubApp(WEB_UA)
+    stubWindow()
+
+    await expect(requestPushPermission()).rejects.toMatchObject({ code: 'UNSUPPORTED' })
+    await expect(getPushToken()).rejects.toMatchObject({ code: 'UNSUPPORTED' })
   })
 })
 

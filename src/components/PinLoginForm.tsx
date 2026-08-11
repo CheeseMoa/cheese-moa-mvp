@@ -7,6 +7,7 @@ import { listAgreements } from '../api/agreements'
 import { setAuthTokens, setCurrentUserId } from '../lib/auth'
 import { evaluateConsentGate } from '../lib/consentGate'
 import { postLoginDestination } from '../lib/onboarding'
+import { registerPushOnLogin } from '../lib/push'
 import { PIN_RE } from '../lib/pin'
 import { Button, PinField, TextField } from './ui'
 
@@ -50,6 +51,8 @@ export function PinLoginForm({
         setAuthTokens(res)
         // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
         setCurrentUserId(res.userId)
+        // 이 기기의 푸시 토큰 등록(CHMO-667) — 권한은 묻지 않는다(06-U 몫). 기다리지 않는다
+        void registerPushOnLogin()
         // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀, 아니면 온보딩/홈
         const dest = postLoginDestination(returnTo)
         // 가입 동의 게이트(CHMO-479) — 조회 실패는 통과(로그인은 막지 않는다)

@@ -37,7 +37,7 @@ export type BridgeErrorCode =
   | 'NETWORK'
   | 'INTERNAL'
 
-export type Capability = 'socialLogin' | 'savePhotos'
+export type Capability = 'socialLogin' | 'savePhotos' | 'push'
 
 export interface CapabilitiesResult {
   v: number
@@ -82,4 +82,37 @@ export interface BridgeProgressEvent {
   opId: string
   done: number
   total: number
+}
+
+// ── 푸시 (CHMO-667) ──────────────────────────────────────────────────────
+
+/**
+ * OS 알림 권한 상태.
+ * `undetermined`만 프롬프트로 바뀔 수 있다 — iOS는 한 번 거부되면 앱이 다시 못 띄우고
+ * 설정 앱으로만 복구되므로, 웹은 `denied`를 "물어봐야 할 상태"가 아니라 "설정으로 보낼 상태"로 읽는다.
+ */
+export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined'
+
+export interface PushPermissionResult {
+  status: PushPermissionStatus
+}
+
+export interface PushTokenResult {
+  /**
+   * FCM 등록 토큰. 권한이 없거나 아직 발급 전이면 **null** — 실패가 아니라
+   * "등록할 것이 없다"는 뜻이라 에러로 던지지 않는다(웹은 등록을 건너뛴다).
+   */
+  token: string | null
+}
+
+/**
+ * 셸 → 웹 CustomEvent('cheesemoa:event')의 detail — FCM 토큰 회전.
+ * FCM 토큰은 앱 재설치·데이터 삭제·장기 미사용으로 서버 통보 없이 갈린다. 갱신을 받아
+ * 다시 등록하지 않으면 그 계정의 알림이 조용히 끊긴다(발송은 성공하는데 도착하지 않는다).
+ * `opId`가 없다 — 특정 호출의 진행이 아니라 앱 생애 내내 오는 브로드캐스트다.
+ */
+export interface BridgePushTokenEvent {
+  v: number
+  type: 'pushToken'
+  token: string
 }

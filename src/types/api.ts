@@ -16,6 +16,12 @@ export interface User {
   id: ID
   nickname: string
   createdAt: ISODateTime
+  /**
+   * 푸시 수신 허용 (CHMO-667) — 설정 '알림 받기' 토글의 서버 상태.
+   * 거부한 사람만 false라 구계약(필드 없음) 응답은 true로 정규화한다(mappers.toUser).
+   * OS 권한과는 별개다: 여기가 true여도 OS가 막고 있으면 알림은 오지 않는다.
+   */
+  pushEnabled: boolean
 }
 
 // ── Group (모임) ─────────────────────────────────────────────

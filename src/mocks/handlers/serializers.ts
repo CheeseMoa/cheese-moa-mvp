@@ -45,9 +45,14 @@ import {
   type DbUser,
 } from '../db'
 
-/** BE UserProfileResponse — id가 아니라 userId */
+/** BE UserProfileResponse — id가 아니라 userId. pushEnabled는 CHMO-667(BE CHMO-664) */
 export function toUser(user: DbUser) {
-  return { userId: user.id, nickname: user.nickname, createdAt: user.createdAt }
+  return {
+    userId: user.id,
+    nickname: user.nickname,
+    createdAt: user.createdAt,
+    pushEnabled: user.pushEnabled,
+  }
 }
 
 export function shareUrlOf(group: DbGroup): string {

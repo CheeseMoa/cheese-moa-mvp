@@ -13,10 +13,12 @@ import {
   nextId,
   nowIso,
   recordAgreement,
+  registerDevice,
   removeMembershipCascade,
   resolveUserFromRefreshToken,
   revokeRefreshToken,
   teacherCountOf,
+  unregisterDevice,
   type DbUser,
 } from '../db'
 import { persistUser, removePersistedUser, updatePersistedUser } from '../persist'
@@ -153,7 +155,7 @@ export const authHandlers = [
     if (nicknameTaken(nickname)) return nicknameConflict()
 
     // 신규 가입 기본 role = USER(BE와 동일 — 관리자 지정은 DB 직접 변경뿐, admin-spec §2-3)
-    const user = { id: nextId('usr'), nickname, pin, role: 'USER' as const, createdAt: nowIso() }
+    const user = { id: nextId('usr'), nickname, pin, role: 'USER' as const, createdAt: nowIso(), pushEnabled: true }
     db.users.push(user)
     persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
     // 동의 행도 가입과 함께 기록 — 로그인 직후 게이트(GET /agreements, CHMO-479)가 pass로 지난다
@@ -197,7 +199,7 @@ export const authHandlers = [
       const validated = validateAgreementItems(items)
       if (validated.error) return validated.error
       // 소셜 계정은 PIN이 없다 — 빈 문자열은 PIN_RE에 걸려 닉네임+PIN 로그인으로는 진입 불가
-      user = { id: nextId('usr'), nickname, pin: '', role: 'USER' as const, createdAt: nowIso() }
+      user = { id: nextId('usr'), nickname, pin: '', role: 'USER' as const, createdAt: nowIso(), pushEnabled: true }
       db.users.push(user)
       // 보존이 곧 "가입됨" 판정 원천(lib/mockSocial) — 다음 로그인부터 signup=true가 안 실린다
       persistUser(user)
@@ -257,6 +259,8 @@ export const authHandlers = [
     // 목 토큰은 자기서술형(userId 참조)이라 유저 행이 사라지면 access·refresh 모두 즉시 무효 —
     // "같은 계정으로 재로그인 불가·리프레시 401" AC까지 이 삭제가 담당한다
     db.users = db.users.filter((u) => u.id !== user.id)
+    // 기기 토큰도 계정과 함께 사라진다(CHMO-667) — 남기면 삭제된 계정 앞으로 발송이 시도된다
+    db.devices = db.devices.filter((d) => d.userId !== user.id)
     removePersistedUser(user.id) // 가입 보존분도 삭제 — 새로고침(재시드) 후 재로그인도 막는다
     return ok(null)
   }),
@@ -266,19 +270,57 @@ export const authHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ nickname?: unknown; pin?: unknown }>(request)
+    const body = await readJson<{ nickname?: unknown; pin?: unknown; pushEnabled?: unknown }>(
+      request,
+    )
     if (!body) return invalidBody()
 
     const nickname = optionalString(body.nickname)
     if (nickname === null) return invalidRequest('닉네임을 입력해 주세요.')
     const pin = body.pin === undefined ? undefined : normalizePin(body.pin)
     if (pin === null) return invalidPin()
+    // 푸시 수신 거부(CHMO-667) — 불리언만 받는다. 설정 토글은 이 필드 하나만 실어 보내므로
+    // 닉네임 없이 오는 PATCH가 정상 요청이다(실 BE도 nickname을 선택으로 받아야 한다)
+    if (body.pushEnabled !== undefined && typeof body.pushEnabled !== 'boolean') {
+      return invalidRequest('알림 수신 설정 값이 올바르지 않습니다.')
+    }
     if (nickname !== undefined && nicknameTaken(nickname, user.id)) return nicknameConflict()
 
     if (nickname !== undefined) user.nickname = nickname
     if (pin !== undefined) user.pin = pin
+    if (body.pushEnabled !== undefined) user.pushEnabled = body.pushEnabled
     updatePersistedUser(user) // 보존 대상(가입 계정)이면 localStorage에도 반영
 
     return ok(toUser(user))
+  }),
+
+  // POST /me/devices — 푸시 기기 토큰 등록 (CHMO-667 · BE CHMO-664).
+  // 멱등이라 같은 토큰을 다시 보내도 성공한다(토큰 회전·재로그인마다 불린다).
+  http.post(api('/me/devices'), async ({ request }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    const body = await readJson<{ token?: unknown; platform?: unknown }>(request)
+    if (!body) return invalidBody()
+    const token = requiredString(body.token)
+    if (!token) return invalidRequest('기기 토큰을 입력해 주세요.')
+    const platform = requiredString(body.platform)
+    if (platform !== 'ios' && platform !== 'android') {
+      return invalidRequest('지원하지 않는 플랫폼입니다.')
+    }
+
+    registerDevice(user.id, token, platform)
+    return ok(null)
+  }),
+
+  // DELETE /me/devices/{token} — 해제(로그아웃·계정 삭제). 없는 토큰도 성공(멱등) —
+  // 해제는 되돌릴 일이 없어 404를 구분할 실익이 없고, 로그아웃을 막아선 안 된다.
+  http.delete(api('/me/devices/:token'), ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+    const token = requiredString(params.token)
+    if (!token) return invalidRequest('기기 토큰을 입력해 주세요.')
+    unregisterDevice(user.id, token)
+    return ok(null)
   }),
 ]
