@@ -9,6 +9,7 @@ import { useApi } from '../hooks/useApi'
 import { attestGuardianConsent } from '../api/agreements'
 import { ApiRequestError, toErrorMessage } from '../api/client'
 import { getEvent, presignUploads, registerPhotos, uploadToPresignedUrl } from '../api/events'
+import { trackEvent } from '../lib/analytics'
 import { runWithConcurrency } from '../lib/concurrency'
 import { createPreviewThumbnail } from '../lib/previewThumb'
 import {
@@ -288,6 +289,10 @@ export function PhotoUploadPage() {
         excludeBlurry,
       })
       if (!alive.current) return
+      trackEvent('upload_success', {
+        count: registered.registeredCount,
+        duplicate_count: registered.duplicateCount ?? 0,
+      })
       const registeredKeys = new Set(pending.map((p) => p.key))
       setPhotos((prev) =>
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
@@ -341,6 +346,12 @@ export function PhotoUploadPage() {
         return
       }
       if (!alive.current) return
+      // 여기까지 왔으면 화면이 '실패'로 굳는 경우다(위 분기들은 각자 복구된다).
+      // 에러 코드만 싣는다 — 메시지는 서버 문구라 무엇이 섞여 올지 알 수 없다
+      trackEvent('upload_fail', {
+        code: err instanceof ApiRequestError ? err.code : 'unknown',
+        count: pending.length,
+      })
       setError(toErrorMessage(err))
       setPhase('idle')
     }

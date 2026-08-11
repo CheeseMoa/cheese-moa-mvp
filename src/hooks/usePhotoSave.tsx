@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { ConfirmDialog, useToast } from '../components/ui'
 import { useAlive } from './useAlive'
 import { openAppSettings } from '../native/bridge'
+import { trackEvent } from '../lib/analytics'
 import {
   bridgeSaveSupported,
   downloadEach,
@@ -280,6 +281,8 @@ export function usePhotoSave() {
   /** 저장 시작 — 앱은 브리지 위임, iOS는 배치 선요청→공유 시트, 그 외는 장별 다운로드 */
   const start = async (items: PhotoSaveItem[]) => {
     if (state.phase !== 'idle' || items.length === 0) return
+    // 이 앱의 가치가 최종 도달하는 지점 — 저장까지 갔는지가 성공 지표다
+    trackEvent('photo_save', { count: items.length })
     const run = ++runRef.current
     fetchFailedRef.current = 0
     savedRef.current = 0

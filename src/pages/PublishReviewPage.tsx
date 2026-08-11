@@ -5,6 +5,7 @@ import { AlbumCard, Button, ConfirmDialog, Header, LoadState, useToast } from '.
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { getEvent, getReviewSummary, publishEvent } from '../api/events'
+import { trackEvent } from '../lib/analytics'
 import { getGroup } from '../api/groups'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 
@@ -105,6 +106,8 @@ export function PublishReviewPage() {
     await mutate(() => publishEvent(eventId), {
       onSuccess: () => {
         setConfirmOpen(false)
+        // republish = 이미 공개된 이벤트에 새 사진을 더 내보낸 경우(CHMO-606) — 첫 공개와 빈도를 가른다
+        trackEvent('publish_success', { republish: published })
         toast.show(published ? '🧀 새 사진을 공개했어요' : '🧀 이벤트를 공개했어요')
         navigate(`/groups/${groupId}`)
       },

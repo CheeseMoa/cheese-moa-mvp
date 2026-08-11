@@ -14,6 +14,7 @@ import {
 import { cx } from '../lib/cx'
 import { useMutation } from '../hooks/useMutation'
 import { createGroup } from '../api/groups'
+import { trackEvent } from '../lib/analytics'
 import type { GroupType } from '../types/api'
 
 /**
@@ -83,6 +84,7 @@ export function GroupCreatePage() {
     setError(null)
     await mutate(() => createGroup({ name: name.trim(), groupType }), {
       onSuccess: (group) => {
+        trackEvent('group_create_success', { group_type: groupType })
         toast.show('🧀 모임을 만들었어요 · 참여 비밀번호는 초대 관리에서 확인해요')
         // 상세에서 뒤로가기가 작성 폼으로 돌아오지 않게 폼 히스토리를 교체
         navigate(`/groups/${group.id}`, { replace: true })

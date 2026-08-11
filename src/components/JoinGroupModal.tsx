@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '../hooks/useMutation'
 import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
+import { trackEvent } from '../lib/analytics'
 import { buildJoinPath, type JoinLinkInfo } from '../lib/joinLink'
 import type { JoinGroupResult } from '../types/api'
 import { Button, Modal, TextField, useToast } from './ui'
@@ -90,6 +91,7 @@ export function JoinGroupModal({
     if (!canSubmit) return
     setSubmitting(true)
     setError(null)
+    trackEvent('join_submit', { flow: 'modal' })
     await mutate(() => joinGroup({ joinKey, password: password.trim() }), {
       onSuccess: finishJoined,
       // 401(토큰 무효) — 초대 링크 진입이면 재로그인 후 참여 화면으로 복귀하게 returnTo를 싣는다
