@@ -1,6 +1,7 @@
 import { useApi } from '../hooks/useApi'
 import { getInviteInfo } from '../api/groups'
 import type { Group, GroupInviteChannel, GroupRole } from '../types/api'
+import { cx } from '../lib/cx'
 import { copyToClipboard } from '../lib/clipboard'
 import { buildJoinUrl } from '../lib/joinLink'
 import { shareOrCopy } from '../lib/share'
@@ -23,6 +24,10 @@ interface RoleCopy {
 /**
  * 문안 3종 — 채널 데이터(joinKey·비밀번호·링크)는 API 계층이, 문구는 여기가 소유한다.
  * 비즈니스는 역할별 2종, 일반 모임은 역할이 없어 1종이다(CHMO-610).
+ *
+ * **공유 문안에는 참여 코드를 싣지 않는다**(CHMO-676) — 함께 나가는 링크가 이미 코드를 품고
+ * 있어 같은 값이 두 번이고, 카톡에서 잘리지 않게 3줄로 맞춘 안내가 길어진다. 코드는 링크를
+ * 보낼 수 없는 자리(구두·문자)에서 쓰는 값이라 화면에서 따로 복사하는 게 그 경로다.
  * 유치원 어휘(선생님·학부모·자녀)는 걷어내고 관리자/멤버/인물로 중립화했다 — 같은 링크가
  * 유치원에도 동호회에도 나가므로, 받는 사람이 자기 모임 얘기로 읽혀야 한다.
  */
@@ -56,6 +61,51 @@ const GENERAL_COPY: RoleCopy = {
   copyDone: '🧀 초대 링크를 복사했어요',
   share: (password) =>
     `🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${password}`,
+}
+
+interface SecretRowProps {
+  label: string
+  value: string
+  ariaLabel: string
+  onCopy: () => void
+  /**
+   * 옮겨 적는 값(참여 코드)은 등폭 서체로 — Jua는 굵기 하나에 획이 둥글어 `I/l`·`O/0`·대소문자가
+   * 뭉개진다. joinKey는 **대소문자를 구분해 매칭**하므로(CHMO-285) 한 글자만 잘못 읽어도 합류가
+   * 막힌다. 정확한 전사가 브랜드 일관성보다 중한 자리라 어드민 `font-admin`과 같은 예외를 둔다
+   * (시스템 등폭 스택이라 폰트 요청은 늘지 않는다).
+   */
+  mono?: boolean
+}
+
+/** 전달할 값 한 줄 — 라벨 + 값 + ⧉. 행 전체가 복사 버튼이다 */
+function SecretRow({ label, value, ariaLabel, onCopy, mono }: SecretRowProps) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onCopy}
+      className="flex w-full items-center gap-1.5 text-left"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-bold text-muted">{label}</span>
+        <span
+          className={cx(
+            'mt-0.5 block truncate text-text',
+            // 코드는 12자라 비밀번호(4자)와 같은 26px로는 카드를 넘긴다 — 길이가 다르므로
+            // 크기를 낮춰도 시각 무게는 비슷해진다(둘은 같은 위계의 값이다)
+            mono
+              ? 'font-mono text-[21px] font-bold tracking-[.02em]'
+              : 'text-[26px] font-extrabold tracking-[.06em]',
+          )}
+        >
+          {value}
+        </span>
+      </span>
+      <span aria-hidden="true" className="shrink-0 text-base text-muted">
+        ⧉
+      </span>
+    </button>
+  )
 }
 
 interface ChannelContentProps {
@@ -94,25 +144,37 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
     <>
       {copy.notice && <p className="text-xs leading-relaxed text-muted">{copy.notice}</p>}
       <div className="mt-2 rounded-2xl border border-border bg-surface p-4">
-        <p className="text-xs font-bold text-muted">비밀번호</p>
-        <div className="mt-0.5 flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="비밀번호 복사"
-            onClick={() => void copyText(channel.password, '🧀 비밀번호를 복사했어요')}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-          >
-            <span className="truncate text-[26px] font-extrabold tracking-[.06em] text-text">
-              {channel.password}
-            </span>
-            <span aria-hidden="true" className="shrink-0 text-base text-muted">
-              ⧉
-            </span>
-          </button>
+        {/*
+         * 전달할 값 둘 — 이 둘만 있으면 링크 없이도 참여가 된다(받는 쪽: 홈 [모임 참여하기] →
+         * 02-1 코드·비밀번호 입력, CHMO-672). 종전엔 비밀번호만 카드로 서고 참여 코드는 링크
+         * URL 안에 잠겨 있었다(표시 줄은 truncate·[링크복사]는 URL을 통째로 복사) — 받는 쪽
+         * 입력란이 요구하는 값을 주는 쪽 화면에서 꺼낼 자리가 없어 수동 참여가 실제로는 닫혀
+         * 있었다(CHMO-676). 링크를 보낼 수 있으면 코드가 필요 없으므로, 코드가 쓰이는 자리는
+         * 링크가 안 통하는 자리(구두·문자 전달)다.
+         */}
+        <SecretRow
+          label="참여 코드"
+          value={channel.joinKey}
+          ariaLabel="참여 코드 복사"
+          mono
+          onCopy={() => void copyText(channel.joinKey, '🧀 참여 코드를 복사했어요')}
+        />
+        <div className="mt-3 border-t border-border pt-3">
+          <SecretRow
+            label="비밀번호"
+            value={channel.password}
+            ariaLabel="비밀번호 복사"
+            onCopy={() => void copyText(channel.password, '🧀 비밀번호를 복사했어요')}
+          />
+        </div>
+        {/* 링크는 그 둘을 한 번에 실어 보내는 지름길 — 값 아래 자기 줄에 둔다 */}
+        <div className="mt-3 flex items-center gap-3 border-t border-border pt-3">
+          <p className="min-w-0 flex-1 truncate text-xs text-muted">{displayUrl(joinUrl)}</p>
           <Button
             size="sm"
+            className="shrink-0"
             onClick={() => {
-              // 비밀번호 복사와 갈라서 센다 — 링크 복사만이 '초대를 꺼냈다'는 신호다
+              // 코드·비밀번호 복사와 갈라서 센다 — 링크 복사만이 '초대를 꺼냈다'는 신호다
               trackEvent('invite_link_copy')
               void copyText(joinUrl, copy.copyDone)
             }}
@@ -120,7 +182,6 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
             ⧉ 링크복사
           </Button>
         </div>
-        <p className="mt-1.5 truncate text-xs text-muted">{displayUrl(joinUrl)}</p>
       </div>
       <button
         type="button"
