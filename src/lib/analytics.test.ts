@@ -10,11 +10,20 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import * as amplitude from '@amplitude/analytics-browser'
-import { screenOf, trackEvent, trackScreen, UNKNOWN_SCREEN, __resetAnalyticsForTest } from './analytics'
+import {
+  isAnalyticsOptedOut,
+  screenOf,
+  setAnalyticsOptOut,
+  trackEvent,
+  trackScreen,
+  UNKNOWN_SCREEN,
+  __resetAnalyticsForTest,
+} from './analytics'
 
 vi.mock('@amplitude/analytics-browser', () => ({
   init: vi.fn(),
   track: vi.fn(),
+  setOptOut: vi.fn(),
 }))
 
 beforeEach(() => {
@@ -77,6 +86,50 @@ describe('키가 없으면 완전 no-op', () => {
   it('trackScreen도 SDK를 부르지 않는다', () => {
     trackScreen('/share/shr_grp1')
     expect(amplitude.track).not.toHaveBeenCalled()
+  })
+})
+
+describe('수집 거부(옵트아웃, CHMO-662) — 처리방침 §12 거부 방법의 실체', () => {
+  it('플래그가 기기 단위로 저장·복원된다 (설정 토글의 재방문 상태)', () => {
+    expect(isAnalyticsOptedOut()).toBe(false)
+    setAnalyticsOptOut(true)
+    expect(isAnalyticsOptedOut()).toBe(true)
+    setAnalyticsOptOut(false)
+    expect(isAnalyticsOptedOut()).toBe(false)
+  })
+
+  it('거부 상태에선 키가 있어도 SDK를 초기화하지 않는다', async () => {
+    // API_KEY는 모듈 로드 시점에 읽힌다 — env를 심고 새 인스턴스를 받아야 키가 보인다
+    vi.stubEnv('VITE_AMPLITUDE_API_KEY', 'test-key')
+    vi.resetModules()
+    try {
+      const analytics = await import('./analytics')
+      // resetModules 이후의 목 인스턴스 — 상단 import(구 인스턴스)로는 호출이 안 잡힌다
+      const amp = await import('@amplitude/analytics-browser')
+      analytics.setAnalyticsOptOut(true)
+      await analytics.initAnalytics()
+      expect(amp.init).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    }
+  })
+
+  it('세션 중에 다시 켜면 건너뛴 초기화가 이어진다', async () => {
+    vi.stubEnv('VITE_AMPLITUDE_API_KEY', 'test-key')
+    vi.resetModules()
+    try {
+      const analytics = await import('./analytics')
+      const amp = await import('@amplitude/analytics-browser')
+      analytics.setAnalyticsOptOut(true)
+      await analytics.initAnalytics() // 거부 상태 — 건너뜀
+      expect(amp.init).not.toHaveBeenCalled()
+      analytics.setAnalyticsOptOut(false) // 토글 켜기 — 내부에서 init 재시도
+      await vi.waitFor(() => expect(amp.init).toHaveBeenCalledTimes(1))
+    } finally {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    }
   })
 })
 

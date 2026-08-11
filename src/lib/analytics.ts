@@ -25,16 +25,19 @@
  *    않지만, 켜는 순간 아이 얼굴 사진이 그대로 제3자 서버에 녹화된다. 이 파일에 그
  *    플러그인을 추가하지 말 것.
  *
- * **키가 없으면 완전 no-op다** — `VITE_AMPLITUDE_API_KEY` 미설정 빌드는 SDK를 초기화조차
- * 하지 않아 네트워크 요청이 0건이고, 기존 동작과 완전히 같다. 그래서 키를 넣기 전까지
- * 이 코드가 배포돼 있어도 무해하다.
+ * ⑥ **수집 거부(옵트아웃)를 이 모듈이 소유한다**(CHMO-662) — 설정 화면의 '이용 통계 수집'
+ *    토글이 유일한 스위치고, 처리방침 §12(자동 수집 장치)의 "거부 방법" 필수 기재(시행령
+ *    제31조① 제6호)가 그 토글을 가리킨다. **토글 문구·위치를 바꾸면 처리방침도 같이 고칠 것.**
+ *    플래그는 기기 단위다(계정 단위가 아니다 — 수집 자체가 익명 기기 단위라서, 계정별로 갈면
+ *    로그아웃 상태의 수집을 설명할 수 없다).
  *
- * ⚠ **키 투입은 개인정보 고지 개정과 세트다.** 처리방침 §11(자동 수집 장치)이 현재
- * "쿠키 등 이용자를 자동으로 식별하는 장치를 사용하지 않습니다"로 고지돼 있다(CHMO-656에서
- * 법정 필수 기재로 신설). 키를 넣는 순간 이 문장이 사실과 달라지므로, 키 투입 배포와
- * 같은 시점에 §11(수집 항목·목적·거부 방법)·§8(위탁 표)·§9(국외 이전 — Amplitude는 한국
- * 리전이 없다)을 함께 고쳐야 한다. 문서 version 인상은 BE `AgreementType`과 함께여야
- * 한다는 제약이 따로 있다(FE 단독 인상 시 가입 동의 제출이 전부 VALID400).
+ * **키가 없으면 완전 no-op다** — `VITE_AMPLITUDE_API_KEY` 미설정 빌드는 SDK를 초기화조차
+ * 하지 않아 네트워크 요청이 0건이고, 기존 동작과 완전히 같다.
+ *
+ * 키는 2026-08-11 운영(Vercel Production) env에 투입됐고, 같은 배포에 처리방침 개정이
+ * 실렸다(CHMO-662 — §12 자동 수집 장치 교체·§8 위탁 표 Amplitude 행·§9 국외 이전 신설).
+ * ⚠ 남은 제약: 문서 version 인상 여부(재동의 대상인지)는 변호사 확인 + BE `AgreementType`
+ * 동반 인상으로만 가능하다(FE 단독 인상 시 가입 동의 제출이 전부 VALID400 — 정본 §12 마커).
  */
 import { nativeAppInfo } from '../native/bridge'
 
@@ -152,9 +155,41 @@ let sdk: AmplitudeModule | null = null
 const pending: Array<[AnalyticsEvent, AnalyticsProps]> = []
 const PENDING_MAX = 50
 
+/**
+ * 수집 거부 플래그 (CHMO-662) — 처리방침 §12 "거부 방법"의 실체. 기기 단위 저장이라
+ * 계정 접미사를 붙이지 않는다(수집이 익명 기기 단위 — 파일 머리 주석 ⑥).
+ * localStorage 접근은 전부 try/catch — 추적 장치가 앱을 죽이는 일은 없어야 한다.
+ */
+const OPT_OUT_KEY = 'cheesemoa.analytics.optOut'
+
+export function isAnalyticsOptedOut(): boolean {
+  try {
+    return localStorage.getItem(OPT_OUT_KEY) !== null
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 설정 '이용 통계 수집' 토글의 저장 지점. 세션 중 전환도 즉시 반영한다 —
+ * 끄기: SDK가 이미 떠 있으면 setOptOut(자동 세션 이벤트까지 멈춘다) + 대기 큐 폐기.
+ * 켜기: 부트 때 거부 상태여서 초기화를 건너뛴 경우가 있어 init을 다시 시도한다(멱등).
+ */
+export function setAnalyticsOptOut(optOut: boolean): void {
+  try {
+    if (optOut) localStorage.setItem(OPT_OUT_KEY, '1')
+    else localStorage.removeItem(OPT_OUT_KEY)
+  } catch {
+    /* 저장 실패(프라이빗 모드 등)여도 아래 SDK 반영은 진행 — 이번 세션만이라도 멈춘다 */
+  }
+  if (optOut) pending.length = 0
+  if (sdk) sdk.setOptOut(optOut)
+  else if (!optOut) void initAnalytics()
+}
+
 /** 키가 없으면 아무것도 하지 않는다 — 미설정 빌드에서 이 모듈은 순수 함수 몇 개일 뿐이다 */
 function enabled(): boolean {
-  return Boolean(API_KEY)
+  return Boolean(API_KEY) && !isAnalyticsOptedOut()
 }
 
 /**
@@ -215,6 +250,12 @@ export async function initAnalytics(): Promise<void> {
 
   // 여기까지 와야 전송이 가능하다 — 로드 중에 쌓인 것부터 흘려보낸다(첫 화면 진입이 여기 있다)
   sdk = amplitude
+  // import가 나는 동안 사용자가 수집을 껐을 수 있다 — 자동 세션 이벤트까지 여기서 막는다
+  if (isAnalyticsOptedOut()) {
+    amplitude.setOptOut(true)
+    pending.length = 0
+    return
+  }
   for (const [event, props] of pending) amplitude.track(event, props)
   pending.length = 0
 }

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, ConfirmDialog, Header, LoadState, TextField, useToast } from '../components/ui'
+import { Button, ConfirmDialog, Header, LoadState, TextField, Toggle, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { deleteAccount, getMe, logout, updateMe } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
+import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
 
 // 약관·정책 전문 링크 (CHMO-478) — 라우트는 가드 밖 /legal/*
 const LEGAL_LINKS = [
@@ -16,7 +17,8 @@ const LEGAL_LINKS = [
 ]
 
 // 신고·문의 창구(App Store 1.2 — 연락 수단, CHMO-526) — 공식 서비스 주소로 통일(CHMO-581,
-// 처리방침 §12 보호책임자·이용약관 제21조③과 같은 주소). 스토어 등록정보의 지원 이메일도 이 주소로 맞춘다.
+// 처리방침 §13 보호책임자·이용약관 제21조③과 같은 주소 — §9 국외 이전 신설로 한 칸 밀림, CHMO-662).
+// 스토어 등록정보의 지원 이메일도 이 주소로 맞춘다.
 const SUPPORT_EMAIL = 'cheesemoa03@gmail.com'
 
 /**
@@ -40,6 +42,9 @@ export function SettingsPage() {
   // 계정 삭제(CHMO-526) — 확인 다이얼로그·진행 중
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  // 이용 통계 수집 토글(CHMO-662) — 처리방침 §12 '거부 방법'이 이 토글을 가리킨다.
+  // 서버 상태가 아니라 기기 플래그(lib/analytics 소유)라 즉시 반영·실패 없음.
+  const [analyticsOn, setAnalyticsOn] = useState(() => !isAnalyticsOptedOut())
 
   useEffect(() => {
     if (me) {
@@ -175,6 +180,27 @@ export function SettingsPage() {
             </Link>
           ))}
         </nav>
+        {/* 이용 통계 수집 거부(CHMO-662) — 처리방침 §12(자동 수집 장치)의 법정 필수 기재
+            '거부 방법'의 실체. 문구·위치를 바꾸면 처리방침 §12·§9(국외 이전)도 같이 고친다 */}
+        <section
+          aria-label="이용 통계"
+          className="mt-5 rounded-2xl border border-border bg-white px-4 py-3.5 shadow-card"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[15px] text-text">이용 통계 수집</p>
+            <Toggle
+              checked={analyticsOn}
+              onChange={(next) => {
+                setAnalyticsOptOut(!next)
+                setAnalyticsOn(next)
+              }}
+            />
+          </div>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+            어떤 화면이 많이 쓰이는지 익명으로 수집해 서비스 개선에 써요. 계정·사진과 연결되지
+            않고, 꺼도 이용에 제한이 없어요.
+          </p>
+        </section>
         {/* 신고·문의 — App Store 1.2 연락 창구(CHMO-526). 서버 신고 큐 없이 mailto 한 줄이 전부라
             메일 앱으로 바로 넘긴다. 주소는 스토어 등록정보의 지원 이메일과 반드시 같아야 한다 */}
         <nav
