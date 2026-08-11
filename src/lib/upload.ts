@@ -56,6 +56,36 @@ export function uploadContentTypeOf(fileName: string): string | null {
   return extension ? CONTENT_TYPES[extension] : null
 }
 
+/**
+ * MIME → 확장자 폴백(CHMO-597). 카메라 촬영본은 기기·픽커에 따라 확장자 없는 이름
+ * (콘텐츠 URI 파생)으로 와서 이름만 보면 멀쩡한 JPEG도 걸러진다 — 브라우저가 아는
+ * MIME(`File.type`)으로 확장자를 유도한다. `image/heif`는 BE 화이트리스트에 없어
+ * 같은 컨테이너 계열 heic로 수렴한다.
+ */
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/heif': 'heic',
+  'image/webp': 'webp',
+}
+
+/**
+ * presign에 보낼 파일명 — 이름에 허용 확장자가 있으면 그대로, 없으면 MIME에서 유도한
+ * 확장자를 덧붙여 보정한다. 지원 밖(둘 다 실패)이면 null — 종전대로 선택 시점에 제외.
+ *
+ * 이름 보정이 곧 계약 적합이다: BE는 파일명 확장자로 Content-Type을 정하고(위 CONTENT_TYPES),
+ * S3 PUT의 Content-Type은 presign 응답 값을 그대로 쓰므로 서명 불일치도 없다.
+ */
+export function uploadFileNameFor(fileName: string, mimeType: string): string | null {
+  if (uploadExtensionOf(fileName)) return fileName
+  const extension = EXTENSION_BY_MIME[mimeType.trim().toLowerCase()]
+  if (!extension) return null
+  // 끝 점만 정리하고 나머지 이름은 보존한다(a. → a.jpg). 빈 이름(픽커에 따라 옴)은 photo로.
+  const base = fileName.endsWith('.') ? fileName.slice(0, -1) : fileName
+  return `${base || 'photo'}.${extension}`
+}
+
 /** BE `@Positive` + 20MB 상한 */
 export function isUploadableSize(size: number): boolean {
   return size > 0 && size <= MAX_UPLOAD_FILE_BYTES

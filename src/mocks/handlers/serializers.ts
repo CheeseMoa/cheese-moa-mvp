@@ -66,7 +66,7 @@ export function toMyMembership(membership: DbMembership) {
   return {
     role: membership.role.toUpperCase(),
     status: membership.status.toUpperCase(),
-    ...(membership.role === 'parent'
+    ...(membership.role === 'viewer'
       ? {
           claimedChildNames: [...membership.childNames],
           linkedChildNames: mappedPersonsOf(membership.userId, membership.groupId).map(
@@ -87,15 +87,25 @@ export function toMyMembership(membership: DbMembership) {
  * 승인 전 정보 노출 0 원칙이고, 이벤트 수 0은 "볼 게 없다"는 사실 그대로다.
  */
 export function toGroupSummary(group: DbGroup, membership: DbMembership) {
-  const isActiveTeacher = membership.status === 'active' && membership.role === 'teacher'
-  const isActiveParent = membership.status === 'active' && membership.role === 'parent'
+  const isActiveTeacher = membership.status === 'active' && membership.role === 'editor'
+  const isActiveParent = membership.status === 'active' && membership.role === 'viewer'
   return {
     groupId: group.id,
     name: group.name,
+    // 모임 유형은 목록·상세·생성·이름변경 응답 전부에 항상 포함(BE CHMO-599 AC-8)
+    groupType: group.groupType.toUpperCase(),
     myMembership: toMyMembership(membership),
     ...(membership.status === 'pending' ? { eventCount: 0 } : {}),
     ...(isActiveTeacher
-      ? { memberCount: memberCountOf(group.id), eventCount: eventCountOf(group.id) }
+      ? {
+          memberCount: memberCountOf(group.id),
+          eventCount: eventCountOf(group.id),
+          // ⚠ 분리 카운트는 FE 선행 제안(CHMO-608 — 홈 비즈니스 카드 "관리자 N · 멤버 N"):
+          // 실 BE GroupSummaryResponse엔 아직 없다(2026-08-06 develop 소스 대조 — 상세만
+          // 보유). BE 반영 전 실서버에선 카드가 '인원 N명' 폴백으로 그려진다
+          editorCount: teacherCountOf(group.id),
+          viewerCount: parentCountOf(group.id),
+        }
       : {}),
     ...(isActiveParent
       ? {
@@ -117,28 +127,20 @@ export function toGroupSummary(group: DbGroup, membership: DbMembership) {
  * (지금은 핸들러가 PENDING을 먼저 403으로 막지만, 직렬화기 단독으로도 새지 않게).
  */
 export function toGroupDetail(group: DbGroup, membership: DbMembership) {
-  const isActiveTeacher = membership.status === 'active' && membership.role === 'teacher'
+  const isActiveTeacher = membership.status === 'active' && membership.role === 'editor'
   return {
     groupId: group.id,
     name: group.name,
+    groupType: group.groupType.toUpperCase(),
     ...(isActiveTeacher
       ? {
           memberCount: memberCountOf(group.id),
-          teacherCount: teacherCountOf(group.id),
-          parentCount: parentCountOf(group.id),
+          // 카운트 필드도 중립어로 개명(CHMO-605 — 구 teacherCount/parentCount)
+          editorCount: teacherCountOf(group.id),
+          viewerCount: parentCountOf(group.id),
         }
       : {}),
     createdAt: group.createdAt,
-  }
-}
-
-/** BE JoinGroupResponse(초안 §3) — 즉시 합류가 아니라 신청 생성 결과 */
-export function toJoinGroupResponse(group: DbGroup, membership: DbMembership) {
-  return {
-    groupId: group.id,
-    groupName: group.name,
-    role: membership.role.toUpperCase(),
-    status: membership.status.toUpperCase(),
   }
 }
 
@@ -149,7 +151,7 @@ export function toJoinRequestResponse(membership: DbMembership, user: DbUser) {
     userId: user.id,
     nickname: user.nickname,
     role: membership.role.toUpperCase(),
-    ...(membership.role === 'parent' ? { childNames: [...membership.childNames] } : {}),
+    ...(membership.role === 'viewer' ? { childNames: [...membership.childNames] } : {}),
     createdAt: membership.createdAt,
   }
 }
@@ -163,7 +165,7 @@ export function toGroupMemberResponse(membership: DbMembership, user: DbUser) {
     userId: user.id,
     nickname: user.nickname,
     role: membership.role.toUpperCase(),
-    ...(membership.role === 'parent'
+    ...(membership.role === 'viewer'
       ? {
           childNames: [...membership.childNames],
           mappings: mappedPersonsOf(user.id, membership.groupId).map((p) => ({
@@ -607,7 +609,7 @@ export function toAdminGroupDetailResponse(group: DbGroup) {
   const memberships = db.memberships
     .filter((m) => m.groupId === group.id)
     .sort((a, b) => a.id - b.id)
-  const owner = memberships.find((m) => m.role === 'teacher' && m.status === 'active')
+  const owner = memberships.find((m) => m.role === 'editor' && m.status === 'active')
   const ownerUser = owner ? db.users.find((u) => u.id === owner.userId) : undefined
   return {
     groupId: group.id,

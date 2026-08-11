@@ -4,18 +4,15 @@
  */
 import { http } from 'msw'
 import {
-  agreementCatalogOf,
   createMembership,
   db,
   deleteGroupCascade,
   findGroup,
-  GUARDIAN_CHILD_CONSENT_TYPE,
   hasAnalyzingEvent,
   membershipOf,
   membershipsOfUser,
   nextId,
   nowIso,
-  recordAgreement,
   type DbGroup,
 } from '../db'
 import {
@@ -34,8 +31,7 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { STALE_VERSION } from './agreements'
-import { shareUrlOf, toGroupDetail, toGroupSummary, toJoinGroupResponse } from './serializers'
+import { shareUrlOf, toGroupDetail, toGroupSummary } from './serializers'
 
 function randomJoinKey(): string {
   // 실 BE는 대소문자 혼합 12자를 발급하고 대소문자를 구분해 매칭한다(채집 예: Fh1TDIk81EPP — CHMO-285)
@@ -65,21 +61,27 @@ export const groupHandlers = [
     return ok(items)
   }),
 
-  // POST /groups — 모임 만들기(생성자는 ACTIVE TEACHER로 즉시 확정, 학부모 공유 자동 발급) · 화면 03
+  // POST /groups — 모임 만들기(생성자는 ACTIVE EDITOR로 즉시 확정, 시크릿 4종 자동 발급) · 화면 03
+  // groupType은 선택(생략 시 BUSINESS — 기존 FE 호환, BE CHMO-599 AC-2). 참여 비밀번호는
+  // 요청으로 받지 않는다(AC-9 — 구 FE가 보내는 password는 무시, 4자리 PIN 자동 발급).
   http.post(api('/groups'), async ({ request }) => {
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ name?: unknown; password?: unknown }>(request)
+    const body = await readJson<{ name?: unknown; groupType?: unknown }>(request)
     const name = requiredString(body?.name)
-    const password = requiredString(body?.password)
     if (!name) return invalidRequest('모임 이름을 입력해 주세요.')
-    if (!password) return invalidRequest('모임 비밀번호를 입력해 주세요.')
+    const rawType = optionalString(body?.groupType)
+    // enum 밖 값은 거부 — BE는 Jackson enum 역직렬화 400(문구 미채집이라 VALID400 계열로 근사)
+    if (rawType !== undefined && rawType !== 'BUSINESS' && rawType !== 'GENERAL')
+      return invalidRequest('모임 유형이 올바르지 않습니다.')
 
     const group: DbGroup = {
       id: nextId('grp'),
       name,
-      password,
+      groupType: rawType === 'GENERAL' ? 'general' : 'business',
+      // 참여 비밀번호도 sharePassword와 같은 4자리 PIN 형식(BE generateNumericPin)
+      password: randomSharePassword(),
       joinKey: randomJoinKey(),
       parentJoinKey: randomJoinKey(),
       share: { token: `shr_${nextId('tok')}`, password: randomSharePassword() },
@@ -89,7 +91,7 @@ export const groupHandlers = [
     const membership = createMembership({
       userId: user.id,
       groupId: group.id,
-      role: 'teacher',
+      role: 'editor',
       status: 'active',
     })
     return created(toGroupDetail(group, membership))
@@ -161,7 +163,6 @@ export const groupHandlers = [
       joinKey?: unknown
       password?: unknown
       childNames?: unknown
-      childConsentVersion?: unknown
     }>(request)
     const joinKey = requiredString(body?.joinKey)
     const password = requiredString(body?.password)
@@ -171,10 +172,13 @@ export const groupHandlers = [
     const parentGroup = teacherGroup ? undefined : db.groups.find((g) => g.parentJoinKey === joinKey)
     const group = teacherGroup ?? parentGroup
     if (!group) return groupNotFound()
-    const role = teacherGroup ? 'teacher' : 'parent'
+    // GENERAL 모임의 학부모 키는 **없는 키 취급**(SPACE404 — BE CHMO-599 AC-6): 일반 모임엔
+    // 학부모 역할 진입로가 없다. 비밀번호 검증보다 앞에 둬 모임의 존재를 드러내지 않는다(ADR 020)
+    if (parentGroup && parentGroup.groupType === 'general') return groupNotFound()
+    const role = teacherGroup ? 'editor' : 'viewer'
 
     // BE JOIN403 — 뷰어 잠금 해제(학부모 비밀번호)도 같은 코드를 쓴다
-    const expected = role === 'teacher' ? group.password : group.share.password
+    const expected = role === 'editor' ? group.password : group.share.password
     if (expected !== password) return errorResponse(403, 'JOIN403', '비밀번호가 일치하지 않습니다.')
 
     // 중복 신청/합류(409)를 childNames 검증(400)보다 먼저 — 뒤에 두면 이미 신청한 학부모의
@@ -188,40 +192,15 @@ export const groupHandlers = [
         existing.status === 'active' ? '이미 참여 중인 모임입니다.' : '이미 참여 신청한 모임입니다.',
       )
 
-    // 학부모 신청은 자녀 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지 않는다(§2)
+    // viewer(멤버/학부모) 신청은 인물 이름(자유 텍스트) 필수 — 신청 UI에 인물 목록을 노출하지
+    // 않는다(§2). 이 400은 마커 없는 링크를 02-1 모달이 02-2로 인계하는 감지 신호이기도 하다.
+    // 자녀 정보 처리 동의(childConsentVersion — BE CHMO-586) 검증은 폐지했다(CHMO-607 —
+    // 동의는 가입 01-A 1회로 일원화. ⚠ BE 폐지 티켓 배포 전까지 실 BE는 이 검증이 남아 있다)
     let childNames: string[] = []
-    if (role === 'parent') {
+    if (role === 'viewer') {
       const raw = Array.isArray(body?.childNames) ? body.childNames : []
       childNames = raw.map(requiredString).filter((name): name is string => name !== null)
-      // 자녀 이름 검증이 동의 검증보다 앞 — 1/3 프로브(이름·동의 없는 제출)가 이 400으로
-      // 학부모 코드를 감지하는 흐름 유지. BE 검증 순서·문구는 미채집(CHMO-586 배포 전)
       if (childNames.length === 0) return invalidRequest('아이 이름을 입력해 주세요.')
-
-      // 자녀 정보 처리 동의(BE CHMO-586) — 동의권자(보호자) 본인의 기록이라 신청 필수.
-      // 누락·구버전이면 신청째 거부(VALID400 — 티켓 확정, 문구는 BE 미채집이라 추정)
-      const consentVersion = requiredString(body?.childConsentVersion)
-      if (!consentVersion) return invalidRequest('자녀 정보 처리 동의는 필수입니다.')
-      const consentCatalog = agreementCatalogOf(GUARDIAN_CHILD_CONSENT_TYPE)
-      if (consentVersion !== consentCatalog?.currentVersion) return invalidRequest(STALE_VERSION)
-
-      // 기록은 신청 시(승인 전 — 동의 의사표시 시각이 기준·append-only라 거절돼도 남는다).
-      // 같은 모임 재신청(거절 후)이 같은 상태면 행을 늘리지 않는다(멱등 — BE AC)
-      const already = db.agreements.some(
-        (row) =>
-          row.userId === user.id &&
-          row.type === GUARDIAN_CHILD_CONSENT_TYPE &&
-          row.groupId === group.id &&
-          row.version === consentVersion &&
-          row.agreed,
-      )
-      if (!already)
-        recordAgreement({
-          userId: user.id,
-          type: GUARDIAN_CHILD_CONSENT_TYPE,
-          version: consentVersion,
-          agreed: true,
-          groupId: group.id,
-        })
     }
 
     const membership = createMembership({
@@ -231,7 +210,9 @@ export const groupHandlers = [
       status: 'pending',
       childNames,
     })
-    return created(toJoinGroupResponse(group, membership))
+    // 실 BE join 응답은 GroupSummaryResponse 재사용(SpaceController 대조 — 전용 DTO 없음,
+    // role·status는 myMembership에 중첩) — 목록 직렬화기를 그대로 쓴다(CHMO-607)
+    return created(toGroupSummary(group, membership))
   }),
 
   // GET /groups/:id/invite — 초대 정보 2종(TEACHER 전용 — PARENT는 ROLE403, Q3) · 화면 05-2

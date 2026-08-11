@@ -12,11 +12,13 @@ export { EventCard } from './EventCard'
 export { GroupCard } from './GroupCard'
 export { Header } from './Header'
 export {
+  IconBuilding,
   IconCheck,
   IconClose,
   IconDownload,
   IconFolderMove,
   IconPencil,
+  IconPeople,
   IconPlus,
   IconShare,
   IconTrash,

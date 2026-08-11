@@ -21,14 +21,10 @@ export const GUARDIAN_CONSENT_COPY = {
 } as const
 
 /**
- * 자녀의 사진·얼굴 특징정보 처리 동의 (02-2 학부모 합류 신청 3/3 — CHMO-587 · BE CHMO-586).
- * 동의권자(보호자) **본인**이 남기는 기록이라 위 선생님의 확인과 별개 항목이다
- * (BE `GUARDIAN_CHILD_CONSENT` — 합류 신청 body의 `childConsentVersion`으로 수집).
- *
- * ⚠ 버전은 여기 없다 — 제출 버전은 `GET /agreements`의 `currentVersion`을 그대로 싣는다
- * (CHMO-587 티켓 확정, 하드코딩 금지: 문서 개정 시 FE 배포 없이 새 버전이 전송된다).
- * CHMO-517(버전 FE 소유)과 다른 선택이므로, 이 문구를 고칠 때 BE 버전 인상과 함께 가는 규칙은
- * 같지만 구버전 번들이 새 버전을 실어 보낼 수 있다는 한계를 안고 간다.
+ * 자녀의 사진·얼굴 특징정보 처리 동의 (구 02-2 학부모 합류 신청 3/3 — CHMO-587 · BE CHMO-586).
+ * ⚠ **화면 소비처 없음(CHMO-607)** — 합류 신청의 동의 단계·`childConsentVersion` 동봉을 폐지했다
+ * (법적 동의는 가입 01-A 1회로 일원화, 정본 group-type-proposal §1). BE 카탈로그·동의 기록
+ * 계약(`GUARDIAN_CHILD_CONSENT`)이 남아 있어 문구 원천만 잔존시킨다 — BE 폐지 시 함께 정리.
  */
 export const GUARDIAN_CHILD_CONSENT_COPY = {
   /** 체크박스 라벨 — "(필수)" 접두는 화면이 그린다 */

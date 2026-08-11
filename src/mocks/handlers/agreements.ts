@@ -36,8 +36,9 @@ import type { AgreementType } from '../../types/api'
  * 합류 신청의 자녀 동의 버전 검증(groups.ts — CHMO-586)도 같은 문구를 쓴다 */
 export const STALE_VERSION = '약관 버전이 최신이 아닙니다. 최신 약관을 확인해 주세요.'
 
-/** 요청 본문의 대문자 enum → 카탈로그 항목(미지 값이면 null → 400) */
-function agreementTypeOf(value: unknown) {
+/** 요청 본문의 대문자 enum → 카탈로그 항목(미지 값이면 null → 400).
+ * 가입 동봉 검증(auth.ts — CHMO-598)도 같은 파서를 쓴다 */
+export function agreementTypeOf(value: unknown) {
   if (typeof value !== 'string') return null
   return agreementCatalogOf(value.toLowerCase() as AgreementType) ?? null
 }

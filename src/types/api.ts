@@ -27,7 +27,17 @@ export interface GroupShare {
 
 // 학부모 전환(CHMO-444 · docs/parent-model-api-draft.md) — role은 모임 멤버십 단위(user×group).
 // 계정 유형은 나누지 않고, 어느 초대 링크(joinKey 2종)로 합류했는지가 role을 정한다(Q6).
-export type GroupRole = 'teacher' | 'parent'
+// 값은 BE 직렬화 값 EDITOR/VIEWER의 소문자 정규화(CHMO-604 — 구 TEACHER/PARENT, ADR 021).
+// editor = 편집 전권(구 선생님) · viewer = 열람 전용(구 학부모). 화면 라벨(선생님/학부모)은 별개다.
+export type GroupRole = 'editor' | 'viewer'
+
+/**
+ * 모임 유형(BE CHMO-599 · ADR 020) — 생성 시 지정, 이후 변경 불가.
+ * business = 역할 분리·승인제·검수/공개·아동 보호자 동의 가드가 있는 사업자용(구 유치원).
+ * general = 전원 editor(역할 분리 없음) — 학부모 키 합류가 닫히고 presign 동의 게이트가 없다.
+ * 유형 도입 전 응답(구계약)은 매퍼가 business로 정규화한다(BE 백필과 같은 의미).
+ */
+export type GroupType = 'business' | 'general'
 /** 합류는 역할 무관 승인제(§1) — 신청(pending) 후 선생님 승인으로 active */
 export type MembershipStatus = 'pending' | 'active'
 
@@ -48,13 +58,15 @@ export interface MyMembership {
 export interface Group {
   id: ID
   name: string
+  /** 모임 유형(목록·상세·생성·이름변경 응답 전부 포함 — 구계약 생략은 매퍼가 business 정규화) */
+  groupType: GroupType
   /** 내 멤버십(role·승인 상태) — 실 BE 미배포 응답엔 없어 undefined(기존 제작자 동작 유지) */
   myMembership?: MyMembership
-  /** ACTIVE 멤버 수 — PARENT·PENDING 응답엔 멤버 정보가 없다(§7-3 미노출) */
+  /** ACTIVE 멤버 수 — VIEWER·PENDING 응답엔 멤버 정보가 없다(§7-3 미노출) */
   memberCount?: number
-  /** 상세 카운트 분리(§7-3 — "선생님 3 · 학부모 12") — memberCount는 과도기 병행 */
-  teacherCount?: number
-  parentCount?: number
+  /** 상세 카운트 분리(§7-3 — "선생님 3 · 학부모 12") — memberCount는 과도기 병행. CHMO-605 개명 */
+  editorCount?: number
+  viewerCount?: number
   /** BE 상세(GroupDetailResponse)엔 없음 — 상세 화면은 이벤트 목록 길이로 파생(CHMO-192) */
   eventCount?: number
   createdAt: ISODateTime
@@ -170,11 +182,11 @@ export interface EventItem {
    */
   progress?: AnalysisProgress | null
   /**
-   * 발행 대기 수(구 재공개 게이트 CHMO-324·265) — 검토됐지만 아직 발행되지 않은 사진.
-   * **상세 응답에만** 있고 목록엔 없다.
-   * ⚠ **화면은 더 이상 읽지 않는다**(CHMO-488): 전량 검토 완료가 공개의 하드 게이트가 되고
-   * 이벤트당 업로드도 1회(CHMO-486)라 공개 후에 발행 대기가 생길 경로가 사라졌다.
-   * BE(CHMO-487)가 필드를 걷어낼 때까지는 실 BE 응답 그대로 통과시킨다.
+   * 발행 대기 수 — 검토됐지만 아직 발행되지 않은 사진. **상세 응답에만** 있고 목록엔 없다.
+   * 재업로드가 다시 열려(CHMO-606) 공개 후에도 발행 대기가 생긴다 — 08 "발행 대기 N장" 안내와
+   * 14 재공개 활성 판정이 읽는다(CHMO-488의 '더는 안 읽는다'를 반전).
+   * **검토를 마친 사진만 센다** — 공개 후 이어 올린 미검토분은 여기 안 잡히므로, 08은 앨범
+   * 목록에서 미검토 잔여를 따로 파생해 "공개 후 추가된 사진 N장"을 함께 알린다(CHMO-615).
    */
   pendingPublishCount?: number
 }
@@ -332,6 +344,11 @@ export interface RegisterPhotosRequest {
 export interface RegisterPhotosResult {
   jobId: string
   registeredCount: number
+  /**
+   * 같은 이벤트에 이미 있는 동일 사진(내용 지문 일치)이라 등록에서 제외된 수(CHMO-254).
+   * 재업로드에서만 0보다 클 수 있다 — 구채집 픽스처엔 없어 optional(전량 중복은 VALID400).
+   */
+  duplicateCount?: number
 }
 
 // ── 공개 요약(14) ────────────────────────────────────────────

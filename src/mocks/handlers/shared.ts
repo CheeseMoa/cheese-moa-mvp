@@ -179,7 +179,7 @@ export function teacherOnlyError(
   groupId: number,
   hide: () => Response = groupNotFound,
 ): Response | null {
-  return membershipRoleError(user, groupId, 'teacher', hide)
+  return membershipRoleError(user, groupId, 'editor', hide)
 }
 
 /**

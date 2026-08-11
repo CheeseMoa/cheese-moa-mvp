@@ -9,7 +9,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { attestGuardianConsent, listAgreements, submitAgreements } from './agreements'
 import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
-import { deleteAccount, getMe, login } from './auth'
+import {
+  deleteAccount,
+  exchangeSocialCode,
+  exchangeSocialSignup,
+  getMe,
+  login,
+  signup,
+} from './auth'
 import {
   createPersonAlbum,
   deletePhotos,
@@ -30,6 +37,7 @@ import {
   uploadToPresignedUrl,
 } from './events'
 import {
+  createGroup,
   findMyGroupByJoinKey,
   getGroup,
   getInviteInfo,
@@ -101,33 +109,78 @@ describe('모임', () => {
 
     // 실 BE는 학부모 전환(CHMO-444) 미배포 — myMembership이 없어도 매퍼가 undefined로 흡수해
     // 기존 제작자 화면이 그대로 동작해야 한다(배포 전후 스위치 양쪽 공존 구간).
+    // groupType도 없다(유형 도입 전) — business로 정규화한다(BE 백필과 같은 해석, CHMO-604).
     await expect(listGroups()).resolves.toEqual([
       {
         id: 6,
         name: 'CHMO-194 업로드검증',
+        groupType: 'business',
         memberCount: 1,
         eventCount: 1,
+        editorCount: undefined,
+        viewerCount: undefined,
+        myMembership: undefined,
         createdAt: '2026-07-10T03:33:06.314638Z',
       },
     ])
   })
 
+  it('모임 유형·개명 카운트(BE CHMO-599·605) — groupType 소문자 정규화, editorCount/viewerCount 통과', async () => {
+    // BE 스펙 대조(develop 머지·운영 미배포) — 실서버 채집 후 픽스처로 교체한다.
+    serve(
+      envelope({
+        groupId: 12,
+        name: '주말 등산 모임',
+        groupType: 'GENERAL',
+        memberCount: 3,
+        editorCount: 3,
+        viewerCount: 0,
+        createdAt: '2026-08-06T00:00:00Z',
+      }),
+    )
+    const group = await getGroup(12)
+    expect(group.groupType).toBe('general')
+    expect(group.editorCount).toBe(3)
+    expect(group.viewerCount).toBe(0)
+  })
+
+  it('구계약 카운트(teacherCount/parentCount)를 editorCount/viewerCount로 흡수한다', async () => {
+    // 운영 BE는 main 머지 전까지 구 필드명을 준다(배포 게이트) — FE가 먼저 나가도 05 카운트
+    // 표기가 깨지지 않아야 한다.
+    serve(
+      envelope({
+        groupId: 6,
+        name: 'CHMO-194 업로드검증',
+        memberCount: 3,
+        teacherCount: 1,
+        parentCount: 2,
+        createdAt: '2026-07-10T03:33:06.314638Z',
+      }),
+    )
+    const group = await getGroup(6)
+    expect(group.editorCount).toBe(1)
+    expect(group.viewerCount).toBe(2)
+  })
+
   it('학부모 전환 초안 — myMembership(대문자 enum·claimedChildNames 생략)을 FE 계약으로 옮긴다', async () => {
-    // BE 미배포 — parent-model-api-draft §1 초안 기대값. 배포 후 실채집 픽스처로 교체한다.
+    // BE 미배포 — parent-model-api-draft §1 초안 기대값(role 값은 CHMO-605 리네이밍 반영).
+    // 배포 후 실채집 픽스처로 교체한다.
     serve(
       envelope([
         {
           groupId: 9,
           name: '햇살반',
-          myMembership: { role: 'PARENT', status: 'PENDING', claimedChildNames: ['김민준'] },
+          groupType: 'BUSINESS',
+          myMembership: { role: 'VIEWER', status: 'PENDING', claimedChildNames: ['김민준'] },
           createdAt: '2026-07-25T00:00:00Z',
         },
         {
           groupId: 6,
           name: 'CHMO-194 업로드검증',
+          groupType: 'BUSINESS',
           memberCount: 1,
           eventCount: 1,
-          myMembership: { role: 'TEACHER', status: 'ACTIVE' },
+          myMembership: { role: 'EDITOR', status: 'ACTIVE' },
           createdAt: '2026-07-10T03:33:06.314638Z',
         },
       ]),
@@ -135,20 +188,44 @@ describe('모임', () => {
 
     const [pending, teacher] = await listGroups()
     expect(pending.myMembership).toEqual({
-      role: 'parent',
+      role: 'viewer',
       status: 'pending',
       claimedChildNames: ['김민준'],
       linkedChildNames: [],
     })
     // PENDING 항목엔 멤버 정보가 없다(§7-3) — 매퍼가 undefined로 통과시킨다
     expect(pending.memberCount).toBeUndefined()
-    // TEACHER는 claimedChildNames·linkedChildNames를 생략할 수 있다(초안 §1) — 빈 배열로 정규화
+    // EDITOR는 claimedChildNames·linkedChildNames를 생략할 수 있다(초안 §1) — 빈 배열로 정규화
     expect(teacher.myMembership).toEqual({
-      role: 'teacher',
+      role: 'editor',
       status: 'active',
       claimedChildNames: [],
       linkedChildNames: [],
     })
+  })
+
+  it('구 역할 값(TEACHER/PARENT)도 editor/viewer로 흡수한다 — 운영 BE 공존 구간(CHMO-604)', async () => {
+    // 운영 BE는 main 머지 전까지 구 값을 직렬화한다(ADR 021) — FE가 먼저 배포돼도
+    // 홈 카드 분기(editor/viewer)가 깨지면 안 된다.
+    serve(
+      envelope([
+        {
+          groupId: 9,
+          name: '햇살반',
+          myMembership: { role: 'PARENT', status: 'ACTIVE', claimedChildNames: ['김민준'] },
+          createdAt: '2026-07-25T00:00:00Z',
+        },
+        {
+          groupId: 6,
+          name: 'CHMO-194 업로드검증',
+          myMembership: { role: 'TEACHER', status: 'ACTIVE' },
+          createdAt: '2026-07-10T03:33:06.314638Z',
+        },
+      ]),
+    )
+    const [legacyParent, legacyTeacher] = await listGroups()
+    expect(legacyParent.myMembership?.role).toBe('viewer')
+    expect(legacyTeacher.myMembership?.role).toBe('editor')
   })
 
   it('BE 빈 목록도 빈 배열로 통과한다', async () => {
@@ -174,9 +251,10 @@ describe('모임', () => {
     expect(invite.teacher.joinKey).toBe('Fh1TDIk81EPP')
     expect(invite.parent?.password).toBe('7421')
     // node 환경엔 window가 없어 오리진이 빈다 — 경로형(/join/:joinKey)인 게 계약의 핵심이다.
-    // 학부모 링크는 role 마커 포함 — joinKey가 불투명이라 02-2 분기의 유일한 근거(CHMO-445)
+    // 마커 없는 원형이다 — 유형·역할·모임 정보 마커는 공유 화면이 lib/joinLink로 동봉한다
+    // (CHMO-607 — 종전 ?role=parent 파생은 그리로 이관, joinLink.test가 마커 계약을 고정)
     expect(invite.teacher.joinUrl).toBe('/join/Fh1TDIk81EPP')
-    expect(invite.parent?.joinUrl).toBe('/join/Pk3xYz92QwEr?role=parent')
+    expect(invite.parent?.joinUrl).toBe('/join/Pk3xYz92QwEr')
   })
 
   it('초대 구계약 공존 — 평면 응답(현행 실 BE)은 teacher로 흡수하고 parent는 null', async () => {
@@ -197,51 +275,91 @@ describe('모임', () => {
     expect(invite.parent).toBeNull()
   })
 
-  it('참여 구계약 공존 — 즉시 합류(GroupDetail 형태) 응답을 active/teacher로 흡수한다', async () => {
-    // 현행 실 BE: 참여 즉시 합류 + 상세 형태 응답(role·status·groupName 없음).
-    // 매퍼가 던지면 서버는 이미 합류를 끝냈는데 화면은 실패로 오인한다 — 반드시 성공으로 흡수.
+  it('참여 구계약 공존 — 형태 미상(GroupDetail 꼴) 응답은 성공으로 흡수하되 pending으로 좁힌다', async () => {
+    // role·status가 어디에도 없는 응답 — 매퍼가 던지면 서버는 이미 처리를 끝냈는데 화면은
+    // 실패로 오인하므로 성공으로 흡수한다. 단 status 기본은 pending(CHMO-607 반전 — 승인제
+    // BE(CHMO-475 배포) 아래에서 active 오판은 모임 직행 후 SPACE403(CHMO-448 실측)으로 터지고,
+    // 홈 랜딩은 어느 계약에서도 안전하다. 종전 active 기본은 즉시 합류 구계약 시절 값).
     serve(envelope(BE_GROUP_DETAIL))
     const result = await joinGroup({ joinKey: 'K', password: 'p' })
-    expect(result.status).toBe('active')
-    expect(result.role).toBe('teacher')
+    expect(result.status).toBe('pending')
+    expect(result.role).toBe('editor')
     expect(result.groupId).toBe(6)
     // 구계약의 name 필드가 groupName으로 온다 — 토스트가 'undefined'를 그리지 않게
     expect(result.groupName).not.toBe('')
   })
 
-  it('참여 초안 계약 — role·status 대문자 enum을 소문자로 옮긴다 (CHMO-444)', async () => {
-    // BE 미배포 — parent-model-api-draft §3 초안 기대값. 배포 후 실채집 픽스처로 교체한다.
+  it('참여 응답(실 BE GroupSummaryResponse) — myMembership 중첩 role·status를 읽는다 (CHMO-607)', async () => {
+    // BE SpaceController.joinGroup은 전용 DTO 없이 GroupSummaryResponse를 재사용한다(소스 대조 —
+    // 실서버 채집은 학부모 전환 배포 후 CHMO-449). role·status가 평면이 아니라 myMembership에
+    // 중첩이다 — 평면만 읽던 종전 매퍼는 여기서 기본값으로 새어 직행 오판을 만들었다(CHMO-448).
     serve(
-      envelope({ groupId: 9, groupName: '햇살반', role: 'PARENT', status: 'PENDING' }),
+      envelope({
+        groupId: 9,
+        name: '햇살반',
+        groupType: 'BUSINESS',
+        myMembership: {
+          role: 'VIEWER',
+          status: 'PENDING',
+          claimedChildNames: ['김민준'],
+          linkedChildNames: [],
+        },
+      }),
     )
     await expect(joinGroup({ joinKey: 'P', password: '7421', childNames: ['김민준'] })).resolves.toEqual({
       groupId: 9,
       groupName: '햇살반',
-      role: 'parent',
+      role: 'viewer',
       status: 'pending',
     })
   })
 
-  it('학부모 신청에 자녀 동의 버전이 그대로 실린다 — 생략하면 필드째 빠진다 (CHMO-587)', async () => {
-    // childConsentVersion은 GET /agreements의 currentVersion 에코(BE CHMO-586) — 값 변형 금지.
-    const calls = serve(
-      envelope({ groupId: 9, groupName: '햇살반', role: 'PARENT', status: 'PENDING' }),
+  it('참여 즉시 합류(ACTIVE) — 일반 모임 합류가 모임 직행의 근거가 되는 명시적 신호다 (CHMO-607)', async () => {
+    // GENERAL 즉시 합류는 BE 미구현(승인제 유지 — CHMO-599)이라 이 픽스처는 목표 계약이다.
+    // 직행(02-1)은 이 명시적 ACTIVE에만 열린다 — 형태 미상은 위 테스트처럼 pending으로 좁힌다.
+    serve(
+      envelope({
+        groupId: 4,
+        name: '제주 가족여행',
+        groupType: 'GENERAL',
+        myMembership: { role: 'EDITOR', status: 'ACTIVE', linkedChildNames: [] },
+      }),
     )
-    await joinGroup({
-      joinKey: 'P',
-      password: '7421',
-      childNames: ['김민준'],
-      childConsentVersion: '1.0',
+    await expect(joinGroup({ joinKey: 'G', password: '1234' })).resolves.toMatchObject({
+      groupId: 4,
+      status: 'active',
+      role: 'editor',
     })
-    expect(bodyOf(calls[0])).toEqual({
-      joinKey: 'P',
-      password: '7421',
-      childNames: ['김민준'],
-      childConsentVersion: '1.0',
-    })
+  })
 
-    // 구계약 BE(카탈로그에 항목 없음)·선생님 키 — undefined는 JSON에서 빠져 종전 계약 그대로다
-    await joinGroup({ joinKey: 'K', password: 'p', childConsentVersion: undefined })
+  it('모임 생성 — groupType을 동봉하고 password는 보내지 않는다 (BE CHMO-599)', async () => {
+    // 참여 비밀번호는 서버 자동 발급(AC-9) — 요청에 password가 남아 있으면 무시되지만,
+    // FE 계약은 아예 싣지 않는 것이다(입력란도 없다 — 03 개편은 CHMO-603).
+    const calls = serve(
+      envelope({
+        groupId: 1001,
+        name: '주말 등산 모임',
+        groupType: 'GENERAL',
+        memberCount: 1,
+        createdAt: '2026-08-06T00:00:00Z',
+      }),
+    )
+    const group = await createGroup({ name: '주말 등산 모임', groupType: 'general' })
+    expect(bodyOf(calls[0])).toEqual({ name: '주말 등산 모임', groupType: 'GENERAL' })
+    expect(group.groupType).toBe('general')
+  })
+
+  it('참여 요청 바디 — childNames만 싣고 childConsentVersion은 더 이상 없다 (CHMO-607)', async () => {
+    // 자녀 정보 처리 동의 동봉(CHMO-587)은 폐지 — 법적 동의는 가입(01-A) 1회로 일원화한다.
+    // ⚠ BE CHMO-586 검증 폐지가 선행/동시가 아니면 viewer 신청이 VALID400 — 배포 게이트.
+    const calls = serve(
+      envelope({ groupId: 9, name: '햇살반', myMembership: { role: 'VIEWER', status: 'PENDING' } }),
+    )
+    await joinGroup({ joinKey: 'P', password: '7421', childNames: ['김민준'] })
+    expect(bodyOf(calls[0])).toEqual({ joinKey: 'P', password: '7421', childNames: ['김민준'] })
+
+    // editor 키 — childNames 생략(undefined)은 JSON에서 빠진다
+    await joinGroup({ joinKey: 'K', password: 'p' })
     expect(bodyOf(calls[1])).toEqual({ joinKey: 'K', password: 'p' })
   })
 
@@ -777,7 +895,8 @@ describe('업로드 3단계 (06-U)', () => {
       excludeEyesClosed: true,
       excludeBlurry: false,
     })
-    expect(result).toEqual({ jobId: BE_REGISTER_PHOTOS.jobId, registeredCount: 2 })
+    // duplicateCount(CHMO-254·606) — 재업로드 시 중복 제외 수. 변환 없이 그대로 통과한다
+    expect(result).toEqual({ jobId: BE_REGISTER_PHOTOS.jobId, registeredCount: 2, duplicateCount: 0 })
   })
 })
 
@@ -883,6 +1002,53 @@ describe('인증 · 프로필', () => {
       accessToken: '<access-jwt>',
       refreshToken: '<refresh-token>',
     })
+  })
+
+  it('가입은 필수 동의 4종을 대문자 enum으로 동봉한다 — BE CHMO-598(없으면 VALID400)', async () => {
+    const calls = serve(envelope(BE_AUTH), 201)
+
+    await signup({ nickname: '치즈', pin: '1234' })
+
+    // 정확 일치로 고정하는 두 가지: MARKETING을 싣지 않는다(정본 §1.1 — 화면에 없는 항목의
+    // 거부 기록을 만들지 않는다) · 모임 스코프 항목이 섞이지 않는다(BE VALID400).
+    // 버전 원천은 FE 문구(src/legal — CHMO-517)라 문구 개정 시 BE AgreementType과 함께 올린다.
+    expect(bodyOf(calls[0])).toEqual({
+      nickname: '치즈',
+      pin: '1234',
+      agreements: [
+        { type: 'AGE_14_OVER', version: '1.0', agreed: true },
+        { type: 'TERMS_OF_SERVICE', version: '1.0', agreed: true },
+        { type: 'PRIVACY_POLICY', version: '1.0', agreed: true },
+        { type: 'FACE_DATA', version: '1.0', agreed: true },
+      ],
+    })
+  })
+
+  // 소셜 가입 유예(CHMO-602 · BE CHMO-598의 소셜판) — 콜백 signup=true 분기가 이 함수를 탄다.
+  // 동봉 규칙은 signup과 동일: MARKETING 미동봉·모임 스코프 항목 배제·버전 원천은 FE 문구
+  it('소셜 가입 exchange는 코드에 필수 동의 4종을 동봉한다', async () => {
+    const calls = serve(envelope(BE_AUTH))
+
+    await exchangeSocialSignup('otc-123')
+
+    expect(calls[0].url).toBe('/api/v1/auth/social/exchange')
+    expect(bodyOf(calls[0])).toEqual({
+      code: 'otc-123',
+      agreements: [
+        { type: 'AGE_14_OVER', version: '1.0', agreed: true },
+        { type: 'TERMS_OF_SERVICE', version: '1.0', agreed: true },
+        { type: 'PRIVACY_POLICY', version: '1.0', agreed: true },
+        { type: 'FACE_DATA', version: '1.0', agreed: true },
+      ],
+    })
+  })
+
+  it('기존 유저 소셜 exchange는 코드만 — agreements 키 자체가 실리지 않는다', async () => {
+    const calls = serve(envelope(BE_AUTH))
+
+    await exchangeSocialCode('otc-123')
+
+    expect(bodyOf(calls[0])).toEqual({ code: 'otc-123' })
   })
 
   it('BE 프로필의 userId를 id로 옮긴다', async () => {

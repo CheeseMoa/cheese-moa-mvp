@@ -20,7 +20,8 @@ interface MovePhotosSheetProps {
   photoIds: ID[]
   /**
    * 공개된(published) 이벤트 — 대상 탭 즉시 이동하지 않고 확인 다이얼로그를 한 번 거친다(CHMO-488).
-   * 옮긴 사진이 발행 상태를 유지해 학부모 화면에 바로 반영되므로 오탭이 곧 잘못된 노출이 된다.
+   * 옮긴 사진이 발행 상태를 유지해 멤버 화면에 바로 반영되므로 오탭이 곧 잘못된 노출이 된다.
+   * 호출부(09)가 이벤트 상태와 **모임 유형**으로 판정한다 — 일반 모임엔 공개가 없다(CHMO-613).
    */
   confirmImmediateExposure?: boolean
   /** 이동 성공 — 부모가 시트를 닫고(언마운트) 선택 해제 + 상세 refetch */
@@ -34,7 +35,7 @@ interface MovePhotosSheetProps {
  * 유사도 높은 순 인물 앨범(원형 아바타 + %) + 공통 사진첩(고정 옵션). 대상을 탭하면
  * 현재 앨범 연결을 해제하고 대상 앨범에 연결한다(다대다 연결 교체 — 복사 아님).
  * 단 **공개된 이벤트에서는 확인 다이얼로그를 한 번 거친다**(confirmImmediateExposure — CHMO-488):
- * 옮긴 사진이 발행 상태를 유지해 학부모 화면에 즉시 반영되기 때문이다.
+ * 옮긴 사진이 발행 상태를 유지해 멤버 화면에 즉시 반영되기 때문이다.
  * **열려 있을 때만 마운트**된다(부모가 `moveOpen`으로 게이트) — 매 오픈이 새 마운트라
  * 이전 선택의 추천/진행 상태가 남지 않는다(useApi·busy가 깨끗하게 시작).
  *
@@ -139,7 +140,7 @@ export function MovePhotosSheet({
         {creating ? (
           <form onSubmit={handleCreate} noValidate className="mt-3.5 flex flex-col gap-3.5">
             <TextField
-              label="아이 이름"
+              label="인물 이름"
               placeholder="예: 김치즈"
               autoComplete="off"
               maxLength={20}
@@ -233,7 +234,7 @@ export function MovePhotosSheet({
         )}
       </BottomSheet>
 
-      {/* 공개된 이벤트에서만(CHMO-488) — 이동은 되돌릴 수 있지만 그 사이 학부모가 이미 본 것은
+      {/* 공개된 이벤트에서만(CHMO-488) — 이동은 되돌릴 수 있지만 그 사이 멤버가 이미 본 것은
           되돌릴 수 없어, 손이 미끄러진 한 번의 탭과 의도한 정정을 여기서 가른다.
           시트(z-40)보다 뒤에 렌더돼 그 위에 뜬다. "새 앨범 만들기"는 이름 입력·[만들기]가
           그 자체로 의도 확인이라 여기서 다시 묻지 않는다 */}
@@ -242,7 +243,7 @@ export function MovePhotosSheet({
         busy={busy}
         busyLabel="옮기는 중…"
         title={`'${pendingTarget?.name ?? ''}'(으)로 옮길까요?`}
-        description={`공개된 이벤트예요. 사진 ${photoIds.length}장을 옮기면 학부모 화면에 바로 반영돼요.`}
+        description={`공개된 이벤트예요. 사진 ${photoIds.length}장을 옮기면 멤버 화면에 바로 반영돼요.`}
         confirmLabel="옮기기"
         onConfirm={() => pendingTarget && handleMove(pendingTarget)}
         onClose={() => setPendingTarget(null)}

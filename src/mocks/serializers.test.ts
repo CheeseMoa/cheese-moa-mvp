@@ -51,7 +51,6 @@ import {
   toGroupDetail,
   toGroupMemberResponse,
   toGroupSummary,
-  toJoinGroupResponse,
   toJoinRequestResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
@@ -104,19 +103,34 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
 
   it('모임 — 목록엔 eventCount, 상세엔 없다 (선생님 시점)', () => {
     const group = findGroup(1)!
-    const teacher = membershipOf(1, 1)! // 이현정 — 햇살반 ACTIVE TEACHER
+    const teacher = membershipOf(1, 1)! // 이현정 — 햇살반 ACTIVE EDITOR
     expect(toGroup(toGroupSummary(group, teacher))).toMatchObject({
       id: 1,
       name: '햇살반',
+      // 유형은 전 모임 응답에 항상 실린다(BE CHMO-599 AC-8) — 시드 1~3은 business
+      groupType: 'business',
       // ACTIVE 멤버만(선생님 3 + 학부모 3) — 대기 신청(치즈냥이88)은 세지 않는다
       memberCount: 6,
       eventCount: 4,
-      myMembership: { role: 'teacher', status: 'active', claimedChildNames: [] },
+      // 목록 분리 카운트(CHMO-608 — 홈 비즈니스 카드 "관리자 N · 멤버 N")는 ⚠ FE 선행 제안:
+      // 실 BE GroupSummaryResponse엔 아직 없어(상세만 보유) 실서버에선 '인원 N명' 폴백
+      editorCount: 3,
+      viewerCount: 3,
+      myMembership: { role: 'editor', status: 'active', claimedChildNames: [] },
     })
     const detail = toGroup(toGroupDetail(group, teacher))
     expect(detail.eventCount).toBeUndefined()
-    // 카운트 분리(§7-3) — 상세는 teacherCount/parentCount를 준다(memberCount는 과도기 병행)
-    expect(detail).toMatchObject({ teacherCount: 3, parentCount: 3, memberCount: 6 })
+    // 카운트 분리(§7-3) — 상세는 editorCount/viewerCount를 준다(CHMO-605 개명 · memberCount는 과도기 병행)
+    expect(detail).toMatchObject({ editorCount: 3, viewerCount: 3, memberCount: 6 })
+  })
+
+  it('GENERAL 모임 — groupType이 직렬화·매퍼를 지나 general로 도착한다 (CHMO-604)', () => {
+    const group = findGroup(4)! // 주말 등산 모임 — GENERAL 시드
+    const editor = membershipOf(1, 4)! // 전원 editor(ADR 020)
+    const mapped = toGroup(toGroupSummary(group, editor))
+    expect(mapped.groupType).toBe('general')
+    // GENERAL엔 학부모가 없다 — viewerCount는 항상 0(ADR 020, FE는 editorCount를 멤버 수로 쓴다)
+    expect(toGroup(toGroupDetail(group, editor))).toMatchObject({ editorCount: 2, viewerCount: 0 })
   })
 
   it('모임 — PARENT·PENDING 응답엔 멤버 정보가 없다 (§7-3 미노출)', () => {
@@ -126,7 +140,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // linkedChildNames는 §4 매핑 파생(CHMO-448) — 민준아빠는 인물 1(김민준)에 연결돼 있다
     const parent = toGroup(toGroupSummary(group, membershipOf(4, 1)!))
     expect(parent.myMembership).toEqual({
-      role: 'parent',
+      role: 'viewer',
       status: 'active',
       claimedChildNames: ['김민준'],
       linkedChildNames: ['김민준'],
@@ -136,7 +150,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // 상세도 멤버 관련 필드 전부 생략
     const parentDetail = toGroup(toGroupDetail(group, membershipOf(4, 1)!))
     expect(parentDetail.memberCount).toBeUndefined()
-    expect(parentDetail.teacherCount).toBeUndefined()
+    expect(parentDetail.editorCount).toBeUndefined()
 
     // 미연결(지호네) — 아이 등장 이벤트만 세므로(CHMO-448 노출 강화) published가 있어도 0
     const unlinked = toGroup(toGroupSummary(group, membershipOf(6, 1)!))
@@ -145,7 +159,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     // PENDING(치즈냥이88) — 신청 원문만 실린다(홈 비활성 카드 §7-2). 승인 전엔 매핑이 없어 연결도 빈 배열
     const pending = toGroup(toGroupSummary(group, membershipOf(7, 1)!))
     expect(pending.myMembership).toEqual({
-      role: 'parent',
+      role: 'viewer',
       status: 'pending',
       claimedChildNames: ['김민준'],
       linkedChildNames: [],
@@ -160,7 +174,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const pendingTeacher = { ...membershipOf(1, 1)!, status: 'pending' as const }
     const pendingTeacherSummary = toGroup(toGroupSummary(group, pendingTeacher))
     expect(pendingTeacherSummary.myMembership).toEqual({
-      role: 'teacher',
+      role: 'editor',
       status: 'pending',
       claimedChildNames: [],
       linkedChildNames: [],
@@ -168,21 +182,21 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(pendingTeacherSummary.memberCount).toBeUndefined()
     expect(pendingTeacherSummary.eventCount).toBe(0)
 
-    // 승인 전(PENDING)이면 role이 teacher여도 상세 카운트를 주지 않는다 — 목록과 게이트 동일
+    // 승인 전(PENDING)이면 role이 editor여도 상세 카운트를 주지 않는다 — 목록과 게이트 동일
     const pendingTeacherDetail = toGroupDetail(group, pendingTeacher)
     expect('memberCount' in pendingTeacherDetail).toBe(false)
-    expect('teacherCount' in pendingTeacherDetail).toBe(false)
+    expect('editorCount' in pendingTeacherDetail).toBe(false)
   })
 
   it('학부모 이벤트 목록 — 카운트·커버가 노출 사진 기준이다 (미발행 누출 방지, Q4)', () => {
-    const event = findEvent(2)! // 봄 소풍(published) — 발행 16장 + 발행 대기 4장
+    const event = findEvent(2)! // 봄 소풍(published) — 발행 14장 + 발행 대기 2장(214·215)
     const raw = toParentEventSummary(event, 4) // 민준아빠 — 김민준(앨범 9) 매핑
     const visibleCount = new Set(
       [...photosOfAlbum(9), ...photosOfAlbum(12)]
         .filter((p) => p.reviewed && p.published)
         .map((p) => p.id),
     ).size
-    expect(raw.photoCount).toBe(visibleCount) // 발행 대기 4장(217~220)은 세지 않는다
+    expect(raw.photoCount).toBe(visibleCount) // 발행 대기분은 세지 않는다
     expect(raw.albumCount).toBe(2) // 김민준 + 공통 — 매핑 안 된 인물 앨범은 세지 않는다
     // 커버는 노출 사진에서만 — 미발행 사진이 썸네일로 새면 안 된다
     expect(raw.thumbnailUrl).toContain('picsum')
@@ -191,13 +205,15 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(toEvent(raw)).toMatchObject({ id: 2, status: 'published', photoCount: visibleCount })
   })
 
-  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3)', () => {
+  it('합류 신청 — joinGroup 응답·신청 목록이 매퍼와 맞는다 (초안 §3 · CHMO-607)', () => {
     const group = findGroup(1)!
     const request = membershipOf(7, 1)! // 치즈냥이88 — PENDING 신청
-    expect(toJoinGroupResult(toJoinGroupResponse(group, request))).toEqual({
+    // join 응답은 실 BE처럼 GroupSummaryResponse 재사용(전용 DTO 없음 — role·status는
+    // myMembership 중첩, SpaceController 대조 CHMO-607) — 목록 직렬화기가 곧 join 직렬화기다
+    expect(toJoinGroupResult(toGroupSummary(group, request))).toEqual({
       groupId: 1,
       groupName: '햇살반',
-      role: 'parent',
+      role: 'viewer',
       status: 'pending',
     })
 
@@ -206,7 +222,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       id: 9,
       userId: 7,
       nickname: '치즈냥이88',
-      role: 'parent',
+      role: 'viewer',
       childNames: ['김민준'],
       createdAt: '2026-07-25T09:10:00+09:00',
     })
@@ -225,7 +241,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(linked).toEqual({
       userId: 4,
       nickname: '민준아빠',
-      role: 'parent',
+      role: 'viewer',
       childNames: ['김민준'],
       mappings: [{ personId: 1, personName: '김민준' }],
     })
@@ -242,7 +258,7 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(teacher).toEqual({
       userId: 1,
       nickname: '이현정',
-      role: 'teacher',
+      role: 'editor',
       childNames: [],
       mappings: [],
     })
@@ -287,9 +303,9 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     const detail = toEvent(toEventDetail(event))
     expect(detail).toMatchObject({ id: 2, groupId: 1, status: 'published' })
     expect(detail.publishedAt).toBe('2026-05-14T18:00:00+09:00')
-    // 발행 대기(구 CHMO-324) — 상세 전용 필드는 남지만 값은 항상 0이다(CHMO-488):
-    // 전량 검토라야 공개되고 공개 후 사진 추가도 없어 대기가 생길 경로가 없다
-    expect(detail.pendingPublishCount).toBe(0)
+    // 발행 대기 — 상세 전용 필드(CHMO-324). 재업로드 복원(CHMO-606)으로 다시 값을 갖는다:
+    // 시드는 봄 소풍 마지막 2장(214·215)을 검토·미발행으로 둔다(재공개 시연)
+    expect(detail.pendingPublishCount).toBe(2)
     expect(summary.pendingPublishCount).toBeUndefined()
 
     // 05 카드 커버(CHMO-515) — 목록에만 오고 상세엔 없다(BE와 같은 비대칭)
@@ -426,15 +442,15 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
   })
 
   it('뷰어 — 발행(published) 기준 카운트/커버 (CHMO-324)', () => {
-    const event = findEvent(2)! // published, 발행 16장 + 발행 대기 4장(217~220)
+    const event = findEvent(2)! // published, 발행 14장 + 발행 대기 2장(214·215 — CHMO-606 시드)
     const viewerEvent = toViewerEvent(toViewerEventSummary(event))
     expect(viewerEvent).toMatchObject({ id: 2, name: '봄 소풍', date: '2026-05-12' })
-    expect(viewerEvent.photoCount).toBe(16) // 발행 대기 4장은 발행 전이라 제외
+    expect(viewerEvent.photoCount).toBe(14) // 발행 대기 2장은 발행 전이라 제외
     expect(viewerEvent.albumCount).toBe(4)
     expect(viewerEvent.coverThumbnailUrl).toContain('picsum')
     expect(viewerEvent.publishedAt).toBeNull() // 목록 응답엔 publishedAt이 없다
 
-    // 김민준 앨범(9)엔 발행 대기 4장이 붙어 있다 — 앨범 카운트·사진 목록도 발행분만
+    // 앨범 카운트·사진 목록도 발행분만 — 발행 대기가 섞인 앨범이 있어도 새지 않는다
     const viewerAlbum = toViewerAlbum(toViewerAlbumSummary(findAlbum(9)!))
     expect(viewerAlbum).toMatchObject({ id: 9, type: 'person', name: '김민준' })
     expect(viewerAlbum.coverThumbnailUrl).toContain('picsum')
@@ -466,14 +482,16 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(photosOfAlbum(specialAlbum.id).some((p) => !p.reviewed)).toBe(true)
   })
 
-  it('공개된 이벤트 — 발행 대기 없이 뷰어에 전량 노출된다 (CHMO-488)', () => {
-    // 봄 소풍(2)은 전 사진 검토 + 발행 완료 시드 — 새 정책에선 published면 대기가 0이다
-    // (전량 검토라야 공개되고 공개 후 사진 추가도 없다 — CHMO-486). 재공개 버튼이 열릴 여지가 없다
-    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(0)
-    expect(pendingPublishCountOf(2)).toBe(0)
-    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(16)
+  it('공개된 이벤트 — 발행 대기는 뷰어에 새지 않고 재공개로만 나간다 (CHMO-606)', () => {
+    // 봄 소풍(2) 시드: 전 사진 검토 + 2장(214·215)은 미발행 = 발행 대기(재업로드 후 검토를
+    // 마친 상태의 근사 — CHMO-488의 "도달 불가" 전제가 재업로드 복원으로 반전됐다)
+    expect(toEvent(toEventDetail(findEvent(2)!)).pendingPublishCount).toBe(2)
+    expect(pendingPublishCountOf(2)).toBe(2)
+    expect(toViewerEvent(toViewerEventSummary(findEvent(2)!)).photoCount).toBe(14)
 
-    // 발행 재호출도 새로 나갈 사진이 없다(멱등)
+    // 발행 재호출(재공개) — 대기 2장이 나가고, 한 번 더 부르면 새로 나갈 것이 없다(멱등)
+    expect(publishEventPhotos(2)).toBe(2)
+    expect(pendingPublishCountOf(2)).toBe(0)
     expect(publishEventPhotos(2)).toBe(0)
   })
 
@@ -747,9 +765,9 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
     expect(detail.memberCount).toBe(6)
     // ACTIVE 6 + 대기 신청 2(치즈냥이88 학부모·신입쌤 선생님) — 운영자는 신청도 봐야 한다
     expect(detail.members).toHaveLength(8)
-    expect(detail.members[0]).toMatchObject({ nickname: '이현정', role: 'TEACHER', status: 'ACTIVE' })
+    expect(detail.members[0]).toMatchObject({ nickname: '이현정', role: 'EDITOR', status: 'ACTIVE' })
     expect(detail.members[6]).toMatchObject({ nickname: '치즈냥이88', status: 'PENDING' })
-    expect(detail.members[7]).toMatchObject({ nickname: '신입쌤', role: 'TEACHER', status: 'PENDING' })
+    expect(detail.members[7]).toMatchObject({ nickname: '신입쌤', role: 'EDITOR', status: 'PENDING' })
 
     expect(detail.events.map((e) => e.eventId)).toEqual([4, 3, 2, 1])
     expect(detail.events[0]).toMatchObject({ name: '가을 발표회 준비', status: 'EMPTY', photoCount: 0 })

@@ -92,6 +92,39 @@ export function IconPlus({ size = 24 }: IconProps) {
   )
 }
 
+/**
+ * 일반 모임 — 사람 둘(person.2). 03 유형 선택 카드(CHMO-603 후속 디자인 개선).
+ * 앞사람은 머리+어깨를 다 그리고 뒷사람은 옆으로 반만 걸치게 둔다 — 26px 렌더에서
+ * 둘을 온전히 그리면 획이 겹쳐 뭉갠다.
+ */
+export function IconPeople({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <circle cx="9.6" cy="8.4" r="3.4" />
+      <path d="M3.4 19.4c0-3.2 2.8-5.2 6.2-5.2s6.2 2 6.2 5.2" />
+      <path d="M16.2 5.6a3.4 3.4 0 0 1 0 5.7" />
+      <path d="M18 14.6c1.7.7 2.6 2.4 2.6 4.4" />
+    </svg>
+  )
+}
+
+/**
+ * 비즈니스 모임 — 본관+별관 건물(building.2). 03 유형 선택 카드.
+ * 창은 2×2로만 둔다: 26px에서 1.8 스트로크 짧은 획을 더 넣으면 점 무더기가 된다.
+ */
+export function IconBuilding({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M4 20.4V5.4A1.4 1.4 0 0 1 5.4 4h7.2A1.4 1.4 0 0 1 14 5.4v15" />
+      <path d="M14 10.2h4.6A1.4 1.4 0 0 1 20 11.6v8.8" />
+      <path d="M2.9 20.4h18.2" />
+      <path d="M7.4 7.9h1.3M11.3 7.9h1.3M7.4 11.9h1.3M11.3 11.9h1.3" />
+      <path d="M17 14.6h1.3" />
+      <path d="M8.2 20.4v-3.6h3.6v3.6" />
+    </svg>
+  )
+}
+
 /** 옮기기 — 폴더 + 안쪽 오른 화살표 */
 export function IconFolderMove({ size = 24 }: IconProps) {
   return (

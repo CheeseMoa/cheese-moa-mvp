@@ -39,7 +39,13 @@ export interface DbUser {
 export interface DbGroup {
   id: number
   name: string
-  /** 선생님 합류용 모임 비밀번호(초대 화면 전용 노출) */
+  /**
+   * 모임 유형(BE CHMO-599 · ADR 020) — 생성 시 지정·불변. 유형 분기는 두 곳뿐:
+   * GENERAL은 학부모 키 합류가 SPACE404로 닫히고, presign의 보호자 동의 게이트가 없다.
+   * 시크릿 4종(joinKey·parentJoinKey·비밀번호 2종)은 GENERAL에도 그대로 발급된다.
+   */
+  groupType: 'business' | 'general'
+  /** 선생님 합류용 모임 비밀번호(초대 화면 전용 노출) — 생성 시 자동 발급(CHMO-599, 요청으로 받지 않는다) */
   password: string
   /** 선생님용 참여 코드 — 어느 링크로 합류했는지가 role을 정한다(학부모 전환 Q6) */
   joinKey: string
@@ -54,7 +60,8 @@ export interface DbGroup {
   createdAt: ISODateTime
 }
 
-export type DbMemberRole = 'teacher' | 'parent'
+/** 저장 값도 BE와 같이 중립어(CHMO-605 — 구 teacher/parent). 직렬화는 대문자 EDITOR/VIEWER */
+export type DbMemberRole = 'editor' | 'viewer'
 export type DbMembershipStatus = 'pending' | 'active'
 
 /**
@@ -333,7 +340,7 @@ export function membershipOf(userId: number, groupId: number): DbMembership | un
 /** 제작자 액션(업로드·검수·공개·설정·초대·매핑)의 관문 — 학부모 차단은 서버 강제(§6) */
 export function isActiveTeacher(userId: number, groupId: number): boolean {
   const membership = membershipOf(userId, groupId)
-  return membership?.status === 'active' && membership.role === 'teacher'
+  return membership?.status === 'active' && membership.role === 'editor'
 }
 
 /**
@@ -487,14 +494,13 @@ export const AGREEMENT_CATALOG: AgreementCatalogItem[] = [
   { type: 'face_data', currentVersion: '1.0', required: true, scope: 'user' },
   { type: 'marketing', currentVersion: '1.0', required: false, scope: 'user' },
   { type: 'child_consent_attested', currentVersion: '1.0', required: true, scope: 'group' },
+  // 자녀 정보 처리 동의(BE CHMO-586) — 합류 신청의 동의 검증·기록은 폐지됐지만(CHMO-607 —
+  // 동의는 가입 01-A 일원화) BE 카탈로그엔 항목이 남아 있어 목도 유지한다(BE 폐지 시 함께 정리)
   { type: 'guardian_child_consent', currentVersion: '1.0', required: true, scope: 'group' },
 ]
 
 /** 아동 보호자 동의 확보 확인 항목 — 업로드 게이트가 요구하는 그 항목 */
 export const GUARDIAN_CONSENT_TYPE: AgreementType = 'child_consent_attested'
-
-/** 자녀 정보 처리 동의 항목 — 보호자 본인이 학부모 합류 신청으로 남긴다(BE CHMO-586) */
-export const GUARDIAN_CHILD_CONSENT_TYPE: AgreementType = 'guardian_child_consent'
 
 export function agreementCatalogOf(type: AgreementType): AgreementCatalogItem | undefined {
   return AGREEMENT_CATALOG.find((item) => item.type === type)
@@ -587,13 +593,14 @@ export function memberCountOf(groupId: number): number {
   return activeMembersOfGroup(groupId).length
 }
 
-/** 카운트 분리(§7-3) — "선생님 3 · 학부모 12". 합산 memberCount는 선생님에게 무의미 */
+/** 카운트 분리(§7-3) — "선생님 3 · 학부모 12". 합산 memberCount는 선생님에게 무의미.
+ * 함수명은 내부 식별자라 유지(ADR 021 관례 — BE findTeacherMoment와 같은 결): teacher=EDITOR */
 export function teacherCountOf(groupId: number): number {
-  return activeMembersOfGroup(groupId).filter((m) => m.role === 'teacher').length
+  return activeMembersOfGroup(groupId).filter((m) => m.role === 'editor').length
 }
 
 export function parentCountOf(groupId: number): number {
-  return activeMembersOfGroup(groupId).filter((m) => m.role === 'parent').length
+  return activeMembersOfGroup(groupId).filter((m) => m.role === 'viewer').length
 }
 
 export function eventCountOf(groupId: number): number {
@@ -841,16 +848,16 @@ export function deleteGroupCascade(groupId: number): void {
 /**
  * 허용 전이(docs/feature-spec.md 상태머신):
  * empty --analyze--> analyzing --완료--> review --전 사진 reviewed--> ready --publish--> published
- * 업로드·분류는 이벤트당 1회라(CHMO-486) **analyzing으로 돌아오는 엣지는 empty에서만** 있다 —
- * 사진 추가로 인한 review·ready → analyzing 회귀, published 무전이 증분 분석은 폐지됐다.
+ * 재업로드 복원(CHMO-606 — CHMO-486 반전): **review·ready → analyzing 회귀**가 돌아왔다(사진
+ * 추가 = 증분 분석). published는 회귀 엣지 없이도 증분 분석이 돈다 — 공개 유지를 위해 전이
+ * 자체를 안 하고(BE Moment.startAnalyzing 무전이, CHMO-216) 핸들러가 job만 만든다.
  */
 const EVENT_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
   empty: ['analyzing'],
   analyzing: ['review'],
-  // published = force 공개(미검토 존재 시 409 경고 후 ?force=true) — 미검토 사진은 뷰어 비노출이라 안전
-  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장) — 0장이면 업로드가 다시 열린다
-  review: ['ready', 'published', 'empty'],
-  ready: ['review', 'published', 'empty'], // 검토 해제 시 review
+  // empty = 사진 전부 삭제 시 복귀(spec: empty = 사진 0장) — 0장이면 첫 업로드 흐름이 다시 열린다
+  review: ['ready', 'published', 'empty', 'analyzing'],
+  ready: ['review', 'published', 'empty', 'analyzing'], // 검토 해제 폐지 후에도 review 회귀는 사진 추가 몫
   // 공개 후 편집·재발행은 상태 전이 없이 진행 — 뷰어 노출은 사진 reviewed && published로 제어(CHMO-324)
   published: [],
 }
@@ -1043,6 +1050,7 @@ export function completeAnalysis(eventId: number): void {
   }
 
   job.status = 'done'
-  // 분류는 이벤트당 1회라 여기 오는 건 analyzing뿐 — analyzing → review로 검수 단계를 연다
+  // analyzing → review로 검수 단계를 연다. published 증분 분석은 전이가 거부돼(published: [])
+  // 공개를 유지한다 — BE completeAnalysis의 무전이와 같은 결과(CHMO-216·606)
   transitionEvent(eventId, 'review')
 }

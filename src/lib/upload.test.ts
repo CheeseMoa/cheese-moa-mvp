@@ -6,6 +6,7 @@ import {
   MAX_UPLOAD_PICK,
   uploadContentTypeOf,
   uploadExtensionOf,
+  uploadFileNameFor,
 } from './upload'
 
 /**
@@ -34,6 +35,50 @@ describe('uploadContentTypeOf', () => {
     expect(uploadContentTypeOf('a.mp4')).toBeNull()
     expect(uploadContentTypeOf('확장자없음')).toBeNull()
     expect(uploadContentTypeOf('a.')).toBeNull()
+  })
+})
+
+/**
+ * 카메라 촬영본은 픽커에 따라 확장자 없는 이름(콘텐츠 URI 파생)으로 온다(CHMO-597) —
+ * 이름 확장자가 없으면 MIME으로 보정한 파일명을 presign에 보낸다. 보정 결과는 반드시
+ * BE 화이트리스트(위 CONTENT_TYPES)를 통과해야 한다.
+ */
+describe('uploadFileNameFor', () => {
+  it('허용 확장자가 있으면 이름을 그대로 쓴다 — MIME이 비거나 어긋나도 이름이 우선', () => {
+    expect(uploadFileNameFor('a.jpg', 'image/jpeg')).toBe('a.jpg')
+    expect(uploadFileNameFor('a.HEIC', '')).toBe('a.HEIC')
+    expect(uploadFileNameFor('a.png', 'application/octet-stream')).toBe('a.png')
+  })
+
+  it('확장자 없는 이름은 MIME에서 확장자를 유도해 보정한다', () => {
+    expect(uploadFileNameFor('1000001234', 'image/jpeg')).toBe('1000001234.jpg')
+    expect(uploadFileNameFor('capture', 'image/png')).toBe('capture.png')
+    expect(uploadFileNameFor('capture', 'image/webp')).toBe('capture.webp')
+  })
+
+  it('image/heif는 BE 화이트리스트에 없어 heic로 수렴한다', () => {
+    expect(uploadFileNameFor('IMG_0001', 'image/heif')).toBe('IMG_0001.heic')
+    expect(uploadFileNameFor('IMG_0001.heif', 'image/heif')).toBe('IMG_0001.heif.heic')
+    expect(uploadFileNameFor('IMG_0001', 'image/heic')).toBe('IMG_0001.heic')
+  })
+
+  it('빈 이름·끝 점 이름도 유효한 파일명으로 보정한다', () => {
+    expect(uploadFileNameFor('', 'image/jpeg')).toBe('photo.jpg')
+    expect(uploadFileNameFor('a.', 'image/jpeg')).toBe('a.jpg')
+  })
+
+  it('이름도 MIME도 지원 밖이면 null — 종전대로 선택 시점에 제외한다', () => {
+    expect(uploadFileNameFor('a.gif', 'image/gif')).toBeNull()
+    expect(uploadFileNameFor('clip', 'video/mp4')).toBeNull()
+    expect(uploadFileNameFor('확장자없음', '')).toBeNull()
+  })
+
+  it('보정한 파일명은 반드시 화이트리스트를 통과한다 — presign에 그대로 실리는 값', () => {
+    for (const mime of ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']) {
+      const corrected = uploadFileNameFor('capture', mime)
+      expect(corrected).not.toBeNull()
+      expect(uploadContentTypeOf(corrected!)).not.toBeNull()
+    }
   })
 })
 

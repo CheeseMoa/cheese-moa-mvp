@@ -3,16 +3,19 @@
  *
  * 구성:
  * - 유저 7(선생님 이현정 id 1 = 기본 로그인 계정, PIN 1234 · 학부모 시연 민준아빠 id 4, PIN 1111)
- * - 모임 3: 햇살반(이벤트 4종 상태 시연) · 달님반(빈 모임) · 별님반(미가입 → 참여 플로우용)
+ * - 모임 4: 햇살반(이벤트 4종 상태 시연) · 달님반(빈 모임) · 별님반(미가입 → 참여 플로우용) ·
+ *   주말 등산 모임(GENERAL — 유형 분기 시연, CHMO-604·612)
  * - 멤버십은 role(teacher/parent)·승인 상태(pending/active)·신청 자녀 이름을 갖는다(CHMO-444)
  * - 이벤트 4(햇살반): review / published / analyzing / empty — 상태별 화면 시연
+ *   + 주말 등산 모임(GENERAL): 이벤트 5 empty(05 카드·업로드 게이트 확인, CHMO-609) ·
+ *     이벤트 6 review(08이 검토 UI 없이 그려지는지 확인, CHMO-612)
  * - 인물은 모임 단위(personId) — 운동회·봄소풍이 같은 인물을 공유해 이름전파를 시연
  * - 사진은 앨범과 다대다(albumIds[]) — 일부 사진이 인물 앨범 2곳에 연결됨
  * - 검토는 사진 단위(reviewed) — 이벤트 1은 앨범 1 사진만, 이벤트 2는 전 사진 검토 + 발행 완료
  *   (발행 대기 = reviewed·미발행 상태는 두지 않는다 — 재공개 경로 폐지로 도달 불가, CHMO-488)
  *
  * ID는 BE(int64)와 동일하게 숫자 — 리소스 종류별 대역으로 가독성 유지:
- * 유저·모임·이벤트·인물 1~, 앨범 1~12, 사진은 이벤트별 100 단위(101~·201~·301~).
+ * 유저·모임·이벤트·인물 1~, 앨범 1~17, 사진은 이벤트별 100 단위(101~·201~·301~·401~).
  * 신규 발급(nextId)은 1001부터라 시드와 충돌하지 않는다.
  *
  * createFixtures()는 **호출마다 모든 객체를 새로 만든다** — 재시드가 이전 세션의
@@ -140,21 +143,45 @@ function buildAlbumsAndPhotos(): { albums: DbAlbum[]; photos: DbPhoto[] } {
     // 공개된 이벤트 — 특수 앨범 없음(검수 때 이미 정리된 컨셉). 플래그 사진도 인물/공통으로 분배
   })
   assignCovers(picnicAlbums, picnicPhotos)
-  // 공개된 이벤트 — 전 사진 검토 + 발행 완료.
-  // **발행 대기(reviewed·미발행)는 시드에 두지 않는다**(CHMO-488): 전량 검토라야 공개되고
-  // 공개 후 사진 추가도 없으니(CHMO-486) 도달할 수 없는 상태다. 남겨 두면 되살릴 UI가 없는
-  // "영영 안 보이는 사진"이 시연 데이터에 박힌다(종전 재공개 게이트 시연분 216~219 제거).
+  // 공개된 이벤트 — 전 사진 검토 완료, 대부분 발행 완료.
   for (const photo of picnicPhotos) {
     photo.reviewed = true
     photo.published = true
   }
+  // 발행 대기 시연 복원(CHMO-606 — CHMO-488의 "도달 불가" 전제 반전): 재업로드가 열려 공개 후
+  // 추가·검토된 사진이 실제로 생긴다. 마지막 2장을 검토·미발행으로 둬 08 "발행 대기 2장" 안내와
+  // 14 [공개하기] 재활성(재공개)을 목에서 볼 수 있게 한다(뷰어·학부모 화면엔 아직 안 보인다).
+  for (const photo of picnicPhotos.slice(-2)) photo.published = false
 
   // 이벤트 3 「여름 물놀이」 — 분석 중(analyzing): 사진은 등록됐지만 아직 앨범 없음
   const poolPhotos = makePhotos(300, 3, 20, '2026-06-27T10:00:00+09:00')
 
+  // 이벤트 6 「북한산 가을 산행」 — GENERAL 모임(4)의 분류 완료 이벤트(CHMO-612 유형 분기 시연).
+  // 08이 검토 UI 없이 균일한 카드로 그려지는지, 하단 구획 라벨이 "분류에서 제외된 사진"으로
+  // 바뀌는지 보려면 특수 앨범이 섞인 완료 이벤트가 하나 있어야 한다(BUSINESS 시드로는 못 본다).
+  // 같은 모임의 이벤트 5는 빈 이벤트라(CHMO-609) 08에 도달하지 못한다.
+  const hikeAlbums = [
+    album(13, 6, 'person', 5),
+    album(14, 6, 'person', 6),
+    album(15, 6, 'common'),
+    album(16, 6, 'uncertain'),
+    album(17, 6, 'eyes_closed'),
+  ]
+  const hikePhotos = makePhotos(400, 6, 18, '2026-06-21T10:00:00+09:00')
+  distribute(hikePhotos, {
+    person: hikeAlbums.slice(0, 2),
+    common: hikeAlbums[2],
+    uncertain: hikeAlbums[3],
+    eyesClosed: hikeAlbums[4],
+  })
+  assignCovers(hikeAlbums, hikePhotos)
+  // 검토 플래그는 BUSINESS와 똑같이 온다(BE 무변경) — 일부만 검토된 상태로 둬서 "값은 있지만
+  // 화면이 읽지 않는다"를 확인한다. 같은 데이터가 BUSINESS 모임이면 갈색 실선 카드가 된다
+  for (const photo of hikePhotos) if (photo.albumIds.includes(13)) photo.reviewed = true
+
   return {
-    albums: [...sportsAlbums, ...picnicAlbums],
-    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos],
+    albums: [...sportsAlbums, ...picnicAlbums, ...hikeAlbums],
+    photos: [...sportsPhotos, ...picnicPhotos, ...poolPhotos, ...hikePhotos],
   }
 }
 
@@ -181,6 +208,7 @@ export function createFixtures(): Db {
       {
         id: 1,
         name: '햇살반',
+        groupType: 'business',
         password: '482AVX',
         joinKey: 'Haetsal3Kx9q',
         parentJoinKey: 'HaetsalP7d2m',
@@ -190,6 +218,7 @@ export function createFixtures(): Db {
       {
         id: 2,
         name: '달님반',
+        groupType: 'business',
         password: '913BQZ',
         joinKey: 'Dalnim7Qw2pz',
         parentJoinKey: 'DalnimP4k8wq',
@@ -201,29 +230,46 @@ export function createFixtures(): Db {
       {
         id: 3,
         name: '별님반',
+        groupType: 'business',
         password: '274CKD',
         joinKey: 'ByeolJoin5x8',
         parentJoinKey: 'ByeolP9s3xtw',
         share: { token: 'shr_grp3', password: '1946' },
         createdAt: '2026-06-20T09:00:00+09:00',
       },
+      // GENERAL 모임(CHMO-604 — BE CHMO-599): 역할 분리 없음·전원 editor. 시크릿 4종은
+      // BUSINESS와 똑같이 발급되지만 학부모 키(parentJoinKey) 합류는 SPACE404로 닫힌다(AC-6)
+      // — presign 보호자 동의 428 없음(AC-4)과 함께 유형 분기 검증용 시드.
+      {
+        id: 4,
+        name: '주말 등산 모임',
+        groupType: 'general',
+        password: '6205',
+        joinKey: 'HikeGen8Rw3t',
+        parentJoinKey: 'HikeGenP5c1k',
+        share: { token: 'shr_grp4', password: '3712' },
+        createdAt: '2026-07-15T09:00:00+09:00',
+      },
     ],
     // 학부모 전환(CHMO-444): role·승인 상태 보유. PENDING 행이 곧 합류 신청(id = joinRequestId).
     // 햇살반: 선생님 3 + 학부모 active 3(지호네는 미연결) + 대기 신청 1(치즈냥이88) — 초대 관리(20) 시연.
     // 민준아빠는 별님반에 대기 신청도 있다 — 학부모 홈의 active 카드+대기 카드 동시 시연(§7-2).
     memberships: [
-      { id: 1, userId: 1, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-01T09:00:00+09:00' },
-      { id: 2, userId: 2, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-02T09:00:00+09:00' },
-      { id: 3, userId: 3, groupId: 1, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-05-03T09:00:00+09:00' },
-      { id: 4, userId: 1, groupId: 2, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-06-10T09:00:00+09:00' },
-      { id: 5, userId: 2, groupId: 3, role: 'teacher', status: 'active', childNames: [], createdAt: '2026-06-20T09:00:00+09:00' },
-      { id: 6, userId: 4, groupId: 1, role: 'parent', status: 'active', childNames: ['김민준'], createdAt: '2026-07-01T10:10:00+09:00' },
-      { id: 7, userId: 5, groupId: 1, role: 'parent', status: 'active', childNames: ['이서연'], createdAt: '2026-07-01T11:00:00+09:00' },
-      { id: 8, userId: 6, groupId: 1, role: 'parent', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
-      { id: 9, userId: 7, groupId: 1, role: 'parent', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
-      { id: 10, userId: 4, groupId: 3, role: 'parent', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
+      { id: 1, userId: 1, groupId: 1, role: 'editor', status: 'active', childNames: [], createdAt: '2026-05-01T09:00:00+09:00' },
+      { id: 2, userId: 2, groupId: 1, role: 'editor', status: 'active', childNames: [], createdAt: '2026-05-02T09:00:00+09:00' },
+      { id: 3, userId: 3, groupId: 1, role: 'editor', status: 'active', childNames: [], createdAt: '2026-05-03T09:00:00+09:00' },
+      { id: 4, userId: 1, groupId: 2, role: 'editor', status: 'active', childNames: [], createdAt: '2026-06-10T09:00:00+09:00' },
+      { id: 5, userId: 2, groupId: 3, role: 'editor', status: 'active', childNames: [], createdAt: '2026-06-20T09:00:00+09:00' },
+      { id: 6, userId: 4, groupId: 1, role: 'viewer', status: 'active', childNames: ['김민준'], createdAt: '2026-07-01T10:10:00+09:00' },
+      { id: 7, userId: 5, groupId: 1, role: 'viewer', status: 'active', childNames: ['이서연'], createdAt: '2026-07-01T11:00:00+09:00' },
+      { id: 8, userId: 6, groupId: 1, role: 'viewer', status: 'active', childNames: ['박지호'], createdAt: '2026-07-02T09:30:00+09:00' },
+      { id: 9, userId: 7, groupId: 1, role: 'viewer', status: 'pending', childNames: ['김민준'], createdAt: '2026-07-25T09:10:00+09:00' },
+      { id: 10, userId: 4, groupId: 3, role: 'viewer', status: 'pending', childNames: ['김민서'], createdAt: '2026-07-20T09:00:00+09:00' },
       // 선생님 신청(CHMO-475) — 선생님 키 합류도 승인 대기다. 자녀 이름은 없다(childNames 빈 배열)
-      { id: 11, userId: 8, groupId: 1, role: 'teacher', status: 'pending', childNames: [], createdAt: '2026-07-27T09:20:00+09:00' },
+      { id: 11, userId: 8, groupId: 1, role: 'editor', status: 'pending', childNames: [], createdAt: '2026-07-27T09:20:00+09:00' },
+      // GENERAL 모임(4) — 전원 editor(ADR 020). 이현정(1)이 생성자, 김지은(2)이 합류 멤버
+      { id: 12, userId: 1, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-15T09:00:00+09:00' },
+      { id: 13, userId: 2, groupId: 4, role: 'editor', status: 'active', childNames: [], createdAt: '2026-07-16T10:00:00+09:00' },
     ],
     // 학부모↔인물 매핑(§2) — 지호네(6)는 승인됐지만 미연결(매핑 0건 = 기본 경로) 시연
     personParents: [
@@ -267,12 +313,39 @@ export function createFixtures(): Db {
         createdAt: '2026-07-01T09:00:00+09:00',
         publishedAt: null,
       },
+      // GENERAL 모임(4)의 빈 이벤트 — 05 유형 분기 목 시연용(CHMO-609): 일반 모임 카드엔
+      // NEW 배지가 없고('분류중'만 남는 규칙), 여기서 업로드를 시작하면 GENERAL이라
+      // 보호자 동의 428 게이트도 없다(CHMO-604 AC-4).
+      {
+        id: 5,
+        groupId: 4,
+        name: '북한산 둘레길',
+        date: '2026-07-19',
+        status: 'empty',
+        createdAt: '2026-07-19T09:00:00+09:00',
+        publishedAt: null,
+      },
+      // GENERAL 모임(4)의 분류 완료 이벤트 — 08 유형 분기 시연(CHMO-612). 빈 이벤트(5)와
+      // 나란히 둔다: 05는 빈 카드를, 08은 이 이벤트를 봐야 한다. 일반 모임엔 공개 단계가
+      // 없어 published로 가지 않는다(검토·공개 UI가 없으니 도달 경로 자체가 없다)
+      {
+        id: 6,
+        groupId: 4,
+        name: '북한산 가을 산행',
+        date: '2026-06-21',
+        status: 'review',
+        createdAt: '2026-06-21T09:00:00+09:00',
+        publishedAt: null,
+      },
     ],
     persons: [
       { id: 1, groupId: 1, name: '김민준' },
       { id: 2, groupId: 1, name: '이서연' },
       { id: 3, groupId: 1, name: '박하린' },
       { id: 4, groupId: 1, name: '최지우' },
+      // GENERAL 모임(4)의 인물 — 유치원이 아니라 친구·가족이라 이름도 그 결로
+      { id: 5, groupId: 4, name: '이현정' },
+      { id: 6, groupId: 4, name: '김지은' },
     ],
     albums,
     photos,
@@ -305,6 +378,14 @@ export function createFixtures(): Db {
         // 진행률 분모 = 물놀이 미분류 사진 20장(poolPhotos)과 일치해야 함(CHMO-287)
         total: 20,
         options: { excludeEyesClosed: true, excludeBlurry: true },
+      },
+      {
+        eventId: 6,
+        status: 'done',
+        startedAt: Date.now(),
+        total: 18,
+        // 흔들림 앨범은 두지 않았다 — 특수 앨범이 하나만 있어도 하단 구획은 보인다
+        options: { excludeEyesClosed: true, excludeBlurry: false },
       },
     ],
     // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다

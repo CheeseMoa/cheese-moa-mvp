@@ -1,9 +1,15 @@
-import type { EventStatus } from '../../types/api'
+import type { EventStatus, GroupType } from '../../types/api'
 import { EventStatusBadge } from './Badge'
 
 interface EventCardProps {
   name: string
   status: EventStatus
+  /**
+   * 모임 유형(CHMO-609) — `general`이면 검수 문맥 배지(NEW·공개 준비·공개 완료)를 걷어내고
+   * '분류중'만 남긴다: 일반 모임엔 검수·공개 단계가 없어 그 상태들이 정보가 아니고, 분류중만이
+   * "아직 앨범이 덜 채워졌다"는 지금 유효한 사실이다. 생략 시 현행(비즈니스와 동일).
+   */
+  groupType?: GroupType
   /** 메타 라인 — "날짜 · 사진 N장" 고정 포맷으로 페이지에서 조합 (dc.html §05) */
   meta: string
   /**
@@ -33,7 +39,15 @@ interface EventCardProps {
  * 그림자는 카드를 띄우는 몫만**(`shadow-card-stack`) 남긴다 — 그림자를 아예 버리면 홈·앨범·시트에
  * 두루 깔린 "카드는 떠 있다"는 결과 어긋나 05만 평평해진다.
  */
-export function EventCard({ name, status, meta, cover, onClick, onSettings }: EventCardProps) {
+export function EventCard({
+  name,
+  status,
+  groupType,
+  meta,
+  cover,
+  onClick,
+  onSettings,
+}: EventCardProps) {
   return (
     <div
       onClick={onClick}
@@ -57,7 +71,9 @@ export function EventCard({ name, status, meta, cover, onClick, onSettings }: Ev
       <div className="p-4">
         <div className="flex items-center gap-2.5">
           <span className="min-w-0 truncate text-base font-bold text-text">{name}</span>
-          <EventStatusBadge status={status} />
+          {(groupType !== 'general' || status === 'analyzing') && (
+            <EventStatusBadge status={status} />
+          )}
           {onSettings && (
             <button
               type="button"

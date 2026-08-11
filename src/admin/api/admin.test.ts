@@ -171,7 +171,7 @@ describe('어드민 모임 상세 (GET /admin/groups/:groupId)', () => {
     expect(detail.members[1]).toEqual({
       userId: 9,
       nickname: '민준아빠',
-      role: 'PARENT',
+      role: 'VIEWER',
       status: 'PENDING',
       joinedAt: '2026-08-02T09:30:00Z',
     })

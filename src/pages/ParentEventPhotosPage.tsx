@@ -19,7 +19,8 @@ import { cx } from '../lib/cx'
 import type { ID } from '../types/api'
 
 /**
- * 19. 학부모 사진 그리드 (ACTIVE PARENT) · node 307:27 · CHMO-448
+ * 19. 멤버(구 학부모) 사진 그리드 (ACTIVE VIEWER) · node 307:27 · B2C 369:58 · CHMO-448
+ * 워딩 중립화(CHMO-608) — 빈 상태의 선생님→관리자·아이→인물 교체(기능·구조 무변경).
  * GET /events/:id/parent-photos — 매핑 인물 + 공통, published만, 플랫(앨범 계층 없음 §3).
  * 아이가 안 나온 이벤트·미연결은 서버가 404로 은닉한다(노출 강화 — 18 목록 필터와 동일 판정,
  * LoadState notFoundTo가 모임으로 되돌린다). 사진 탭 → 공용 라이트박스(개별 저장) ·
@@ -157,16 +158,16 @@ export function ParentEventPhotosPage() {
                   description={
                     linkedNames.length > 0 ? (
                       <>
-                        선생님이 사진을 공개하면
+                        관리자가 사진을 공개하면
                         <br />
                         여기에서 볼 수 있어요.
                       </>
                     ) : (
                       // 미연결(승인 후 기본 경로 §2) — 공통 사진만 보이는 상태임을 안내
                       <>
-                        선생님이 아이를 연결하면
+                        관리자가 인물을 연결하면
                         <br />
-                        아이 사진을 함께 볼 수 있어요.
+                        그 인물의 사진을 함께 볼 수 있어요.
                       </>
                     )
                   }

@@ -29,6 +29,7 @@ import type {
   Group,
   GroupMember,
   GroupRole,
+  GroupType,
   ID,
   ISODate,
   ISODateTime,
@@ -61,11 +62,31 @@ export function toUser(raw: RawUser): User {
 // ── Group ────────────────────────────────────────────────────
 
 /**
+ * BE 역할 직렬화 값 → FE GroupRole (CHMO-604).
+ * 신 값 EDITOR/VIEWER(CHMO-605 · ADR 021)와 **구 값 TEACHER/PARENT를 함께 흡수한다** —
+ * 운영 BE는 main 머지 전까지 구 값을 주므로(배포 게이트) 매퍼가 양쪽을 받아야
+ * FE·BE 어느 쪽이 먼저 나가도 깨지지 않는다(invite 평면 흡수와 같은 결).
+ */
+function toGroupRole(raw: string): GroupRole {
+  const value = raw.toUpperCase()
+  return value === 'VIEWER' || value === 'PARENT' ? 'viewer' : 'editor'
+}
+
+/**
+ * BE 모임 유형 직렬화 값 → FE GroupType (CHMO-604 · BE CHMO-599).
+ * 유형 도입 전 응답(구계약 — 키 자체가 없다)은 business — BE 백필(SpaceTypeBackfill)이
+ * 기존 행을 BUSINESS로 채우는 것과 같은 해석이다.
+ */
+function toGroupType(raw: string | undefined): GroupType {
+  return raw?.toUpperCase() === 'GENERAL' ? 'general' : 'business'
+}
+
+/**
  * BE MyMembershipResponse(학부모 전환 초안 §1 — CHMO-444).
- * TEACHER는 claimedChildNames를 생략할 수 있다(초안 명시) — 매퍼가 빈 배열로 정규화.
+ * TEACHER(=EDITOR)는 claimedChildNames를 생략할 수 있다(초안 명시) — 매퍼가 빈 배열로 정규화.
  */
 export interface RawMyMembership {
-  /** 대문자 enum(TEACHER/PARENT) */
+  /** 대문자 enum(EDITOR/VIEWER — 구 TEACHER/PARENT 흡수) */
   role: string
   /** 대문자 enum(PENDING/ACTIVE) */
   status: string
@@ -76,7 +97,7 @@ export interface RawMyMembership {
 
 function toMyMembership(raw: RawMyMembership): MyMembership {
   return {
-    role: raw.role.toLowerCase() as GroupRole,
+    role: toGroupRole(raw.role),
     status: raw.status.toLowerCase() as MembershipStatus,
     claimedChildNames: raw.claimedChildNames ?? [],
     linkedChildNames: raw.linkedChildNames ?? [],
@@ -91,8 +112,13 @@ function toMyMembership(raw: RawMyMembership): MyMembership {
 export interface RawGroup {
   groupId: ID
   name: string
+  /** 대문자 enum(BUSINESS/GENERAL) — 구계약(유형 도입 전) 응답엔 없다(매퍼가 business 정규화) */
+  groupType?: string
   memberCount?: number
-  /** 상세 카운트 분리(§7-3) — 과도기엔 memberCount 병행 */
+  /** 상세 카운트 분리(§7-3) — 과도기엔 memberCount 병행. CHMO-605 개명 값 */
+  editorCount?: number
+  viewerCount?: number
+  /** 구계약 카운트 필드(CHMO-605 개명 전) — 운영 BE가 main 머지 전까지 주는 값(흡수 후 폐기) */
   teacherCount?: number
   parentCount?: number
   /** BE 상세(GroupDetailResponse)엔 없음 — 화면이 이벤트 목록 길이로 파생 */
@@ -105,10 +131,11 @@ export function toGroup(raw: RawGroup): Group {
   return {
     id: raw.groupId,
     name: raw.name,
+    groupType: toGroupType(raw.groupType),
     myMembership: raw.myMembership ? toMyMembership(raw.myMembership) : undefined,
     memberCount: raw.memberCount,
-    teacherCount: raw.teacherCount,
-    parentCount: raw.parentCount,
+    editorCount: raw.editorCount ?? raw.teacherCount,
+    viewerCount: raw.viewerCount ?? raw.parentCount,
     eventCount: raw.eventCount,
     createdAt: raw.createdAt,
   }
@@ -124,21 +151,27 @@ export function toGroup(raw: RawGroup): Group {
 export interface RawJoinGroupResult {
   groupId: ID
   groupName?: string
-  /** 구계약(GroupDetail 형태)의 모임 이름 필드 */
+  /** 실 BE(GroupSummaryResponse)·구계약(GroupDetail 형태)의 모임 이름 필드 */
   name?: string
-  /** 대문자 enum(TEACHER/PARENT) — joinKey 종류에서 서버가 파생(Q6). 구계약엔 없다 */
+  /** 실 BE 형태 — join 응답은 GroupSummaryResponse라 role·status가 여기에 중첩된다(CHMO-607 대조) */
+  myMembership?: { role?: string; status?: string }
+  /** 초안 평면 형태(구 목 계약) — 대문자 enum(EDITOR/VIEWER — 구 TEACHER/PARENT 흡수) */
   role?: string
-  /** 대문자 enum(PENDING/ACTIVE) — 구계약엔 없다(즉시 합류 = active) */
+  /** 초안 평면 형태 — 대문자 enum(PENDING/ACTIVE) */
   status?: string
 }
 
 export function toJoinGroupResult(raw: RawJoinGroupResult): JoinGroupResult {
+  const role = raw.myMembership?.role ?? raw.role
+  const status = raw.myMembership?.status ?? raw.status
   return {
     groupId: raw.groupId,
     groupName: raw.groupName ?? raw.name ?? '',
-    // 구계약 = 선생님 초대 수락뿐이라 teacher/active가 사실과 일치한다
-    role: (raw.role?.toLowerCase() as GroupRole | undefined) ?? 'teacher',
-    status: (raw.status?.toLowerCase() as MembershipStatus | undefined) ?? 'active',
+    role: role !== undefined ? toGroupRole(role) : 'editor',
+    // 형태 미상(양쪽 다 없음)은 **pending**으로 — 승인제 BE(CHMO-475 배포) 아래에서 join은
+    // 신청 생성이 기본이고, active 오판은 모임 직행(CHMO-607) 후 SPACE403(CHMO-448 실측)으로
+    // 터진다. 홈 랜딩은 어느 계약에서도 안전하다. (종전 'active' 기본은 즉시 합류 구계약 시절 값)
+    status: (status?.toLowerCase() as MembershipStatus | undefined) ?? 'pending',
   }
 }
 
@@ -149,9 +182,9 @@ export interface RawJoinRequest {
   joinRequestId: ID
   userId: ID
   nickname: string
-  /** 대문자 enum(TEACHER/PARENT) */
+  /** 대문자 enum(EDITOR/VIEWER — 구 TEACHER/PARENT 흡수) */
   role: string
-  /** 학부모 신청 원문 — TEACHER는 생략 가능 */
+  /** 학부모 신청 원문 — EDITOR는 생략 가능 */
   childNames?: string[]
   createdAt: ISODateTime
 }
@@ -161,17 +194,17 @@ export function toJoinRequest(raw: RawJoinRequest): JoinRequest {
     id: raw.joinRequestId,
     userId: raw.userId,
     nickname: raw.nickname,
-    role: raw.role.toLowerCase() as GroupRole,
+    role: toGroupRole(raw.role),
     childNames: raw.childNames ?? [],
     createdAt: raw.createdAt,
   }
 }
 
-/** BE GroupMemberResponse(초안 §4) — childNames·mappings는 TEACHER 항목에서 생략 가능 */
+/** BE GroupMemberResponse(초안 §4) — childNames·mappings는 EDITOR 항목에서 생략 가능 */
 export interface RawGroupMember {
   userId: ID
   nickname: string
-  /** 대문자 enum(TEACHER/PARENT) */
+  /** 대문자 enum(EDITOR/VIEWER — 구 TEACHER/PARENT 흡수) */
   role: string
   childNames?: string[]
   mappings?: { personId: ID; personName: string | null }[]
@@ -181,7 +214,7 @@ export function toGroupMember(raw: RawGroupMember): GroupMember {
   return {
     userId: raw.userId,
     nickname: raw.nickname,
-    role: raw.role.toLowerCase() as GroupRole,
+    role: toGroupRole(raw.role),
     childNames: raw.childNames ?? [],
     mappings: (raw.mappings ?? []).map((m) => ({
       personId: m.personId,
