@@ -16,10 +16,12 @@ export interface AdminProfile {
   role: string
 }
 
-/** BE AdminStatsResponse.RecentGroup — 최근 생성 모임(5개 고정, 생성일 내림차순) */
+/**
+ * BE AdminStatsResponse.RecentGroup — 최근 생성 모임(5개 고정, 생성일 내림차순).
+ * 모임 이름은 어드민 응답 어디에도 없다(BE CHMO-668) — 어드민은 모임을 groupId로만 식별한다.
+ */
 export interface AdminRecentGroup {
   groupId: number
-  name: string
   memberCount: number
   createdAt: string
 }
@@ -31,10 +33,9 @@ export interface AdminStats {
   recentGroups: AdminRecentGroup[]
 }
 
-/** BE AdminGroupSummaryResponse — GET /admin/groups 목록 한 행 */
+/** BE AdminGroupSummaryResponse — GET /admin/groups 목록 한 행(이름 없음 — CHMO-668) */
 export interface AdminGroupRow {
   groupId: number
-  name: string
   memberCount: number
   eventCount: number
   photoCount: number
@@ -75,10 +76,9 @@ export interface AdminGroupEvent {
   publishedAt: string | null
 }
 
-/** BE AdminGroupDetailResponse — GET /admin/groups/:groupId */
+/** BE AdminGroupDetailResponse — GET /admin/groups/:groupId (모임 이름 없음 — CHMO-668) */
 export interface AdminGroupDetail {
   groupId: number
-  name: string
   createdAt: string
   /** 생성자 — 탈퇴 등으로 없을 수 있어 null 허용(BE Long) */
   ownerUserId: number | null
@@ -91,13 +91,16 @@ export interface AdminGroupDetail {
   events: AdminGroupEvent[]
 }
 
-/** GET /admin/groups 쿼리 — BE 화이트리스트(createdAt·name × asc·desc), 기본 createdAt,desc */
-export type AdminGroupSort = 'createdAt,desc' | 'createdAt,asc' | 'name,asc' | 'name,desc'
+/**
+ * GET /admin/groups 정렬 — 기본 `createdAt,desc`.
+ * BE 화이트리스트에는 `name`도 남아 있지만(CHMO-668은 값만 걷고 동작은 유지) **FE는 쓰지 않는다**:
+ * 이름을 화면에 안 보여주면 무슨 기준으로 줄 세웠는지 확인할 방법이 없다. 같은 이유로 이름 검색(q)도
+ * 보내지 않아 파라미터 자체가 없다.
+ */
+export type AdminGroupSort = 'createdAt,desc' | 'createdAt,asc'
 
 export interface AdminGroupListParams {
   page: number
   size?: number
-  /** 모임명 부분 일치(대소문자 무시) — 공백이면 보내지 않는다 */
-  q?: string
   sort?: AdminGroupSort
 }
