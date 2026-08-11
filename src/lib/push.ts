@@ -15,7 +15,6 @@
  * 그래서 이 모듈의 함수는 어느 것도 reject하지 않는다 — 호출부에 try/catch가 없다.
  */
 import {
-  getPushPermission,
   getPushToken,
   hasCapability,
   nativeAppInfo,
@@ -66,32 +65,57 @@ export function isPushSupported(): Promise<boolean> {
   return hasCapability('push')
 }
 
-/** 현재 OS 알림 권한 — 앱이 아니거나 조회가 실패하면 'denied'(켤 수 없는 상태로 수렴) */
+/**
+ * 알림이 실제로 도달하는 상태인가. `provisional`(iOS 조용한 알림)도 **도달은 하므로**
+ * granted와 같이 본다 — 안 그러면 알림을 받고 있는 사람에게 "설정에서 켜세요"라고 말하게 된다.
+ */
+export function pushAllowed(status: PushPermissionStatus): boolean {
+  return status === 'granted' || status === 'provisional'
+}
+
+/**
+ * 현재 OS 알림 권한 — **창을 열지 않는다**(getPushToken이 상태 조회 경로다).
+ * 앱이 아니거나 조회가 실패하면 'denied'(켤 수 없는 상태로 수렴 — 설정 화면이 그렇게 안내한다).
+ */
 export async function pushPermissionStatus(): Promise<PushPermissionStatus> {
   if (!(await isPushSupported())) return 'denied'
   try {
-    return (await getPushPermission()).status
+    return (await getPushToken()).status
   } catch {
     return 'denied'
   }
 }
 
 /**
- * 이 기기 토큰을 서버에 등록. 권한이 없으면 토큰 자체가 없어 조용히 끝난다.
- * 로그인 직후·토큰 회전·권한 허용 직후 — 세 자리에서 부르고 **멱등**이라 중복 호출이 정상이다.
+ * 서버 등록 — 토큰을 **인자로 받는다**. 권한 조회와 등록이 한 왕복(`{status, token}`)에
+ * 끝나므로 호출부가 이미 든 토큰을 다시 물어보지 않게 하려는 것이고, `pushToken` 이벤트로
+ * 뒤늦게 도착한 토큰도 같은 경로를 탄다(계약 §2.5 — 웹은 두 경로 모두에서 등록해야 한다).
  */
-async function registerCurrentToken(): Promise<void> {
+async function registerToken(token: string): Promise<void> {
   // 등록은 인증이 필요하다 — 토큰이 없으면 401이 날 뿐이라 아예 부르지 않는다
   if (!getAccessToken()) return
   const app = nativeAppInfo()
   if (!app) return
   try {
-    const { token } = await getPushToken()
-    if (!token) return
     await registerDevice({ token, platform: app.platform })
     writeStoredToken(token)
   } catch {
     /* 등록 실패 = 알림이 안 올 뿐 — 다음 로그인·토큰 회전에서 다시 시도된다 */
+  }
+}
+
+/**
+ * 창을 열지 않고 "지금 등록할 토큰이 있으면 등록". 허용 상태여도 토큰이 아직 없을 수 있는데
+ * (iOS APNs 등록 전) 그건 실패가 아니라 **`pushToken` 이벤트를 기다리면 되는 상태**다.
+ */
+async function registerCurrentToken(): Promise<void> {
+  if (!getAccessToken()) return
+  try {
+    const { status, token } = await getPushToken()
+    if (!pushAllowed(status) || !token) return
+    await registerToken(token)
+  } catch {
+    /* 조회 실패 — 다음 로그인·토큰 회전에서 다시 시도된다 */
   }
 }
 
@@ -102,7 +126,6 @@ async function registerCurrentToken(): Promise<void> {
  */
 export async function registerPushOnLogin(): Promise<void> {
   if (!(await isPushSupported())) return
-  if ((await pushPermissionStatus()) !== 'granted') return
   await registerCurrentToken()
 }
 
@@ -139,7 +162,7 @@ export function forgetPushTokenAfterAccountDelete(): void {
  * 근거가 없어 거부율이 높은데, iOS 프롬프트는 1회성이라 그 거부가 영구적이다.
  *
  * "1회"는 로컬 플래그가 아니라 **OS 권한 상태가 판정한다** — 이미 결정된 기기는
- * `undetermined`가 아니라서 프롬프트가 뜨지 않는다. 별도 플래그를 두면 OS와 두 벌이 되고,
+ * `notDetermined`가 아니라서 프롬프트가 뜨지 않는다. 별도 플래그를 두면 OS와 두 벌이 되고,
  * 앱 재설치로 권한이 초기화됐을 때 플래그만 남아 영영 못 묻는 상태가 된다.
  *
  * 실패·거부 모두 조용하다 — 업로드 흐름에 얹힌 곁가지라 화면에 아무것도 알리지 않는다.
@@ -147,17 +170,29 @@ export function forgetPushTokenAfterAccountDelete(): void {
 export async function requestPushPermissionAfterUpload(): Promise<void> {
   if (!(await isPushSupported())) return
   const current = await pushPermissionStatus()
-  // granted: 물을 것이 없고 등록만 확인 / denied: 다시 물어도 프롬프트가 뜨지 않는다
-  if (current === 'granted') {
+  // 이미 허용: 물을 것이 없고 등록만 확인 / denied: 다시 물어도 프롬프트가 뜨지 않는다
+  if (pushAllowed(current)) {
     await registerCurrentToken()
     return
   }
-  if (current !== 'undetermined') return
+  if (current !== 'notDetermined') return
+  await requestPushPermissionNow()
+}
+
+/**
+ * 권한 창을 열고, 허용되면 그 왕복이 준 토큰으로 바로 등록한다.
+ * 06-U 자동 요청과 설정 화면 [알림 켜기]가 공유한다 — 두 입구가 같은 후속을 타야
+ * 한쪽만 등록을 빠뜨리는 일이 없다. 반환값은 결정된 상태(호출부가 화면을 갱신한다).
+ */
+export async function requestPushPermissionNow(): Promise<PushPermissionStatus> {
   try {
-    const { status } = await requestPushPermission()
-    if (status === 'granted') await registerCurrentToken()
+    const { status, token } = await requestPushPermission()
+    // 허용됐는데 토큰이 아직 없으면(iOS APNs 등록 전) pushToken 이벤트가 이어받는다
+    if (pushAllowed(status) && token) await registerToken(token)
+    return status
   } catch {
-    /* 프롬프트를 못 띄웠다 — 다음 업로드에서 다시 시도된다(상태가 여전히 undetermined) */
+    /* 프롬프트를 못 띄웠다 — 상태가 그대로라 다음 업로드에서 다시 시도된다 */
+    return 'notDetermined'
   }
 }
 
@@ -168,14 +203,6 @@ export async function requestPushPermissionAfterUpload(): Promise<void> {
  * 브라우저에서는 이벤트가 오지 않아 구독만 걸리고 아무 일도 일어나지 않는다.
  */
 export function startPushTokenSync(): () => void {
-  return subscribeBridgePushToken((token) => {
-    if (!getAccessToken()) return
-    const app = nativeAppInfo()
-    if (!app) return
-    void registerDevice({ token, platform: app.platform })
-      .then(() => writeStoredToken(token))
-      .catch(() => {
-        /* 회전 등록 실패 — 다음 로그인에서 복구된다 */
-      })
-  })
+  // 허용 직후 토큰이 늦게 발급되는 경우(iOS APNs)도 이 이벤트로 들어온다 — 등록 경로가 같다
+  return subscribeBridgePushToken((token) => void registerToken(token))
 }

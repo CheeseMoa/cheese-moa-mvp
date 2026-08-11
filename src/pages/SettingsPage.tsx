@@ -5,13 +5,15 @@ import { PhoneShell } from '../components/PhoneShell'
 import { Button, ConfirmDialog, Header, LoadState, TextField, Toggle, useToast } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
-import { deleteAccount, getMe, logout, updateMe, updatePushEnabled } from '../api/auth'
+import { deleteAccount, getMe, logout, updateMe, updatePushSetting } from '../api/auth'
 import { clearAuthTokens, getRefreshToken } from '../lib/auth'
 import { isAnalyticsOptedOut, setAnalyticsOptOut } from '../lib/analytics'
 import {
   forgetPushTokenAfterAccountDelete,
   isPushSupported,
+  pushAllowed,
   pushPermissionStatus,
+  requestPushPermissionNow,
   unregisterPushOnLogout,
 } from '../lib/push'
 import { openAppSettings } from '../native/bridge'
@@ -89,13 +91,21 @@ export function SettingsPage() {
    * 서버 수신 거부 전환. 낙관적으로 먼저 뒤집고 실패하면 되돌린다 —
    * 토글은 즉시 반응해야 하는 컨트롤이라 왕복을 기다리며 멈춰 있으면 안 눌린 것처럼 보인다.
    */
+  /** [알림 켜기] — OS 권한 창을 열고 결과로 이 섹션을 다시 그린다(허용 시 토큰 등록은 모듈이) */
+  const handlePushEnable = async () => {
+    if (pushBusy) return
+    setPushBusy(true)
+    setPushPermission(await requestPushPermissionNow())
+    setPushBusy(false)
+  }
+
   const handlePushToggle = async (next: boolean) => {
     if (pushBusy) return
     setPushBusy(true)
     setPushOn(next)
-    await mutate(() => updatePushEnabled(next), {
-      onSuccess: (updated) => {
-        setPushOn(updated.pushEnabled)
+    await mutate(() => updatePushSetting(next), {
+      onSuccess: (enabled) => {
+        setPushOn(enabled)
         setPushBusy(false)
       },
       onError: (msg) => {
@@ -270,22 +280,30 @@ export function SettingsPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <p className="text-[15px] text-text">알림 받기</p>
-              {pushPermission === 'granted' ? (
+              {pushPermission && pushAllowed(pushPermission) ? (
                 <Toggle
                   checked={pushOn}
                   disabled={pushBusy}
                   onChange={(next) => void handlePushToggle(next)}
                 />
+              ) : pushPermission === 'notDetermined' ? (
+                // 아직 안 물어본 기기 — 설정 앱으로 보내지 않고 여기서 바로 묻는다
+                <Button variant="secondary" size="sm" onClick={() => void handlePushEnable()}>
+                  알림 켜기
+                </Button>
               ) : (
+                // denied — 앱이 프롬프트를 다시 못 띄운다(복구는 OS 설정뿐)
                 <Button variant="secondary" size="sm" onClick={() => void openAppSettings()}>
                   설정 열기
                 </Button>
               )}
             </div>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-              {pushPermission === 'granted'
+              {pushPermission && pushAllowed(pushPermission)
                 ? '참여 신청이 오거나 사진 분류가 끝나면 알려드려요.'
-                : '휴대폰 설정에서 치즈모아 알림을 켜면 참여 신청·분류 완료를 알려드려요.'}
+                : pushPermission === 'notDetermined'
+                  ? '참여 신청이 오거나 사진 분류가 끝나면 알려드려요.'
+                  : '휴대폰 설정에서 치즈모아 알림을 켜면 참여 신청·분류 완료를 알려드려요.'}
             </p>
           </section>
         ) : null}

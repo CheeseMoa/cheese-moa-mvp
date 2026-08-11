@@ -13,7 +13,6 @@ import {
   type CapabilitiesResult,
   type NativeAppInfo,
   type PushPermissionResult,
-  type PushTokenResult,
   type SavePhotosParams,
   type SavePhotosResult,
   type SocialLoginParams,
@@ -257,25 +256,24 @@ export function openAppSettings(): Promise<void> {
   return callBridge<void>('openAppSettings')
 }
 
-// ── 푸시 (CHMO-667) ──────────────────────────────────────────────────────
-// 권한 거부는 예외가 아니라 결과다 — PERMISSION_DENIED로 던지지 않고 status로 돌려준다.
-// 웹이 "물어봤다"를 기록하려면 거부도 정상 응답으로 받아야 하고(거부를 에러로 받으면
-// 실패 재시도와 구분이 안 된다), 설정 토글은 granted 여부를 상시 읽어야 한다.
-
-/** 현재 OS 알림 권한 — 프롬프트를 띄우지 않는다(설정 토글의 표시 판정용) */
-export function getPushPermission(): Promise<PushPermissionResult> {
-  return callBridge<PushPermissionResult>('getPushPermission')
-}
+// ── 푸시 (CHMO-667 · 셸 CHMO-666) ────────────────────────────────────────
+// 메서드는 둘이지만 capability는 `push` 하나다 — 한 기능이라 셸이 그렇게 묶었다(계약 §2.5).
+// 권한 거부는 예외가 아니라 `status`다: 사용자가 답을 준 정상 왕복이라 PERMISSION_DENIED로
+// 던지지 않는다(그렇게 오면 통신 실패와 구분이 안 되고, 설정 화면은 상태를 상시 읽어야 한다).
 
 /**
- * OS 알림 권한 프롬프트. 사용자가 다이얼로그를 언제 누를지 모르므로 시간 제한이 없다
- * (socialLogin·savePhotos와 같은 이유). 이미 결정된 상태면 프롬프트 없이 그 값이 즉시 온다.
+ * OS 알림 권한 **창을 연다**. 사용자가 다이얼로그를 언제 누를지 모르므로 시간 제한이 없다
+ * (socialLogin·savePhotos와 같은 이유). Android 13+ `POST_NOTIFICATIONS`도 이 호출이 연다.
+ * 셸은 앱 첫 실행에 자동으로 부르지 않는다 — **시점은 웹이 정한다**(06-U 업로드 직후).
  */
 export function requestPushPermission(): Promise<PushPermissionResult> {
   return callBridge<PushPermissionResult>('requestPushPermission', undefined, { timeoutMs: 0 })
 }
 
-/** FCM 등록 토큰. 권한 없음·발급 전은 `{ token: null }`(에러가 아니다 — types.ts 참조) */
-export function getPushToken(): Promise<PushTokenResult> {
-  return callBridge<PushTokenResult>('getPushToken')
+/**
+ * **창을 열지 않고** 현재 권한 상태와 토큰만 본다 — 설정 화면 표시, 앱 재실행 후 재등록 경로.
+ * 허용됐어도 토큰이 없을 수 있다(iOS APNs 등록 전 — 그때는 `pushToken` 이벤트로 따라온다).
+ */
+export function getPushToken(): Promise<PushPermissionResult> {
+  return callBridge<PushPermissionResult>('getPushToken')
 }

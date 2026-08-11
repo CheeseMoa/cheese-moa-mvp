@@ -87,22 +87,25 @@ export interface BridgeProgressEvent {
 // ── 푸시 (CHMO-667) ──────────────────────────────────────────────────────
 
 /**
- * OS 알림 권한 상태.
- * `undetermined`만 프롬프트로 바뀔 수 있다 — iOS는 한 번 거부되면 앱이 다시 못 띄우고
- * 설정 앱으로만 복구되므로, 웹은 `denied`를 "물어봐야 할 상태"가 아니라 "설정으로 보낼 상태"로 읽는다.
+ * OS 알림 권한 상태 (계약 §2.5 — 셸 CHMO-666).
+ * `notDetermined`만 아직 물어볼 수 있다 — iOS는 한 번 거부되면 앱이 프롬프트를 다시 못 띄우고
+ * 설정 앱으로만 복구되므로, 웹은 `denied`를 "물어볼 상태"가 아니라 "설정으로 보낼 상태"로 읽는다.
+ * `provisional`은 iOS의 조용한 알림 허용(배너 없이 알림 센터로) — **발송은 도달하므로 웹은
+ * granted와 같이 취급한다**(끄고 싶으면 수신 거부 토글이 있다).
  */
-export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined'
+export type PushPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'provisional'
 
+/**
+ * `requestPushPermission`·`getPushToken` 공통 응답 — 둘 다 상태와 토큰을 함께 준다.
+ * **권한 거부는 에러가 아니라 `status`다**(계약 §2.5 — 사용자가 답을 준 정상 왕복).
+ */
 export interface PushPermissionResult {
   status: PushPermissionStatus
-}
-
-export interface PushTokenResult {
   /**
-   * FCM 등록 토큰. 권한이 없거나 아직 발급 전이면 **null** — 실패가 아니라
-   * "등록할 것이 없다"는 뜻이라 에러로 던지지 않는다(웹은 등록을 건너뛴다).
+   * FCM 등록 토큰. **허용됐어도 없을 수 있다**(iOS APNs 등록 전) — 그때는 `status`만 오고
+   * 토큰은 `pushToken` 이벤트로 따라온다. 그래서 웹은 **두 경로 모두에서** 서버 등록을 한다.
    */
-  token: string | null
+  token?: string
 }
 
 /**

@@ -270,28 +270,36 @@ export const authHandlers = [
     const user = userFrom(request)
     if (!user) return unauthorized()
 
-    const body = await readJson<{ nickname?: unknown; pin?: unknown; pushEnabled?: unknown }>(
-      request,
-    )
+    const body = await readJson<{ nickname?: unknown; pin?: unknown }>(request)
     if (!body) return invalidBody()
 
     const nickname = optionalString(body.nickname)
     if (nickname === null) return invalidRequest('닉네임을 입력해 주세요.')
     const pin = body.pin === undefined ? undefined : normalizePin(body.pin)
     if (pin === null) return invalidPin()
-    // 푸시 수신 거부(CHMO-667) — 불리언만 받는다. 설정 토글은 이 필드 하나만 실어 보내므로
-    // 닉네임 없이 오는 PATCH가 정상 요청이다(실 BE도 nickname을 선택으로 받아야 한다)
-    if (body.pushEnabled !== undefined && typeof body.pushEnabled !== 'boolean') {
-      return invalidRequest('알림 수신 설정 값이 올바르지 않습니다.')
-    }
     if (nickname !== undefined && nicknameTaken(nickname, user.id)) return nicknameConflict()
 
     if (nickname !== undefined) user.nickname = nickname
     if (pin !== undefined) user.pin = pin
-    if (body.pushEnabled !== undefined) user.pushEnabled = body.pushEnabled
     updatePersistedUser(user) // 보존 대상(가입 계정)이면 localStorage에도 반영
 
     return ok(toUser(user))
+  }),
+
+  // PATCH /me/push-settings — 계정 단위 푸시 수신 on/off (CHMO-667 · BE CHMO-664).
+  // 프로필 수정과 다른 엔드포인트이고, 요청·응답 필드는 `enabled`다(GET /me는 pushEnabled).
+  http.patch(api('/me/push-settings'), async ({ request }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    const body = await readJson<{ enabled?: unknown }>(request)
+    if (!body) return invalidBody()
+    // BE UpdatePushSettingRequest @NotNull — 문구도 그대로
+    if (typeof body.enabled !== 'boolean') return invalidRequest('enabled 는 필수입니다.')
+
+    user.pushEnabled = body.enabled
+    updatePersistedUser(user)
+    return ok({ enabled: user.pushEnabled })
   }),
 
   // POST /me/devices — 푸시 기기 토큰 등록 (CHMO-667 · BE CHMO-664).
@@ -302,15 +310,17 @@ export const authHandlers = [
 
     const body = await readJson<{ token?: unknown; platform?: unknown }>(request)
     if (!body) return invalidBody()
+    // 검증 순서·문구는 BE RegisterDeviceRequest bean validation 그대로
     const token = requiredString(body.token)
-    if (!token) return invalidRequest('기기 토큰을 입력해 주세요.')
+    if (!token) return invalidRequest('기기 토큰은 필수입니다.')
+    if (token.length > 512) return invalidRequest('기기 토큰이 너무 깁니다.')
+    // BE DevicePlatform enum — **대문자만** 받는다(Jackson 역직렬화는 대소문자를 가린다).
+    // 소문자를 통과시키면 목에서만 되는 요청이 생겨 실 BE에서 400으로 드러난다
     const platform = requiredString(body.platform)
-    if (platform !== 'ios' && platform !== 'android') {
-      return invalidRequest('지원하지 않는 플랫폼입니다.')
-    }
+    if (platform !== 'IOS' && platform !== 'ANDROID') return invalidRequest('플랫폼은 필수입니다.')
 
     registerDevice(user.id, token, platform)
-    return ok(null)
+    return created(null)
   }),
 
   // DELETE /me/devices/{token} — 해제(로그아웃·계정 삭제). 없는 토큰도 성공(멱등) —
