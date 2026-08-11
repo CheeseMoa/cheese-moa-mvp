@@ -33,7 +33,6 @@ export interface RawAdminStats {
 
 export interface RawAdminRecentGroup {
   groupId: number
-  name: string
   memberCount?: number
   createdAt: string
 }
@@ -58,7 +57,6 @@ export function toAdminStats(raw: RawAdminStats): AdminStats {
 function toAdminRecentGroup(raw: RawAdminRecentGroup): AdminRecentGroup {
   return {
     groupId: raw.groupId,
-    name: raw.name,
     memberCount: raw.memberCount ?? 0,
     createdAt: raw.createdAt,
   }
@@ -66,7 +64,6 @@ function toAdminRecentGroup(raw: RawAdminRecentGroup): AdminRecentGroup {
 
 export interface RawAdminGroupRow {
   groupId: number
-  name: string
   memberCount?: number
   eventCount?: number
   photoCount?: number
@@ -76,7 +73,6 @@ export interface RawAdminGroupRow {
 export function toAdminGroupRow(raw: RawAdminGroupRow): AdminGroupRow {
   return {
     groupId: raw.groupId,
-    name: raw.name,
     memberCount: raw.memberCount ?? 0,
     eventCount: raw.eventCount ?? 0,
     photoCount: raw.photoCount ?? 0,
@@ -86,7 +82,6 @@ export function toAdminGroupRow(raw: RawAdminGroupRow): AdminGroupRow {
 
 export interface RawAdminGroupDetail {
   groupId: number
-  name: string
   createdAt: string
   ownerUserId?: number | null
   ownerNickname?: string | null
@@ -117,7 +112,6 @@ export interface RawAdminGroupEvent {
 export function toAdminGroupDetail(raw: RawAdminGroupDetail): AdminGroupDetail {
   return {
     groupId: raw.groupId,
-    name: raw.name,
     createdAt: raw.createdAt,
     ownerUserId: raw.ownerUserId ?? null,
     ownerNickname: raw.ownerNickname ?? null,

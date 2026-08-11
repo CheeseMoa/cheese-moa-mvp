@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi'
 import { listAdminGroups } from '../api/admin'
@@ -7,42 +7,37 @@ import { AdminTopbar } from '../components/AdminTopbar'
 import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
 import { Pagination } from '../components/Pagination'
-import { formatCount, formatDate } from '../lib/format'
+import { formatCount, formatDate, groupLabel } from '../lib/format'
 
 /** BE 기본값과 동일(1~100 제약) — 페이지 크기 UI는 1차에 두지 않는다 */
 const PAGE_SIZE = 20
 
-/** BE sort 화이트리스트(createdAt·name × asc·desc) 안에서만 고른다 — 밖은 COMMON400 */
+/**
+ * 생성일 정렬만 고른다 — 이름 정렬은 BE 화이트리스트에 남아 있지만 이름을 화면에 안 보여주는
+ * 이상 순서의 근거가 안 보인다(CHMO-670). 같은 이유로 이름 검색창도 없다.
+ */
 const SORT_OPTIONS: { value: AdminGroupSort; label: string }[] = [
   { value: 'createdAt,desc', label: '최신순' },
   { value: 'createdAt,asc', label: '오래된순' },
-  { value: 'name,asc', label: '이름순' },
 ]
 
-/** A2 모임 목록(289:45) — 검색·정렬·페이지네이션 표 */
+/** A2 모임 목록(289:45) — 정렬·페이지네이션 표 */
 export function AdminGroupsPage() {
   const navigate = useNavigate()
   const [page, setPage] = useState(0)
   const [sort, setSort] = useState<AdminGroupSort>('createdAt,desc')
-  const [qInput, setQInput] = useState('')
-  const [q, setQ] = useState('')
-
-  // 타이핑마다 서버를 부르지 않게 300ms 디바운스 — 확정된 검색어만 요청 키에 들어간다
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setQ(qInput.trim())
-      setPage(0)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [qInput])
 
   const list = useApi(
-    `admin-groups?page=${page}&size=${PAGE_SIZE}&q=${q}&sort=${sort}`,
-    (signal) => listAdminGroups({ page, size: PAGE_SIZE, q, sort }, signal),
+    `admin-groups?page=${page}&size=${PAGE_SIZE}&sort=${sort}`,
+    (signal) => listAdminGroups({ page, size: PAGE_SIZE, sort }, signal),
   )
 
   const columns: AdminColumn<AdminGroupRow>[] = [
-    { key: 'name', header: '모임명', render: (g) => <span className="font-medium">{g.name}</span> },
+    {
+      key: 'group',
+      header: '모임',
+      render: (g) => <span className="font-medium">{groupLabel(g.groupId)}</span>,
+    },
     {
       key: 'members',
       header: '멤버 수',
@@ -82,15 +77,7 @@ export function AdminGroupsPage() {
         right={total !== undefined ? `총 ${formatCount(total)}개` : undefined}
       />
       <div className="flex-1 space-y-4 overflow-y-auto px-7 py-6">
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-admin-border bg-admin-surface px-4 py-3">
-          <input
-            type="search"
-            value={qInput}
-            onChange={(e) => setQInput(e.target.value)}
-            placeholder="모임명 검색"
-            aria-label="모임명 검색"
-            className="h-9 w-80 rounded-lg border border-admin-border bg-admin-surface px-3 text-[13px] placeholder:text-admin-muted focus:border-primary focus:outline-none"
-          />
+        <div className="flex items-center justify-end">
           <select
             value={sort}
             onChange={(e) => {
@@ -119,7 +106,7 @@ export function AdminGroupsPage() {
               rows={list.data.items}
               rowKey={(g) => g.groupId}
               onRowClick={(g) => navigate(`/admin/groups/${g.groupId}`)}
-              emptyText={q ? `'${q}' 검색 결과가 없어요.` : '아직 만들어진 모임이 없어요.'}
+              emptyText="아직 만들어진 모임이 없어요."
               dimmed={list.loading}
             />
             {list.data.pageInfo && list.data.pageInfo.totalPages > 0 ? (

@@ -99,6 +99,7 @@ export interface AdminGroupPage {
 /**
  * GET /admin/groups — 전체 모임 목록(페이지네이션). size 1~100·sort 화이트리스트 밖은
  * COMMON400 — 화면은 셀렉트/버튼으로만 조합해 도달하지 않는다.
+ * 이름 검색(q)·이름 정렬은 BE가 여전히 받지만 보내지 않는다(types.ts AdminGroupSort 주석).
  */
 export async function listAdminGroups(
   params: AdminGroupListParams,
@@ -106,9 +107,6 @@ export async function listAdminGroups(
 ): Promise<AdminGroupPage> {
   const search = new URLSearchParams({ page: String(params.page) })
   if (params.size !== undefined) search.set('size', String(params.size))
-  // BE는 공백 q를 무시하지만 애초에 싣지 않는다 — URL이 곧 useApi 캐시 키라 공백 유무로 갈리면 안 된다
-  const q = params.q?.trim()
-  if (q) search.set('q', q)
   if (params.sort) search.set('sort', params.sort)
 
   const { items, pageInfo } = await apiFetchPaged<RawAdminGroupRow[]>(
