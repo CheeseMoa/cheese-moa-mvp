@@ -109,7 +109,7 @@ describe('어드민 대시보드 (GET /admin/stats)', () => {
     expect(stats.totals).toEqual({ users: 123, groups: 45, events: 210, photos: 8123 })
     expect(stats.last7Days).toEqual({ newGroups: 3, newEvents: 12, newPhotos: 950 })
     expect(stats.recentGroups).toEqual([
-      { groupId: 45, name: '치즈유치원', memberCount: 8, createdAt: '2026-08-01T10:00:00Z' },
+      { groupId: 45, memberCount: 8, createdAt: '2026-08-01T10:00:00Z' },
     ])
   })
 
@@ -132,12 +132,11 @@ describe('어드민 모임 목록 (GET /admin/groups)', () => {
       }),
     )
 
-    const page = await listAdminGroups({ page: 0, size: 20, q: '치즈', sort: 'name,asc' })
-    expect(calls[0].url).toBe('/api/v1/admin/groups?page=0&size=20&q=%EC%B9%98%EC%A6%88&sort=name%2Casc')
+    const page = await listAdminGroups({ page: 0, size: 20, sort: 'createdAt,asc' })
+    expect(calls[0].url).toBe('/api/v1/admin/groups?page=0&size=20&sort=createdAt%2Casc')
     expect(page.items).toEqual([
       {
         groupId: 45,
-        name: '치즈유치원',
         memberCount: 8,
         eventCount: 12,
         photoCount: 830,
@@ -147,10 +146,18 @@ describe('어드민 모임 목록 (GET /admin/groups)', () => {
     expect(page.pageInfo).toEqual(BE_ADMIN_PAGE_INFO)
   })
 
-  it('공백 q는 요청에 싣지 않는다 — URL이 곧 useApi 캐시 키다', async () => {
+  it('정렬을 안 넘기면 page만 실린다 — URL이 곧 useApi 캐시 키다', async () => {
     const calls = serve(envelope([]))
-    await listAdminGroups({ page: 1, q: '  ' })
+    await listAdminGroups({ page: 1 })
     expect(calls[0].url).toBe('/api/v1/admin/groups?page=1')
+  })
+
+  // FE 선배포 구간(BE PR #203 배포 전)에는 아직 name이 실려 온다 — 매퍼가 통째로 흘려보내야
+  // 화면 타입에 없는 값이 새지 않는다(CHMO-670)
+  it('BE가 아직 모임 name을 보내도 행에 담지 않는다', async () => {
+    serve(envelope([{ ...BE_ADMIN_GROUP_ROWS[0], name: '치즈유치원' }]))
+    const page = await listAdminGroups({ page: 0 })
+    expect(page.items[0]).not.toHaveProperty('name')
   })
 
   it('pageInfo가 없거나 형태가 어긋나면 null로 접는다 — 목록은 그대로 온다', async () => {
@@ -166,7 +173,9 @@ describe('어드민 모임 상세 (GET /admin/groups/:groupId)', () => {
     const calls = serve(envelope(BE_ADMIN_GROUP_DETAIL))
     const detail = await getAdminGroupDetail(45)
     expect(calls[0].url).toBe('/api/v1/admin/groups/45')
-    expect(detail.name).toBe('치즈유치원')
+    expect(detail.groupId).toBe(45)
+    // 모임 이름은 응답에 없다(CHMO-668) — 이벤트 이름·닉네임은 그대로 온다
+    expect(detail).not.toHaveProperty('name')
     expect(detail.ownerNickname).toBe('김선생')
     expect(detail.members[1]).toEqual({
       userId: 9,
@@ -182,9 +191,7 @@ describe('어드민 모임 상세 (GET /admin/groups/:groupId)', () => {
   })
 
   it('members·events 키가 생략돼도 빈 배열로 정규화된다', async () => {
-    serve(
-      envelope({ groupId: 45, name: '치즈유치원', createdAt: '2026-08-01T10:00:00', memberCount: 0 }),
-    )
+    serve(envelope({ groupId: 45, createdAt: '2026-08-01T10:00:00', memberCount: 0 }))
     const detail = await getAdminGroupDetail(45)
     expect(detail.members).toEqual([])
     expect(detail.events).toEqual([])

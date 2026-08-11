@@ -7,7 +7,7 @@ import { AdminTopbar } from '../components/AdminTopbar'
 import { StatCard } from '../components/StatCard'
 import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
-import { formatCount, formatDate, formatDateTime } from '../lib/format'
+import { formatCount, formatDate, formatDateTime, groupLabel } from '../lib/format'
 
 /** A1 대시보드(289:3) — 전체 누적 4칸 + 최근 7일 3칸 + 최근 생성 모임 5개 */
 export function AdminDashboardPage() {
@@ -25,7 +25,11 @@ export function AdminDashboardPage() {
   }, [])
 
   const recentColumns: AdminColumn<AdminRecentGroup>[] = [
-    { key: 'name', header: '모임명', render: (g) => <span className="font-medium">{g.name}</span> },
+    {
+      key: 'group',
+      header: '모임',
+      render: (g) => <span className="font-medium">{groupLabel(g.groupId)}</span>,
+    },
     {
       key: 'members',
       header: '멤버 수',
