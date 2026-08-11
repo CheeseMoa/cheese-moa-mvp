@@ -2,7 +2,15 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, Header, IconBuilding, IconPeople, TextField, useToast } from '../components/ui'
+import {
+  BottomSheet,
+  Button,
+  Header,
+  IconBuilding,
+  IconPeople,
+  TextField,
+  useToast,
+} from '../components/ui'
 import { cx } from '../lib/cx'
 import { useMutation } from '../hooks/useMutation'
 import { createGroup } from '../api/groups'
@@ -30,6 +38,8 @@ const GROUP_TYPE_CARDS: Array<{
   Icon: typeof IconPeople
   name: string
   examples: string
+  /** 이 유형이 뭐가 다른지 한 줄 — 고르고 난 뒤(2단계)가 아니라 고르는 자리에서 말한다 */
+  difference: string
   tile: string
 }> = [
   {
@@ -37,6 +47,7 @@ const GROUP_TYPE_CARDS: Array<{
     Icon: IconPeople,
     name: '일반 모임',
     examples: '가족 여행 · 친구 모임',
+    difference: '링크를 받으면 누구나 바로 참여해요',
     tile: 'bg-surface text-heading',
   },
   {
@@ -44,6 +55,7 @@ const GROUP_TYPE_CARDS: Array<{
     Icon: IconBuilding,
     name: '비즈니스 모임',
     examples: '유치원 · 학원 · 여행사',
+    difference: '신청을 승인하고, 검토한 사진만 공개해요',
     tile: 'bg-primary/25 text-heading',
   },
 ]
@@ -87,39 +99,52 @@ export function GroupCreatePage() {
     return (
       <PhoneShell>
         <Header backTo="/home" backLabel="홈" title="모임 만들기" />
-        <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
-          {/* 정사각 2-up에서 세로 리스트로(홈 모임 카드와 같은 문법) — 정사각은 가운데가 비고
-              이름·예시가 바닥에 눌려 위계가 죽는다. 가로가 넓어져 예시 줄도 잘리지 않는다 */}
-          <div className="flex flex-col gap-3">
+        {/* 시트가 덮을 바탕 — 상단 56px에 이 헤더가 어둡게 비쳐 "덮은 화면"이 보인다 */}
+        <main className="flex-1" />
+        <BottomSheet
+          open
+          fullHeight
+          onClose={() => navigate('/home')}
+          title="어떤 모임을 만드시나요?"
+          subtitle="유형에 따라 참여 방식과 사진 공개 방식이 달라요."
+        >
+          {/* 제목 아래 남는 높이에 카드를 세로 중앙으로 — 전체화면 시트라 위로 붙이면 아래가 휑하다 */}
+          <div className="flex h-full flex-col justify-center gap-3.5 pb-2">
             {GROUP_TYPE_CARDS.map((card) => (
               <button
                 key={card.type}
                 type="button"
                 onClick={() => setGroupType(card.type)}
-                // 세로로 쌓이는 카드라 blur 30(shadow-card)은 사이 12px을 뿌옇게 채운다(CHMO-532)
-                className="group flex w-full items-center gap-3.5 rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack transition active:scale-[0.99]"
+                // 세로로 쌓이는 카드라 blur 30(shadow-card)은 사이 14px을 뿌옇게 채운다(CHMO-532)
+                className="group w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack transition active:scale-[0.99]"
               >
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    // 누르는 동안 타일이 옐로우로 차오른다 — 두 카드가 같은 피드백을 준다
-                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors group-active:bg-primary',
-                    card.tile,
-                  )}
-                >
-                  <card.Icon size={26} />
+                <span className="flex items-center gap-3.5">
+                  <span
+                    aria-hidden="true"
+                    className={cx(
+                      // 누르는 동안 타일이 옐로우로 차오른다 — 두 카드가 같은 피드백을 준다
+                      'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors group-active:bg-primary',
+                      card.tile,
+                    )}
+                  >
+                    <card.Icon size={30} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[17px] text-heading">{card.name}</span>
+                    <span className="mt-1 block text-[13px] text-muted">{card.examples}</span>
+                  </span>
+                  <span className="shrink-0 text-lg text-[#C9C2B4]" aria-hidden="true">
+                    ›
+                  </span>
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[17px] text-heading">{card.name}</span>
-                  <span className="mt-1 block text-[13px] text-muted">{card.examples}</span>
-                </span>
-                <span className="shrink-0 text-lg text-[#C9C2B4]" aria-hidden="true">
-                  ›
+                {/* 차이 한 줄 — 고르기 전에 판단 근거를 준다(종전엔 2단계에서야 비즈니스만 나왔다) */}
+                <span className="mt-3.5 block border-t border-border pt-3 text-[13px] text-muted">
+                  {card.difference}
                 </span>
               </button>
             ))}
           </div>
-        </main>
+        </BottomSheet>
       </PhoneShell>
     )
   }
