@@ -9,6 +9,7 @@ import {
 } from '../api/auth'
 import { BridgeError, hasCapability, socialLogin } from '../native/bridge'
 import { isSocialProviderVisible } from '../lib/socialProviders'
+import { trackEvent } from '../lib/analytics'
 
 /** 프로바이더별 브랜드 규격 — 색은 각 사 디자인 가이드 고정값이라 디자인 토큰을 쓰지 않는다 */
 const PROVIDERS: Array<{
@@ -98,6 +99,8 @@ export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
     inFlight.current = true
     try {
       if (returnTo) setSocialReturnTo(returnTo)
+      // 프로바이더별 이탈을 본다 — 여기서 나가면 외부 인가 화면이라 이 시점이 마지막 기록이다
+      trackEvent('login_start', { provider })
       // MSW 목 모드는 브라우저 전용(문서 이동으로 목 콜백 직행) — 앱 경로를 타지 않는다
       if (import.meta.env.VITE_ENABLE_MSW !== 'true' && (await hasCapability('socialLogin'))) {
         await startInApp(provider)

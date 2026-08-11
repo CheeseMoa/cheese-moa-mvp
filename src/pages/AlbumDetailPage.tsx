@@ -24,6 +24,7 @@ import { useMutation } from '../hooks/useMutation'
 import { usePhotoSave, photoSaveLabel } from '../hooks/usePhotoSave'
 import { toErrorMessage } from '../api/client'
 import { deleteAlbum, deletePhotos, getAlbumWithPhotos, markAlbumReviewed } from '../api/albums'
+import { trackEvent } from '../lib/analytics'
 import { getEvent, listEventAlbums } from '../api/events'
 import { getGroup } from '../api/groups'
 import { cx } from '../lib/cx'
@@ -233,6 +234,8 @@ function AlbumDetailView() {
     setBusy(true)
     await mutate(() => markAlbumReviewed(albumId), {
       onSuccess: () => {
+        // 검토는 앨범 수만큼 반복이라 이탈이 가장 의심되는 구간 — 몇 번째에서 멈추는지 본다
+        trackEvent('album_review_complete')
         setReviewOpen(false)
         // 검토는 앨범 단위로 반복하는 작업이라 08로 돌려보내지 않고 다음 미검토 앨범을 바로 연다
         // (CHMO-521 — CHMO-414의 '08 복귀'를 대체). 더 볼 앨범이 없으면 그다음 차례가 공개라 14로.

@@ -4,6 +4,7 @@ import type { Group, GroupInviteChannel, GroupRole } from '../types/api'
 import { copyToClipboard } from '../lib/clipboard'
 import { buildJoinUrl } from '../lib/joinLink'
 import { shareOrCopy } from '../lib/share'
+import { trackEvent } from '../lib/analytics'
 import { Button, IconShare, InlineRetry, useToast } from './ui'
 
 /** 표시용 URL — 와이어프레임처럼 프로토콜은 떼고 보여준다(복사는 원본 전체) */
@@ -75,6 +76,8 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
 
   // OS 공유 시트(카카오톡·라인·문자 등) — 미지원 환경은 전체 메시지 복사로 폴백
   const handleShare = async () => {
+    // 초대를 실제로 보냈는가 — 링크를 꺼내 놓고 안 보내는 구간이 있는지 본다
+    trackEvent('invite_share')
     const outcome = await shareOrCopy({
       text: copy.share(channel.password),
       url: joinUrl,
@@ -106,7 +109,14 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
               ⧉
             </span>
           </button>
-          <Button size="sm" onClick={() => void copyText(joinUrl, copy.copyDone)}>
+          <Button
+            size="sm"
+            onClick={() => {
+              // 비밀번호 복사와 갈라서 센다 — 링크 복사만이 '초대를 꺼냈다'는 신호다
+              trackEvent('invite_link_copy')
+              void copyText(joinUrl, copy.copyDone)
+            }}
+          >
             ⧉ 링크복사
           </Button>
         </div>
