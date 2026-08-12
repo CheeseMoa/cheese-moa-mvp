@@ -6,6 +6,7 @@ import { ApiRequestError } from '../api/client'
 import { joinGroup } from '../api/groups'
 import { trackEvent } from '../lib/analytics'
 import { buildJoinPath, type JoinLinkInfo } from '../lib/joinLink'
+import { sanitizeJoinKeyInput } from '../lib/joinSecret'
 import type { JoinGroupResult } from '../types/api'
 import { Button, Modal, TextField, useToast } from './ui'
 
@@ -74,7 +75,9 @@ export function JoinGroupModal({
     setError(null)
   }, [open])
 
-  // 실 BE joinKey는 대소문자 혼합 발급 + 대소문자 구분 매칭 — 케이스를 훼손하면 안 된다(CHMO-285)
+  // 매칭은 대소문자를 구분한다(CHMO-285). **링크가 실어 온 코드(fixedJoinKey)는 손대지 않고**
+  // 직접 입력만 대문자로 올린다(CHMO-680 — 정규화는 setJoinKeyInput 시점에 이미 끝나 있다):
+  // 링크에는 구 규칙(혼합 12자) 코드나 학부모 키가 실려 올 수 있어 케이스를 훼손하면 깨진다
   const joinKey = (fixedJoinKey ?? joinKeyInput).trim()
   const canSubmit = joinKey.length > 0 && password.trim().length > 0 && !submitting
 
@@ -179,8 +182,13 @@ export function JoinGroupModal({
             label="참여 코드"
             placeholder="참여 코드 입력"
             autoComplete="off"
+            // 코드는 대문자 전용(CHMO-680) — 자동 대문자·자동수정·맞춤법은 끄고 우리가 올린다.
+            // 키보드가 첫 글자만 올리고 나머지를 소문자로 두면 오히려 어긋난 값이 보인다
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={joinKeyInput}
-            onChange={(e) => setJoinKeyInput(e.target.value)}
+            onChange={(e) => setJoinKeyInput(sanitizeJoinKeyInput(e.target.value))}
           />
         ) : null}
         <TextField

@@ -208,13 +208,27 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 요청 `{ "joinKey": "HAETSAL", "password": "482AVX" }` — viewer(멤버) 키는 `childNames`(인물 이름 1개 이상) 필수. `childConsentVersion` 동봉은 폐지(CHMO-607 — 동의는 가입 01-A 일원화, 상세는 `parent-model-api-draft.md` §3).
 응답 `200` → `GroupSummaryResponse` 재사용(role·status는 `myMembership` 중첩 — CHMO-607 소스 대조). role 무관 승인제(CHMO-475)라 신청(PENDING) 생성이고, 일반(GENERAL) 모임 즉시 합류(ACTIVE)는 BE 미구현 — FE는 status로 랜딩을 가른다.
 오류: `403 WRONG_PASSWORD`, `404 NOT_FOUND`, `409 ALREADY_MEMBER`.
+> **코드는 대문자로 보낸다**(CHMO-680): 매칭이 대소문자를 구분하는데(CHMO-285) 자동 발급이 이미 대문자 6자라, 손으로 옮겨 적는 자리(02-1 코드 입력)를 대문자로 고정하면 모바일 키보드 기본 소문자로 `kptxqa`를 쳐서 `SPACE404`를 맞는 실패가 사라진다. **초대 링크의 joinKey는 손대지 않는다** — 구 규칙 코드나 멤버 키(`shareToken`, 혼합 12자)가 실려 오므로 케이스를 훼손하면 그 링크가 깨진다. 비밀번호는 대소문자를 살린다.
 
-#### `GET /groups/:id/invite` — 초대 정보 · 화면 초대(`211:1556`)
+#### `GET /groups/:id/invite` — 초대 정보 · 화면 20(초대)
 응답 `200`
 ```json
-{ "joinKey": "HAETSAL", "password": "482AVX", "joinUrl": "https://app.cheesemoa.kr/join/HAETSAL" }
+{ "teacher": { "joinKey": "KPTXQA", "password": "4821" },
+  "parent":  { "joinKey": "Pk3xYz92QwEr", "password": "7421" } }
 ```
-> 모임 비밀번호는 멤버에게만 노출(초대 화면 전용).
+> 모임 비밀번호는 멤버에게만 노출(초대 화면 전용). 채널 2종(관리자/멤버 — 초안 §2, 키 이름은 BE 내부 식별자 `teacher`/`parent` 유지 · GENERAL은 `parent` null). `joinUrl`은 주지 않는다 — FE가 joinKey로 경로형(`/join/:joinKey`)을 파생한다(CHMO-237).
+> **자동 발급 참여 코드는 대문자 6자**(BE CHMO-673 `generateJoinCode` — 종전 대소문자 혼합 12자는 말로 부를 수 없었다). 멤버 채널 키(`shareToken`)는 12자 유지 — 링크로만 도는 값이라 옮겨 적을 일이 없다. **기존 모임의 12자 코드는 그대로**고, 바꾸려면 아래 PATCH.
+
+#### `PATCH /groups/:id/invite` — 참여 코드·비밀번호 변경 · 화면 20(초대) — BE CHMO-673 · FE CHMO-677
+요청 `{ "joinKey": "FAMILYTRIP", "password": "banana12" }` — **부분 수정**(생략한 항목은 유지, 둘 다 생략하면 `400`).
+응답 `200` → 초대 정보 조회와 **같은 모양**.
+오류: `400 VALIDATION_ERROR`(형식), `403`(EDITOR 아님), `404 NOT_FOUND`, `409 JOIN_KEY_TAKEN`(BE `SPACE409`).
+- 형식: `joinKey` 영문·숫자 4~20자 · `password` 영문·숫자 4~12자(`@Pattern`). **한글은 배제** — 유니코드 정규화(NFC/NFD)로 같은 글자가 다른 값이 돼 눈으로는 같은데 매칭이 안 된다.
+- BE는 소문자 지정도 받지만(`^[0-9A-Za-z]{4,20}$`) **FE는 대문자만 보낸다**(CHMO-680 — 코드를 입력하는 자리가 FE 둘뿐이라 양쪽을 막으면 실질적으로 대문자만 저장·조회된다. BE 변경 없이 성립).
+- 비밀번호를 자동 발급값(숫자 4자리)보다 넓게 연 이유: 사람이 정한 코드는 추측 가능한 값이라 **비밀번호가 유일한 비밀**이 된다(리미터 아래에서도 1만 조합은 1~2주면 전수 대입).
+- 중복 검사는 **`joinKey`·`shareToken` 두 컬럼 전역**(자기 모임도 제외하지 않는다) — 합류 조회가 joinKey → shareToken 순이라 남의 멤버 키와 겹치면 그 모임의 합류를, 자기 멤버 키와 겹치면 자기 멤버 채널을 가로챈다. 예외는 **현재 코드 그대로 재제출**뿐.
+- 대상은 **관리자 채널의 코드와 참여 비밀번호뿐** — 멤버 키(`shareToken`)·학부모 비밀번호는 바뀌지 않는다. 그래서 FE도 관리자 탭에서만 변경을 연다.
+- 매칭은 대소문자 구분(CHMO-285) → **코드를 바꾸면 먼저 보낸 링크·코드는 즉시 무효**다.
 
 #### `GET /groups/:id/share` — 학부모 공유 정보 · 화면 05(학부모 공유)
 응답 `200`
@@ -433,7 +447,7 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·
 | `POST /groups` | 03 |
 | `GET /groups/:id` · `PATCH /groups/:id` | 05 |
 | `POST /groups/join` | 02-1 |
-| `GET /groups/:id/invite` | 초대(211:1556) |
+| `GET /groups/:id/invite` · `PATCH /groups/:id/invite` | 20 초대 |
 | `GET /groups/:id/share` | 05(학부모 공유) |
 | `GET /groups/:id/events` | 05 |
 | `POST /groups/:id/events` | 06-M |

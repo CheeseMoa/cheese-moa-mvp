@@ -149,6 +149,18 @@ export function toGroupDetail(group: DbGroup, membership: DbMembership) {
   }
 }
 
+/**
+ * BE GroupInviteResponse(초안 §2 — 2종 채널). **조회와 변경이 같은 모양**을 준다
+ * (GET·PATCH `/groups/:id/invite` — BE CHMO-673). 멤버 채널 비밀번호는 sharePassword 재사용(Q2),
+ * joinUrl은 주지 않는다(FE가 joinKey로 경로형 파생 — CHMO-237).
+ */
+export function toGroupInvite(group: DbGroup) {
+  return {
+    teacher: { joinKey: group.joinKey, password: group.password },
+    parent: { joinKey: group.parentJoinKey, password: group.share.password },
+  }
+}
+
 /** BE JoinRequestResponse(초안 §3) — PENDING 멤버십 행이 곧 신청이다 */
 export function toJoinRequestResponse(membership: DbMembership, user: DbUser) {
   return {

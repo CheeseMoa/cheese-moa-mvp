@@ -23,6 +23,8 @@
  *   CHMO-379 착수 프로브)
  * + 2026-08-06 BE 소스 대조(AUTH409 — ErrorStatus.NICKNAME_TAKEN. 가입 동의 동봉 CHMO-600 착수 중
  *   확인 — CHMO-598 스펙 문서의 USER409 표기는 소스와 달라 소스를 따른다. 실서버 채집은 미완).
+ * + 2026-08-11 BE 스펙 대조(SPACE409 — ErrorStatus.JOIN_KEY_TAKEN. 참여 코드·비밀번호 변경
+ *   CHMO-673의 신설 코드. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -71,6 +73,12 @@ const BE_CODE_MAP: Record<string, string> = {
   ADMIN403: 'NOT_ADMIN',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
+  /**
+   * 참여 코드 중복(409 — BE JOIN_KEY_TAKEN, CHMO-673). 사용자가 정한 코드가 이미 다른 모임의
+   * 참여 코드거나 멤버 채널 키(shareToken)와 겹칠 때. 20 변경 모달이 인라인 에러로 받아
+   * 그 자리에서 다시 입력하게 한다(화면 이탈 없음).
+   */
+  SPACE409: 'JOIN_KEY_TAKEN',
   /** 이벤트(BE 도메인명 moment) 없음(404) */
   MOMENT404: 'NOT_FOUND',
   /** 앨범 없음(404) */

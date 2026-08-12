@@ -124,8 +124,11 @@ export type AnalyticsEvent =
   | 'album_review_complete'
   /** 14 [공개하기] 성공 */
   | 'publish_success'
-  /** 20 초대 링크 복사·공유 */
-  | 'invite_link_copy'
+  /**
+   * 20 초대 공유 — 링크를 내보내는 유일한 길이다(CHMO-683에서 [⧉ 링크복사]가 폐지되며 짝이던
+   * `invite_link_copy`도 사라졌다. 값 카드의 코드·비밀번호 복사는 세지 않는다 —
+   * 그건 링크가 안 통하는 자리의 우회로라 '초대를 보냈다'와 같은 뜻이 아니다).
+   */
   | 'invite_share'
   /** 02-1·02-2 참여(신청) 제출 */
   | 'join_submit'

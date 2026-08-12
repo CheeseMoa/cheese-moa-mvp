@@ -49,6 +49,7 @@ import {
   toEventDetail,
   toEventSummary,
   toGroupDetail,
+  toGroupInvite,
   toGroupMemberResponse,
   toGroupSummary,
   toJoinRequestResponse,
@@ -72,6 +73,7 @@ import {
   toAnalysisJob,
   toEvent,
   toGroup,
+  toGroupInviteInfo,
   toGroupMember,
   toJoinGroupResult,
   toJoinRequest,
@@ -132,6 +134,24 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
     expect(mapped.groupType).toBe('general')
     // GENERAL엔 학부모가 없다 — viewerCount는 항상 0(ADR 020, FE는 editorCount를 멤버 수로 쓴다)
     expect(toGroup(toGroupDetail(group, editor))).toMatchObject({ editorCount: 2, viewerCount: 0 })
+  })
+
+  it('초대 정보 — 채널 2종이 매퍼를 지나 코드·비밀번호·경로형 링크로 도착한다 (CHMO-677)', () => {
+    const group = findGroup(1)! // 햇살반
+    const invite = toGroupInviteInfo(toGroupInvite(group))
+    // 관리자 채널 = 모임 참여 코드·비밀번호(변경 API가 바꾸는 두 값)
+    expect(invite.teacher).toEqual({
+      joinKey: group.joinKey,
+      password: group.password,
+      joinUrl: `/join/${group.joinKey}`,
+    })
+    // 멤버 채널은 키가 다르고(shareToken 자리) 비밀번호는 sharePassword 재사용(Q2) —
+    // PATCH /invite는 이 둘을 건드리지 않으므로 화면도 관리자 탭에서만 변경을 연다
+    expect(invite.parent).toEqual({
+      joinKey: group.parentJoinKey,
+      password: group.share.password,
+      joinUrl: `/join/${group.parentJoinKey}`,
+    })
   })
 
   it('모임 — PARENT·PENDING 응답엔 멤버 정보가 없다 (§7-3 미노출)', () => {
