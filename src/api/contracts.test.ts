@@ -46,6 +46,7 @@ import {
   joinGroup,
   listGroups,
   removeGroupMember,
+  updateInviteSecrets,
 } from './groups'
 import {
   getViewerAlbumPhotos,
@@ -275,6 +276,32 @@ describe('모임', () => {
       joinUrl: '/join/Fh1TDIk81EPP',
     })
     expect(invite.parent).toBeNull()
+  })
+
+  it('초대 시크릿 변경 — 바뀐 필드만 싣고, 응답은 조회와 같은 매퍼를 탄다 (CHMO-677·BE 673)', async () => {
+    const calls = serve(
+      envelope({
+        teacher: { joinKey: 'familytrip', password: 'banana12' },
+        parent: { joinKey: 'Pk3xYz92QwEr', password: '7421' },
+      }),
+    )
+    // 비밀번호만 바꾸는 호출 — joinKey 키 자체가 본문에 없어야 서버가 '유지'로 읽는다
+    const invite = await updateInviteSecrets(6, { password: 'banana12' })
+    expect(calls[0]?.method).toBe('PATCH')
+    expect(calls[0]?.url).toBe('/api/v1/groups/6/invite')
+    expect(bodyOf(calls[0])).toEqual({ password: 'banana12' })
+    // 새 코드로 joinUrl이 다시 파생된다 — 링크·공유 문안이 옛 코드를 물고 있으면 안 된다
+    expect(invite.teacher.joinUrl).toBe('/join/familytrip')
+    expect(invite.parent?.joinKey).toBe('Pk3xYz92QwEr')
+  })
+
+  it('참여 코드 중복 — SPACE409를 JOIN_KEY_TAKEN으로 정규화한다(BE 메시지는 그대로 노출)', async () => {
+    serve(errorEnvelope('SPACE409', '이미 사용 중인 참여 코드입니다.'), 409)
+    await expect(updateInviteSecrets(6, { joinKey: 'familytrip' })).rejects.toMatchObject({
+      status: 409,
+      code: 'JOIN_KEY_TAKEN',
+      message: '이미 사용 중인 참여 코드입니다.',
+    })
   })
 
   it('참여 구계약 공존 — 형태 미상(GroupDetail 꼴) 응답은 성공으로 흡수하되 pending으로 좁힌다', async () => {

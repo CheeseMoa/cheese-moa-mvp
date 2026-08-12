@@ -31,15 +31,44 @@ import {
   unauthorized,
   userFrom,
 } from './shared'
-import { shareUrlOf, toGroupDetail, toGroupSummary } from './serializers'
+import { shareUrlOf, toGroupDetail, toGroupInvite, toGroupSummary } from './serializers'
+import {
+  JOIN_KEY_RE,
+  JOIN_KEY_RULE_TEXT,
+  JOIN_PASSWORD_RE,
+  JOIN_PASSWORD_RULE_TEXT,
+} from '../../lib/joinSecret'
 
-function randomJoinKey(): string {
-  // 실 BE는 대소문자 혼합 12자를 발급하고 대소문자를 구분해 매칭한다(채집 예: Fh1TDIk81EPP — CHMO-285)
+/** 두 키 컬럼(관리자 코드·멤버 키) 전역에서 이미 쓰는 값인가 — 발급·변경이 같은 범위를 본다 */
+function joinKeyTaken(key: string): boolean {
+  return db.groups.some((g) => g.joinKey === key || g.parentJoinKey === key)
+}
+
+/**
+ * 관리자 참여 코드 자동 발급 — **대문자 6자**(BE CHMO-673 SpaceSecretGenerator.generateJoinCode).
+ * 종전 대소문자 혼합 12자(CHMO-285)는 눈으로 읽어 옮길 수가 없어 "코드 불러줄게"가 불가능했다.
+ * 조합 3억(26^6)이라 재추첨 루프로 충돌을 피한다(실 BE는 DB unique가 백스톱).
+ * 기존 모임(시드 포함)의 12자 코드는 그대로 산다 — 바꾸려면 PATCH /groups/:id/invite.
+ */
+function randomJoinCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let key = ''
+  do {
+    key = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  } while (joinKeyTaken(key))
+  return key
+}
+
+/**
+ * 멤버(학부모) 키 — 실 BE shareToken은 **12자 유지**다(공유 링크로만 도는 값이라 옮겨 적을
+ * 일이 없다). 대소문자 혼합·구분 매칭도 그대로(채집 예: Fh1TDIk81EPP — CHMO-285).
+ */
+function randomShareToken(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   let key = ''
   do {
     key = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-  } while (db.groups.some((g) => g.joinKey === key || g.parentJoinKey === key))
+  } while (joinKeyTaken(key))
   return key
 }
 
@@ -82,8 +111,8 @@ export const groupHandlers = [
       groupType: rawType === 'GENERAL' ? 'general' : 'business',
       // 참여 비밀번호도 sharePassword와 같은 4자리 PIN 형식(BE generateNumericPin)
       password: randomSharePassword(),
-      joinKey: randomJoinKey(),
-      parentJoinKey: randomJoinKey(),
+      joinKey: randomJoinCode(),
+      parentJoinKey: randomShareToken(),
       share: { token: `shr_${nextId('tok')}`, password: randomSharePassword() },
       createdAt: nowIso(),
     }
@@ -228,10 +257,45 @@ export const groupHandlers = [
     if (!group) return groupNotFound()
     const denied = teacherOnlyError(user, group.id)
     if (denied) return denied
-    return ok({
-      teacher: { joinKey: group.joinKey, password: group.password },
-      parent: { joinKey: group.parentJoinKey, password: group.share.password },
-    })
+    return ok(toGroupInvite(group))
+  }),
+
+  // PATCH /groups/:id/invite — 참여 코드·비밀번호를 사람이 정한 값으로 교체(BE CHMO-673) · 화면 20
+  // EDITOR 전용(조회와 같은 경계) · 부분 수정(생략 항목 유지) · 응답은 조회와 같은 모양.
+  // 바꾸는 대상은 관리자 코드(joinKey)와 참여 비밀번호뿐 — 멤버 키(parentJoinKey = 실 BE
+  // shareToken)·학부모 비밀번호는 그대로다.
+  http.patch(api('/groups/:id/invite'), async ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    const body = await readJson<{ joinKey?: unknown; password?: unknown }>(request)
+    if (!body) return invalidBody()
+    const joinKey = optionalString(body.joinKey)
+    const password = optionalString(body.password)
+    // 형식 검증(@Pattern)은 컨트롤러 진입 전이라 모임 조회·권한보다 먼저다.
+    // 한글을 막는 건 유니코드 정규화(NFC/NFD)로 같은 글자가 다른 값이 되기 때문(BE 70e889e)
+    if (joinKey !== undefined && (joinKey === null || !JOIN_KEY_RE.test(joinKey)))
+      return invalidRequest(`참여 코드는 ${JOIN_KEY_RULE_TEXT}로 입력해 주세요.`)
+    if (password !== undefined && (password === null || !JOIN_PASSWORD_RE.test(password)))
+      return invalidRequest(`비밀번호는 ${JOIN_PASSWORD_RULE_TEXT}로 입력해 주세요.`)
+
+    const group = findGroup(toId(params.id))
+    if (!group) return groupNotFound()
+    const denied = teacherOnlyError(user, group.id)
+    if (denied) return denied
+
+    if (joinKey === undefined && password === undefined)
+      return invalidRequest('변경할 참여 코드나 비밀번호를 입력해 주세요.')
+
+    // 중복 검사 범위는 **두 키 컬럼 전역이고 자기 모임도 뺀 게 아니다** — 남의 멤버 키와 겹치면
+    // 그 모임의 멤버 합류를, 자기 멤버 키와 겹치면 자기 멤버 채널을 가로챈다(합류 조회가
+    // joinKey → shareToken 순이라서). 예외는 지금 쓰는 코드를 그대로 다시 낸 경우뿐.
+    if (joinKey !== undefined && joinKey !== group.joinKey && joinKeyTaken(joinKey))
+      return errorResponse(409, 'SPACE409', '이미 사용 중인 참여 코드입니다.')
+
+    if (joinKey !== undefined) group.joinKey = joinKey
+    if (password !== undefined) group.password = password
+    return ok(toGroupInvite(group))
   }),
 
   // GET /groups/:id/share — 학부모 공유 정보(무로그인 뷰어 — 폐기 예정 §7, 이관 완료까지 유지) · 화면 05

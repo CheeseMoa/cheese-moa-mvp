@@ -27,6 +27,8 @@ import type {
   EventStatus,
   FaceBbox,
   Group,
+  GroupInviteChannel,
+  GroupInviteInfo,
   GroupMember,
   GroupRole,
   GroupType,
@@ -181,6 +183,50 @@ export function toJoinGroupResult(raw: RawJoinGroupResult): JoinGroupResult {
     // 신청 생성이 기본이고, active 오판은 모임 직행(CHMO-607) 후 SPACE403(CHMO-448 실측)으로
     // 터진다. 홈 랜딩은 어느 계약에서도 안전하다. (종전 'active' 기본은 즉시 합류 구계약 시절 값)
     status: (status?.toLowerCase() as MembershipStatus | undefined) ?? 'pending',
+  }
+}
+
+/**
+ * BE GroupInviteResponse(초안 §2 — 2종 채널) ∪ 구계약(평면 — 유형 이원화 전 실 BE).
+ * GET·PATCH `/groups/:id/invite`가 같은 모양을 준다(BE CHMO-673).
+ * joinUrl은 신형 응답에 없다(FE가 경로형 파생 — CHMO-237); 구계약의 쿼리형 joinUrl은 버린다.
+ */
+export interface RawGroupInvite {
+  teacher?: { joinKey: string; password: string }
+  parent?: { joinKey: string; password: string }
+  /** 구계약 평면 필드(2026-07-16 채집) — 선생님 채널만 존재하던 시절 */
+  joinKey?: string
+  password?: string
+}
+
+function toInviteChannel(raw: { joinKey: string; password: string }): GroupInviteChannel {
+  // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
+  const origin = typeof window === 'undefined' ? '' : window.location.origin
+  // joinUrl은 마커 없는 경로형 원형이다 — 유형·역할·모임 정보 마커는 lib/joinLink가 계약을
+  // 소유하고, 공유 화면(GroupInviteLinks)이 모임 컨텍스트를 알아야 동봉할 수 있어 거기서
+  // 파생한다(CHMO-607 — 종전 ?role=parent 마커도 그리로 이관).
+  return {
+    joinKey: raw.joinKey,
+    password: raw.password,
+    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
+  }
+}
+
+/**
+ * **구계약 공존**(listGroups의 myMembership 흡수와 같은 결): 유형 이원화 전 실 BE는 평면
+ * `{joinKey, password, joinUrl}`(선생님 채널만)을 준다 — teacher로 흡수하고 parent는 null
+ * (화면이 멤버 초대 UI를 숨긴다). BE가 초안을 배포하면 폴백을 걷는다.
+ */
+export function toGroupInviteInfo(raw: RawGroupInvite): GroupInviteInfo {
+  if (raw.teacher) {
+    return {
+      teacher: toInviteChannel(raw.teacher),
+      parent: raw.parent ? toInviteChannel(raw.parent) : null,
+    }
+  }
+  return {
+    teacher: toInviteChannel({ joinKey: raw.joinKey ?? '', password: raw.password ?? '' }),
+    parent: null,
   }
 }
 
