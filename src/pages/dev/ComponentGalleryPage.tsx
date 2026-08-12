@@ -21,6 +21,7 @@ import {
   IconDownload,
   IconFolderMove,
   IconPeople,
+  IconCopy,
   IconShare,
   IconTrash,
   InlineRetry,
@@ -105,6 +106,7 @@ export function ComponentGalleryPage() {
           <div className="flex items-center gap-5 text-accent">
             <IconDownload />
             <IconShare />
+            <IconCopy />
             <IconFolderMove />
             <span className="text-warn">
               <IconTrash />
@@ -112,7 +114,9 @@ export function ComponentGalleryPage() {
             <span className="text-text">
               <IconClose />
             </span>
-            <span className="text-xs text-muted">저장 · 공유 · 옮기기 · 삭제 · 닫기 (currentColor)</span>
+            <span className="text-xs text-muted">
+              저장 · 공유 · 복사 · 옮기기 · 삭제 · 닫기 (currentColor)
+            </span>
           </div>
           {/* 03 유형 선택 카드 타일 — 실제 렌더 크기(26)와 타일 색까지 같이 본다 */}
           <div className="flex items-center gap-3">

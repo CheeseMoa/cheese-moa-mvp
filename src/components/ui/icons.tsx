@@ -42,13 +42,31 @@ export function IconDownload({ size = 24 }: IconProps) {
   )
 }
 
-/** 공유 — 위 화살표 + 받침 트레이(square.and.arrow.up) — 초대/학부모 공유 시트 */
+/**
+ * 공유 — 위 화살표 + 받침 트레이(square.and.arrow.up) · IconDownload의 짝(방향만 뒤집힌다).
+ * 20 초대 [공유하기] 버튼 안 18px 렌더가 기본이라 그 크기에 맞춰 다시 잡았다(CHMO-683): 화살표를 트레이보다
+ * 위로 확실히 빼고(머리 각을 넓혀 촉이 뭉치지 않게) 트레이는 폭을 좁혀 화살표가 주인공이 되게.
+ */
 export function IconShare({ size = 24 }: IconProps) {
   return (
     <svg {...svgProps(size)}>
-      <path d="M12 14V4" />
-      <path d="M8.5 7.5L12 4l3.5 3.5" />
-      <path d="M5 11v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+      <path d="M12 15V4.2" />
+      <path d="M8.2 8L12 4.2 15.8 8" />
+      <path d="M6 11.6V18a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-6.4" />
+    </svg>
+  )
+}
+
+/**
+ * 복사 — 겹친 종이 둘(doc.on.doc). 값 행 우측 힌트(20 참여 코드·비밀번호).
+ * 종전엔 `⧉` 글리프였는데 서체마다 모양·굵기가 달라 세트 안에서 혼자 겉돌았다 —
+ * 뒷장은 앞장에 가려지는 ㄴ자만 그린다(둘을 온전히 그리면 18px에서 획이 겹쳐 뭉갠다).
+ */
+export function IconCopy({ size = 24 }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <rect x="9" y="9" width="11" height="11" rx="2.6" />
+      <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
     </svg>
   )
 }

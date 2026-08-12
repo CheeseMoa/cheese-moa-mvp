@@ -8,18 +8,12 @@ import { copyToClipboard } from '../lib/clipboard'
 import { buildJoinUrl } from '../lib/joinLink'
 import { shareOrCopy } from '../lib/share'
 import { trackEvent } from '../lib/analytics'
-import { Button, IconShare, InlineRetry, useToast } from './ui'
-
-/** 표시용 URL — 와이어프레임처럼 프로토콜은 떼고 보여준다(복사는 원본 전체) */
-function displayUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '')
-}
+import { Button, IconCopy, IconShare, InlineRetry, useToast } from './ui'
 
 interface RoleCopy {
   /** 섹션 제목 — 관리자는 바로 합류, 멤버는 신청이라 링크의 이름부터 다르다 */
   linkLabel: string
   notice: string | null
-  copyDone: string
   share: (password: string) => string
 }
 
@@ -37,14 +31,12 @@ const ROLE_COPY: Record<GroupRole, RoleCopy> = {
   editor: {
     linkLabel: '참여 링크',
     notice: null,
-    copyDone: '🧀 참여 링크를 복사했어요',
     share: (password) =>
       `🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${password}`,
   },
   viewer: {
     linkLabel: '신청 링크',
     notice: '멤버는 참여 신청 후 관리자 승인이 필요해요 · 연결된 인물과 공통 사진만 볼 수 있어요',
-    copyDone: '🧀 신청 링크를 복사했어요',
     // 이 문안이 곧 멤버 온보딩이다(CHMO-565) — 키즈노트·하이클래스류 도메인 관행처럼 사용법은
     // 앱이 아니라 관리자(초대 메시지)가 전한다. 앞으로 일어날 일 세 가지를 순서로 말하고,
     // 카톡에서 잘리지 않게 안내는 3줄을 넘기지 않는다
@@ -60,7 +52,6 @@ const ROLE_COPY: Record<GroupRole, RoleCopy> = {
 const GENERAL_COPY: RoleCopy = {
   linkLabel: '초대 링크',
   notice: '링크와 비밀번호가 함께 전달돼요. 받은 사람은 바로 멤버가 돼요.',
-  copyDone: '🧀 초대 링크를 복사했어요',
   share: (password) =>
     `🧀 치즈모아 모임에 초대해요!\n아래 링크로 들어와 비밀번호를 입력하면 함께할 수 있어요.\n비밀번호: ${password}`,
 }
@@ -79,7 +70,7 @@ interface SecretRowProps {
   mono?: boolean
 }
 
-/** 전달할 값 한 줄 — 라벨 + 값 + ⧉. 행 전체가 복사 버튼이다 */
+/** 전달할 값 한 줄 — 라벨 + 값 + 복사 아이콘. 행 전체가 복사 버튼이다 */
 function SecretRow({ label, value, ariaLabel, onCopy, mono }: SecretRowProps) {
   return (
     <button
@@ -103,8 +94,8 @@ function SecretRow({ label, value, ariaLabel, onCopy, mono }: SecretRowProps) {
           {value}
         </span>
       </span>
-      <span aria-hidden="true" className="shrink-0 text-base text-muted">
-        ⧉
+      <span aria-hidden="true" className="shrink-0 text-muted">
+        <IconCopy size={18} />
       </span>
     </button>
   )
@@ -113,11 +104,11 @@ function SecretRow({ label, value, ariaLabel, onCopy, mono }: SecretRowProps) {
 interface ChannelContentProps {
   channel: GroupInviteChannel
   copy: RoleCopy
-  /** 마커를 동봉한 공유용 링크(lib/joinLink) — 복사·공유·표시 전부 이 링크를 쓴다 */
+  /** 마커를 동봉한 공유용 링크(lib/joinLink) — 공유 시트에 실려 나가는 유일한 표면이다 */
   joinUrl: string
 }
 
-/** 안내 문구 + 비밀번호 카드 + [⧉ 링크복사] + 카카오톡 공유 (와이어프레임 307:21) */
+/** 안내 문구 + 값 카드(참여 코드·비밀번호) + [공유하기] (와이어프레임 307:21) */
 function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
   const toast = useToast()
 
@@ -128,7 +119,7 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
 
   // OS 공유 시트(카카오톡·라인·문자 등) — 미지원 환경은 전체 메시지 복사로 폴백
   const handleShare = async () => {
-    // 초대를 실제로 보냈는가 — 링크를 꺼내 놓고 안 보내는 구간이 있는지 본다
+    // 초대를 실제로 보냈는가 — 20까지 와서 아무것도 안 보내고 나가는 구간이 있는지 본다
     trackEvent('invite_share')
     const outcome = await shareOrCopy({
       text: copy.share(channel.password),
@@ -169,35 +160,23 @@ function ChannelContent({ channel, copy, joinUrl }: ChannelContentProps) {
             onCopy={() => void copyText(channel.password, '🧀 비밀번호를 복사했어요')}
           />
         </div>
-        {/* 링크는 그 둘을 한 번에 실어 보내는 지름길 — 값 아래 자기 줄에 둔다 */}
-        <div className="mt-3 flex items-center gap-3 border-t border-border pt-3">
-          <p className="min-w-0 flex-1 truncate text-xs text-muted">{displayUrl(joinUrl)}</p>
-          <Button
-            size="sm"
-            className="shrink-0"
-            onClick={() => {
-              // 코드·비밀번호 복사와 갈라서 센다 — 링크 복사만이 '초대를 꺼냈다'는 신호다
-              trackEvent('invite_link_copy')
-              void copyText(joinUrl, copy.copyDone)
-            }}
-          >
-            ⧉ 링크복사
-          </Button>
-        </div>
       </div>
-      <button
-        type="button"
-        onClick={() => void handleShare()}
-        className="mx-auto mt-4 flex flex-col items-center gap-1.5"
-      >
-        <span
-          className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-accent text-text"
-          aria-hidden="true"
-        >
-          <IconShare />
-        </span>
-        <span className="text-[11px] font-medium text-text">카카오톡 공유</span>
-      </button>
+      {/*
+       * 링크를 내보내는 길은 공유 시트 하나다(CHMO-683) — 표시용 URL 줄과 [⧉ 링크복사]를 걷었다.
+       * 복사한 URL을 어딘가에 붙여넣는 건 공유 시트가 대신 해 주는 일이고, 링크만 따로 보내면
+       * 비밀번호가 빠져 받는 쪽이 멈춘다(공유 문안은 링크·비밀번호·안내를 한 덩어리로 낸다).
+       * 링크가 안 통하는 자리(구두·문자)는 위 값 카드(참여 코드·비밀번호)가 맡는다.
+       *
+       * 이 섹션의 유일한 동작이라 원형 아이콘 뱃지(52px 갈색 원 + 11px 라벨)가 아니라 제 크기
+       * 버튼으로 세운다 — 위계는 색이 만든다는 규칙(CHMO-530)에서 화면의 첫 번째 일이 가장
+       * 작은 표면을 갖고 있을 이유가 없다. 라벨은 '카카오톡 공유'가 아니라 '공유하기'다:
+       * 열리는 건 OS 공유 시트라 대상이 카톡·문자·메일 무엇이든 될 수 있고, 미지원 환경에선
+       * 복사로 폴백한다(특정 앱 이름을 걸면 그 자리에서 사실이 아니게 된다).
+       */}
+      <Button fullWidth className="mt-3 gap-2" onClick={() => void handleShare()}>
+        <IconShare size={18} />
+        공유하기
+      </Button>
     </>
   )
 }
