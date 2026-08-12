@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
 import { getInviteInfo } from '../api/groups'
+import { InviteSecretModal } from './InviteSecretModal'
 import type { Group, GroupInviteChannel, GroupRole } from '../types/api'
 import { cx } from '../lib/cx'
 import { copyToClipboard } from '../lib/clipboard'
@@ -232,6 +234,7 @@ export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInvi
   const { data, error, refetch } = useApi(`invite:${groupId}`, (signal) =>
     getInviteInfo(groupId, signal),
   )
+  const [editing, setEditing] = useState(false)
   // 일반 모임엔 역할이 없다 — 채널·문구·링크 마커를 전부 관리자(editor) 기준으로 수렴시킨다.
   // 호출부의 탭 상태(기본 viewer)가 그대로 새면 죽은 학부모 키 링크가 만들어진다(GENERAL의
   // viewer 합류는 SPACE404 — BE CHMO-599 AC-6). 유형 미상은 business로 본다(매퍼와 같은 해석).
@@ -272,10 +275,34 @@ export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInvi
 
   return (
     <section className="mb-6">
-      <h3 className="text-[12px] tracking-[0.06em] text-muted">{copy.linkLabel}</h3>
+      {/* 제목 줄 우측이 변경 진입점 — 값 카드는 '전달할 값'의 자리라 손대지 않는다(복사가 그
+          카드의 유일한 동작). 자주 하는 일이 아니라 12px 텍스트 한 줄로 무게를 낮췄다 */}
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[12px] tracking-[0.06em] text-muted">{copy.linkLabel}</h3>
+        {/* 관리자 채널에서만 — 이 API는 멤버 채널 키·비밀번호를 바꾸지 않는다(CHMO-677) */}
+        {effectiveRole === 'editor' ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="-my-1 shrink-0 py-1 text-[12px] text-text"
+          >
+            ✎ 코드·비밀번호 변경
+          </button>
+        ) : null}
+      </div>
       <div className="mt-2">
         <ChannelContent channel={channel} copy={copy} joinUrl={joinUrl} />
       </div>
+      {/* 열려 있을 때만 마운트 — 매 오픈이 지금 값으로 시작한다 */}
+      {editing && (
+        <InviteSecretModal
+          open
+          groupId={groupId}
+          channel={channel}
+          onClose={() => setEditing(false)}
+          onUpdated={refetch}
+        />
+      )}
     </section>
   )
 }

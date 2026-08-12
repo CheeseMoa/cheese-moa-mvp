@@ -7,10 +7,12 @@ import { ApiRequestError, apiFetch } from './client'
 import { listEventAlbums, listGroupEvents } from './events'
 import {
   toGroup,
+  toGroupInviteInfo,
   toGroupMember,
   toJoinGroupResult,
   toJoinRequest,
   type RawGroup,
+  type RawGroupInvite,
   type RawGroupMember,
   type RawJoinGroupResult,
   type RawJoinRequest,
@@ -18,7 +20,6 @@ import {
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 import type {
   Group,
-  GroupInviteChannel,
   GroupInviteInfo,
   GroupMember,
   GroupPerson,
@@ -85,52 +86,34 @@ export function joinGroup(input: {
 }
 
 /**
- * BE GroupInviteResponse(초안 §2 — 2종 채널) ∪ 구계약(평면 — 현재 배포된 실 BE).
- * joinUrl은 신형 응답에 없다(FE가 경로형 파생 — CHMO-237); 구계약의 쿼리형 joinUrl은 버린다.
+ * GET /groups/:id/invite — 초대 정보 2종(TEACHER 전용 — PARENT는 ROLE403, Q3).
+ * 학부모 비밀번호는 기존 sharePassword 재사용(Q2). 참여 링크는 BE joinUrl을 신뢰하지 않고
+ * joinKey로 **FE 오리진 기준 경로형**(`/join/:joinKey`)을 파생한다(CHMO-237 — 매퍼 소유).
  */
-interface RawGroupInvite {
-  teacher?: { joinKey: string; password: string }
-  parent?: { joinKey: string; password: string }
-  /** 구계약 평면 필드(2026-07-16 채집) — 선생님 채널만 존재하던 시절 */
-  joinKey?: string
-  password?: string
-}
-
-function toInviteChannel(raw: { joinKey: string; password: string }): GroupInviteChannel {
-  // 테스트(node)엔 window가 없다 — 오리진 없이도 경로형 계약은 그대로 검증된다
-  const origin = typeof window === 'undefined' ? '' : window.location.origin
-  // joinUrl은 마커 없는 경로형 원형이다 — 유형·역할·모임 정보 마커는 lib/joinLink가 계약을
-  // 소유하고, 공유 화면(GroupInviteLinks)이 모임 컨텍스트를 알아야 동봉할 수 있어 거기서
-  // 파생한다(CHMO-607 — 종전 ?role=parent 마커도 그리로 이관).
-  return {
-    joinKey: raw.joinKey,
-    password: raw.password,
-    joinUrl: `${origin}/join/${encodeURIComponent(raw.joinKey)}`,
-  }
+export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promise<GroupInviteInfo> {
+  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then(toGroupInviteInfo)
 }
 
 /**
- * GET /groups/:id/invite — 초대 정보 2종(TEACHER 전용 — PARENT는 ROLE403, Q3).
- * 학부모 비밀번호는 기존 sharePassword 재사용(Q2). 참여 링크는 BE joinUrl을 신뢰하지 않고
- * joinKey로 **FE 오리진 기준 경로형**(`/join/:joinKey`)을 파생한다(CHMO-237).
+ * PATCH /groups/:id/invite — 참여 코드·비밀번호를 사람이 정한 값으로 교체(BE CHMO-673 · 화면 20).
+ * EDITOR 전용이고 응답은 조회와 같은 모양이라 같은 매퍼를 탄다.
  *
- * **구계약 공존**(listGroups의 myMembership 흡수와 같은 결): 현재 배포된 실 BE는 평면
- * `{joinKey, password, joinUrl}`(선생님 채널만)을 준다 — teacher로 흡수하고 parent는 null
- * (화면이 학부모 초대 UI를 숨긴다). BE가 초안을 배포하면 폴백을 걷는다.
+ * **부분 수정**이다 — 호출부는 바뀐 필드만 싣는다(생략한 항목은 서버가 유지, 둘 다 생략하면
+ * VALID400). 바꾸는 대상은 **관리자 채널(joinKey)과 참여 비밀번호뿐**이고 멤버 채널의 키
+ * (shareToken)·비밀번호는 이 API가 건드리지 않는다 — 그래서 화면도 관리자 탭에서만 연다.
+ *
+ * 실패 2종: 형식 위반 VALID400(화면이 `lib/joinSecret`으로 선차단) · 코드 중복 SPACE409.
+ * 중복 검사 범위는 **joinKey·shareToken 두 컬럼 전역**이다(남의 멤버 채널과 겹치면 그 모임의
+ * 멤버 합류를 가로챈다) — 예외는 지금 쓰는 코드를 그대로 다시 낸 경우뿐.
  */
-export function getInviteInfo(groupId: ID | string, signal?: AbortSignal): Promise<GroupInviteInfo> {
-  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, { signal }).then((raw) => {
-    if (raw.teacher) {
-      return {
-        teacher: toInviteChannel(raw.teacher),
-        parent: raw.parent ? toInviteChannel(raw.parent) : null,
-      }
-    }
-    return {
-      teacher: toInviteChannel({ joinKey: raw.joinKey ?? '', password: raw.password ?? '' }),
-      parent: null,
-    }
-  })
+export function updateInviteSecrets(
+  groupId: ID | string,
+  input: { joinKey?: string; password?: string },
+): Promise<GroupInviteInfo> {
+  return apiFetch<RawGroupInvite>(`/groups/${groupId}/invite`, {
+    method: 'PATCH',
+    body: input,
+  }).then(toGroupInviteInfo)
 }
 
 // ── 합류 신청·멤버·인물 매핑 (학부모 전환 §3~4 — TEACHER 전용) ──
