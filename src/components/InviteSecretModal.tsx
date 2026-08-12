@@ -3,12 +3,12 @@ import type { FormEvent } from 'react'
 import { useMutation } from '../hooks/useMutation'
 import { updateInviteSecrets } from '../api/groups'
 import {
-  JOIN_KEY_MAX,
   JOIN_KEY_RULE_TEXT,
   JOIN_PASSWORD_MAX,
   JOIN_PASSWORD_RULE_TEXT,
   joinKeyFormatError,
   joinPasswordFormatError,
+  sanitizeJoinKeyInput,
   sanitizeJoinSecretInput,
 } from '../lib/joinSecret'
 import type { GroupInviteChannel, ID } from '../types/api'
@@ -119,7 +119,11 @@ export function InviteSecretModal({
           inputMode="text"
           value={joinKey}
           error={joinKeyError}
-          onChange={(e) => setJoinKey(sanitizeJoinSecretInput(e.target.value, JOIN_KEY_MAX))}
+          // 지정하는 코드도 대문자 전용(CHMO-680) — 참여 화면이 대문자로만 받으므로 여기서
+          // 소문자를 저장하게 두면 그 코드로는 아무도 수동 참여를 못 한다.
+          // **열 때 시딩한 초기값은 올리지 않는다**(useEffect는 채널 값 그대로) — 구 규칙 코드가
+          // 열자마자 대문자로 바뀌면 손대지도 않은 필드가 '변경됨'이 돼 의도 없는 PATCH가 나간다
+          onChange={(e) => setJoinKey(sanitizeJoinKeyInput(e.target.value))}
         />
         <TextField
           label="비밀번호"
@@ -132,10 +136,11 @@ export function InviteSecretModal({
           error={passwordError}
           onChange={(e) => setPassword(sanitizeJoinSecretInput(e.target.value, JOIN_PASSWORD_MAX))}
         />
-        {/* 바꾸기 전에 알아야 할 사실 — 이미 보낸 링크·코드가 그 순간 죽는다(대소문자도 구분한다) */}
+        {/* 바꾸기 전에 알아야 할 사실 — 이미 보낸 링크·코드가 그 순간 죽는다. 케이스 안내는
+            비밀번호에만 남는다: 코드는 대문자 전용이 돼 구분할 케이스가 없다(CHMO-680) */}
         <p className="-mt-1 text-xs leading-relaxed text-muted">
-          코드를 바꾸면 먼저 보낸 링크·코드로는 참여할 수 없어요. 대문자와 소문자는 다른 글자로
-          구분돼요.
+          코드를 바꾸면 먼저 보낸 링크·코드로는 참여할 수 없어요. 참여 코드는 대문자로 저장되고,
+          비밀번호는 대문자와 소문자를 구분해요.
         </p>
         {error ? (
           <p role="alert" className="text-sm text-warn">
