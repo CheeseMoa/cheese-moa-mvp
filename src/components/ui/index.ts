@@ -15,6 +15,7 @@ export {
   IconBuilding,
   IconCheck,
   IconClose,
+  IconCopy,
   IconDownload,
   IconFolderMove,
   IconPencil,
