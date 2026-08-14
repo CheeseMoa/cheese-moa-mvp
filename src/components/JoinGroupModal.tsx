@@ -88,6 +88,15 @@ export function JoinGroupModal({
   ].filter((part): part is string => part !== null)
 
   const finishJoined = (result: JoinGroupResult) => {
+    // join_submit의 짝 (CHMO-691) — 제출만 세면 비밀번호를 틀려 되돌아간 사람과 실제로
+    // 들어온 사람이 한 수에 섞인다. 즉시 합류(일반)와 승인 대기(비즈니스)도 여기서 갈린다.
+    // group_type은 링크 마커 스냅샷이라 코드 직접 입력 진입에서는 없다(그때는 서버 응답
+    // 전까지 유형을 모르는 게 정상 — CHMO-672)
+    trackEvent('join_result', {
+      flow: 'modal',
+      status: result.status,
+      group_type: linkInfo?.groupType,
+    })
     if (result.status === 'active') {
       toast.show('🧀 모임에 참여했어요')
       // 즉시 합류(active)는 모임 화면 직행. 교체는 **초대 링크 진입일 때만** — 참여 화면은

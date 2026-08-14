@@ -126,3 +126,30 @@ export function consumeSocialReturnTo(): string | null {
     return null
   }
 }
+
+// ── 소셜 로그인 프로바이더 (CHMO-691) ────────────────────────
+// BE 콜백은 `code`·`signup`·`error`만 싣고 **어느 프로바이더로 갔는지는 돌려주지 않는다** —
+// 그래서 `login_start`(버튼 탭)와 `login_success`(교환 성공)를 프로바이더로 이을 방법이
+// 없었다. returnTo와 똑같은 이유로 떠나기 전 sessionStorage에 맡겼다가 콜백에서 꺼낸다.
+// 지표 전용 값이라 없으면 없는 대로 진행한다(로그인 자체는 이 값에 의존하지 않는다).
+
+const SOCIAL_PROVIDER_KEY = 'cheesemoa.socialProvider'
+
+export function setSocialProvider(provider: string): void {
+  try {
+    sessionStorage.setItem(SOCIAL_PROVIDER_KEY, provider)
+  } catch {
+    /* 접근 불가 — 지표에서 provider가 빠질 뿐 로그인은 그대로 진행된다 */
+  }
+}
+
+/** 읽는 쪽에서 소비(삭제) — 다음 로그인이 이전 프로바이더로 잘못 집계되지 않게 */
+export function consumeSocialProvider(): string | null {
+  try {
+    const value = sessionStorage.getItem(SOCIAL_PROVIDER_KEY)
+    sessionStorage.removeItem(SOCIAL_PROVIDER_KEY)
+    return value
+  } catch {
+    return null
+  }
+}

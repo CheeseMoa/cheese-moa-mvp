@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { trackEvent } from '../lib/analytics'
 import { LegalDocBody } from './LegalDocBody'
 import { BottomSheet, Button } from './ui'
 import {
@@ -17,6 +18,12 @@ interface SignupConsentFormProps {
   error: string | null
   /** 전 필수 항목 체크에서만 호출된다 — 제출 내용(항목·버전)은 호출부가 소유 */
   onSubmit: () => void
+  /**
+   * 어느 문으로 온 폼인지 (CHMO-691) — `social_signup`은 01-C 소셜 신규 가입,
+   * `regate`는 01-A 재동의(기존 계정·문구 개정). 둘은 이탈의 의미가 다르다:
+   * 전자는 **가입을 포기한 것**이고 후자는 이미 있는 계정이 재동의를 미룬 것이다.
+   */
+  entry: 'social_signup' | 'regate'
 }
 
 /**
@@ -31,10 +38,17 @@ interface SignupConsentFormProps {
  * [전문 보기]는 화면 이탈 없이 바텀시트로 연다 — 체크 상태가 컴포넌트 state라 라우팅으로
  * 나가면 날아간다. 렌더러는 /legal/* 전문 페이지와 같은 LegalDocBody(보여준 문서 = 제출 버전).
  */
-export function SignupConsentForm({ submitting, error, onSubmit }: SignupConsentFormProps) {
+export function SignupConsentForm({ submitting, error, onSubmit, entry }: SignupConsentFormProps) {
   // 필수 항목 기본 체크 금지(설계 제약 ②) — 전부 해제로 시작한다
   const [checked, setChecked] = useState<Partial<Record<AgreementType, boolean>>>({})
   const [docItem, setDocItem] = useState<SignupAgreementItem | null>(null)
+
+  // 도달 기록 (CHMO-691) — 제출(signup_consent_submit) 대비 이탈률의 분모다. 두 진입점이
+  // 이 폼 하나를 그리므로 여기 한 번만 두면 양쪽이 함께 잡힌다(01-A는 라우트라 screen_view도
+  // 있지만 01-C 가입 분기는 콜백 화면 안에서 갈라져 화면 코드로는 구분되지 않는다)
+  useEffect(() => {
+    trackEvent('signup_consent_view', { entry })
+  }, [entry])
 
   const generalAllChecked = SIGNUP_GENERAL_ITEMS.every((item) => checked[item.type])
   const allRequiredChecked = SIGNUP_AGREEMENT_ITEMS.every((item) => checked[item.type])

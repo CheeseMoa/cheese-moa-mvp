@@ -111,8 +111,22 @@ export const UNKNOWN_SCREEN = 'unknown'
  */
 export type AnalyticsEvent =
   | 'screen_view'
+  /**
+   * 화면 이탈 (CHMO-691) — `screen_view`의 짝. 이게 없으면 **들어온 기록만 있고 나간 기록이
+   * 없어서**, 마지막 화면이 08이라는 건 알아도 3초 보고 튕긴 건지 2분 붙잡고 있다 포기한
+   * 건지 구분되지 않는다. 체류 시간(`duration_ms`)이 그 구분을 만든다.
+   */
+  | 'screen_leave'
   /** 소셜 로그인 버튼 탭 — 프로바이더별 이탈을 본다 */
   | 'login_start'
+  /**
+   * 로그인 성립 (CHMO-691) — `login_start`의 짝. 시작만 세고 성공을 안 세면 분모가 없어
+   * "카카오만 실패하고 있다"를 볼 수 없다. provider는 콜백 URL에 없어 세션 위탁으로 잇는다
+   * (`lib/auth`의 소셜 provider 보관 — returnTo와 같은 이유·같은 관용).
+   */
+  | 'login_success'
+  /** 가입 동의 화면 도달 (CHMO-691) — 제출(`signup_consent_submit`) 대비 이탈률의 분모 */
+  | 'signup_consent_view'
   /** 01-A 가입 동의 제출 = 가입 완료 */
   | 'signup_consent_submit'
   | 'group_create_success'
@@ -132,8 +146,24 @@ export type AnalyticsEvent =
   | 'invite_share'
   /** 02-1·02-2 참여(신청) 제출 */
   | 'join_submit'
+  /**
+   * 합류 결과 (CHMO-691) — `join_submit`의 짝. 제출만 세면 비밀번호를 틀려 되돌아간 사람과
+   * 실제로 들어온 사람이 한 수에 섞인다. 즉시 합류(일반)와 승인 대기(비즈니스)도 여기서 갈린다.
+   */
+  | 'join_result'
+  /**
+   * 에러 화면 노출 (CHMO-691) — 사용자가 **막혀 멈춰 선** 자리. 화면이 통째로 실패한 경우만
+   * 세고(공용 `ErrorState` 한 곳), 인라인 재시도·토스트는 세지 않는다.
+   * ⚠ BE 메시지 원문은 절대 싣지 않는다 — 거기 모임명·인물명이 섞일 수 있다.
+   */
+  | 'error_shown'
   /** 사진 저장 — 이 앱의 최종 가치가 도달하는 지점 */
   | 'photo_save'
+  /**
+   * 사진 저장 실패 (CHMO-691) — `photo_save`는 **시작 시점**에 발화하므로 그것만으로는
+   * 실제로 사진이 갤러리에 도착했는지 알 수 없다. 사용자 취소는 정상 흐름이라 세지 않는다.
+   */
+  | 'photo_save_fail'
 
 /**
  * 이벤트 프로퍼티 — **개인정보를 절대 넣지 않는다.**
@@ -146,6 +176,16 @@ export type AnalyticsProps = Record<string, string | number | boolean | undefine
 let initialized = false
 /** 같은 화면 연속 기록 방지 — router.subscribe는 한 번의 이동에도 여러 번 불린다 */
 let lastScreen: string | null = null
+/**
+ * 현재 화면에 들어온 시각 (CHMO-691). null이면 **체류를 세고 있지 않다**는 뜻이고,
+ * 그 상태는 둘 중 하나다 — 아직 첫 화면 전이거나, 백그라운드로 나가며 이미 마감했거나.
+ */
+let screenEnteredAt: number | null = null
+/**
+ * 체류 시간 상한 30분. 탭을 열어 둔 채 잊은 세션이 "이 화면에서 6시간 머물렀다"로 잡히면
+ * 평균이 통째로 망가진다 — 그런 값은 체류가 아니라 방치라서 캡에서 잘라낸다.
+ */
+const SCREEN_MAX_MS = 30 * 60 * 1000
 
 type AmplitudeModule = typeof import('@amplitude/analytics-browser')
 /** 동적 import가 끝나야 채워진다 — 그전 이벤트는 큐로 받는다 */
@@ -280,21 +320,80 @@ export function trackEvent(event: AnalyticsEvent, props?: AnalyticsProps): void 
 }
 
 /**
+ * 막힌 지점 기록 (CHMO-691) — 화면이 통째로 실패해 사용자가 멈춰 선 자리.
+ *
+ * **에러 객체를 통째로 받아 여기서 code·status만 뽑는다.** 호출부가 프로퍼티를 조립하게 두면
+ * 언젠가 `toErrorMessage(err)`가 딸려 들어오는데, BE 메시지에는 모임명·인물명이 섞일 수 있다
+ * (파일 머리 주석 ①의 연장). 이 함수를 지나는 한 **메시지는 구조적으로 나갈 수 없다** —
+ * 나머지 안전장치가 전부 이 파일에 있는 것과 같은 이유로 이 규칙도 여기 둔다.
+ */
+export function trackErrorShown(pathname: string, error: { status: number; code: string }): void {
+  trackEvent('error_shown', { screen: screenOf(pathname), code: error.code, status: error.status })
+}
+
+/**
+ * 직전 화면의 체류를 마감한다 (CHMO-691). `screenEnteredAt`을 null로 되돌려 **두 번 마감되지
+ * 않게** 한다 — 백그라운드 전환과 화면 이동이 잇따라 오면 같은 체류가 두 번 실릴 수 있다.
+ */
+function emitScreenLeave(): void {
+  if (lastScreen === null || screenEnteredAt === null) return
+  const elapsed = Date.now() - screenEnteredAt
+  screenEnteredAt = null
+  // 음수는 기기 시계가 뒤로 간 경우 — 0으로 접는다(버리면 이탈 자체가 사라진다)
+  trackEvent('screen_leave', { screen: lastScreen, duration_ms: Math.min(Math.max(0, elapsed), SCREEN_MAX_MS) })
+}
+
+/**
  * 화면 진입 기록. **경로가 아니라 화면 코드를 싣는다**(파일 머리 주석 ①).
  * 같은 화면이 연달아 들어오면 무시한다 — 한 번의 이동에 subscribe가 여러 번 불린다.
+ * 새 화면을 열기 전에 직전 화면을 마감해 `screen_view`↔`screen_leave`가 짝을 이룬다.
  */
 export function trackScreen(pathname: string): void {
   if (!enabled()) return
   const screen = screenOf(pathname)
   if (screen === lastScreen) return
+  emitScreenLeave()
   lastScreen = screen
+  screenEnteredAt = Date.now()
   trackEvent('screen_view', { screen })
+}
+
+/**
+ * 앱을 떠날 때(탭 닫기·백그라운드 전환) 체류를 마감한다 (CHMO-691).
+ *
+ * **`unload`가 아니라 `pagehide`로 부른다** — iOS Safari는 `unload`를 자주 건너뛰어서
+ * 거기 걸면 모바일에서 마지막 화면이 통째로 유실된다(이 서비스는 모바일웹이 본류다).
+ *
+ * 마감 뒤 전송을 beacon으로 바꿔 밀어낸다. 평소 전송은 배치라 페이지가 죽으면 큐가 함께
+ * 사라지는데, beacon은 브라우저가 페이지와 무관하게 끝까지 보내 준다 — 이걸 안 하면
+ * 정작 가장 중요한 **마지막 화면의 이탈**만 골라서 잃는다.
+ */
+export function endScreenSession(): void {
+  if (!enabled()) return
+  emitScreenLeave()
+  try {
+    sdk?.setTransport('beacon')
+    void sdk?.flush()
+  } catch {
+    /* 전송 방식 전환 실패는 지표 손실일 뿐 — 페이지를 떠나는 길을 막지 않는다 */
+  }
+}
+
+/**
+ * 백그라운드에서 돌아왔을 때 체류를 다시 센다 (CHMO-691).
+ * 이게 없으면 앱을 접어 둔 시간이 그대로 체류로 잡혀 **화면에 오래 머문 것처럼 보인다**
+ * (앱 웹뷰는 홈으로 나가는 것만으로도 여기를 지난다).
+ */
+export function resumeScreenSession(): void {
+  if (!enabled()) return
+  if (lastScreen !== null && screenEnteredAt === null) screenEnteredAt = Date.now()
 }
 
 /** 테스트 전용 — 모듈 전역(중복 방지 상태)을 초기화한다 */
 export function __resetAnalyticsForTest(): void {
   initialized = false
   lastScreen = null
+  screenEnteredAt = null
   sdk = null
   pending.length = 0
 }
