@@ -72,7 +72,12 @@ export function SignupConsentPage() {
   return (
     <PhoneShell>
       {verdict === 'consent' ? (
-        <SignupConsentForm submitting={submitting} error={error} onSubmit={handleSubmit} />
+        <SignupConsentForm
+          submitting={submitting}
+          error={error}
+          onSubmit={handleSubmit}
+          entry="regate"
+        />
       ) : (
         <main className="flex flex-1 flex-col overflow-y-auto px-5 pt-7">
           <h1 className="text-xl text-heading">서비스 이용 동의</h1>

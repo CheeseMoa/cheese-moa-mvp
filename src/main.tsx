@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
 import { ToastProvider } from './components/ui'
-import { initAnalytics, trackScreen } from './lib/analytics'
+import { endScreenSession, initAnalytics, resumeScreenSession, trackScreen } from './lib/analytics'
 import { startPushTokenSync } from './lib/push'
 import './index.css'
 
@@ -41,6 +41,19 @@ function startAnalytics() {
   void initAnalytics()
   trackScreen(window.location.pathname)
   router.subscribe((state) => trackScreen(state.location.pathname))
+
+  // 화면 체류 마감 (CHMO-691) — 화면 이동은 위 구독이 마감하지만, **앱을 떠나며 보고 있던
+  // 마지막 화면**은 아무도 마감해 주지 않는다. 그게 곧 이탈 지점이라 가장 중요한 한 건이다.
+  //
+  // 두 신호를 함께 듣는 이유: `pagehide`는 탭 닫기·이동·bfcache 진입을 덮지만 앱 웹뷰가
+  // 홈 버튼으로 접힐 때는 안 오고, `visibilitychange`는 그 경우를 받는다. 겹쳐 와도
+  // emitScreenLeave가 한 번만 마감하므로(마감 후 타이머 null) 중복 계상되지 않는다.
+  window.addEventListener('pagehide', endScreenSession)
+  document.addEventListener('visibilitychange', () => {
+    // 돌아왔을 때 다시 세지 않으면 접어 둔 시간이 통째로 체류로 잡힌다
+    if (document.visibilityState === 'hidden') endScreenSession()
+    else resumeScreenSession()
+  })
 }
 
 // 목 API 초기화는 베스트 에포트 — 실패해도 앱은 항상 렌더한다(흰 화면 방지).

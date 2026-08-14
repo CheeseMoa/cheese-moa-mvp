@@ -5,6 +5,7 @@ import { useMutation } from '../hooks/useMutation'
 import { login } from '../api/auth'
 import { listAgreements } from '../api/agreements'
 import { setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { trackEvent } from '../lib/analytics'
 import { evaluateConsentGate } from '../lib/consentGate'
 import { postLoginDestination } from '../lib/onboarding'
 import { registerPushOnLogin } from '../lib/push'
@@ -51,6 +52,9 @@ export function PinLoginForm({
         setAuthTokens(res)
         // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
         setCurrentUserId(res.userId)
+        // 소셜과 갈라 센다 (CHMO-691) — 이 폼은 심사용 숨김 진입(CHMO-572)과 DEV 입구라
+        // 소셜에 섞이면 프로바이더별 성공률이 우리 자신의 로그인으로 오염된다
+        trackEvent('login_success', { provider: 'pin' })
         // 이 기기의 푸시 토큰 등록(CHMO-667) — 권한은 묻지 않는다(06-U 몫). 기다리지 않는다
         void registerPushOnLogin()
         // 로그인에 가로막혀 온 경우(초대 링크 등) 원래 목적지로 복귀, 아니면 온보딩/홈
