@@ -72,7 +72,10 @@ export function AlbumCard({
   const cover = (
     <span className="cheese-dots block h-24 overflow-hidden rounded-[10px] bg-photo">
       {coverUrl ? (
-        <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+        // 디코드를 메인 스레드에서 떼어 낸다(CHMO-401 — PhotoTile과 같은 처방).
+        // lazy는 안 건다: 3열 그리드라 첫 화면에 대부분 들어와 이득이 없고, 스크롤 중
+        // 뒤늦게 뜨는 커버가 오히려 눈에 띈다
+        <img src={coverUrl} alt="" decoding="async" className="h-full w-full object-cover" />
       ) : album.type === 'uncertain' ? (
         <span className="flex h-full items-center justify-center text-2xl">🤔</span>
       ) : null}

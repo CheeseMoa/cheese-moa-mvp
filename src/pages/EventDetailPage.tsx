@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumSettingsSheet } from '../components/AlbumSettingsSheet'
 import { PhoneShell } from '../components/PhoneShell'
@@ -15,6 +15,7 @@ import {
   useToast,
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import type { UseApiResult } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
 import { getGroup } from '../api/groups'
@@ -76,6 +77,11 @@ export function EventDetailPage() {
   // 이벤트 조회와 나란히(마운트 시점) 나가므로 앨범 목록보다 먼저 도착한다 — 카드가 그려질 땐
   // 유형이 정해져 있다.
   const groupApi = useApi(`group:${groupId}`, (signal) => getGroup(groupId, signal))
+  // 앨범 목록도 여기서 부른다(CHMO-401) — 종전엔 EventAlbumGrid 안에 있어서 **이벤트 상세가
+  // 도착한 뒤에야** 요청이 나갔다(그 컴포넌트가 그때 마운트되므로). 실서버 기준 ~300ms가 직렬로
+  // 두 번 쌓이던 자리다. 빈 이벤트·분석중이면 이 요청은 헛돌지만 응답은 빈 배열이고, 대신
+  // 분류가 끝난 이벤트(대부분의 진입)는 두 응답이 나란히 도착한다.
+  const albumsApi = useApi(`event-albums:${eventId}`, (signal) => listEventAlbums(eventId, signal))
 
   // 분석중 자동 폴링 — 2초마다 진행률·상태를 다시 확인하고(BE 요청 주기), 완료되면 앨범
   // 그리드로 자연 전환. 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
@@ -84,6 +90,21 @@ export function EventDetailPage() {
     const timer = setInterval(eventApi.refetch, 2000)
     return () => clearInterval(timer)
   }, [analysisActive, eventApi.refetch])
+
+  // 분석이 끝나면 앨범 목록을 다시 읽는다 — 앨범 요청을 위로 올린 대가다(CHMO-401). 종전엔
+  // 그리드가 완료 시점에 마운트되며 최신 목록을 받았는데, 이제는 분석 중에 받아 둔 목록(대개
+  // 비어 있다)을 든 채로 그리드에 들어가 "완료됐는데 앨범이 없는" 화면이 된다.
+  const wasAnalyzing = useRef(false)
+  const refetchAlbums = albumsApi.refetch
+  useEffect(() => {
+    if (analysisActive) {
+      wasAnalyzing.current = true
+      return
+    }
+    if (!wasAnalyzing.current) return
+    wasAnalyzing.current = false
+    refetchAlbums()
+  }, [analysisActive, refetchAlbums])
 
   // 보조 fetch(모임명)의 401은 ErrorState를 거치지 않아 여기서 직접 복귀시킨다
   // (eventApi 401은 아래 ErrorState unauthorizedTo가 처리)
@@ -98,6 +119,7 @@ export function EventDetailPage() {
         event={event}
         groupId={groupId}
         groupType={groupApi.data?.groupType}
+        albumsApi={albumsApi}
         onEventUpdated={eventApi.refetch}
       />
     )
@@ -237,6 +259,8 @@ interface EventAlbumGridProps {
   groupId: string
   /** 모임 유형(CHMO-612 · 앨범 설정 시트의 멤버 연결 섹션도 소비 — CHMO-610) — 도착 전(undefined)은 business로 본다(매퍼의 구계약 정규화와 같은 해석) */
   groupType?: GroupType
+  /** 앨범 목록 — 페이지가 이벤트 상세와 나란히 부른다(CHMO-401, 직렬 요청 해소) */
+  albumsApi: UseApiResult<Album[]>
   /** 이벤트명 수정 후 이벤트 상세 갱신(refetch) */
   onEventUpdated: () => void
 }
@@ -255,11 +279,14 @@ interface EventAlbumGridProps {
  * 재공개 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
  * 설정·09 진입은 유형과 무관하다(전원 동일 권한이라 막을 이유가 없다).
  */
-function EventAlbumGrid({ event, groupId, groupType, onEventUpdated }: EventAlbumGridProps) {
+function EventAlbumGrid({
+  event,
+  groupId,
+  groupType,
+  albumsApi,
+  onEventUpdated,
+}: EventAlbumGridProps) {
   const navigate = useNavigate()
-  const albumsApi = useApi(`event-albums:${event.id}`, (signal) =>
-    listEventAlbums(event.id, signal),
-  )
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 08에서 바로 손볼 인물 앨범(CHMO-400) — 열릴 때만 시트 마운트(카드마다 대상이 달라 stale 방지)
   const [albumTarget, setAlbumTarget] = useState<Album | null>(null)

@@ -98,7 +98,8 @@ export function ChildLinkSheet({ groupId, member, onClose, onLinked }: ChildLink
           : member.nickname
       }
     >
-      {loading || error ? (
+      {/* 후보가 있으면 갱신 중에도 유지한다(CHMO-401) */}
+      {data === null ? (
         <LoadState
           loading={loading}
           error={error}

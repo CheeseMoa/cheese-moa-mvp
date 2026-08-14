@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { redirectIfUnauthorized, toErrorMessage } from '../api/client'
+import { clearApiCache } from '../lib/apiCache'
 import { useAlive } from './useAlive'
 
 interface MutationHandlers<T> {
@@ -36,6 +37,11 @@ export function useMutation() {
     ): Promise<void> {
       try {
         const result = await task()
+        // 쓰기가 성공했으면 읽기 캐시는 전부 못 믿는다(CHMO-401) — 어떤 키가 상했는지 일일이
+        // 세는 대신 통째로 버린다. 화면이 든 데이터는 그대로라 지금 보이는 것은 안 바뀌고,
+        // 다음 진입·refetch가 새로 받는다(캐시 없던 종전과 같은 동작).
+        // 언마운트 가드보다 앞이다 — 화면을 떠난 뒤 도착한 성공도 서버 상태는 이미 바꿨다.
+        clearApiCache()
         if (!alive.current) return
         handlers.onSuccess(result)
       } catch (err) {
