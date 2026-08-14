@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
+import { useDelayedFlag } from '../hooks/useDelayedFlag'
 import { getInviteInfo } from '../api/groups'
 import { InviteSecretModal } from './InviteSecretModal'
 import type { Group, GroupInviteChannel, GroupRole } from '../types/api'
@@ -213,6 +214,8 @@ export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInvi
   const { data, error, refetch } = useApi(`invite:${groupId}`, (signal) =>
     getInviteInfo(groupId, signal),
   )
+  // 문구는 LoadState와 같은 규칙으로 미룬다(CHMO-401) — 짧게 스치는 안내는 정보가 아니다
+  const showLoadingText = useDelayedFlag(!data && !error)
   const [editing, setEditing] = useState(false)
   // 일반 모임엔 역할이 없다 — 채널·문구·링크 마커를 전부 관리자(editor) 기준으로 수렴시킨다.
   // 호출부의 탭 상태(기본 viewer)가 그대로 새면 죽은 학부모 키 링크가 만들어진다(GENERAL의
@@ -234,7 +237,7 @@ export function GroupInviteLinks({ groupId, role, group, eventCount }: GroupInvi
   if (!data)
     return (
       <section className="mb-6">
-        <p className="text-sm text-muted">초대 링크를 불러오는 중…</p>
+        {showLoadingText ? <p className="text-sm text-muted">초대 링크를 불러오는 중…</p> : null}
       </section>
     )
   // parent 채널이 없는 구계약 실 BE에선 링크만 감춘다(시트는 탭을 통째로 숨겼지만, 이 화면은

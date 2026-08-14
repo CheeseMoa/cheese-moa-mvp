@@ -9,7 +9,8 @@ import { exchangeSocialCode, exchangeSocialSignup } from '../api/auth'
 import { listAgreements } from '../api/agreements'
 import { ApiRequestError } from '../api/client'
 import { toFeErrorCode } from '../api/errors'
-import { consumeSocialReturnTo, setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { consumeSocialProvider, consumeSocialReturnTo, setAuthTokens, setCurrentUserId } from '../lib/auth'
+import { trackEvent } from '../lib/analytics'
 import { registerPushOnLogin } from '../lib/push'
 import { evaluateConsentGate } from '../lib/consentGate'
 import { postLoginDestination } from '../lib/onboarding'
@@ -36,6 +37,10 @@ function completeLogin(tokens: AuthResponse): string {
   setAuthTokens(tokens)
   // 온보딩 완료 플래그가 계정별이라 판정보다 먼저 저장한다(CHMO-481)
   setCurrentUserId(tokens.userId)
+  // login_start의 짝 (CHMO-691). provider는 콜백 URL에 없어 버튼 탭 때 맡겨 둔 값을 꺼낸다 —
+  // 없으면 'unknown'으로 남긴다: 빼 버리면 성공 합계가 프로바이더별 합계와 안 맞는데
+  // 어디서 샜는지 알 방법이 없다
+  trackEvent('login_success', { provider: consumeSocialProvider() ?? 'unknown' })
   // 이 기기의 푸시 토큰 등록(CHMO-667) — 이미 권한을 허용한 기기만 해당하고 권한을 묻지는
   // 않는다. 기다리지 않는다: 알림은 보조 수단이라 브리지 왕복이 복귀를 늦추면 안 된다
   void registerPushOnLogin()
@@ -95,6 +100,9 @@ export function SocialCallbackPage() {
     await mutate(() => exchangeSocialSignup(code), {
       noAuthRedirect: true,
       onSuccess: (tokens) => {
+        // 소셜 신규 가입도 가입 완료다 (CHMO-691) — 01-A만 세면 실제 가입의 대부분이
+        // 집계에서 빠진다(소셜이 유일한 가입 경로라 이쪽이 본류다)
+        trackEvent('signup_consent_submit', { entry: 'social_signup' })
         // 가입과 동의 기록이 한 트랜잭션(BE) — 방금 낸 동의를 01-A 게이트로 되묻지 않는다
         navigate(completeLogin(tokens), { replace: true })
       },
@@ -117,7 +125,12 @@ export function SocialCallbackPage() {
   if (!errorMessage && isSignup) {
     return (
       <PhoneShell>
-        <SignupConsentForm submitting={submitting} error={consentError} onSubmit={handleConsentSubmit} />
+        <SignupConsentForm
+          submitting={submitting}
+          error={consentError}
+          onSubmit={handleConsentSubmit}
+          entry="social_signup"
+        />
       </PhoneShell>
     )
   }

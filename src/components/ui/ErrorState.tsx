@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import type { ApiRequestError } from '../../api/client'
 import { toErrorMessage, toErrorReference } from '../../api/client'
+import { trackErrorShown } from '../../lib/analytics'
 import { cx } from '../../lib/cx'
 import { Button, ButtonLink } from './Button'
 
@@ -45,7 +47,22 @@ export function ErrorState({
   className,
   children,
 }: ErrorStateProps) {
-  if (error.status === 401 && unauthorizedTo) return <Navigate to={unauthorizedTo} replace />
+  // 401 복귀는 화면이 뜨지 않고 곧장 리다이렉트한다 — 사용자가 막혀 선 자리가 아니라서 안 센다
+  const redirecting = Boolean(error.status === 401 && unauthorizedTo)
+
+  /**
+   * 막힌 지점 기록 (CHMO-691) — 공용 컴포넌트 한 곳이라 이 훅 하나가 전 화면을 덮는다.
+   * 무엇을 싣고 무엇을 빼는지는 `trackErrorShown`이 소유한다(메시지 유출 방지가 그쪽 몫).
+   *
+   * 의존성이 `error` 객체 참조라 **같은 실패로 리렌더돼도 다시 쏘지 않고**, 재시도가 새 실패를
+   * 만들면(새 객체) 그때 한 번 더 쏜다 — 세고 싶은 것이 정확히 "몇 번 막혔나"다.
+   */
+  useEffect(() => {
+    if (redirecting) return
+    trackErrorShown(window.location.pathname, error)
+  }, [error, redirecting])
+
+  if (redirecting && unauthorizedTo) return <Navigate to={unauthorizedTo} replace />
   const reference = toErrorReference(error)
   return (
     <div className={cx('flex flex-col items-center gap-3', className ?? 'py-11')}>

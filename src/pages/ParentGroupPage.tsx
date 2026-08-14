@@ -47,7 +47,8 @@ export function ParentGroupPage() {
             <p className="mt-1 text-[13px] text-muted">{subtitle}</p>
 
             <div className="mt-5 flex flex-1 flex-col">
-              {eventsApi.loading || eventsApi.error ? (
+              {/* 목록이 있으면 갱신 중에도 유지 — 18↔19 왕복마다 비지 않게(CHMO-401) */}
+              {eventsApi.data === null ? (
                 <LoadState
                   loading={eventsApi.loading}
                   error={eventsApi.error}

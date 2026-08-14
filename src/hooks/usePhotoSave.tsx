@@ -137,6 +137,9 @@ export function usePhotoSave() {
   /** 공유 경로 종료 — 부분 실패(fetch 못 받은 장수)까지 한 번에 알린다 */
   const finish = () => {
     const failed = fetchFailedRef.current
+    // 공유 경로에서 일부 원본을 못 받은 경우 (CHMO-691) — 시트는 떴고 저장도 됐지만
+    // 사용자가 기대한 장수에는 못 미친 상태다
+    if (failed > 0) trackEvent('photo_save_fail', { reason: 'partial', count: failed })
     toast.show(
       failed === 0
         ? `🧀 사진 ${savedRef.current}장을 저장했어요`
@@ -257,6 +260,10 @@ export function usePhotoSave() {
     if (!ok(run)) return
     switch (outcome.kind) {
       case 'done':
+        // 일부만 도착한 경우도 실패로 센다 (CHMO-691) — 전부 실패(saved 0)와 갈리지 않지만
+        // 어느 쪽이든 "요청한 만큼 저장되지 않았다"가 봐야 할 사실이다
+        if (outcome.failed > 0)
+          trackEvent('photo_save_fail', { reason: 'partial', count: outcome.failed })
         toast.show(
           outcome.failed === 0
             ? `🧀 사진 ${outcome.saved}장을 저장했어요`
@@ -266,12 +273,15 @@ export function usePhotoSave() {
         )
         break
       case 'permission':
+        // 앱 권한이 막은 실패 — 우리 코드가 아니라 OS 설정이 원인이라 갈라 센다
+        trackEvent('photo_save_fail', { reason: 'permission', count: items.length })
         if (outcome.canOpenSettings) setAskPermission(true)
         else toast.show('사진 권한이 없어 저장하지 못했어요. 휴대폰 설정에서 허용해 주세요.')
         break
       case 'cancelled':
-        break // 사용자 취소 = 정상 흐름 — 공유 시트 닫기와 같은 무토스트 관용
+        break // 사용자 취소 = 정상 흐름 — 공유 시트 닫기와 같은 무토스트 관용(지표에도 안 센다)
       case 'error':
+        trackEvent('photo_save_fail', { reason: 'bridge_error', count: items.length })
         toast.show('저장하지 못했어요. 다시 시도해 주세요.')
         break
     }
@@ -304,6 +314,8 @@ export function usePhotoSave() {
       const files = await awaitBatch(run, 0)
       if (files === null) return
       if (files.length === 0) {
+        // 첫 배치의 원본을 한 장도 못 받았다 — 공유 시트를 띄워 볼 것도 없이 끝난 경우
+        trackEvent('photo_save_fail', { reason: 'fetch_fail', count: items.length })
         toast.show('저장하지 못했어요. 다시 시도해 주세요.')
         reset()
         return
@@ -321,6 +333,8 @@ export function usePhotoSave() {
     })
     if (!ok(run)) return
     if (failed > 0) {
+      // 다운로드 폴백(Android·데스크탑) 경로의 실패 — 공유 시트 경로와 원인이 달라 갈라 센다
+      trackEvent('photo_save_fail', { reason: 'download_fail', count: failed })
       toast.show(`${failed}장은 저장하지 못했어요. 다시 시도해 주세요.`)
     } else if (items.length > 1) {
       // 한 장 저장은 브라우저 저장 동작 자체가 피드백이라 침묵(라이트박스 기존 규칙)

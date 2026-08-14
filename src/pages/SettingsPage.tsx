@@ -194,7 +194,8 @@ export function SettingsPage() {
           떠안고 행이 잘렸다(이용 통계 섹션이 늘며 드러난 문제). shrink-0이면 넘치는 만큼 main이 스크롤한다 */}
       <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
         <h2 className="shrink-0 text-xl font-bold text-text">프로필 편집</h2>
-        {loading || loadError ? (
+        {/* 프로필이 있으면 갱신 중에도 폼을 유지한다(CHMO-401) */}
+        {me === null ? (
           <LoadState
             loading={loading}
             error={loadError}

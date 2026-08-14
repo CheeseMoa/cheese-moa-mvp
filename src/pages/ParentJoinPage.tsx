@@ -52,6 +52,9 @@ export function ParentJoinPage({ joinKey, groupName }: ParentJoinPageProps) {
   const returnTo = buildJoinPath(joinKey, { groupType: 'business', role: 'viewer', groupName })
 
   const finishJoined = (result: JoinGroupResult) => {
+    // join_submit의 짝 (CHMO-691). group_type은 싣지 않는다 — 멤버 키 합류는 비즈니스에만
+    // 열려 있어(일반은 SPACE404) 상수를 박는 셈이고, 갈래는 flow가 이미 말한다
+    trackEvent('join_result', { flow: 'member', status: result.status })
     toast.show(
       result.status === 'active'
         ? '🧀 모임에 참여했어요'
