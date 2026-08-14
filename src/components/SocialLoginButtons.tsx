@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { setSocialReturnTo } from '../lib/auth'
+import { setSocialProvider, setSocialReturnTo } from '../lib/auth'
 import {
   socialAuthorizeUrlForApp,
   socialCallbackPath,
@@ -99,6 +99,8 @@ export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
     inFlight.current = true
     try {
       if (returnTo) setSocialReturnTo(returnTo)
+      // 콜백은 프로바이더를 안 돌려준다 — 여기서 맡겨야 login_success와 짝이 맞는다 (CHMO-691)
+      setSocialProvider(provider)
       // 프로바이더별 이탈을 본다 — 여기서 나가면 외부 인가 화면이라 이 시점이 마지막 기록이다
       trackEvent('login_start', { provider })
       // MSW 목 모드는 브라우저 전용(문서 이동으로 목 콜백 직행) — 앱 경로를 타지 않는다

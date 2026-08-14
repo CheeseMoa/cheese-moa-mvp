@@ -166,7 +166,8 @@ export function MovePhotosSheet({
               </Button>
             </div>
           </form>
-        ) : loading || error ? (
+        ) : data === null ? (
+          /* 추천이 있으면 갱신 중에도 유지한다(CHMO-401) */
           <LoadState
             loading={loading}
             error={error}

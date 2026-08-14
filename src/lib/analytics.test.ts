@@ -8,7 +8,7 @@
  * 빠지므로 router.tsx와의 누락 대조까지 여기서 고정한다.
  */
 import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as amplitude from '@amplitude/analytics-browser'
 import {
   isAnalyticsOptedOut,
@@ -24,6 +24,9 @@ vi.mock('@amplitude/analytics-browser', () => ({
   init: vi.fn(),
   track: vi.fn(),
   setOptOut: vi.fn(),
+  // 페이지를 떠날 때 beacon으로 밀어내는 경로(endScreenSession) — 실제 모듈에 있는 API다
+  setTransport: vi.fn(),
+  flush: vi.fn(),
 }))
 
 beforeEach(() => {
@@ -130,6 +133,125 @@ describe('수집 거부(옵트아웃, CHMO-662) — 처리방침 §12 거부 방
       vi.unstubAllEnvs()
       vi.resetModules()
     }
+  })
+})
+
+/**
+ * 체류·이탈 계측 (CHMO-691).
+ *
+ * 관찰 방법에 두 가지 제약이 있다 — ① 키가 없으면 모듈이 통째로 no-op라 아무것도 안 나오고,
+ * ② DEV에서는 전송 대신 `console.info`로 빠진다(개발 트래픽이 지표를 흐리지 않게).
+ * 그래서 키를 심어 새 모듈 인스턴스를 받고, payload는 그 로그로 읽는다.
+ * 계산(화면 코드 환산·체류 시간·프로퍼티 선별)은 전부 그 분기보다 앞에서 끝나므로
+ * 여기서 보는 값이 실제로 전송될 값과 같다.
+ */
+describe('화면 체류·이탈 (CHMO-691)', () => {
+  let restoreLog: (() => void) | null = null
+
+  async function harness() {
+    vi.stubEnv('VITE_AMPLITUDE_API_KEY', 'test-key')
+    vi.resetModules()
+    const analytics = await import('./analytics')
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    restoreLog = () => log.mockRestore()
+    const emitted = () =>
+      log.mock.calls
+        .filter((call) => call[0] === '[analytics]')
+        .map((call) => [call[1] as string, call[2] as Record<string, unknown>] as const)
+    return { analytics, emitted }
+  }
+
+  afterEach(() => {
+    restoreLog?.()
+    restoreLog = null
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('화면을 옮기면 직전 화면이 체류 시간과 함께 마감된다', async () => {
+    vi.useFakeTimers()
+    const { analytics, emitted } = await harness()
+
+    analytics.trackScreen('/home')
+    vi.advanceTimersByTime(3_000)
+    analytics.trackScreen('/groups/1')
+
+    // view↔leave가 짝을 이뤄야 퍼널이 "몇 초 보고 나갔나"를 계산할 수 있다
+    expect(emitted().map(([event, props]) => [event, props.screen, props.duration_ms])).toEqual([
+      ['screen_view', '02-home', undefined],
+      ['screen_leave', '02-home', 3_000],
+      ['screen_view', '05-group-detail', undefined],
+    ])
+  })
+
+  it('같은 화면이 연달아 들어오면 마감도 진입도 없다', async () => {
+    const { analytics, emitted } = await harness()
+
+    // 한 번의 이동에 router.subscribe가 여러 번 불린다 — 그때마다 체류가 끊기면 안 된다
+    analytics.trackScreen('/home')
+    analytics.trackScreen('/home')
+
+    expect(emitted().map(([event]) => event)).toEqual(['screen_view'])
+  })
+
+  it('탭을 열어 둔 채 잊은 체류는 30분에서 잘린다', async () => {
+    vi.useFakeTimers()
+    const { analytics, emitted } = await harness()
+
+    analytics.trackScreen('/home')
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000) // 3시간 방치
+    analytics.endScreenSession()
+
+    // 캡이 없으면 이런 한 건이 평균 체류를 통째로 망가뜨린다
+    const leave = emitted().find(([event]) => event === 'screen_leave')
+    expect(leave?.[1].duration_ms).toBe(30 * 60 * 1000)
+  })
+
+  it('pagehide와 visibilitychange가 겹쳐 와도 한 번만 마감한다', async () => {
+    const { analytics, emitted } = await harness()
+
+    analytics.trackScreen('/home')
+    analytics.endScreenSession()
+    analytics.endScreenSession()
+
+    expect(emitted().filter(([event]) => event === 'screen_leave')).toHaveLength(1)
+  })
+
+  it('백그라운드에 있던 시간은 체류로 세지 않는다', async () => {
+    vi.useFakeTimers()
+    const { analytics, emitted } = await harness()
+
+    analytics.trackScreen('/home')
+    vi.advanceTimersByTime(2_000)
+    analytics.endScreenSession() // 앱을 접었다
+    vi.advanceTimersByTime(10 * 60 * 1000) // 10분 뒤
+    analytics.resumeScreenSession() // 돌아왔다 — 여기서 다시 센다
+    vi.advanceTimersByTime(1_000)
+    analytics.endScreenSession()
+
+    // 접어 둔 10분이 어느 쪽에도 안 들어간다(안 그러면 "이 화면에 오래 머물렀다"가 된다)
+    expect(
+      emitted()
+        .filter(([event]) => event === 'screen_leave')
+        .map(([, props]) => props.duration_ms),
+    ).toEqual([2_000, 1_000])
+  })
+
+  it('막힌 지점 기록에 BE 메시지가 실리지 않는다', async () => {
+    const { analytics, emitted } = await harness()
+
+    // 실제 ApiRequestError는 Error라 message를 들고 다니고, 거기 인물명이 섞일 수 있다 —
+    // 통째로 넘겨도 새지 않아야 한다(그래서 호출부가 아니라 analytics가 프로퍼티를 고른다)
+    const error = { status: 404, code: 'ALBUM_NOT_FOUND', message: "'김민준' 앨범이 없습니다" }
+    analytics.trackErrorShown('/groups/1/events/2/albums/3', error)
+
+    const [[event, props]] = emitted()
+    expect(event).toBe('error_shown')
+    expect(props).toMatchObject({ screen: '09-album-detail', code: 'ALBUM_NOT_FOUND', status: 404 })
+    expect(props.message).toBeUndefined()
+    // 경로에 든 식별자(1·2·3)도 화면 코드로 접혀 나간다 — 이름은 어디에도 없다
+    expect(JSON.stringify(props)).not.toContain('김민준')
   })
 })
 

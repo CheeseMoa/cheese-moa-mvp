@@ -10,6 +10,7 @@ import { attestGuardianConsent } from '../api/agreements'
 import { ApiRequestError, toErrorMessage } from '../api/client'
 import { getEvent, presignUploads, registerPhotos, uploadToPresignedUrl } from '../api/events'
 import { trackEvent } from '../lib/analytics'
+import { clearApiCache } from '../lib/apiCache'
 import { requestPushPermissionAfterUpload } from '../lib/push'
 import { runWithConcurrency } from '../lib/concurrency'
 import { createPreviewThumbnail } from '../lib/previewThumb'
@@ -348,6 +349,9 @@ export function PhotoUploadPage() {
         excludeEyesClosed,
         excludeBlurry,
       })
+      // 이 업로드는 useMutation을 타지 않는다(3단계를 직접 조립한다) — 읽기 캐시를 손수 비운다
+      // (CHMO-401). 안 비우면 방금 사진을 올린 사람이 이벤트 상세·05 목록에서 옛 사진 수를 본다.
+      clearApiCache()
       if (!alive.current) return
       trackEvent('upload_success', {
         count: registered.registeredCount,
