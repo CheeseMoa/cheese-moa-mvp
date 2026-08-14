@@ -64,7 +64,9 @@ export function HomePage() {
             서브텍스트(13px muted)와 굵기로는 갈라지지 않는다 */}
         <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">모임</h3>
         <div className="mt-2 flex flex-1 flex-col">
-          {loading || error ? (
+          {/* 데이터가 있으면 갱신(refetch·캐시 재검증) 중에도 목록을 유지한다 — 로딩으로
+              갈아끼우면 재진입마다 화면이 한 번 비었다 채워진다(CHMO-401) */}
+          {data === null ? (
             <LoadState
               loading={loading}
               error={error}

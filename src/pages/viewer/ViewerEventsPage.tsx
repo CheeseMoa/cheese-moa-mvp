@@ -2,6 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../../components/PhoneShell'
 import { Button, EmptyState, ErrorState, Header } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
+import { useDelayedFlag } from '../../hooks/useDelayedFlag'
 import { getViewerEvents } from '../../api/viewer'
 import { formatEventDate } from '../../lib/eventDate'
 import { clearViewerToken } from '../../lib/viewer'
@@ -15,6 +16,9 @@ export function ViewerEventsPage() {
   const { token = '' } = useParams<{ token: string }>()
   const navigate = useNavigate()
   const api = useApi(`viewer-events:${token}`, (signal) => getViewerEvents(token, signal))
+  // 로딩 문구는 LoadState와 같은 규칙으로 미룬다(CHMO-401) — 이 화면은 헤더·제목까지 응답에
+  // 딸려 있어 문구가 번쩍이면 화면 전체가 한 번 튄다
+  const showLoadingText = useDelayedFlag(api.loading)
 
   const events = api.data?.events ?? []
 
@@ -74,7 +78,9 @@ export function ViewerEventsPage() {
             )}
           </>
         ) : api.loading ? (
-          <p className="py-11 text-center text-sm text-muted">공개 이벤트를 불러오는 중…</p>
+          showLoadingText ? (
+            <p className="py-11 text-center text-sm text-muted">공개 이벤트를 불러오는 중…</p>
+          ) : null
         ) : api.error ? (
           api.error.status === 404 ? (
             // 공유 링크 회수/모임 삭제(영구 실패). 잠금 해제 화면은 저장된 viewerToken이 있으면

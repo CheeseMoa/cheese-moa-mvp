@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useApi } from '../hooks/useApi'
+import { useDelayedFlag } from '../hooks/useDelayedFlag'
 import { useMutation } from '../hooks/useMutation'
 import { renamePersonAlbum } from '../api/albums'
 import { linkPersonParent, listGroupMembers, unlinkPersonParent } from '../api/groups'
@@ -68,6 +69,8 @@ export function AlbumSettingsSheet({
   const membersApi = useApi(personId != null ? `group-members:${groupId}` : null, (signal) =>
     listGroupMembers(groupId, signal),
   )
+  // 문구는 LoadState와 같은 규칙으로 미룬다(CHMO-401)
+  const showMembersLoading = useDelayedFlag(membersApi.loading)
   // 현재 이름은 지우지 않아도 되게 회색 placeholder로만 — 입력은 비워서 연다(CHMO-429)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -189,7 +192,9 @@ export function AlbumSettingsSheet({
 
             {membersApi.data === null ? (
               membersApi.loading ? (
-                <p className="mt-3 text-sm text-muted">멤버를 불러오는 중…</p>
+                showMembersLoading ? (
+                  <p className="mt-3 text-sm text-muted">멤버를 불러오는 중…</p>
+                ) : null
               ) : (
                 // 조회 실패는 이름 수정을 막지 않는다 — 이 섹션 안에서만 알리고 재시도한다
                 // (20 초대 관리의 인라인 재시도와 같은 결 — 곁가지 조회가 화면을 가리지 않게)

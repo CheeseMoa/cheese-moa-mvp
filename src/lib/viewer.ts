@@ -5,6 +5,8 @@
  * 공개 이벤트 목록(GET /share/:token)엔 없다(CHMO-192 항목 9).
  */
 
+import { clearApiCache } from './apiCache'
+
 const VIEWER_TOKENS_KEY = 'cheesemoa.viewerTokens'
 const VIEWER_GROUP_NAMES_KEY = 'cheesemoa.viewerGroupNames'
 
@@ -38,7 +40,11 @@ export function setViewerToken(shareToken: string, viewerToken: string): void {
   writeMap(VIEWER_TOKENS_KEY, map)
 }
 
-/** 토큰과 함께 캐시된 모임명도 지운다 — 재해제(unlock)가 다시 채운다 */
+/**
+ * 토큰과 함께 캐시된 모임명도 지운다 — 재해제(unlock)가 다시 채운다.
+ * 응답 캐시(CHMO-401)도 비운다 — 잠금이 풀린 동안 받은 사진 목록이 남아 있으면, 잠금 화면으로
+ * 돌아간 뒤 다시 열었을 때 그 값이 첫 렌더부터 그려진다(같은 기기·다른 사람일 수 있다).
+ */
 export function clearViewerToken(shareToken: string): void {
   const tokens = readMap(VIEWER_TOKENS_KEY)
   delete tokens[shareToken]
@@ -46,6 +52,7 @@ export function clearViewerToken(shareToken: string): void {
   const names = readMap(VIEWER_GROUP_NAMES_KEY)
   delete names[shareToken]
   writeMap(VIEWER_GROUP_NAMES_KEY, names)
+  clearApiCache()
 }
 
 export function getViewerGroupName(shareToken: string): string | null {
