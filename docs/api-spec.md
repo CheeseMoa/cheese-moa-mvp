@@ -280,7 +280,9 @@ ERD 6개 엔티티 + 관계 테이블 2개와 API 노출 관계. **대표 벡터
 [ { "s3Key": "originals/events/1/3f9a....jpg", "uploadUrl": "https://cheesemoa-uploads.s3.ap-northeast-2.amazonaws.com/originals/events/1/3f9a....jpg?X-Amz-...", "contentType": "image/jpeg" } ]
 ```
 > **사진 레코드는 여기서 생기지 않는다** — 발급되는 건 `s3Key`와 presigned URL(짧은 TTL)뿐이다. `contentType`은 **BE가 파일명 확장자로 정한다**(요청이 MIME을 보내지 않는다) — 화이트리스트 밖 확장자는 `400 PHOTO400`.
-> 제약(단일 원천 `src/lib/upload.ts`): 확장자 jpg/jpeg/png/heic/webp · 파일당 20MB · 요청당 **500장**(`MAX_UPLOAD_BATCH` — 2026-07-28 실측, BE CHMO-482). 웹 화면은 별도로 **100장**에서 캡한다(`MAX_UPLOAD_PICK` — 브라우저 디코드 부담, CHMO-497).
+> 제약(단일 원천 `src/lib/upload.ts`): 확장자 jpg/jpeg/png/heic/webp · 파일당 20MB · 요청당 **500장**(`MAX_UPLOAD_BATCH` — 2026-07-28 실측, BE CHMO-482). 웹 화면은 별도로 **200장**에서 캡한다(`MAX_UPLOAD_PICK` — 브라우저 디코드 부담, CHMO-497 · 2026-08-14에 100→200 상향).
+>
+> 호출 패턴(CHMO-693): 웹은 presign을 **한 번에 몰아 부르지 않고 30장 배치로 나눠** 부른다(한 번의 업로드에 presign 요청 여러 건). 발급받은 URL을 그 배치를 올리는 동안만 쓰므로 presign URL TTL(600초) 안에 전송이 끝난다. S3 PUT이 실패한 장은 장별로 2회까지 재시도하고, 끝내 실패한 장은 **등록(③)의 `s3Keys`에서 빠진다**(부분 성공 — 나머지는 정상 등록·분류된다).
 > 오류: `400 VALID400`(빈 목록·상한 초과·크기 초과) · `400 PHOTO400`(미지원 확장자) · `428 AGREEMENT428`(보호자 동의 확보 확인 전 — CHMO-514·516).
 
 #### (②) S3 직접 업로드 — **API 아님**

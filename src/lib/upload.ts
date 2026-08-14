@@ -40,7 +40,7 @@ export const MAX_UPLOAD_BATCH = 500
  * 500장 규모는 앱의 네이티브 업로드가 맡는다(하이브리드 전환). BE 상한이 더 올라가도 웹은 이 값을
  * 지킨다. 다만 이 값이 `MAX_UPLOAD_BATCH`를 넘으면 BE가 배치 전체를 400으로 거절한다.
  */
-export const MAX_UPLOAD_PICK = 100
+export const MAX_UPLOAD_PICK = 200
 
 /** 소문자 확장자(화이트리스트 밖이거나 확장자가 없으면 null) */
 export function uploadExtensionOf(fileName: string): string | null {

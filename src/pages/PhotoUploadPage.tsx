@@ -13,6 +13,7 @@ import { trackEvent } from '../lib/analytics'
 import { requestPushPermissionAfterUpload } from '../lib/push'
 import { runWithConcurrency } from '../lib/concurrency'
 import { createPreviewThumbnail } from '../lib/previewThumb'
+import { runUploadTransfer } from '../lib/uploadTransfer'
 import {
   isUploadableSize,
   MAX_UPLOAD_PICK,
@@ -21,10 +22,13 @@ import {
   uploadFileNameFor,
 } from '../lib/upload'
 
-/** S3 PUT 동시 실행 수 — 브라우저의 호스트당 커넥션 한도(≈6)에 맞춘다 */
-const UPLOAD_CONCURRENCY = 6
 /** 미리보기 축소 동시 실행 수 — 디코드·캔버스가 CPU 작업이라 낮게 잡아 화면 멈춤을 피한다 */
 const PREVIEW_CONCURRENCY = 2
+/**
+ * 업로드 진행 반영 간격(CHMO-693) — 장마다 setState하면 200장이 곧 200번의 전체 리렌더고,
+ * 그 리렌더가 전송 콜백과 같은 스레드를 쓴다. 진행률은 200ms마다 묶어 올린다.
+ */
+const PROGRESS_FLUSH_MS = 200
 
 /** 기기에서 고른 파일 + 미리보기 — key는 같은 파일 중복 추가 방지용 */
 interface PickedPhoto {
@@ -66,7 +70,7 @@ async function registrationLanded(eventId: string, photoCountBefore: number): Pr
  * 다시 들어와 이어 올린다. 분석 중에만 진입을 막는다 — BE는 분석 중 등록도 새 job으로 대체하지만
  * (CHMO-460) 화면은 돌고 있는 분류를 덮어쓰는 동선을 열지 않는다. 같은 사진을 다시 올리면 BE가
  * 내용 지문으로 걸러 duplicateCount로 알려 준다(CHMO-254 — 전량 중복이면 VALID400).
- * 선택은 MAX_UPLOAD_PICK(100장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
+ * 선택은 MAX_UPLOAD_PICK(200장)에서 캡 — 초과분은 해제 상태로 담고 안내만 한다(직접
  * 해제 강요 제거, CHMO-397). 이 상한은 **BE 계약 상한(500, 2026-07-28 실측)과 별개**로 웹이 스스로
  * 거는 값이다(CHMO-497) — 브라우저는 고른 파일을 전부 디코드해야 하고, 500장 규모는 앱의 네이티브
  * 업로드가 맡는다. 미리보기는 원본을 장당 1회만 디코드한다(타일에 원본을 꽂지 않는다).
@@ -101,15 +105,27 @@ export function PhotoUploadPage() {
   const [consentError, setConsentError] = useState<string | null>(null)
   // 미리보기 준비 소요(AC-5 기준선 측정용) — DEV에서만 화면에 노출한다
   const [previewTiming, setPreviewTiming] = useState<{ count: number; ms: number } | null>(null)
+  // 전송 구간 기준선(CHMO-693) — 실기기 사파리는 콘솔을 붙이기 어려워 화면에 띄운다(DEV만).
+  // 실효 Mbps가 있어야 "느리다"가 대역폭 탓인지 우리 코드 탓인지 수치로 갈린다.
+  const [transferTiming, setTransferTiming] = useState<{
+    count: number
+    mb: number
+    presignMs: number
+    putMs: number
+    mbps: number
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 시도(attempt) 식별자 — 실패 후 곧바로 재시도할 때 이전 시도의 늦은 응답이 진행률을 건드리지 않게
   const attemptRef = useRef(0)
+  // 미리보기 축소 작업 취소용 — 업로드가 시작되면 끊는다(CPU를 전송에 양보한다)
+  const previewAbortRef = useRef<AbortController | null>(null)
 
   // 언마운트 시 미리보기 URL 해제 — 최신 목록은 ref로 읽는다(cleanup은 한 번만 등록)
   const photosRef = useRef(photos)
   photosRef.current = photos
   useEffect(
     () => () => {
+      previewAbortRef.current?.abort()
       for (const p of photosRef.current) if (p.previewUrl) URL.revokeObjectURL(p.previewUrl)
     },
     [],
@@ -185,16 +201,24 @@ export function PhotoUploadPage() {
    */
   const buildPreviews = async (items: PickedPhoto[]) => {
     const startedAt = performance.now()
-    await runWithConcurrency(items, PREVIEW_CONCURRENCY, async ({ key, file }) => {
-      const previewUrl = (await createPreviewThumbnail(file)) ?? URL.createObjectURL(file)
-      if (!alive.current) {
-        URL.revokeObjectURL(previewUrl)
-        return
-      }
-      setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, previewUrl } : p)))
-    })
+    // 업로드가 시작되면 남은 축소 작업을 끊는다(CHMO-693) — 디코드·캔버스가 CPU를 물고 있으면
+    // 전송 콜백까지 밀린다. 못 만든 타일은 플레이스홀더로 남는다(곧 화면을 떠난다).
+    const controller = (previewAbortRef.current ??= new AbortController())
+    await runWithConcurrency(
+      items,
+      PREVIEW_CONCURRENCY,
+      async ({ key, file }) => {
+        const previewUrl = (await createPreviewThumbnail(file)) ?? URL.createObjectURL(file)
+        if (!alive.current || controller.signal.aborted) {
+          URL.revokeObjectURL(previewUrl)
+          return
+        }
+        setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, previewUrl } : p)))
+      },
+      controller.signal,
+    )
     // AC-5 기준선 — 실기기(모바일 사파리)는 콘솔을 붙이기 어려워 화면에 띄운다(DEV에서만 렌더)
-    if (alive.current)
+    if (alive.current && !controller.signal.aborted)
       setPreviewTiming({ count: items.length, ms: Math.round(performance.now() - startedAt) })
   }
 
@@ -235,57 +259,92 @@ export function PhotoUploadPage() {
     try {
       // 이번 시도에서 새로 받은 키(상태 반영은 비동기라 등록 단계는 이 맵을 본다)
       const freshKeys = new Map<string, string>()
+      let failedCount = 0
       if (toUpload.length > 0) {
-        // ① presign — 파일 메타(이름·크기)만 보내고 파일별 업로드 URL과 s3Key를 받는다.
-        // 이름은 보정본(CHMO-597) — 확장자 없는 카메라 촬영본도 BE 화이트리스트를 통과한다.
-        const uploads = await presignUploads(
-          eventId,
-          toUpload.map((p) => ({
-            fileName: uploadFileNameFor(p.file.name, p.file.type) ?? p.file.name,
-            size: p.file.size,
-          })),
-        )
-        if (uploads.length !== toUpload.length)
-          throw new ApiRequestError(
-            502,
-            'UPLOAD_FAILED',
-            '업로드 URL을 받지 못했어요. 다시 시도해 주세요.',
-          )
-        // ② S3 직접 PUT — uploads는 요청 files와 같은 순서. 진행률은 시도 로컬 카운터로
+        // 축소 작업을 끊어 CPU를 전송에 넘긴다(CHMO-693)
+        previewAbortRef.current?.abort()
+        previewAbortRef.current = null
+
+        // 진행·s3Key 반영을 묶는다 — 장마다 setState하면 200장이 곧 200번의 전체 리렌더다.
         // (이전 시도의 늦은 응답이 새 시도의 카운터를 올리지 않게 attempt 일치 시에만 반영)
-        let done = 0
-        await runWithConcurrency(
-          uploads,
-          UPLOAD_CONCURRENCY,
-          async (upload, i) => {
-            const picked = toUpload[i]
-            try {
-              await uploadToPresignedUrl(upload, picked.file, controller.signal)
-            } catch (err) {
-              controller.abort() // 남은 PUT을 즉시 중단 — 고아 객체를 덜 남긴다
-              throw err
-            }
+        const unflushed: { key: string; s3Key: string }[] = []
+        let lastFlushAt = 0
+        const flush = (done: number, force = false) => {
+          if (!alive.current || attemptRef.current !== attempt) return
+          const at = performance.now()
+          if (!force && at - lastFlushAt < PROGRESS_FLUSH_MS) return
+          lastFlushAt = at
+          setUploadedCount(done)
+          if (unflushed.length === 0) return
+          const patch = new Map(unflushed.splice(0).map((u) => [u.key, u.s3Key]))
+          setPhotos((prev) =>
+            prev.map((p) => (patch.has(p.key) ? { ...p, s3Key: patch.get(p.key)! } : p)),
+          )
+        }
+
+        // ①② presign → S3 PUT을 배치로 겹쳐 돌린다(CHMO-693). 전량 선발급을 그만둔 이유는
+        // presign URL TTL(600초, CHMO-499) — 200장을 느린 업링크로 올리면 뒤쪽 URL이 만료된다.
+        // 이름은 보정본(CHMO-597) — 확장자 없는 카메라 촬영본도 BE 화이트리스트를 통과한다.
+        let transfer
+        try {
+          transfer = await runUploadTransfer<File>({
+            items: toUpload.map((p) => ({
+              key: p.key,
+              file: p.file,
+              fileName: uploadFileNameFor(p.file.name, p.file.type) ?? p.file.name,
+              size: p.file.size,
+            })),
+            presign: async (files) => {
+              const uploads = await presignUploads(eventId, files)
+              if (uploads.length !== files.length)
+                throw new ApiRequestError(
+                  502,
+                  'UPLOAD_FAILED',
+                  '업로드 URL을 받지 못했어요. 다시 시도해 주세요.',
+                )
+              return uploads
+            },
+            put: uploadToPresignedUrl,
             // 성공한 업로드는 어느 시도든 기록 — 재시도 시 재업로드 대상에서 제외
-            freshKeys.set(picked.key, upload.s3Key)
-            setPhotos((prev) =>
-              prev.map((p) => (p.key === picked.key ? { ...p, s3Key: upload.s3Key } : p)),
-            )
-            done += 1
-            if (alive.current && attemptRef.current === attempt) setUploadedCount(done)
-          },
-          controller.signal,
-        )
+            onUploaded: (item, s3Key) => {
+              freshKeys.set(item.key, s3Key)
+              unflushed.push({ key: item.key, s3Key })
+            },
+            onProgress: (done) => flush(done),
+            signal: controller.signal,
+          })
+        } finally {
+          // 중간에 던지고 나가도(뒤 배치 presign 실패 등) 이미 올라간 s3Key는 상태에 남긴다 —
+          // 안 남기면 재시도가 같은 파일을 처음부터 다시 올린다.
+          flush(freshKeys.size, true)
+        }
         if (!alive.current) return
+        failedCount = transfer.failed.length
+        if (import.meta.env.DEV) {
+          const seconds = transfer.putMs / 1000
+          setTransferTiming({
+            count: transfer.uploaded.size,
+            mb: Math.round((transfer.bytes / 1024 / 1024) * 10) / 10,
+            presignMs: Math.round(transfer.presignMs),
+            putMs: Math.round(transfer.putMs),
+            mbps: seconds > 0 ? Math.round(((transfer.bytes * 8) / 1e6 / seconds) * 10) / 10 : 0,
+          })
+        }
+        // 한 장도 못 올렸으면 등록할 게 없다 — 실패 원인을 그대로 위로 넘긴다
+        if (transfer.uploaded.size === 0 && transfer.failed.length > 0) throw transfer.lastError
         setPhase('registering')
       }
       // ③ 등록 — BE가 사진을 기록하고 이벤트를 analyzing으로 전이한 뒤 AI 분류를 발행한다.
       // 품질 제외 토글은 analyze가 아니라 이 호출에 실린다.
-      const s3Keys = pending.map((p) => freshKeys.get(p.key) ?? p.s3Key)
-      if (s3Keys.some((key) => !key))
+      // 못 올린 장은 빼고 올라간 것만 등록한다(CHMO-693 부분 성공) — 한 장 때문에 나머지
+      // 199장을 버리지 않는다. 빠진 장은 아래 토스트로 알리고 [＋ 사진 추가]로 이어 올린다.
+      const registerable = pending.filter((p) => freshKeys.get(p.key) ?? p.s3Key)
+      const s3Keys = registerable.map((p) => (freshKeys.get(p.key) ?? p.s3Key) as string)
+      if (s3Keys.length === 0)
         throw new ApiRequestError(500, 'UPLOAD_FAILED', '업로드가 끝나지 않은 사진이 있어요.')
       registerAttempted = true
       const registered = await registerPhotos(eventId, {
-        s3Keys: s3Keys as string[],
+        s3Keys,
         excludeEyesClosed,
         excludeBlurry,
       })
@@ -293,6 +352,7 @@ export function PhotoUploadPage() {
       trackEvent('upload_success', {
         count: registered.registeredCount,
         duplicate_count: registered.duplicateCount ?? 0,
+        failed_count: failedCount,
       })
       // 알림 권한 프롬프트 (CHMO-667) — 앱에서 계정당 1회. **이 자리인 이유**: 사진을 올려
       // 두고 분류를 기다리는 지금이 "끝나면 알려드릴 테니 앱을 닫으셔도 돼요"가 사실이 되는
@@ -301,15 +361,16 @@ export function PhotoUploadPage() {
       // 막힌다. 프롬프트는 OS 레이어라 화면이 바뀌어도(분류중 진행률) 그대로 떠 있고,
       // 도착지가 곧 "기다리는 화면"이라 문맥도 오히려 맞는다. 실패·거부는 모듈이 삼킨다.
       void requestPushPermissionAfterUpload()
-      const registeredKeys = new Set(pending.map((p) => p.key))
+      const registeredKeys = new Set(registerable.map((p) => p.key))
       setPhotos((prev) =>
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
       )
-      toast.show(
-        registered.duplicateCount
-          ? `🧀 사진 분류를 시작했어요 · 이미 있는 사진 ${registered.duplicateCount}장은 제외했어요`
-          : '🧀 사진 분류를 시작했어요',
-      )
+      const notices = ['🧀 사진 분류를 시작했어요']
+      if (registered.duplicateCount)
+        notices.push(`이미 있는 사진 ${registered.duplicateCount}장은 제외했어요`)
+      // 부분 실패(CHMO-693) — 나머지는 이미 분류에 들어갔으니 실패가 아니라 '빠진 장' 안내다
+      if (failedCount) notices.push(`${failedCount}장은 올리지 못했어요`)
+      toast.show(notices.join(' · '))
       // '분석 시작' 킥(CHMO-443) — 등록 직후엔 AI 첫 진행률 메시지 전이라 progress가 잠깐 null이고,
       // 상세의 단발 조회가 분석 시작을 놓칠 수 있다. published 재업로드는 상태 전이도 없어
       // (CHMO-216) 킥 없이는 분석 시작을 알 길이 없다 — 재업로드 복원으로 다시 필수(CHMO-606).
@@ -441,6 +502,14 @@ export function PhotoUploadPage() {
               {import.meta.env.DEV && previewTiming ? (
                 <p className="mt-1 text-[11px] text-muted">
                   [DEV] 미리보기 {previewTiming.count}장 준비 {previewTiming.ms}ms
+                </p>
+              ) : null}
+              {/* 전송 기준선(CHMO-693) — 실효 Mbps가 있어야 대역폭 탓인지 코드 탓인지 갈린다 */}
+              {import.meta.env.DEV && transferTiming ? (
+                <p className="mt-1 text-[11px] text-muted">
+                  [DEV] 전송 {transferTiming.count}장 {transferTiming.mb}MB · presign{' '}
+                  {transferTiming.presignMs}ms · PUT {transferTiming.putMs}ms ·{' '}
+                  {transferTiming.mbps}Mbps
                 </p>
               ) : null}
               {/* 캡으로 해제 상태 사진이 남았을 때만 — 재업로드가 열려 있어(CHMO-606) 이어

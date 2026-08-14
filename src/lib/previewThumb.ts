@@ -38,13 +38,13 @@ async function createThumbnailBlob(file: File): Promise<Blob | null> {
   try {
     return await drawToJpegBlob(bitmap, bitmap.width, bitmap.height)
   } finally {
-    bitmap.close() // 디코드 결과를 즉시 해제 — GC를 기다리면 100장에서 피크가 쌓인다
+    bitmap.close() // 디코드 결과를 즉시 해제 — GC를 기다리면 200장에서 피크가 쌓인다
   }
 }
 
 /**
  * 1순위 경로 — `createImageBitmap`은 **디코드 단계에서 바로 축소**할 수 있어(resize 옵션)
- * 원본 해상도 비트맵을 메모리에 올리지 않는다. 100장 배치에서 차이가 크다.
+ * 원본 해상도 비트맵을 메모리에 올리지 않는다. 200장 배치에서 차이가 크다.
  *
  * resize 옵션을 무시하는 브라우저(Safari 구버전 등)는 원본 크기 비트맵을 돌려주는데,
  * 그래도 뒤이은 캔버스 축소가 같은 결과를 만든다 — 그래서 **지원 여부를 미리 감지하지 않는다**
