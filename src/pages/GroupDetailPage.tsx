@@ -244,7 +244,8 @@ export function GroupDetailPage() {
             </div>
 
             <div className="flex flex-1 flex-col overflow-y-auto">
-              {eventsApi.loading || eventsApi.error ? (
+              {/* 목록이 있으면 갱신 중에도 유지 — 05↔08 왕복마다 비었다 채워지지 않게(CHMO-401) */}
+              {eventsApi.data === null ? (
                 <LoadState
                   loading={eventsApi.loading}
                   error={eventsApi.error}
