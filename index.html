@@ -2,7 +2,8 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
@@ -15,10 +16,13 @@
          Safari 전용이라 앱 웹뷰·Android·데스크톱에는 아무 영향이 없다. id는 lib/appLink.ts와 같은 값 -->
     <meta name="apple-itunes-app" content="app-id=6797158719" />
     <title>치즈모아</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- 서체는 Jua 한 벌(CHMO-513) — 로고와 본문이 같은 얼굴이다. Gothic A1은 걷어냈다(요청 4건 → 1건) -->
-    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <!-- 서체는 Pretendard Variable 한 벌(CHMO-702) — Jua 단일화(CHMO-513)를 B2C 리디자인 방향으로
+         대체. 가변 굵기(45~920)라 font-bold가 실제 굵기로 렌더된다. dynamic subset이라 글리프 단위 분할 로딩 -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
   </head>
   <body>
     <div id="root"></div>

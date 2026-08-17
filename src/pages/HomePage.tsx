@@ -60,8 +60,8 @@ export function HomePage() {
         <h2 className="text-xl font-bold text-text">내 모임</h2>
         <p className="mt-1 text-[13px] text-muted">참여 중인 모임을 확인하세요</p>
 
-        {/* 섹션 라벨은 크기·자간이 만든다(CHMO-513) — Jua는 굵기가 한 벌이라 바로 위
-            서브텍스트(13px muted)와 굵기로는 갈라지지 않는다 */}
+        {/* 섹션 라벨은 크기·자간이 만든다 — Jua 단일 굵기 시절(CHMO-513) 규칙이고
+            Pretendard 전환(CHMO-702) 뒤에도 유지한다 */}
         <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">모임</h3>
         <div className="mt-2 flex flex-1 flex-col">
           {/* 데이터가 있으면 갱신(refetch·캐시 재검증) 중에도 목록을 유지한다 — 로딩으로
