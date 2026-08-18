@@ -66,7 +66,10 @@ export function HomePage() {
         {/* 섹션 라벨은 크기·자간이 만든다 — Jua 단일 굵기 시절(CHMO-513) 규칙이고
             Pretendard 전환(CHMO-702) 뒤에도 유지한다 */}
         <h3 className="mt-5 shrink-0 text-[12px] tracking-[0.06em] text-muted">모임</h3>
-        <div className="mt-2 flex flex-1 flex-col overflow-y-auto">
+        {/* -mx-5 px-5·-mt-2 pt-2·pb-4: 카드 그림자(shadow-card, blur 30)가 스크롤 컨테이너
+            가장자리에서 잘리면 카드 폭만큼의 회색 판처럼 보인다 — 번질 여백을 컨테이너
+            안쪽으로 되돌려 준다(시각 위치는 동일) */}
+        <div className="-mx-5 flex flex-1 flex-col overflow-y-auto px-5 pb-4 pt-2">
           {/* 데이터가 있으면 갱신(refetch·캐시 재검증) 중에도 목록을 유지한다 — 로딩으로
               갈아끼우면 재진입마다 화면이 한 번 비었다 채워진다(CHMO-401) */}
           {data === null ? (
