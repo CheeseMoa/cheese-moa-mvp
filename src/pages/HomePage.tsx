@@ -56,14 +56,17 @@ export function HomePage() {
           </Link>
         }
       />
-      <main className="flex flex-1 flex-col overflow-y-auto px-5 pb-safe-9 pt-5">
-        <h2 className="text-xl font-bold text-text">내 모임</h2>
-        <p className="mt-1 text-[13px] text-muted">참여 중인 모임을 확인하세요</p>
+      {/* 스크롤은 모임 목록만 갖는다(CHMO-530 관용 — CHMO-707) — main은 스크롤 컨테이너가
+          아니고(overflow-hidden) 하단 버튼이 shrink-0으로 붙어 목록만 그 사이를 흐른다.
+          sticky는 쓰지 않는다(CHMO-424 — 실기기 WebKit 부유 결함) */}
+      <main className="flex flex-1 flex-col overflow-hidden px-5 pt-5">
+        <h2 className="shrink-0 text-xl font-bold text-text">내 모임</h2>
+        <p className="mt-1 shrink-0 text-[13px] text-muted">참여 중인 모임을 확인하세요</p>
 
         {/* 섹션 라벨은 크기·자간이 만든다 — Jua 단일 굵기 시절(CHMO-513) 규칙이고
             Pretendard 전환(CHMO-702) 뒤에도 유지한다 */}
-        <h3 className="mt-5 text-[12px] tracking-[0.06em] text-muted">모임</h3>
-        <div className="mt-2 flex flex-1 flex-col">
+        <h3 className="mt-5 shrink-0 text-[12px] tracking-[0.06em] text-muted">모임</h3>
+        <div className="mt-2 flex flex-1 flex-col overflow-y-auto">
           {/* 데이터가 있으면 갱신(refetch·캐시 재검증) 중에도 목록을 유지한다 — 로딩으로
               갈아끼우면 재진입마다 화면이 한 번 비었다 채워진다(CHMO-401) */}
           {data === null ? (
@@ -127,18 +130,18 @@ export function HomePage() {
               })}
             </ul>
           )}
+        </div>
 
-          {/* 두 버튼은 나란히가 아니라 세로로 쌓는다(CHMO-672) — 390px에서 버튼 하나가 170px인데
-              `＋ 모임 만들기`가 이미 그 폭을 거의 채워(05 하단 실측, CHMO-530) 라벨이 잘린다.
-              위계는 색이 만든다: 만들기 primary · 참여 secondary */}
-          <div className="mt-auto flex flex-col gap-3 pt-6">
-            <ButtonLink to="/groups/new" fullWidth>
-              ＋ 모임 만들기
-            </ButtonLink>
-            <Button variant="secondary" fullWidth onClick={() => setJoinOpen(true)}>
-              모임 참여하기
-            </Button>
-          </div>
+        {/* 두 버튼은 나란히가 아니라 세로로 쌓는다(CHMO-672) — 390px에서 버튼 하나가 170px인데
+            `＋ 모임 만들기`가 이미 그 폭을 거의 채워(05 하단 실측, CHMO-530) 라벨이 잘린다.
+            위계는 색이 만든다: 만들기 primary · 참여 secondary */}
+        <div className="flex shrink-0 flex-col gap-3 pb-safe-9 pt-4">
+          <ButtonLink to="/groups/new" fullWidth>
+            ＋ 모임 만들기
+          </ButtonLink>
+          <Button variant="secondary" fullWidth onClick={() => setJoinOpen(true)}>
+            모임 참여하기
+          </Button>
         </div>
       </main>
 
