@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import catUrl from '../assets/chase/cat.png'
+import cheeseUrl from '../assets/chase/cheese.png'
+import mouseUrl from '../assets/chase/mouse.png'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumSettingsSheet } from '../components/AlbumSettingsSheet'
 import { PhoneShell } from '../components/PhoneShell'
@@ -206,14 +209,37 @@ export function EventDetailPage() {
 }
 
 /**
- * 사진 분류 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
+ * 사진 분류 진행률 — 쥐가 치즈를 쫓고 고양이가 그 쥐를 쫓는 프로그레스 바(CHMO-287 · 710).
+ * 캐릭터는 픽셀 아트 달리기 스프라이트 시트(`assets/chase/` — 사용자 제공 원본(리포 밖,
+ * 6프레임×3행 검정 배경 시트)에서 배경 제거·프레임 정렬 추출, 레시피는 CHMO-710 코멘트).
  * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
- * progress가 아직 null이면(등록 직후 등) 쥐가 트랙 위를 왕복하는 인디터미넌트로 폴백.
- * 쥐 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
+ * progress가 아직 null이면(등록 직후 등) 트랙 위를 왕복하는 인디터미넌트로 폴백.
+ * 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
  * (숨김 탭·임베디드 프리뷰)에선 transition이 걸린 속성이 첫 값에 얼어붙어, 폴링으로
  * 스타일이 갱신돼도 화면이 영영 안 움직인다. 진행 위치는 상태라 장식(총총거림)과 달리
  * 어느 환경에서든 즉시 반영돼야 한다.
  */
+/**
+ * 달리기 스프라이트(6프레임 가로 스트립)를 steps() 배경 이동으로 재생한다.
+ * w·h는 css px — 값은 시트 추출 스크립트 출력(자산이 2배 해상도, CHMO-710 코멘트 레시피).
+ */
+function RunnerSprite({ url, w, h, durMs }: { url: string; w: number; h: number; durMs: number }) {
+  return (
+    <span
+      className="animate-chase-frames"
+      style={{
+        width: w,
+        height: h,
+        backgroundImage: `url(${url})`,
+        // 6프레임 스트립 = 배경폭 600% — chase-frames 키프레임(0→120%)과 한 쌍
+        backgroundSize: '600% 100%',
+        // 잰걸음 차이 — 쥐(다리가 짧다)가 고양이보다 사이클이 훨씬 빨라야 쫓기는 게 보인다
+        animationDuration: `${durMs}ms`,
+      }}
+    />
+  )
+}
+
 function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
   const percent = progress?.percent
   return (
@@ -225,17 +251,24 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
       aria-valuenow={percent}
       className="mt-6 w-full"
     >
-      {/* 추격 무대 — 치즈는 결승점(오른쪽 끝) 고정, 쥐는 percent 위치 */}
-      <div className="relative h-9">
-        <span aria-hidden className="absolute -right-1.5 bottom-0 text-[26px]">
-          🧀
-        </span>
+      {/* 추격 무대 — 치즈는 결승점(오른쪽 끝) 고정, 고양이·쥐는 **한 덩어리**로 percent 위치.
+          각자 움직이게 두면 2초 폴링 점프가 두 번 보여 렉처럼 읽히고 총총거림도 어긋난다
+          (2026-08-18 피드백 — 위상차·딜레이 전부 폐기, 추격의 뜻은 배치(고양이가 뒤)가 만든다).
+          overflow-x-clip: 덩어리가 양 끝에서 무대 밖으로 밀려도 가로 스크롤을 만들지 않는다 */}
+      <div className="relative h-[52px] overflow-x-clip">
+        <img src={cheeseUrl} alt="" aria-hidden className="absolute bottom-0 right-0 h-7 w-auto" />
         <span
           aria-hidden
-          className={`absolute bottom-0 -translate-x-1/2 ${percent == null ? 'animate-chase-roam' : ''}`}
-          style={percent == null ? undefined : { left: `${percent}%` }}
+          // translateX(-71px) = 고양이(67)+간격(4) 되감기 — 0%엔 쥐만 무대 왼쪽 끝에 보이고
+          // 고양이는 무대 밖에서 대기하다 진행되며 들어온다(등장 연출). left의 -0.48px/%는
+          // 쥐 폭(48px)만큼 이동량을 줄여 100%에 쥐가 오른쪽 끝(치즈)에 정확히 닿게 한다
+          className={`absolute bottom-0 flex translate-x-[-71px] items-end gap-1 ${percent == null ? 'animate-chase-roam' : ''}`}
+          style={
+            percent == null ? undefined : { left: `calc(${percent}% - ${percent * 0.48}px)` }
+          }
         >
-          <span className="inline-block animate-chase-scurry text-[26px]">🐭</span>
+          <RunnerSprite url={catUrl} w={67} h={52} durMs={700} />
+          <RunnerSprite url={mouseUrl} w={48} h={44} durMs={350} />
         </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
