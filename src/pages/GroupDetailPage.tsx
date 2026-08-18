@@ -17,6 +17,7 @@ import {
   useToast,
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useEntrance } from '../hooks/useEntrance'
 import { useMutation } from '../hooks/useMutation'
 import { getMe } from '../api/auth'
 import { ApiRequestError } from '../api/client'
@@ -172,6 +173,8 @@ export function GroupDetailPage() {
   // 두는데, 분기 UI 전부가 group 도착 뒤에만 그려져 잘못 그려질 틈이 없다.
   const business = group?.groupType === 'business'
   const events = eventsApi.data ?? []
+  // 진입 라이즈 효과(CHMO-709) — 08 팝과 결을 가른다(목록=라이즈 / 그리드=팝)
+  const listRef = useEntrance<HTMLUListElement>(events.length > 0, 'rise')
   // BE 상세 응답엔 eventCount가 없어 이벤트 목록 길이로 파생하는데(CHMO-192), 목록이 아직
   // 안 왔으면 length 0을 '이벤트 0개'로 단정하지 않는다 — 값이 확정될 때만 표시(깜빡임 방지).
   const eventCount = group?.eventCount ?? (eventsApi.data ? events.length : null)
@@ -268,7 +271,7 @@ export function GroupDetailPage() {
                 />
               ) : (
                 // 간격은 그림자 blur(8)보다 넓게 둔다(CHMO-532) — 좁으면 그림자가 사이를 메운다
-                <ul className="flex flex-col gap-3.5">
+                <ul ref={listRef} className="flex flex-col gap-3.5">
                   {events.map((event) => (
                     <li key={event.id}>
                       <EventCard
