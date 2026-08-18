@@ -59,9 +59,9 @@ export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onB
   }
   return (
     <header className="flex h-[60px] shrink-0 items-center border-b border-border bg-cream px-5">
-      {/* -ml-[2.5px]: 자산이 투명 여백을 물고 있어(28px 렌더 기준 좌 2.63px) 박스를 px-5에 붙이면
+      {/* -ml-[2.5px]: 자산이 투명 여백을 물고 있어(26px 렌더 기준 좌 2.44px) 박스를 px-5에 붙이면
           눈에 보이는 심볼이 안쪽에서 시작한다 — 본문 좌측선(20px)에 획을 맞춘다 */}
-      <Cheddar size={28} className="-ml-[2.5px] shrink-0" />
+      <Cheddar size={26} className="-ml-[2.5px] shrink-0" />
       {/* 워드마크만 Jua(CHMO-706) — title을 받은 홈형은 화면 이름이라 본문 서체(Pretendard) 유지.
           translate-y: Jua는 한글 글리프가 글자상자(asc 800/desc -200, 중심 300) 중심보다
           0.087em 위에 앉아 items-center로도 로고·우측 액션과 눈높이가 안 맞는다 — 22px에서 1.9px */}
