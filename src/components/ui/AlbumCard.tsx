@@ -104,7 +104,7 @@ export function AlbumCard({
     return (
       <div
         onClick={onClick}
-        className={cx(baseCls, onClick && 'cursor-pointer transition active:scale-[0.99]')}
+        className={cx(baseCls, onClick && 'cursor-pointer transition active:scale-[0.98]')}
       >
         {cover}
         <button
@@ -142,7 +142,7 @@ export function AlbumCard({
     <button
       type="button"
       onClick={onClick}
-      className={cx(baseCls, 'transition active:scale-[0.99]')}
+      className={cx(baseCls, 'transition active:scale-[0.98]')}
     >
       {content}
     </button>

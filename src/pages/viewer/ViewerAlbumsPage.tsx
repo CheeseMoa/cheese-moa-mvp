@@ -43,7 +43,7 @@ export function ViewerAlbumsPage() {
                     key={album.id}
                     type="button"
                     onClick={() => navigate(`/share/${token}/events/${eventId}/albums/${album.id}`)}
-                    className="w-full rounded-2xl border border-border bg-white p-2 text-left transition active:scale-[0.99]"
+                    className="w-full rounded-2xl border border-border bg-white p-2 text-left transition active:scale-[0.98]"
                   >
                     <span className="cheese-dots block h-24 overflow-hidden rounded-[10px] bg-photo">
                       {album.coverThumbnailUrl && (

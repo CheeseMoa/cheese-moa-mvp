@@ -85,7 +85,7 @@ export function ParentGroupPage() {
                       <button
                         type="button"
                         onClick={() => navigate(`/parent/groups/${groupId}/events/${event.id}`)}
-                        className="w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card transition active:scale-[0.99]"
+                        className="w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card transition active:scale-[0.98]"
                       >
                         <span className="block truncate text-base font-bold text-text">
                           {event.name}

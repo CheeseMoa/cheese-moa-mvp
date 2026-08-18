@@ -28,7 +28,8 @@ export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onB
   if (backTo || onBack) {
     const backClass = cx(
       'justify-self-start truncate text-[15px] font-medium',
-      backDisabled ? 'pointer-events-none text-muted' : 'text-accent',
+      // 눌림 반응은 iOS 내비게이션 바 관용(텍스트 버튼은 축소 대신 딤)
+      backDisabled ? 'pointer-events-none text-muted' : 'text-accent transition duration-100 active:opacity-40',
     )
     return (
       <header className="grid h-[60px] shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-cream px-5">

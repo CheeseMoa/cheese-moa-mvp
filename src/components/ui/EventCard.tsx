@@ -54,7 +54,7 @@ export function EventCard({
       onClick={onClick}
       // 테두리 색은 border(#E6E0D4)보다 한 단계 진한 라인 — 팔레트에 중간 톤 라인 색이 없어
       // 임의값이다(다른 카드도 같은 처방을 하게 되면 토큰으로 올린다)
-      className="w-full cursor-pointer overflow-hidden rounded-[18px] border-[1.5px] border-[#D8CFBB] bg-white shadow-card-stack transition active:scale-[0.99]"
+      className="w-full cursor-pointer overflow-hidden rounded-[18px] border-[1.5px] border-[#D8CFBB] bg-white shadow-card-stack transition active:scale-[0.98]"
     >
       {cover && (
         <div className="cheese-dots h-32 w-full bg-photo">
