@@ -80,7 +80,7 @@ export function SignupConsentPage() {
         />
       ) : (
         <main className="flex flex-1 flex-col overflow-y-auto px-5 pt-7">
-          <h1 className="text-xl text-heading">서비스 이용 동의</h1>
+          <h1 className="text-xl font-bold text-heading">서비스 이용 동의</h1>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
             치즈모아를 시작하려면 아래 항목을 확인하고 동의해 주세요.
           </p>

@@ -31,7 +31,7 @@ export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onB
       backDisabled ? 'pointer-events-none text-muted' : 'text-accent',
     )
     return (
-      <header className="grid h-[60px] shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-cream px-3.5">
+      <header className="grid h-[60px] shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-cream px-5">
         {backTo ? (
           <Link
             to={backTo}
@@ -58,10 +58,10 @@ export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onB
     )
   }
   return (
-    <header className="flex h-[60px] shrink-0 items-center border-b border-border bg-cream px-3.5">
+    <header className="flex h-[60px] shrink-0 items-center border-b border-border bg-cream px-5">
       <Cheddar size={34} />
       {/* 워드마크만 Jua(CHMO-706) — title을 받은 홈형은 화면 이름이라 본문 서체(Pretendard) 유지 */}
-      <span className={cx('ml-2 text-[22px] text-heading', !title && 'font-logo')}>
+      <span className={cx('ml-2.5 text-[22px] text-heading', !title && 'font-logo')}>
         {title ?? '치즈모아'}
       </span>
       <div className="ml-auto">{right}</div>
