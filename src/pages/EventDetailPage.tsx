@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumSettingsSheet } from '../components/AlbumSettingsSheet'
 import { PhoneShell } from '../components/PhoneShell'
@@ -23,7 +23,7 @@ import { createPersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 import { hasSeenCoachHint } from '../lib/onboarding'
-import type { Album, AnalysisProgress, EventItem, GroupType } from '../types/api'
+import type { Album, AnalysisProgress, EventItem, GroupType, ID } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
@@ -279,6 +279,55 @@ interface EventAlbumGridProps {
  * 재공개 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
  * 설정·09 진입은 유형과 무관하다(전원 동일 권한이라 막을 이유가 없다).
  */
+/** 진입 효과를 이미 본 이벤트(세션 내) — 09 왕복·재진입엔 다시 재생하지 않는다(새로고침이면 초기화) */
+const entrancePlayed = new Set<ID>()
+
+/**
+ * 08 진입 캐스케이드 — 분류가 끝난 이벤트를 처음 열면 앨범 카드들이 제 자리에서 살짝
+ * 떠올랐다가 순서대로 자리 잡는다. 첫 안(상단에 모였다 흩어지는 딜)은 이동이 길어 "아직
+ * 로딩 중"으로 읽혀 폐기 — 제자리·짧은 오프셋·빠른 스태거가 로딩감 없이 리듬만 남긴다.
+ * 이벤트당 세션 1회만 — 09 왕복마다 다시 흩어지면 효과가 아니라 소음이다.
+ * 끝나면 인라인 transition을 걷는다(남기면 카드의 눌림 전환(active:scale)이 이 전환을 탄다).
+ * prefers-reduced-motion이면 건너뛴다.
+ */
+function useGridEntrance(ready: boolean, eventId: ID) {
+  const gridRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const grid = gridRef.current
+    if (!ready || entrancePlayed.has(eventId) || !grid) return
+    entrancePlayed.add(eventId)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const cells = Array.from(grid.children).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement,
+    )
+    if (cells.length < 2) return
+    cells.forEach((el) => {
+      el.style.transition = 'none'
+      // 스케일 팝 — 이동 없이 제자리에서 작게 시작해 살짝 넘쳤다(overshoot) 자리 잡는다
+      el.style.transform = 'scale(0.85)'
+      el.style.opacity = '0'
+    })
+    // 시작 상태가 그려진 다음 프레임에 목표 상태로 — 같은 프레임에 쓰면 전환이 안 탄다
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        cells.forEach((el, i) => {
+          // cubic-bezier y>1 = 1을 지나쳤다 돌아오는 백-아웃 이징이 팝 느낌을 만든다
+          el.style.transition = `transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 30}ms, opacity 140ms ease-out ${i * 30}ms`
+          el.style.transform = ''
+          el.style.opacity = ''
+        })
+      }),
+    )
+    // 정리는 setTimeout 완주에 맡긴다(cleanup으로 끊으면 StrictMode 이중 실행에서 인라인
+    // transition이 영영 남는다) — 언마운트 뒤 실행돼도 떨어져 나간 노드라 무해하다
+    window.setTimeout(
+      () => cells.forEach((el) => (el.style.transition = '')),
+      240 + cells.length * 30 + 100,
+    )
+  }, [ready, eventId])
+  return gridRef
+}
+
 function EventAlbumGrid({
   event,
   groupId,
@@ -320,6 +369,9 @@ function EventAlbumGrid({
   // 세지 않는다(계약상 optional — 값이 없다고 미검토로 단정하지 않는 reviewFlow와 같은 태도).
   const unreviewedPhotoCount = mainAlbums.reduce((sum, a) => sum + (a.unreviewedPhotoCount ?? 0), 0)
 
+  // 진입 캐스케이드 — 앨범이 실제로 있을 때만(빈 그리드는 만들기 타일 하나라 움직일 게 없다)
+  const dealGridRef = useGridEntrance(mainAlbums.length > 0, event.id)
+
   return (
     <PhoneShell>
       {/* 제목은 헤더 중앙이 맡는다 — 본문 큰 제목과 '이벤트 상세'가 같은 이름을 두 번 말하고
@@ -353,7 +405,7 @@ function EventAlbumGrid({
                   {toErrorMessage(albumsApi.error)}
                 </p>
               )}
-              <div className="mt-4 grid grid-cols-3 gap-2.5">
+              <div ref={dealGridRef} className="mt-4 grid grid-cols-3 gap-2.5">
                 {mainAlbums.map((album, i) => {
                   const card = (
                     <AlbumCard
@@ -539,7 +591,7 @@ function CreateAlbumTile({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl border-2 border-dashed border-[#C9C2B4] bg-white p-2 text-left transition active:scale-[0.99]"
+      className="w-full rounded-2xl border-2 border-dashed border-[#C9C2B4] bg-white p-2 text-left transition active:scale-[0.98]"
     >
       <span className="flex h-24 items-center justify-center rounded-[10px] bg-photo text-muted">
         <IconPlus size={26} />

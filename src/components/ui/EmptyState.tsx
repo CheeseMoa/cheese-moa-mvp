@@ -11,7 +11,7 @@ interface EmptyStateProps {
 }
 
 /**
- * 빈 상태 (dc.html §08): 체다 일러스트 + Jua 타이틀 + 본문 + CTA.
+ * 빈 상태 (dc.html §08): 브랜드 심볼 + 타이틀 + 본문 + CTA.
  * 상황별(빈 모임/빈 이벤트/빈 앨범/공개 이벤트 없음)로 문구만 교체해 쓴다.
  */
 export function EmptyState({ title, description, action, icon }: EmptyStateProps) {

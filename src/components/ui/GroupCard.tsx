@@ -60,7 +60,7 @@ export function GroupCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-white p-4 text-left shadow-card transition active:scale-[0.99]"
+      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-white p-4 text-left shadow-card transition active:scale-[0.98]"
     >
       {/* 갈색 타일 없이 심볼만 — 슬롯 크기(44)는 유지해 목록 정렬이 흔들리지 않게 한다 */}
       <span
@@ -69,7 +69,8 @@ export function GroupCard({
           pending && 'opacity-50',
         )}
       >
-        <Cheddar size={40} />
+        {/* 헤더와 같은 비율로 축소(CHMO-706, 34→26). 슬롯 44는 그대로라 목록 정렬은 안 흔들린다 */}
+        <Cheddar size={30} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">

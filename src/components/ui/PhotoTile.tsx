@@ -81,7 +81,7 @@ export function PhotoTile({
       // 롱프레스 시 컨텍스트 메뉴/콜아웃 방지(iOS는 touch-callout, 안드로이드 크롬은 이 preventDefault)
       onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
       className={cx(
-        'cheese-dots relative aspect-square w-full select-none overflow-hidden rounded-xl bg-photo',
+        'cheese-dots relative aspect-square w-full select-none overflow-hidden rounded-xl bg-photo transition duration-100 active:scale-[0.97] active:brightness-90',
         onLongPress && '[-webkit-touch-callout:none]',
         selected && 'border-[3px] border-primary',
       )}

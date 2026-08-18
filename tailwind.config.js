@@ -11,7 +11,7 @@ export default {
         cream: '#FFFDF5', // 페이지 배경(--color-bg)
         surface: '#F3F0E9', // 카드/입력 표면
         text: '#3A3128', // 본문 텍스트
-        heading: '#4A3415', // Jua 헤딩/로고 워드마크(딥 브라운) — docs/design/screen-system.dc.html
+        heading: '#4A3415', // 헤딩/로고 워드마크(딥 브라운) — docs/design/screen-system.dc.html
         muted: '#9E978C', // 보조 텍스트/플레이스홀더
         border: '#E6E0D4', // 구분선/기본 테두리
         photo: '#EAE4D8', // 사진 썸네일 플레이스홀더 배경
@@ -44,14 +44,15 @@ export default {
         },
       },
       fontFamily: {
-        // 서체는 Jua 한 벌(CHMO-513) — 로고 워드마크와 본문이 같은 얼굴을 쓴다.
-        // `display` 토큰은 폐지했다: sans와 같아져 구분이 거짓이 된다(font-display 사용처도 제거).
+        // 서체는 Pretendard Variable 한 벌(CHMO-702) — Jua 단일화(CHMO-513)를 B2C 리디자인
+        // 방향으로 대체했다. 가변 굵기(45~920)라 `font-bold`가 실제 굵기로 렌더된다.
         //
-        // ⚠ Jua는 굵기가 400 하나뿐이다 — `font-bold`는 시각 효과가 없다(index.css가 합성 볼드를
-        // 차단한다. 안 막으면 브라우저가 가짜 굵기를 만들어 획이 뭉갠다). 굵기 유틸은 의미 표시로
-        // 남기되, **화면의 위계는 크기와 색이 만든다**: 같은 크기·같은 색을 굵기로만 갈라놨던
-        // 자리는 크기·자간·색으로 다시 벌려 놨다(섹션 라벨 12px+자간 등).
-        sans: ['Jua', 'system-ui', 'sans-serif'],
+        // Jua 시절 크기·자간·색으로 벌려 둔 위계(섹션 라벨 12px+자간 등)는 그대로 둔다 —
+        // 굵기 축이 생겼다고 되돌릴 이유가 없고, 위계를 굵기로 다시 짜는 건 리디자인 본편 몫.
+        sans: ['Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'],
+        // 워드마크 전용(CHMO-706) — 헤더 '치즈모아' 한 곳에만 쓴다. 본문에 번지면 CHMO-702가
+        // 걷어낸 둥근 서체가 되살아나므로 사용처를 늘리지 않는다(Jua는 굵기 400 한 벌뿐).
+        logo: ['Jua', 'system-ui', 'sans-serif'],
         // 어드민 전용 중립 서체(CHMO-379) — 표·숫자 위주 화면이라 Jua(둥근 단일 굵기)가 아니라
         // 시스템 산세리프를 쓴다(굵기 위계 사용 가능 — 시스템 서체는 실제 볼드 파일이 있어
         // font-synthesis 차단과 무관하다). 추가 폰트 요청 0건.

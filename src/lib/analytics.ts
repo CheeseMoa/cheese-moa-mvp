@@ -164,6 +164,20 @@ export type AnalyticsEvent =
    * 실제로 사진이 갤러리에 도착했는지 알 수 없다. 사용자 취소는 정상 흐름이라 세지 않는다.
    */
   | 'photo_save_fail'
+  /**
+   * 앱 첫 실행 (CHMO-704) — 다운로드 랜딩(`cheese-moa.com/get`)의 마지막 짝.
+   *
+   * 랜딩은 `landing_store_click`(App Store로 넘어갔다)까지만 볼 수 있다. 그 사람이 정말
+   * 설치했는지는 **웹이 구조적으로 알 수 없다** — 브라우저와 앱 웹뷰는 저장소가 분리돼 있어
+   * 같은 사람이라는 걸 이을 방법이 없다(그게 유료 어트리뷰션 도구가 파는 기능이다).
+   * 그래서 개인이 아니라 **집계로 잇는다**: 같은 기간의 세 숫자를 나란히 본다.
+   *
+   *   landing_view → landing_store_click → app_first_open
+   *
+   * `surface: 'app'`만으로는 안 되는 이유는 그게 "앱을 쓰고 있는 모든 순간"이라
+   * 새로 깐 사람과 원래 쓰던 사람이 한 수에 섞이기 때문이다.
+   */
+  | 'app_first_open'
 
 /**
  * 이벤트 프로퍼티 — **개인정보를 절대 넣지 않는다.**
@@ -341,6 +355,40 @@ function emitScreenLeave(): void {
   screenEnteredAt = null
   // 음수는 기기 시계가 뒤로 간 경우 — 0으로 접는다(버리면 이탈 자체가 사라진다)
   trackEvent('screen_leave', { screen: lastScreen, duration_ms: Math.min(Math.max(0, elapsed), SCREEN_MAX_MS) })
+}
+
+/**
+ * 앱 첫 실행 기록 키 (CHMO-704). **기기 단위**라 계정 접미사를 붙이지 않는다 —
+ * 세는 대상이 "이 기기에 앱이 새로 깔렸다"이지 "누가 로그인했다"가 아니다
+ * (수집이 익명 기기 단위인 것과 같은 이유 — optOut·푸시 토큰과 같은 관용).
+ *
+ * 앱을 지우면 웹뷰 저장소도 함께 사라지므로 재설치는 다시 한 번 잡힌다 — 그게 맞다.
+ */
+const APP_FIRST_OPEN_KEY = 'cheesemoa.analytics.appFirstOpen'
+
+/**
+ * 앱 첫 실행 1회 기록 (CHMO-704) — main.tsx 부트에서 부른다.
+ *
+ * **브라우저에서는 아무것도 하지 않는다.** 이 이벤트가 세는 건 앱 설치이고, 웹앱 방문은
+ * 이미 `screen_view`(surface=web)로 잡힌다.
+ *
+ * 두 가지를 일부러 이렇게 뒀다:
+ * ① **수집 거부·키 미설정이면 저장소도 건드리지 않는다** — 거부한 사람의 기기에 추적용
+ *    값을 남기는 건 거부 의사에 어긋난다(나중에 켜면 그때 한 번 잡히는 부정확은 감수한다).
+ * ② **저장에 실패하면 세지 않는다** — 기록을 못 남기면 실행할 때마다 발화해 "첫 실행" 수가
+ *    부풀고, 부풀려진 수로 내리는 판단이 아예 없는 것보다 나쁘다(과대보다 과소를 택한다).
+ */
+export function trackAppFirstOpen(): void {
+  if (!enabled()) return
+  // UA 마커가 곧 앱 판정 — 주입 객체는 늦게 생겨 부트 시점 판정에 쓸 수 없다(native/bridge)
+  if (!nativeAppInfo()) return
+  try {
+    if (localStorage.getItem(APP_FIRST_OPEN_KEY) !== null) return
+    localStorage.setItem(APP_FIRST_OPEN_KEY, '1')
+  } catch {
+    return
+  }
+  trackEvent('app_first_open')
 }
 
 /**

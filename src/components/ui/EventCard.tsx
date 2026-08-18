@@ -30,7 +30,8 @@ interface EventCardProps {
  * 커버가 이 카드의 정체를 만든다(CHMO-515) — "모임이랑 이벤트가 구별 안 된다"는 피드백의 원인 하나가
  * 홈 모임 카드와 이 카드의 실루엣이 같다는 것이었다(흰 카드 + 제목 + 회색 메타 한 줄). 이벤트는
  * 사진 묶음이니 사진을 보여주고, 모임 쪽(색면 헤더 + 치즈 심볼)과 갈라진다.
- * (서체가 Jua 한 벌이라 font-bold는 시각 효과가 없다 — 제목·메타를 가르는 건 크기와 색이다, CHMO-513)
+ * (제목·메타를 가르는 건 크기와 색이다 — Jua 단일 굵기 시절(CHMO-513)의 위계이고,
+ * Pretendard 전환(CHMO-702) 뒤에도 그대로 둔다)
  *
  * **카드끼리도 갈라져야 한다(CHMO-532)** — 여럿을 쌓으면 어디서 끊기는지가 흐렸다. 원인은 취향이
  * 아니라 색 수치였다: 카드 면(흰색)과 페이지 배경(cream)은 명도차가 1%도 안 돼 사실상 같은 색이라
@@ -53,7 +54,7 @@ export function EventCard({
       onClick={onClick}
       // 테두리 색은 border(#E6E0D4)보다 한 단계 진한 라인 — 팔레트에 중간 톤 라인 색이 없어
       // 임의값이다(다른 카드도 같은 처방을 하게 되면 토큰으로 올린다)
-      className="w-full cursor-pointer overflow-hidden rounded-[18px] border-[1.5px] border-[#D8CFBB] bg-white shadow-card-stack transition active:scale-[0.99]"
+      className="w-full cursor-pointer overflow-hidden rounded-[18px] border-[1.5px] border-[#D8CFBB] bg-white shadow-card-stack transition active:scale-[0.98]"
     >
       {cover && (
         <div className="cheese-dots h-32 w-full bg-photo">
