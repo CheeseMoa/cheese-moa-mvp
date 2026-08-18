@@ -1,4 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import catUrl from '../assets/chase/cat.png'
+import cheeseUrl from '../assets/chase/cheese.png'
+import mouseUrl from '../assets/chase/mouse.png'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlbumSettingsSheet } from '../components/AlbumSettingsSheet'
 import { PhoneShell } from '../components/PhoneShell'
@@ -15,6 +18,7 @@ import {
   useToast,
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useEntrance } from '../hooks/useEntrance'
 import type { UseApiResult } from '../hooks/useApi'
 import { useMutation } from '../hooks/useMutation'
 import { toErrorMessage } from '../api/client'
@@ -23,7 +27,7 @@ import { createPersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
 import { hasSeenCoachHint } from '../lib/onboarding'
-import type { Album, AnalysisProgress, EventItem, GroupType, ID } from '../types/api'
+import type { Album, AnalysisProgress, EventItem, GroupType } from '../types/api'
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
@@ -205,14 +209,37 @@ export function EventDetailPage() {
 }
 
 /**
- * 사진 분류 진행률 — 쥐(🐭)가 치즈(🧀)를 쫓아가는 프로그레스 바(CHMO-287).
+ * 사진 분류 진행률 — 쥐가 치즈를 쫓고 고양이가 그 쥐를 쫓는 프로그레스 바(CHMO-287 · 710).
+ * 캐릭터는 픽셀 아트 달리기 스프라이트 시트(`assets/chase/` — 사용자 제공 원본(리포 밖,
+ * 6프레임×3행 검정 배경 시트)에서 배경 제거·프레임 정렬 추출, 레시피는 CHMO-710 코멘트).
  * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
- * progress가 아직 null이면(등록 직후 등) 쥐가 트랙 위를 왕복하는 인디터미넌트로 폴백.
- * 쥐 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
+ * progress가 아직 null이면(등록 직후 등) 트랙 위를 왕복하는 인디터미넌트로 폴백.
+ * 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
  * (숨김 탭·임베디드 프리뷰)에선 transition이 걸린 속성이 첫 값에 얼어붙어, 폴링으로
  * 스타일이 갱신돼도 화면이 영영 안 움직인다. 진행 위치는 상태라 장식(총총거림)과 달리
  * 어느 환경에서든 즉시 반영돼야 한다.
  */
+/**
+ * 달리기 스프라이트(6프레임 가로 스트립)를 steps() 배경 이동으로 재생한다.
+ * w·h는 css px — 값은 시트 추출 스크립트 출력(자산이 2배 해상도, CHMO-710 코멘트 레시피).
+ */
+function RunnerSprite({ url, w, h, durMs }: { url: string; w: number; h: number; durMs: number }) {
+  return (
+    <span
+      className="animate-chase-frames"
+      style={{
+        width: w,
+        height: h,
+        backgroundImage: `url(${url})`,
+        // 6프레임 스트립 = 배경폭 600% — chase-frames 키프레임(0→120%)과 한 쌍
+        backgroundSize: '600% 100%',
+        // 잰걸음 차이 — 쥐(다리가 짧다)가 고양이보다 사이클이 훨씬 빨라야 쫓기는 게 보인다
+        animationDuration: `${durMs}ms`,
+      }}
+    />
+  )
+}
+
 function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
   const percent = progress?.percent
   return (
@@ -224,17 +251,24 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
       aria-valuenow={percent}
       className="mt-6 w-full"
     >
-      {/* 추격 무대 — 치즈는 결승점(오른쪽 끝) 고정, 쥐는 percent 위치 */}
-      <div className="relative h-9">
-        <span aria-hidden className="absolute -right-1.5 bottom-0 text-[26px]">
-          🧀
-        </span>
+      {/* 추격 무대 — 치즈는 결승점(오른쪽 끝) 고정, 고양이·쥐는 **한 덩어리**로 percent 위치.
+          각자 움직이게 두면 2초 폴링 점프가 두 번 보여 렉처럼 읽히고 총총거림도 어긋난다
+          (2026-08-18 피드백 — 위상차·딜레이 전부 폐기, 추격의 뜻은 배치(고양이가 뒤)가 만든다).
+          overflow-x-clip: 덩어리가 양 끝에서 무대 밖으로 밀려도 가로 스크롤을 만들지 않는다 */}
+      <div className="relative h-[52px] overflow-x-clip">
+        <img src={cheeseUrl} alt="" aria-hidden className="absolute bottom-0 right-0 h-7 w-auto" />
         <span
           aria-hidden
-          className={`absolute bottom-0 -translate-x-1/2 ${percent == null ? 'animate-chase-roam' : ''}`}
-          style={percent == null ? undefined : { left: `${percent}%` }}
+          // translateX(-71px) = 고양이(67)+간격(4) 되감기 — 0%엔 쥐만 무대 왼쪽 끝에 보이고
+          // 고양이는 무대 밖에서 대기하다 진행되며 들어온다(등장 연출). left의 -0.48px/%는
+          // 쥐 폭(48px)만큼 이동량을 줄여 100%에 쥐가 오른쪽 끝(치즈)에 정확히 닿게 한다
+          className={`absolute bottom-0 flex translate-x-[-71px] items-end gap-1 ${percent == null ? 'animate-chase-roam' : ''}`}
+          style={
+            percent == null ? undefined : { left: `calc(${percent}% - ${percent * 0.48}px)` }
+          }
         >
-          <span className="inline-block animate-chase-scurry text-[26px]">🐭</span>
+          <RunnerSprite url={catUrl} w={67} h={52} durMs={700} />
+          <RunnerSprite url={mouseUrl} w={48} h={44} durMs={350} />
         </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
@@ -279,55 +313,6 @@ interface EventAlbumGridProps {
  * 재공개 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
  * 설정·09 진입은 유형과 무관하다(전원 동일 권한이라 막을 이유가 없다).
  */
-/** 진입 효과를 이미 본 이벤트(세션 내) — 09 왕복·재진입엔 다시 재생하지 않는다(새로고침이면 초기화) */
-const entrancePlayed = new Set<ID>()
-
-/**
- * 08 진입 캐스케이드 — 분류가 끝난 이벤트를 처음 열면 앨범 카드들이 제 자리에서 살짝
- * 떠올랐다가 순서대로 자리 잡는다. 첫 안(상단에 모였다 흩어지는 딜)은 이동이 길어 "아직
- * 로딩 중"으로 읽혀 폐기 — 제자리·짧은 오프셋·빠른 스태거가 로딩감 없이 리듬만 남긴다.
- * 이벤트당 세션 1회만 — 09 왕복마다 다시 흩어지면 효과가 아니라 소음이다.
- * 끝나면 인라인 transition을 걷는다(남기면 카드의 눌림 전환(active:scale)이 이 전환을 탄다).
- * prefers-reduced-motion이면 건너뛴다.
- */
-function useGridEntrance(ready: boolean, eventId: ID) {
-  const gridRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const grid = gridRef.current
-    if (!ready || entrancePlayed.has(eventId) || !grid) return
-    entrancePlayed.add(eventId)
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const cells = Array.from(grid.children).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement,
-    )
-    if (cells.length < 2) return
-    cells.forEach((el) => {
-      el.style.transition = 'none'
-      // 스케일 팝 — 이동 없이 제자리에서 작게 시작해 살짝 넘쳤다(overshoot) 자리 잡는다
-      el.style.transform = 'scale(0.85)'
-      el.style.opacity = '0'
-    })
-    // 시작 상태가 그려진 다음 프레임에 목표 상태로 — 같은 프레임에 쓰면 전환이 안 탄다
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        cells.forEach((el, i) => {
-          // cubic-bezier y>1 = 1을 지나쳤다 돌아오는 백-아웃 이징이 팝 느낌을 만든다
-          el.style.transition = `transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 30}ms, opacity 140ms ease-out ${i * 30}ms`
-          el.style.transform = ''
-          el.style.opacity = ''
-        })
-      }),
-    )
-    // 정리는 setTimeout 완주에 맡긴다(cleanup으로 끊으면 StrictMode 이중 실행에서 인라인
-    // transition이 영영 남는다) — 언마운트 뒤 실행돼도 떨어져 나간 노드라 무해하다
-    window.setTimeout(
-      () => cells.forEach((el) => (el.style.transition = '')),
-      240 + cells.length * 30 + 100,
-    )
-  }, [ready, eventId])
-  return gridRef
-}
-
 function EventAlbumGrid({
   event,
   groupId,
@@ -369,8 +354,9 @@ function EventAlbumGrid({
   // 세지 않는다(계약상 optional — 값이 없다고 미검토로 단정하지 않는 reviewFlow와 같은 태도).
   const unreviewedPhotoCount = mainAlbums.reduce((sum, a) => sum + (a.unreviewedPhotoCount ?? 0), 0)
 
-  // 진입 캐스케이드 — 앨범이 실제로 있을 때만(빈 그리드는 만들기 타일 하나라 움직일 게 없다)
-  const dealGridRef = useGridEntrance(mainAlbums.length > 0, event.id)
+  // 진입 스케일 팝 — 앨범이 실제로 있을 때만(빈 그리드는 만들기 타일 하나라 움직일 게 없다).
+  // 진입할 때마다 재생(CHMO-709 — 세션 1회 제한은 화면 피드백으로 폐기, 마운트 내 갱신엔 미재생)
+  const dealGridRef = useEntrance<HTMLDivElement>(mainAlbums.length > 0, 'pop')
 
   return (
     <PhoneShell>

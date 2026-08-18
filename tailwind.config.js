@@ -83,14 +83,18 @@ export default {
       },
       // AI 분석 진행률 — 쥐가 치즈를 쫓아가는 프로그레스(CHMO-287, 분석중 화면 전용)
       keyframes: {
-        'chase-scurry': {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-4px)' },
+        // 달리기 프레임(CHMO-710) — 6프레임 가로 스트립을 background-position으로 한 장씩 넘긴다.
+        // 120%인 이유: 배경폭 600%에서 P%의 오프셋 = -5w×P/100 이라 steps(6)로 0→120%를 밟으면
+        // 정확히 0, -w, …, -5w 여섯 자리가 나온다(프레임 폭 w를 몰라도 되는 퍼센트 트릭)
+        'chase-frames': {
+          from: { backgroundPositionX: '0%' },
+          to: { backgroundPositionX: '120%' },
         },
-        // 진행률 없는 동안(인디터미넌트) 쥐가 트랙 위를 왕복 — left만 움직여 translate와 안 겹침
+        // 진행률 없는 동안(인디터미넌트) 왕복 — left만 움직인다(고양이 되감기 translateX(-71px)는
+        // 래퍼의 정적 클래스 몫). 끝값 -48px = 쥐 폭만큼 빼서 오른쪽 끝에서 쥐가 무대에 남는다
         'chase-roam': {
-          '0%': { left: '4%' },
-          '100%': { left: '96%' },
+          '0%': { left: '0%' },
+          '100%': { left: 'calc(100% - 48px)' },
         },
         // 코치 힌트(CHMO-565) 등장 — 아래에서 살짝 올라오며 나타난다
         'step-in': {
@@ -99,7 +103,7 @@ export default {
         },
       },
       animation: {
-        'chase-scurry': 'chase-scurry 0.45s ease-in-out infinite',
+        'chase-frames': 'chase-frames 0.6s steps(6) infinite',
         'chase-roam': 'chase-roam 1.8s ease-in-out infinite alternate',
         'step-in': 'step-in 0.3s ease-out both',
       },
