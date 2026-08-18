@@ -3,7 +3,13 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
 import { ToastProvider } from './components/ui'
-import { endScreenSession, initAnalytics, resumeScreenSession, trackScreen } from './lib/analytics'
+import {
+  endScreenSession,
+  initAnalytics,
+  resumeScreenSession,
+  trackAppFirstOpen,
+  trackScreen,
+} from './lib/analytics'
 import { startPushTokenSync } from './lib/push'
 import './index.css'
 
@@ -39,6 +45,9 @@ function startAnalytics() {
   // SDK는 동적 import라 도착까지 시간이 걸린다 — 기다리지 않는다(렌더를 막을 이유가 없다).
   // 그 사이 발생한 이벤트는 analytics가 큐에 담았다가 초기화 끝에 흘려보낸다.
   void initAnalytics()
+  // 앱 첫 실행 (CHMO-704) — 기기당 1회. 브라우저에서는 아무것도 하지 않는다.
+  // 첫 화면 기록보다 앞에 두는 건 순서 자체가 뜻을 갖기 때문이다(앱이 열렸고 → 이 화면을 봤다).
+  trackAppFirstOpen()
   trackScreen(window.location.pathname)
   router.subscribe((state) => trackScreen(state.location.pathname))
 

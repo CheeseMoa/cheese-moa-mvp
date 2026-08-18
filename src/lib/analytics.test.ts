@@ -271,3 +271,77 @@ describe('router.tsx와의 누락 대조', () => {
     expect(missing).toEqual([])
   })
 })
+
+/**
+ * 앱 첫 실행 (CHMO-704) — 다운로드 랜딩(`cheese-moa.com/get`)의 마지막 짝.
+ *
+ * 이 이벤트가 지켜야 하는 건 정확도가 아니라 **셈의 성질**이다. 기기당 딱 한 번이라야
+ * 랜딩 클릭 수와 나란히 놓고 볼 수 있고, 한 번이 아니게 되는 순간(브라우저에서도 발화하거나
+ * 매 실행마다 발화하면) 숫자가 부풀어 대조 자체가 무의미해진다.
+ *
+ * 체류 테스트와 같은 제약을 받는다 — 키가 없으면 모듈이 통째로 no-op이고 DEV에서는
+ * 전송 대신 `console.info`로 빠진다. 그래서 키를 심어 새 인스턴스를 받고 로그로 읽는다.
+ */
+describe('앱 첫 실행 (CHMO-704)', () => {
+  const APP_UA = 'Mozilla/5.0 (Linux; Android 14) CheeseMoaApp/1.2.0 (android) Bridge/1'
+  const BROWSER_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) Safari/604.1'
+  let restoreLog: (() => void) | null = null
+
+  async function harness(userAgent: string) {
+    vi.stubGlobal('navigator', { userAgent, maxTouchPoints: 0 })
+    vi.stubEnv('VITE_AMPLITUDE_API_KEY', 'test-key')
+    vi.resetModules()
+    const analytics = await import('./analytics')
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    restoreLog = () => log.mockRestore()
+    const emitted = () =>
+      log.mock.calls.filter((call) => call[0] === '[analytics]').map((call) => call[1] as string)
+    return { analytics, emitted }
+  }
+
+  afterEach(() => {
+    restoreLog?.()
+    restoreLog = null
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('앱 웹뷰에서 처음 열면 1회 발화한다', async () => {
+    const { analytics, emitted } = await harness(APP_UA)
+
+    analytics.trackAppFirstOpen()
+
+    expect(emitted()).toEqual(['app_first_open'])
+  })
+
+  it('같은 기기에서 다시 열면 발화하지 않는다', async () => {
+    const { analytics, emitted } = await harness(APP_UA)
+
+    analytics.trackAppFirstOpen()
+    analytics.trackAppFirstOpen() // 두 번째 실행 — 기기 플래그가 남아 있다
+
+    // 두 번 세면 "설치 수"가 "실행 수"가 돼 랜딩 클릭과 대조할 수 없다
+    expect(emitted()).toEqual(['app_first_open'])
+  })
+
+  it('일반 브라우저에서는 발화하지 않는다', async () => {
+    const { analytics, emitted } = await harness(BROWSER_UA)
+
+    analytics.trackAppFirstOpen()
+
+    // 웹앱 방문은 이미 screen_view(surface=web)로 잡힌다 — 이 이벤트가 세는 건 앱 설치다
+    expect(emitted()).toEqual([])
+  })
+
+  it('수집 거부 상태에서는 발화하지도, 저장소를 건드리지도 않는다', async () => {
+    const { analytics, emitted } = await harness(APP_UA)
+
+    analytics.setAnalyticsOptOut(true)
+    analytics.trackAppFirstOpen()
+
+    expect(emitted()).toEqual([])
+    // 거부한 사람의 기기에 추적용 값을 남기지 않는다 — 남기면 나중에 켜도 영영 안 잡힌다
+    expect(localStorage.getItem('cheesemoa.analytics.appFirstOpen')).toBeNull()
+  })
+})
