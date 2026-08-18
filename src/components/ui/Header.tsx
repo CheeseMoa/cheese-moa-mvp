@@ -60,7 +60,10 @@ export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onB
   return (
     <header className="flex h-[60px] shrink-0 items-center border-b border-border bg-cream px-3.5">
       <Cheddar size={34} />
-      <span className="ml-2 text-[22px] text-heading">{title ?? '치즈모아'}</span>
+      {/* 워드마크만 Jua(CHMO-706) — title을 받은 홈형은 화면 이름이라 본문 서체(Pretendard) 유지 */}
+      <span className={cx('ml-2 text-[22px] text-heading', !title && 'font-logo')}>
+        {title ?? '치즈모아'}
+      </span>
       <div className="ml-auto">{right}</div>
     </header>
   )
