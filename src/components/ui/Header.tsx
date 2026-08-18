@@ -53,18 +53,22 @@ export function Header({ title, titleBadge, backTo, backLabel, backDisabled, onB
           <span className="min-w-0 truncate">{title}</span>
           {titleBadge}
         </h1>
-        <div className="justify-self-end">{right}</div>
+        <div className="flex items-center justify-self-end">{right}</div>
       </header>
     )
   }
   return (
     <header className="flex h-[60px] shrink-0 items-center border-b border-border bg-cream px-5">
-      <Cheddar size={34} />
-      {/* 워드마크만 Jua(CHMO-706) — title을 받은 홈형은 화면 이름이라 본문 서체(Pretendard) 유지 */}
-      <span className={cx('ml-2.5 text-[22px] text-heading', !title && 'font-logo')}>
+      <Cheddar size={34} className="shrink-0" />
+      {/* 워드마크만 Jua(CHMO-706) — title을 받은 홈형은 화면 이름이라 본문 서체(Pretendard) 유지.
+          translate-y: Jua는 한글 글리프가 글자상자(asc 800/desc -200, 중심 300) 중심보다
+          0.087em 위에 앉아 items-center로도 로고·우측 액션과 눈높이가 안 맞는다 — 22px에서 1.9px */}
+      <span
+        className={cx('ml-2.5 text-[22px] text-heading', !title && 'translate-y-[2px] font-logo')}
+      >
         {title ?? '치즈모아'}
       </span>
-      <div className="ml-auto">{right}</div>
+      <div className="ml-auto flex items-center">{right}</div>
     </header>
   )
 }
