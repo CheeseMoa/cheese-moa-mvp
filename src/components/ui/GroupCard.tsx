@@ -69,7 +69,8 @@ export function GroupCard({
           pending && 'opacity-50',
         )}
       >
-        <Cheddar size={40} />
+        {/* 헤더와 같은 비율로 축소(CHMO-706, 34→26). 슬롯 44는 그대로라 목록 정렬은 안 흔들린다 */}
+        <Cheddar size={30} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
