@@ -21,7 +21,8 @@ export function BrandHero({ onSymbolTap }: BrandHeroProps) {
       <span className="select-none touch-manipulation" onClick={onSymbolTap}>
         <Cheddar size={88} />
       </span>
-      <h1 className="mt-4 text-[32px] leading-tight text-heading">치즈모아</h1>
+      {/* 워드마크는 홈 헤더와 같은 얼굴(CHMO-706) — Pretendard 400으로는 32px에서 획이 가늘게 눕는다 */}
+      <h1 className="mt-4 font-logo text-[32px] leading-tight text-heading">치즈모아</h1>
       {/* 서브카피 중립화(CHMO-608 · B2C 359:11) — 서비스 정의가 "유치원 도구"에서
           "모임 사진 자동 정리 일반 도구"로 바뀌었다(group-type-proposal §2) */}
       <p className="mt-1 text-sm text-muted">모임 사진을 올리면, 사람별로 자동 정리</p>
