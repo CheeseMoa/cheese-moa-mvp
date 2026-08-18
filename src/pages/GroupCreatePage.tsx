@@ -118,7 +118,7 @@ export function GroupCreatePage() {
                 type="button"
                 onClick={() => setGroupType(card.type)}
                 // 세로로 쌓이는 카드라 blur 30(shadow-card)은 사이 14px을 뿌옇게 채운다(CHMO-532)
-                className="group w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack transition active:scale-[0.99]"
+                className="group w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack transition active:scale-[0.98]"
               >
                 <span className="flex items-center gap-3.5">
                   <span
