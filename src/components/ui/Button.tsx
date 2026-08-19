@@ -28,7 +28,7 @@ function buttonClasses({ variant, size, fullWidth, disabled, className }: Button
           ? 'bg-warn text-white'
           : 'bg-accent text-white'
   return cx(
-    'inline-flex items-center justify-center font-bold transition duration-100 active:scale-[0.97] active:brightness-95 disabled:active:scale-100 disabled:active:brightness-100',
+    'press inline-flex items-center justify-center font-bold active:brightness-95 disabled:active:scale-100 disabled:active:brightness-100',
     sizeCls,
     variantCls,
     fullWidth && 'w-full',

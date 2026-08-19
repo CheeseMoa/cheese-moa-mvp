@@ -1,3 +1,24 @@
+import { MOTION_DURATION, MOTION_EASE } from './src/lib/motion'
+
+/**
+ * 모션 토큰은 `src/lib/motion.ts`가 단일 원천이다(CHMO-711) — JS로 도는 모션(진입 효과·
+ * 라이트박스 슬라이드)과 CSS 유틸이 같은 값을 써야 해서, 여기서 값을 다시 적지 않고 읽어 온다.
+ */
+const duration = Object.fromEntries(
+  Object.entries(MOTION_DURATION).map(([name, ms]) => [name, `${ms}ms`]),
+)
+
+/**
+ * 오버레이 등장/퇴장 애니메이션 한 줄 만들기 — 이름만 다르고 조립은 같다.
+ * fill-mode가 갈리는 게 핵심이다: 등장은 `backwards`(끝난 뒤 값을 붙들지 않는다),
+ * 퇴장은 `forwards`(언마운트될 때까지 사라진 상태로 남는다).
+ * 등장에 `both`를 쓰면 애니메이션이 끝난 뒤에도 transform을 계속 소유해서, 인라인 style로
+ * 도는 모션(시트 끌어내리기)이 애니메이션에 밀려 아예 먹히지 않는다.
+ */
+const motion = (name, ms, ease, fill) => `${name} ${ms}ms ${ease} ${fill}`
+const enter = (name, ms, ease) => motion(name, ms, ease, 'backwards')
+const leave = (name, ms, ease) => motion(name, ms, ease, 'forwards')
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -101,12 +122,47 @@ export default {
           from: { opacity: '0', transform: 'translateY(10px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        // 오버레이 전환(CHMO-711) — 스크림·다이얼로그·시트·토스트가 나타나고 사라지는 방식.
+        // 등장과 퇴장을 따로 두는 건 이징이 반대라서다(등장은 부드럽게 안착, 퇴장은 빠르게 빠짐).
+        'scrim-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        'scrim-out': { from: { opacity: '1' }, to: { opacity: '0' } },
+        // 다이얼로그는 제자리에서 팝 — 위치를 옮기면 어디서 왔는지 눈이 따라가야 한다
+        'dialog-in': {
+          from: { opacity: '0', transform: 'scale(0.94)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+        'dialog-out': {
+          from: { opacity: '1', transform: 'scale(1)' },
+          to: { opacity: '0', transform: 'scale(0.97)' },
+        },
+        // 시트는 아래에서 올라오고 아래로 내려간다 — 끌어내려 닫는 제스처와 같은 축
+        'sheet-in': { from: { transform: 'translateY(100%)' }, to: { transform: 'translateY(0)' } },
+        'sheet-out': { from: { transform: 'translateY(0)' }, to: { transform: 'translateY(100%)' } },
+        // 토스트는 살짝 떠오른다(코치 힌트 step-in과 같은 결, 이동 거리만 짧다)
+        'toast-in': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        'toast-out': {
+          from: { opacity: '1', transform: 'translateY(0)' },
+          to: { opacity: '0', transform: 'translateY(4px)' },
+        },
       },
       animation: {
         'chase-frames': 'chase-frames 0.6s steps(6) infinite',
         'chase-roam': 'chase-roam 1.8s ease-in-out infinite alternate',
-        'step-in': 'step-in 0.3s ease-out both',
+        'step-in': enter('step-in', MOTION_DURATION.slow, MOTION_EASE.standard),
+        'scrim-in': enter('scrim-in', MOTION_DURATION.base, MOTION_EASE.standard),
+        'scrim-out': leave('scrim-out', MOTION_DURATION.fast, MOTION_EASE.exit),
+        'dialog-in': enter('dialog-in', MOTION_DURATION.base, MOTION_EASE.pop),
+        'dialog-out': leave('dialog-out', MOTION_DURATION.fast, MOTION_EASE.exit),
+        'sheet-in': enter('sheet-in', MOTION_DURATION.base, MOTION_EASE.standard),
+        'sheet-out': leave('sheet-out', MOTION_DURATION.fast, MOTION_EASE.exit),
+        'toast-in': enter('toast-in', MOTION_DURATION.base, MOTION_EASE.standard),
+        'toast-out': leave('toast-out', MOTION_DURATION.fast, MOTION_EASE.exit),
       },
+      transitionDuration: duration,
+      transitionTimingFunction: MOTION_EASE,
       borderRadius: {
         '4xl': '2rem',
       },

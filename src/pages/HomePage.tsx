@@ -12,6 +12,7 @@ import {
   useToast,
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useEntrance } from '../hooks/useEntrance'
 import { listGroups } from '../api/groups'
 
 /**
@@ -46,6 +47,8 @@ export function HomePage() {
   const [joinOpen, setJoinOpen] = useState(false)
 
   const groups = data ?? []
+  // 05 이벤트 목록·08 앨범 그리드와 같은 진입 효과(CHMO-711) — 같은 꼴의 목록은 같게 들어온다
+  const groupListRef = useEntrance<HTMLUListElement>(groups.length > 0, 'rise')
 
   return (
     <PhoneShell>
@@ -93,7 +96,7 @@ export function HomePage() {
               }
             />
           ) : (
-            <ul className="flex flex-col gap-3">
+            <ul ref={groupListRef} className="flex flex-col gap-3">
               {groups.map((g) => {
                 const membership = g.myMembership
                 const pending = membership?.status === 'pending'

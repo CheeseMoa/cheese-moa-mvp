@@ -49,7 +49,7 @@ export function CoachHint({ id, className, arrow = 'up', tail = 'left', children
     <div
       role="status"
       className={cx(
-        'pointer-events-none absolute z-10 max-w-[240px] rounded-xl bg-heading px-3 py-2 text-xs leading-relaxed text-cream shadow-card-sm motion-safe:animate-step-in',
+        'pointer-events-none absolute z-10 max-w-[240px] rounded-xl bg-heading px-3 py-2 text-xs leading-relaxed text-cream shadow-card-sm animate-step-in',
         className,
       )}
     >

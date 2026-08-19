@@ -118,14 +118,14 @@ export function GroupCreatePage() {
                 type="button"
                 onClick={() => setGroupType(card.type)}
                 // 세로로 쌓이는 카드라 blur 30(shadow-card)은 사이 14px을 뿌옇게 채운다(CHMO-532)
-                className="group w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack transition active:scale-[0.98]"
+                className="press-card group w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card-stack"
               >
                 <span className="flex items-center gap-3.5">
                   <span
                     aria-hidden="true"
                     className={cx(
                       // 누르는 동안 타일이 옐로우로 차오른다 — 두 카드가 같은 피드백을 준다
-                      'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors group-active:bg-primary',
+                      'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition-colors duration-fast ease-standard group-active:bg-primary',
                       card.tile,
                     )}
                   >

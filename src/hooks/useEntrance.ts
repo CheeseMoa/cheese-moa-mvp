@@ -1,11 +1,25 @@
 import { useLayoutEffect, useRef } from 'react'
+import { MOTION_DURATION, MOTION_EASE, prefersReducedMotion } from '../lib/motion'
 
-/** 진입 효과 프리셋 — 시작 transform과 타이밍만 다르고 재생 방식(FLIP 되감기)은 같다 */
+/**
+ * 진입 효과 프리셋 — 시작 transform과 타이밍만 다르고 재생 방식(FLIP 되감기)은 같다.
+ * 시간·이징은 모션 토큰(CHMO-711)에서 온다 — 오버레이·슬라이드와 같은 축을 쓴다.
+ */
 const PRESETS = {
   // 08 앨범 그리드: 제자리 팝(작게 → 살짝 넘침 → 안착). y>1 백-아웃 이징이 팝 느낌을 만든다
-  pop: { from: 'scale(0.85)', duration: 240, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', stagger: 30 },
+  pop: {
+    from: 'scale(0.85)',
+    duration: MOTION_DURATION.base,
+    easing: MOTION_EASE.pop,
+    stagger: 30,
+  },
   // 05 이벤트 목록: 라이즈(아래에서 떠오름) — 세로 목록은 스크롤과 같은 축의 이동이 자연스럽다
-  rise: { from: 'translateY(18px)', duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', stagger: 45 },
+  rise: {
+    from: 'translateY(18px)',
+    duration: MOTION_DURATION.slow,
+    easing: MOTION_EASE.standard,
+    stagger: 45,
+  },
 } as const
 
 export type EntrancePreset = keyof typeof PRESETS
@@ -25,7 +39,7 @@ export function useEntrance<T extends HTMLElement>(ready: boolean, preset: Entra
     const container = ref.current
     if (!ready || playedRef.current || !container) return
     playedRef.current = true
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (prefersReducedMotion()) return
     const { from, duration, easing, stagger } = PRESETS[preset]
     const cells = Array.from(container.children).filter(
       (el): el is HTMLElement => el instanceof HTMLElement,
@@ -40,7 +54,7 @@ export function useEntrance<T extends HTMLElement>(ready: boolean, preset: Entra
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         cells.forEach((el, i) => {
-          el.style.transition = `transform ${duration}ms ${easing} ${i * stagger}ms, opacity 160ms ease-out ${i * stagger}ms`
+          el.style.transition = `transform ${duration}ms ${easing} ${i * stagger}ms, opacity ${MOTION_DURATION.fast}ms ${MOTION_EASE.standard} ${i * stagger}ms`
           el.style.transform = ''
           el.style.opacity = ''
         })

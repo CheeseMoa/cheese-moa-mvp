@@ -1,7 +1,9 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { useOverlayTransition } from '../../hooks/useOverlayTransition'
 import { cx } from '../../lib/cx'
+import { MOTION_DURATION, MOTION_EASE } from '../../lib/motion'
 
 interface BottomSheetProps {
   open: boolean
@@ -53,6 +55,11 @@ interface DragState {
  * 긴 화면에서 프레임이 뷰포트보다 자라도 시트가 화면 밖(프레임 맨 아래)에 열리지 않게,
  * 스크림 안 sticky 컨테이너(h-dvh, 프레임이 더 짧으면 max-h-full)로 현재 뷰포트 하단에 붙인다.
  *
+ * 열림·닫힘 모두 전환을 탄다(CHMO-711) — 아래에서 올라오고 아래로 내려간다(끌어내려 닫는
+ * 제스처와 같은 축). 끌어서 닫을 때만 예외로 퇴장 애니메이션을 쓰지 않는다: 손이 이미
+ * 시트를 내려놓은 자리에서 키프레임(translateY 0 → 100%)이 시작하면 시트가 위로 튄다.
+ * 그땐 끌던 위치에서 이어 내려가도록 인라인 transform에 맡긴다.
+ *
  * 끌어내려 닫기(CHMO-345): 포인터 이벤트라 터치·마우스 모두 동작한다. 첫 이동의
  * 지배 축이 수직일 때만 시트를 끌고, 수평이면 내부 가로 스크롤(09-1 추천 목록)에
  * 양보한다 — touch-action: pan-x가 터치의 가로 네이티브 팬은 살리고 수직만 JS로
@@ -72,8 +79,18 @@ export function BottomSheet({
   const sheetRef = useRef<HTMLDivElement>(null)
   const drag = useRef<DragState | null>(null)
   const suppressClick = useRef(false)
+  const { mounted, leaving } = useOverlayTransition(open)
+  /** 끌어내려 닫는 중인가 — 퇴장을 키프레임이 아니라 손이 놓은 자리에서 이어 간다 */
+  const [dragClosing, setDragClosing] = useState(false)
+  /** 끌어 닫은 직후 "정말 닫혔는지"를 이벤트 핸들러 밖에서 확인하기 위한 최신 open */
+  const openRef = useRef(open)
 
-  if (!open) return null
+  useEffect(() => {
+    openRef.current = open
+    if (open) setDragClosing(false)
+  }, [open])
+
+  if (!mounted) return null
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // 멀티터치 두 번째 포인터가 진행 중인 드래그 상태를 덮어쓰지 않게 무시
@@ -124,11 +141,30 @@ export function BottomSheet({
     drag.current = null
     if (d.axis !== 'v') return
     const flick = d.dy > AXIS_LOCK_MIN && d.speed > CLOSE_FLICK_SPEED
-    if (e.type !== 'pointercancel' && (d.dy > CLOSE_DRAG_MIN || flick)) onClose()
-    // 닫힘이 거부될 수 있어(이동 중 busy 등) 항상 원위치로 되돌린다
+    const closing = e.type !== 'pointercancel' && (d.dy > CLOSE_DRAG_MIN || flick)
     const el = sheetRef.current
+    if (closing) {
+      // 손이 놓은 자리에서 그대로 화면 밖까지 — 퇴장 애니메이션은 이 경우만 건너뛴다
+      setDragClosing(true)
+      if (el) {
+        el.style.transition = `transform ${MOTION_DURATION.fast}ms ${MOTION_EASE.exit}`
+        el.style.transform = 'translateY(100%)'
+      }
+      onClose()
+      // 닫힘은 거부될 수 있다(이동 중 busy 등) — 그대로 두면 시트가 화면 밖에 남는다.
+      // 다음 틱(리렌더 후)에도 열려 있으면 되돌린다.
+      window.setTimeout(() => {
+        const still = sheetRef.current
+        if (!openRef.current || !still) return
+        setDragClosing(false)
+        still.style.transition = `transform ${MOTION_DURATION.base}ms ${MOTION_EASE.standard}`
+        still.style.transform = 'translateY(0px)'
+      }, 0)
+      return
+    }
+    // 닫히지 않았으면(짧은 끌기, 또는 닫힘이 거부될 수 있는 busy 상황) 원위치로 되돌린다
     if (el) {
-      el.style.transition = 'transform 200ms ease'
+      el.style.transition = `transform ${MOTION_DURATION.base}ms ${MOTION_EASE.standard}`
       el.style.transform = 'translateY(0px)'
     }
   }
@@ -144,7 +180,11 @@ export function BottomSheet({
     <div
       onClick={onClose}
       onClickCapture={handleClickCapture}
-      className="absolute inset-0 z-40 bg-text/[.45]"
+      className={cx(
+        'absolute inset-0 z-40 bg-text/[.45]',
+        // 퇴장 중엔 입력을 받지 않는다 — 이미 닫힌 시트가 탭을 한 번 더 삼키면 안 된다
+        leaving ? 'pointer-events-none animate-scrim-out' : 'animate-scrim-in',
+      )}
     >
       <div className="sticky top-0 flex h-dvh max-h-full flex-col justify-end">
         <div
@@ -161,6 +201,7 @@ export function BottomSheet({
           style={{ touchAction: bodyScrollable ? undefined : 'pan-x' }}
           className={cx(
             'select-none rounded-t-[24px] bg-cream px-5 pb-safe-6 pt-3',
+            !dragClosing && (leaving ? 'animate-sheet-out' : 'animate-sheet-in'),
             // 상단 56px은 스크림에 남긴다 — 어두워진 뒤 배경이 그만큼 비쳐 깊이가 생긴다
             fullHeight && 'flex h-[calc(100%-56px)] flex-col',
           )}
