@@ -119,7 +119,7 @@ export function SignupConsentForm({ submitting, error, onSubmit, entry }: Signup
           </p>
         ) : null}
         <p className="mb-2.5 text-center text-xs text-muted">{SIGNUP_CONSENT_NOTICE}</p>
-        <Button fullWidth disabled={!allRequiredChecked || submitting} onClick={onSubmit}>
+        <Button variant="accent" fullWidth disabled={!allRequiredChecked || submitting} onClick={onSubmit}>
           {submitting ? '저장 중…' : '동의하고 시작하기'}
         </Button>
       </div>

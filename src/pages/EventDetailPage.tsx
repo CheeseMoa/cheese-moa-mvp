@@ -157,7 +157,7 @@ export function EventDetailPage() {
                   {/* replace로 들어간다 — 06-U는 히스토리에 남지 않는 '지나가는 화면'이라(CHMO-486
                       내비 관용) 06-E 자리를 대신 차지해야 업로드 후 뒤로가기가 모임 상세로 곧장
                       빠진다. push로 두면 히스토리에 06-E·06-U가 남아 뒤로가기가 두 번 헛돈다 */}
-                  <Button fullWidth onClick={() => navigate(`${base}/upload`, { replace: true })}>
+                  <Button variant="accent" fullWidth onClick={() => navigate(`${base}/upload`, { replace: true })}>
                     사진 업로드
                   </Button>
                 </div>
@@ -487,10 +487,10 @@ function EventAlbumGrid({
           {/* 재업로드 진입(CHMO-606 — CHMO-486 반전): 분류가 끝난 이벤트에 사진을 이어 올린다.
               replace — 06-U는 히스토리에 남지 않는 지나가는 화면이라(내비 관용) push로 두면
               업로드 완료 replace가 06-U 자리를 08로 바꿔 뒤로가기가 08→08로 한 번 헛돈다.
-              일반 모임에선 이게 유일한 CTA라 primary — 색이 위계를 만드는 규칙(CHMO-530)에서
+              일반 모임에선 이게 유일한 CTA라 강조색(accent) — 색이 위계를 만드는 규칙(CHMO-530)에서
               혼자 남은 secondary는 할 일이 없는 화면처럼 읽힌다 */}
           <Button
-            variant={business ? 'secondary' : 'primary'}
+            variant={business ? 'secondary' : 'accent'}
             fullWidth
             onClick={() => navigate(`${base}/upload`, { replace: true })}
           >
@@ -500,7 +500,7 @@ function EventAlbumGrid({
               14 공개 요약도, 그 게이트를 미리 알리는 힌트도 가리킬 대상이 없다 */}
           {business && (
             <div className="relative">
-              <Button fullWidth onClick={() => navigate(`${base}/publish`)}>
+              <Button variant="accent" fullWidth onClick={() => navigate(`${base}/publish`)}>
                 공개 전 요약보기
               </Button>
               {/* 공개 게이트 힌트(CHMO-578) — "모든 앨범 검토 완료 = 공개 조건"(CHMO-488)은 화면

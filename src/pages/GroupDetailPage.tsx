@@ -340,7 +340,7 @@ export function GroupDetailPage() {
                   초대
                 </ButtonLink>
               )}
-              <Button className="flex-1 whitespace-nowrap" onClick={() => setCreateOpen(true)}>
+              <Button variant="accent" className="flex-1 whitespace-nowrap" onClick={() => setCreateOpen(true)}>
                 ＋ 이벤트 생성
               </Button>
             </div>

@@ -272,7 +272,7 @@ export function PublishReviewPage() {
             )}
             {/* published 라벨 분기(CHMO-606): 발행 대기·미검토가 남았으면 아직 할 일이 있는
                 '공개하기'(재공개), 전부 나갔으면 '공개 완료됨' 잠금 */}
-            <Button fullWidth disabled={!canPublish} onClick={() => setConfirmOpen(true)}>
+            <Button variant="accent" fullWidth disabled={!canPublish} onClick={() => setConfirmOpen(true)}>
               {published && pendingPublish === 0 && !hasUnreviewed ? '공개 완료됨' : '공개하기'}
             </Button>
           </div>

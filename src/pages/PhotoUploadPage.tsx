@@ -633,6 +633,7 @@ export function PhotoUploadPage() {
           ) : null}
 
           <Button
+            variant="accent"
             fullWidth
             disabled={selectedCount === 0 || overBatchLimit || busy}
             onClick={handleAnalyze}
