@@ -23,6 +23,7 @@ import {
   recordAgreement,
   deleteAlbumCascade,
   membershipOf,
+  mergePersonInto,
   photosOfAlbum,
   photosOfEvent,
   albumsOfEvent,
@@ -53,6 +54,7 @@ import {
   toGroupMemberResponse,
   toGroupSummary,
   toJoinRequestResponse,
+  toMergeAlbumPersonResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
   toParentEventPhotosResponse,
@@ -588,6 +590,53 @@ describe('목 직렬화기 → api 매퍼 이음매', () => {
       photoCount: 0,
       coverThumbnailUrl: null,
     })
+  })
+
+  it('인물 병합 — 전 이벤트 이관·같은 이벤트 통합·매핑 이관·인물 삭제 (CHMO-688)', () => {
+    // 시드: 김민준(person 1) = 앨범 1(이벤트 1, 전량 검토)·9(이벤트 2) + 민준아빠(user 4) 매핑,
+    // 최지우(person 4) = 앨범 4(이벤트 1만) + 매핑 없음. 앨범 1을 최지우로 병합하면 —
+    const requested = findAlbum(1)!
+    const movedPhotoIds = photosOfAlbum(1).map((p) => p.id)
+    const targetPhotoIds = photosOfAlbum(4).map((p) => p.id)
+
+    const surviving = mergePersonInto(requested, 4)
+
+    // 이벤트 1: 같은 이벤트에 대상 앨범(4)이 있어 통합 — 원본은 삭제되고 남은 앨범 id가 온다
+    expect(surviving).toBe(4)
+    expect(findAlbum(1)).toBeUndefined()
+    const merged = photosOfAlbum(4)
+    expect(merged.map((p) => p.id)).toEqual(
+      expect.arrayContaining([...movedPhotoIds, ...targetPhotoIds]),
+    )
+    // 검토 상태 보존(AC-4) — 이관된 매핑은 원래 값(검토 완료) 그대로, 대상 앨범 상태를 따르지 않는다
+    for (const id of movedPhotoIds) expect(merged.find((p) => p.id === id)!.reviewed).toBe(true)
+    // 커버 재계산 — BE 규칙(min photoId, CHMO-402)
+    expect(findAlbum(4)!.coverPhotoId).toBe(Math.min(...merged.map((p) => p.id)))
+    // 이벤트 2: 대상 앨범이 없어 앨범째 이관 — 인물이 반쪽으로 갈라져 남지 않는다
+    expect(findAlbum(9)!.personId).toBe(4)
+    // 흡수 인물은 행째 삭제(벡터 파기의 목 대응), 학부모 매핑은 대상 인물로 이관
+    expect(db.persons.find((p) => p.id === 1)).toBeUndefined()
+    expect(db.personParents).toContainEqual({ userId: 4, personId: 4 })
+    expect(db.personParents.some((pp) => pp.personId === 1)).toBe(false)
+
+    // FE mergeAlbumPerson이 읽는 응답 필드명(albumId·personId·personName)
+    expect(toMergeAlbumPersonResponse(surviving as number, db.persons.find((p) => p.id === 4)!)).toEqual({
+      albumId: 4,
+      personId: 4,
+      personName: '최지우',
+    })
+  })
+
+  it('인물 병합 — 양쪽이 서로 다른 학부모에 연결돼 있으면 중단하고 아무것도 바꾸지 않는다 (PERSON409)', () => {
+    // 김민준(민준아빠 매핑) → 이서연(서연맘 매핑): 오병합이면 다른 인물 사진이 노출되므로 거부
+    const before = [...db.personParents.map((pp) => ({ ...pp }))]
+
+    expect(mergePersonInto(findAlbum(1)!, 2)).toBe('parent_conflict')
+
+    // 판정이 변이보다 앞이라 매핑·앨범·인물이 전부 그대로다
+    expect(db.personParents).toEqual(before)
+    expect(findAlbum(1)).toBeDefined()
+    expect(db.persons.find((p) => p.id === 1)).toBeDefined()
   })
 
   it('앨범 삭제 — 이 앨범에만 속한 사진은 폐기, 다른 앨범 사본은 유지 (CHMO-271·435)', () => {

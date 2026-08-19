@@ -387,6 +387,13 @@ export const BE_CREATE_ALBUM_EMPTY = {
 /** DELETE /photos — DeletePhotosResponse (스키마 기준) */
 export const BE_DELETE_PHOTOS = { detachedCount: 2, deletedPhotoCount: 1 }
 
+/**
+ * POST /albums/:id/merge-person — MergeAlbumPersonResponse(CHMO-688 BE 스펙·소스 대조 —
+ * 실서버 채집 후 교체). albumId는 요청 앨범이 있던 이벤트에서 병합 후 남은 앨범(대상 인물
+ * 앨범과 통합됐으면 그 앨범), personName은 대상(남은) 인물 이름.
+ */
+export const BE_MERGE_ALBUM_PERSON = { albumId: 12, personId: 42, personName: '김민준' }
+
 /** POST /photos/move — MovePhotosResponse (스키마 기준) */
 export const BE_MOVE_PHOTOS = { movedCount: 3 }
 

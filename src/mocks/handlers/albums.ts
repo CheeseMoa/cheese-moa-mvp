@@ -8,6 +8,8 @@ import {
   deleteAlbumCascade,
   findAlbum,
   findEvent,
+  findGroupPerson,
+  mergePersonInto,
   movePhotoBetweenAlbums,
   photosOfAlbum,
   recomputeEventReadiness,
@@ -40,6 +42,7 @@ import {
   toAlbumSummary,
   toCreateAlbumResponse,
   toDeletePhotosResponse,
+  toMergeAlbumPersonResponse,
   toMovePhotosResponse,
   toMoveSuggestionResponse,
 } from './serializers'
@@ -182,6 +185,38 @@ export const albumHandlers = [
     }
 
     return ok(toAlbumSummary(album))
+  }),
+
+  // POST /albums/:id/merge-person — 앨범 인물 병합(CHMO-688) · 화면 08/09 앨범 설정 시트.
+  // 요청 앨범의 인물이 흡수되는 쪽, body의 personId가 남는 쪽이다. 검증 순서는 BE 그대로 —
+  // ① body @NotNull(bean validation이 앨범 조회보다 먼저: 없는 앨범 + 빈 바디면 VALID400이 이긴다)
+  // → ② 앨범 관문 → ③ 인물 앨범 → ④ 대상 조회(다른 모임 인물은 존재 은닉 PERSON404)
+  // → ⑤ 자기 자신 → ⑥ 학부모 매핑 상충 PERSON409. 모임 유형 무관 허용(검수·공개 축이 아니다).
+  http.post(api('/albums/:id/merge-person'), async ({ request, params }) => {
+    const user = userFrom(request)
+    if (!user) return unauthorized()
+
+    const body = await readJson<{ personId?: unknown }>(request)
+    if (!body) return invalidBody()
+    const personId = toId(body.personId)
+    if (!personId) return invalidRequest('personId 는 필수입니다.')
+
+    const album = teacherAlbum(user, toId(params.id))
+    if (album instanceof Response) return album
+    if (album.type !== 'person' || !album.personId)
+      return invalidRequest('인물 앨범만 병합할 수 있습니다.')
+
+    const event = findEvent(album.eventId)
+    if (!event) return albumNotFound()
+    const target = findGroupPerson(event.groupId, personId)
+    if (!target) return errorResponse(404, 'PERSON404', '인물을 찾을 수 없습니다.')
+    if (target.id === album.personId) return invalidRequest('같은 인물로는 병합할 수 없습니다.')
+
+    const merged = mergePersonInto(album, target.id)
+    if (merged === 'parent_conflict')
+      return errorResponse(409, 'PERSON409', '서로 다른 학부모에 연결된 인물은 병합할 수 없습니다.')
+
+    return ok(toMergeAlbumPersonResponse(merged, target))
   }),
 
   // DELETE /albums/:id — 앨범 삭제(CHMO-271) — 전 타입 허용, 이 앨범에만 속한 사진은 영구 삭제 · 화면 09
