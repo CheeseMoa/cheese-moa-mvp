@@ -21,13 +21,13 @@ export function Toggle({ checked, onChange, label, disabled }: ToggleProps) {
     >
       <span
         className={cx(
-          'relative h-7 w-12 shrink-0 rounded-full transition-colors',
+          'relative h-7 w-12 shrink-0 rounded-full transition-colors duration-fast ease-standard',
           checked ? 'bg-primary' : 'bg-border',
         )}
       >
         <span
           className={cx(
-            'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-[left]',
+            'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-[left] duration-fast ease-standard',
             checked ? 'left-[23px]' : 'left-[3px]',
           )}
         />

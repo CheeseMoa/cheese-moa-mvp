@@ -346,7 +346,35 @@
     <b style="color:#3A3128;">③ 치즈 옐로우 위 흰 글자 금지</b> — primary 버튼 텍스트는 text(#3A3128).&nbsp;
     <b style="color:#3A3128;">④ AlbumCard 검토 상태 규칙 고정</b> — 채운 면+갈색 실선=검토완료 · 빈 면+회색 점선=미검토(CHMO-531).&nbsp;
     <b style="color:#3A3128;">⑤ 특수 앨범(분류가 어려워요·눈감음·흔들림)은 뷰어 비노출.</b>&nbsp;
-    <b style="color:#3A3128;">⑥ 미확정</b>(screen-spec §5): 홈 관리자 배지 · 품질 제외 사진 라우팅 · common 앨범 정의 — 임의 구현 금지.
+    <b style="color:#3A3128;">⑥ 미확정</b>(screen-spec §5): 홈 관리자 배지 · 품질 제외 사진 라우팅 · common 앨범 정의 — 임의 구현 금지.&nbsp;
+    <b style="color:#3A3128;">⑦ 모션은 토큰 3단·이징 3종만</b>(CHMO-711, 아래 11) — 화면에 ms·cubic-bezier를 새로 적지 않는다.
+  </div>
+</div>
+
+<!-- ═══════════ 11 · 모션 ═══════════ -->
+<div style="position:absolute;left:0;top:2980px;width:1120px;">
+  <div class="sec" data-drags-parent="1">11 · 모션 — 토큰과 쓰임(CHMO-711)</div>
+  <div class="card">
+    <div style="display:flex;gap:28px;flex-wrap:wrap;font:400 13px/1.8 Jua,sans-serif;color:#3A3128;">
+      <div>
+        <div style="font-size:12px;letter-spacing:0.06em;color:#9E978C;">시간</div>
+        <div><b>fast 120ms</b> — 눌림 반응 · 색 전환 · 오버레이 퇴장</div>
+        <div><b>base 200ms</b> — 오버레이 등장 · 시트 되돌림 · 그리드 팝</div>
+        <div><b>slow 280ms</b> — 목록 라이즈 · 사진 슬라이드 · 코치 힌트</div>
+      </div>
+      <div>
+        <div style="font-size:12px;letter-spacing:0.06em;color:#9E978C;">이징</div>
+        <div><b>standard</b> cubic-bezier(0.22, 1, 0.36, 1) — 등장 · 이동</div>
+        <div><b>pop</b> cubic-bezier(0.34, 1.56, 0.64, 1) — 카드 · 다이얼로그</div>
+        <div><b>exit</b> cubic-bezier(0.4, 0, 1, 1) — 닫힘 전용</div>
+      </div>
+      <div>
+        <div style="font-size:12px;letter-spacing:0.06em;color:#9E978C;">눌림 깊이</div>
+        <div><b>press</b> scale 0.97 — 버튼 · 사진 타일 · 칩</div>
+        <div><b>press-card</b> scale 0.98 — 목록에 쌓이는 큰 면</div>
+      </div>
+    </div>
+    <div class="note">오버레이(모달 · 확인 다이얼로그 · 바텀시트 · 토스트)는 열림·닫힘을 모두 탄다 — 스크림은 페이드, 다이얼로그는 제자리 팝, 시트는 아래에서 올라와 아래로, 토스트는 살짝 떠오른다. 퇴장이 등장보다 빠르고(fast) 이징이 반대인 건 관용이다. 시트를 <b>끌어서</b> 닫을 때만 퇴장 애니메이션을 건너뛰고 손이 놓은 자리에서 이어 내려간다(키프레임은 translateY 0에서 시작해 시트가 위로 튄다). 모션 최소화(prefers-reduced-motion) 설정에선 전역 CSS가 전환을 걷는다 — 예외는 <b>data-motion-essential</b> 하위(분류 진행 인디케이터: 움직임이 곧 정보라 멈추면 멈춘 화면과 구분되지 않는다).</div>
   </div>
 </div>
 </x-dc>

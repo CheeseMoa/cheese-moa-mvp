@@ -255,7 +255,9 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
           각자 움직이게 두면 2초 폴링 점프가 두 번 보여 렉처럼 읽히고 총총거림도 어긋난다
           (2026-08-18 피드백 — 위상차·딜레이 전부 폐기, 추격의 뜻은 배치(고양이가 뒤)가 만든다).
           overflow-x-clip: 덩어리가 양 끝에서 무대 밖으로 밀려도 가로 스크롤을 만들지 않는다 */}
-      <div className="relative h-[52px] overflow-x-clip">
+      {/* data-motion-essential: 모션 최소화 설정에서도 이 무대만은 계속 움직인다(CHMO-711) —
+          달리기·왕복이 곧 "분류가 돌고 있다"는 정보라, 멈추면 멈춘 화면과 구분되지 않는다 */}
+      <div data-motion-essential className="relative h-[52px] overflow-x-clip">
         <img src={cheeseUrl} alt="" aria-hidden className="absolute bottom-0 right-0 h-7 w-auto" />
         <span
           aria-hidden
@@ -577,7 +579,7 @@ function CreateAlbumTile({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl border-2 border-dashed border-[#C9C2B4] bg-white p-2 text-left transition active:scale-[0.98]"
+      className="press-card w-full rounded-2xl border-2 border-dashed border-[#C9C2B4] bg-white p-2 text-left"
     >
       <span className="flex h-24 items-center justify-center rounded-[10px] bg-photo text-muted">
         <IconPlus size={26} />

@@ -128,7 +128,7 @@ export function ChildLinkSheet({ groupId, member, onClose, onLinked }: ChildLink
                   disabled={busy || alreadyLinked}
                   onClick={() => toggleSelect(p.personId)}
                   className={cx(
-                    'flex w-[88px] flex-none flex-col items-start gap-1.5 transition active:scale-[0.97]',
+                    'press flex w-[88px] flex-none flex-col items-start gap-1.5',
                     (busy || alreadyLinked) && 'opacity-50',
                   )}
                 >

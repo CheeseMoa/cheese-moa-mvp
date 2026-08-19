@@ -12,6 +12,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import { usePhotoSave } from '../hooks/usePhotoSave'
 import { usePhotoZoom } from '../hooks/usePhotoZoom'
 import { cx } from '../lib/cx'
+import { MOTION_DURATION, MOTION_EASE, prefersReducedMotion } from '../lib/motion'
 import type { FaceBbox, ID } from '../types/api'
 
 /** 라이트박스가 필요로 하는 최소 사진 형태 — Photo(제작자)·ViewerPhoto(뷰어) 공통부 */
@@ -46,9 +47,9 @@ interface PhotoLightboxProps<T extends LightboxPhoto> {
 
 /** 슬라이드 사이 간격 — 끌 때 두 사진이 맞붙어 한 장처럼 보이지 않게 */
 const SLIDE_GAP = 16
-/** 놓았을 때 제자리를 찾아가는 시간 — 끝에서 감속하는 곡선(사진 앱 관용) */
-const SLIDE_MS = 300
-const SLIDE_EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)'
+/** 놓았을 때 제자리를 찾아가는 시간 — 끝에서 감속하는 곡선(사진 앱 관용). 모션 토큰의 이동 축 */
+const SLIDE_MS = MOTION_DURATION.slow
+const SLIDE_EASE = MOTION_EASE.standard
 /** 이동 확정 — 화면 폭의 이만큼 끌었으면 넘긴다 */
 const COMMIT_RATIO = 0.22
 /** 짧게 끌었어도 이 속도(px/ms)로 튕겼으면 넘긴다 — 손목만 튕기는 관용 제스처 */
@@ -67,8 +68,7 @@ const trackTransform = (index: number, dx: number) =>
   `translate3d(calc((100% + ${SLIDE_GAP}px) * ${-index} + ${dx}px), 0, 0)`
 
 /** 모션 최소화를 켠 기기에서는 미끄러지지 않고 즉시 바뀐다 */
-const slideDuration = () =>
-  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : SLIDE_MS
+const slideDuration = () => (prefersReducedMotion() ? 0 : SLIDE_MS)
 
 /**
  * 사진 크게 보기 공용 라이트박스(09 제작자 검수 · 16 뷰어, CHMO-242) — iOS 사진 앱풍

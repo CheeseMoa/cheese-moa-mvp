@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useOverlayTransition } from '../../hooks/useOverlayTransition'
+import { cx } from '../../lib/cx'
 import { ToastContext } from './toastContext'
 
 const TOAST_DURATION_MS = 2500
@@ -13,16 +15,21 @@ const TOAST_DURATION_MS = 2500
  * 프레임 안 CTA 버튼을 덮거나 프레임 밖에 떨어진다. 그래서 PhoneShell과 같은 박스
  * (h-dvh / sm:my-6 sm:h-[844px] / max-w-phone)를 재현한 고스트 프레임 안에 절대 배치한다 —
  * 모바일(<sm)은 프레임=뷰포트라 동작 동일. PhoneShell 프레임 치수가 바뀌면 여기도 함께 바꾼다.
+ * 나타날 때·사라질 때 모두 전환을 탄다(CHMO-711) — 코치 힌트와 같은 결로 살짝 떠오른다.
  * 앱 루트(main.tsx)에서 라우터를 감싼다. 사용은 useToast().show('🧀 …').
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState<string | null>(null)
+  // 표시 여부와 마운트를 나눈다 — 사라지는 전환이 끝날 때까지 문구가 화면에 남아야 한다
+  const [visible, setVisible] = useState(false)
+  const { mounted, leaving } = useOverlayTransition(visible)
   const timerRef = useRef<number>()
 
   const show = useCallback((next: string) => {
     setMessage(next)
+    setVisible(true)
     window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => setMessage(null), TOAST_DURATION_MS)
+    timerRef.current = window.setTimeout(() => setVisible(false), TOAST_DURATION_MS)
   }, [])
 
   useEffect(() => () => window.clearTimeout(timerRef.current), [])
@@ -32,7 +39,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {message && (
+      {message && mounted && (
         <div className="pointer-events-none fixed inset-0 z-50 flex justify-center">
           {/* 고스트 프레임 — PhoneShell 프레임 박스의 복제(치수 동기 필수) */}
           <div className="relative h-dvh w-full max-w-phone sm:my-6 sm:h-[844px]">
@@ -40,7 +47,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               role="status"
               className="absolute inset-x-0 bottom-[calc(7rem+env(safe-area-inset-bottom,0px))] flex justify-center px-6"
             >
-              <span className="rounded-full bg-text px-[22px] py-[13px] text-[13px] font-medium text-cream shadow-card">
+              <span
+                className={cx(
+                  'rounded-full bg-text px-[22px] py-[13px] text-[13px] font-medium text-cream shadow-card',
+                  leaving ? 'animate-toast-out' : 'animate-toast-in',
+                )}
+              >
                 {message}
               </span>
             </div>

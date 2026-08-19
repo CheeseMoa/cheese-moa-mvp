@@ -176,7 +176,7 @@ export function OnboardingPage() {
               aria-label={`${i + 1}번째 안내 보기`}
               aria-current={i === index || undefined}
               onClick={() => goTo(i)}
-              className={cx('h-2 w-2 rounded-full transition', i === index ? 'bg-primary' : 'bg-border')}
+              className={cx('h-2 w-2 rounded-full transition duration-fast ease-standard', i === index ? 'bg-primary' : 'bg-border')}
             />
           ))}
         </div>

@@ -189,7 +189,7 @@ export function MovePhotosSheet({
                   type="button"
                   disabled={busy}
                   onClick={() => handleTargetTap(s)}
-                  className="flex w-16 flex-none flex-col items-center gap-1.5 transition active:scale-[0.97] disabled:opacity-50"
+                  className="press flex w-16 flex-none flex-col items-center gap-1.5 disabled:opacity-50"
                 >
                   {s.thumbnailUrl ? (
                     <img
@@ -224,7 +224,7 @@ export function MovePhotosSheet({
               type="button"
               disabled={busy}
               onClick={() => setCreating(true)}
-              className="flex w-16 flex-none flex-col items-center gap-1.5 transition active:scale-[0.97] disabled:opacity-50"
+              className="press flex w-16 flex-none flex-col items-center gap-1.5 disabled:opacity-50"
             >
               <span className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-[#C9C2B4] text-muted">
                 <IconPlus size={22} />

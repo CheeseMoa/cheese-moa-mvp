@@ -52,7 +52,7 @@ export function ViewerEventsPage() {
                     <button
                       type="button"
                       onClick={() => navigate(`/share/${token}/events/${event.id}`)}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-white p-3 text-left shadow-card transition active:scale-[0.98]"
+                      className="press-card flex w-full items-center gap-3 rounded-2xl border border-border bg-white p-3 text-left shadow-card"
                     >
                       <span className="cheese-dots block h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl bg-photo">
                         {event.coverThumbnailUrl && (

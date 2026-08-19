@@ -210,7 +210,7 @@ export function InviteManagePage() {
                     waiting > 0 ? `${ROLE_LABEL[key]} · 대기 신청 ${waiting}건` : undefined
                   }
                   onClick={() => setTab(key)}
-                  className={`flex-1 rounded-full py-2 text-sm transition ${
+                  className={`flex-1 rounded-full py-2 text-sm transition duration-fast ease-standard ${
                     tab === key ? 'bg-primary font-bold text-text' : 'font-medium text-muted'
                   }`}
                 >

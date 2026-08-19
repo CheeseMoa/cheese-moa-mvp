@@ -41,6 +41,34 @@
   }
 }
 
+/* 모션을 줄여 달라고 설정한 사용자에겐 전환·애니메이션을 걷는다(CHMO-711).
+   종전엔 useEntrance·라이트박스가 각자 확인하고 코치 힌트만 motion-safe:를 써서, 새로 붙는
+   모션마다 처방을 기억해야 했다 — 기본을 뒤집어 "끄는 게 기본, 살릴 것만 표시"로 둔다.
+   예외는 data-motion-essential 하위: 분류 진행 인디케이터처럼 움직임 자체가 정보인 자리는
+   멈추면 "진행 중"이라는 사실이 사라진다(진행률 없는 구간의 왕복 인디케이터). */
+@media (prefers-reduced-motion: reduce) {
+  *:not([data-motion-essential]):not([data-motion-essential] *) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* 눌림 반응(CHMO-711) — 시간·이징은 한 벌이고 눌리는 깊이만 대상 크기에 따라 둘이다.
+     같은 3%라도 110px 카드와 48px 버튼은 움직이는 거리가 달라, 카드까지 0.97로 누르면
+     목록 전체가 출렁이는 것처럼 보인다. 그래서 press = 손가락만 한 대상(버튼·타일·칩),
+     press-card = 목록에 쌓이는 큰 면. 그 밖의 값은 쓰지 않는다. */
+  .press {
+    @apply transition duration-fast ease-standard active:scale-[0.97];
+  }
+
+  .press-card {
+    @apply transition duration-fast ease-standard active:scale-[0.98];
+  }
+}
+
 @layer utilities {
   /* 치즈 도트 — 배경 텍스처(치즈 구멍 느낌의 은은한 점 패턴) */
   .cheese-dots {
