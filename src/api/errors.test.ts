@@ -14,8 +14,11 @@ describe('toFeErrorCode', () => {
     expect(toFeErrorCode(BE_ERRORS.SPACE404.payload.code)).toBe('NOT_FOUND')
     expect(toFeErrorCode('MOMENT404')).toBe('NOT_FOUND')
     expect(toFeErrorCode(BE_ERRORS.ALBUM404.payload.code)).toBe('NOT_FOUND')
+    expect(toFeErrorCode('PERSON404')).toBe('NOT_FOUND')
     // 공개 하드 게이트의 서버 응답(CHMO-488 — force 우회 폐지) · 2026-07-22 실서버 채집
     expect(toFeErrorCode(BE_ERRORS.PUBLISH409.payload.code)).toBe('HAS_UNREVIEWED_PHOTOS')
+    // 병합하려는 두 인물이 서로 다른 학부모에 연결됨(CHMO-688 — BE 소스 대조) — 시트가 화면 어휘로 안내
+    expect(toFeErrorCode('PERSON409')).toBe('PERSON_PARENT_CONFLICT')
   })
 
   it('같은 403이라도 승인 대기와 role 부족을 구분한다 (CHMO-475 — 선생님도 승인제)', () => {

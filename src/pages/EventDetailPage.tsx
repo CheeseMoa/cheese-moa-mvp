@@ -563,6 +563,12 @@ function EventAlbumGrid({
           groupType={groupType}
           onClose={() => setAlbumTarget(null)}
           onUpdated={albumsApi.refetch}
+          // 인물 병합(CHMO-689) — 흡수된 앨범이 그리드에서 사라지고 대상 앨범 수치가 바뀐다.
+          // 이 화면은 목록만 refetch(09와 달리 어느 앨범 안도 아니라 이동할 곳이 없다)
+          onMerged={() => {
+            setAlbumTarget(null)
+            albumsApi.refetch()
+          }}
         />
       )}
     </PhoneShell>

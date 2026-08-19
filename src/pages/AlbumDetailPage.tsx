@@ -698,6 +698,18 @@ function AlbumDetailView() {
           groupType={groupApi.data?.groupType}
           onClose={() => setSettingsOpen(false)}
           onUpdated={albumApi.refetch}
+          // 인물 병합(CHMO-689) — 이 앨범이 대상 앨범과 통합돼 사라졌으면 남은 앨범으로 교체
+          // 진입한다(09→09 replace — 검토 이어가기와 같은 관용, key 재마운트로 상태 초기화).
+          // 앨범이 남았으면(이 이벤트에 대상 앨범이 없어 이관만) 이름·인물이 바뀌었으니 재조회.
+          onMerged={(result) => {
+            setSettingsOpen(false)
+            if (result.albumId === albumId) {
+              albumApi.refetch()
+              albumsApi.refetch()
+            } else {
+              navigate(`${eventPath}/albums/${result.albumId}`, { replace: true })
+            }
+          }}
           // 삭제 확인은 이 화면 소유(앨범이 사라지면 08로 나가야 한다) — 시트를 닫고 다이얼로그를 연다
           onDeleteRequest={() => {
             setSettingsOpen(false)
