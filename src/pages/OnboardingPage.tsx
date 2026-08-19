@@ -184,7 +184,7 @@ export function OnboardingPage() {
         <div className="shrink-0 px-5 pb-safe-7">
           {isLast ? (
             <>
-              <Button fullWidth onClick={() => finish('/groups/new')}>
+              <Button variant="accent" fullWidth onClick={() => finish('/groups/new')}>
                 모임 만들기
               </Button>
               {/* 참여는 링크로만 이뤄진다(CHMO-513) — 종전 '초대 코드로 참여하기' 링크는 홈의
@@ -195,7 +195,7 @@ export function OnboardingPage() {
               </p>
             </>
           ) : (
-            <Button fullWidth onClick={() => goTo(index + 1)}>
+            <Button variant="accent" fullWidth onClick={() => goTo(index + 1)}>
               다음
             </Button>
           )}

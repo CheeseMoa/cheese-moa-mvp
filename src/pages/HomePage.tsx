@@ -142,7 +142,7 @@ export function HomePage() {
             `＋ 모임 만들기`가 이미 그 폭을 거의 채워(05 하단 실측, CHMO-530) 라벨이 잘린다.
             위계는 색이 만든다: 만들기 primary · 참여 secondary */}
         <div className="flex shrink-0 flex-col gap-3 pb-safe-9 pt-4">
-          <ButtonLink to="/groups/new" fullWidth>
+          <ButtonLink to="/groups/new" variant="accent" fullWidth>
             ＋ 모임 만들기
           </ButtonLink>
           <Button variant="secondary" fullWidth onClick={() => setJoinOpen(true)}>

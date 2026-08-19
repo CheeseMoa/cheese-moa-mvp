@@ -103,7 +103,7 @@ export function InAppBrowserGuide({ groupName, onContinue }: InAppBrowserGuidePr
           </p>
         </div>
         <div className="flex flex-col items-center gap-3 px-5 pb-safe-9">
-          <Button fullWidth onClick={handleOpen} disabled={opening}>
+          <Button variant="accent" fullWidth onClick={handleOpen} disabled={opening}>
             {opening ? '앱을 여는 중…' : isIOS ? '앱에서 열기' : '브라우저에서 열기'}
           </Button>
           {/* 웹으로도 쓸 수 있다 — 앱 설치를 강요하지 않는다 */}

@@ -512,11 +512,11 @@ function AlbumDetailView() {
             ) : (
               <>
                 {/* 앨범 전체 저장(미검토 포함) — 개별 요청 파이프라인(CHMO-473, ZIP 폐지).
-                    일반 모임에선 이게 유일한 CTA라 primary — 색이 위계를 만드는 규칙(CHMO-530)에서
+                    일반 모임에선 이게 유일한 CTA라 강조색(accent) — 색이 위계를 만드는 규칙(CHMO-530)에서
                     혼자 남은 secondary는 할 일이 없는 화면처럼 읽힌다(08 [＋ 사진 추가] 선례) */}
                 {bulkSaveEligible && (
                   <Button
-                    variant={business ? 'secondary' : 'primary'}
+                    variant={business ? 'secondary' : 'accent'}
                     className="flex-1 gap-1.5 whitespace-nowrap !px-2"
                     disabled={save.busy}
                     onClick={() => handleSave(photos)}
@@ -534,6 +534,7 @@ function AlbumDetailView() {
                 {business && (
                   <div className="relative flex-1">
                     <Button
+                      variant="accent"
                       fullWidth
                       className="!px-2"
                       disabled={locked || allReviewed}

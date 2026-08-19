@@ -106,6 +106,7 @@ export function ViewerAlbumDetailPage() {
         {album && hasPhotos && (
           <div className="flex gap-2.5 px-5 pb-safe-9 pt-4">
             <Button
+              variant="accent"
               className="flex-1 gap-1.5 whitespace-nowrap !px-2"
               disabled={save.busy}
               onClick={handleDownload}
