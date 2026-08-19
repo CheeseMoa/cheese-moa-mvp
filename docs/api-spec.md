@@ -356,6 +356,13 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·
 > **`name` 변경은 모임-단위 인물(대표 벡터) 이름 갱신 → 그 모임 내 모든 이벤트의 같은 `personId` 앨범 이름이 함께 바뀐다**(그룹 전체 전파). 인물 앨범(`type: person`)에서만 허용.
 > FE 캐시: rename 성공 시 같은 `personId`를 쓰는 다른 이벤트의 앨범 목록도 무효화(refetch) 대상. 특수 앨범은 `name` 변경 불가(`400 VALIDATION_ERROR`).
 
+#### `POST /albums/:id/merge-person` — 앨범 인물 병합 · 화면 08/09 앨범 설정 시트 (CHMO-688·689)
+> 같은 모임의 다른 이벤트에서 AI가 기존 인물을 못 알아보고 새 인물("인물 N") 앨범을 만들었을 때의 수동 보정. **요청 앨범의 인물이 흡수되는 쪽, body의 `personId`가 남는 쪽**이다. 흡수 인물의 **모든 이벤트** 앨범이 대상 인물로 이관되고(대상 앨범이 이미 있는 이벤트는 통합 — 중복 매핑은 대상 쪽 유지·검토 상태 보존·커버 재계산), 흡수 인물은 벡터째 삭제돼 재업로드에도 되살아나지 않는다. 학부모 매핑은 매핑된 쪽으로 흡수하되 **양쪽이 서로 다른 학부모에 매핑돼 있으면 `409 PERSON409`로 거부**(오병합 노출 방지 — ADR 012). 대상 인물 목록 API는 따로 없다(인물 명단 노출 방지) — FE가 앨범 목록의 `personId`·이름에서 파생. 모임 유형 무관 허용. 계약 상세는 BE 리포 `docs/spec/CHMO-688-앨범-인물-병합.md`.
+
+요청 `{ "personId": 42 }`
+응답 `200` `{ "albumId": 10, "personId": 42, "personName": "김민준" }`
+> `albumId` = 요청 앨범이 있던 이벤트에서 병합 후 남은 앨범(통합됐으면 대상 앨범). 오류: `404 ALBUM404`(앨범 없음/EDITOR 아님) · `400 VALID400`(인물 앨범 아님/자기 자신) · `404 PERSON404`(대상 없음/다른 모임 — 존재 은닉) · `409 PERSON409`.
+
 #### `GET /albums/:id/move-suggestions` — 이동 추천 · 화면 09-1
 쿼리: `?photoIds=pht_11,pht_12` (선택 사진 기준)
 응답 `200`
@@ -459,6 +466,7 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·
 | `GET /events/:id/review-summary` · `POST /events/:id/publish` | 14 |
 | `GET /events/:id/albums` | 08 |
 | `GET /albums/:id` · `PATCH /albums/:id` | 09 / 08 |
+| `POST /albums/:id/merge-person` | 08/09 앨범 설정 시트 |
 | `GET /albums/:id/move-suggestions` · `POST /photos/move` | 09-1 |
 | `DELETE /photos` | 09 |
 | `POST /share/:token/unlock` | 15 진입 전(잠금) |

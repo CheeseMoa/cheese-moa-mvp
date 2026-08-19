@@ -26,6 +26,7 @@ import {
   getAlbumZip,
   getMoveSuggestions,
   markAlbumReviewed,
+  mergeAlbumPerson,
   movePhotos,
 } from './albums'
 import {
@@ -76,6 +77,7 @@ import {
   BE_GROUP_SUMMARY,
   BE_CREATE_ALBUM_EMPTY,
   BE_MEMBER_ZIP,
+  BE_MERGE_ALBUM_PERSON,
   BE_MOVE_PHOTOS,
   BE_MOVE_SUGGESTION_COMMON,
   BE_MOVE_SUGGESTION_PERSON,
@@ -762,6 +764,18 @@ describe('앨범 · 사진', () => {
       photoIds: [101, 102, 103],
     })
     expect(result).toEqual({ albumId: 832, photoCount: 3 })
+  })
+
+  it('인물 병합 — personId만 실어 보내고 남은 앨범·대상 인물을 받는다 (CHMO-688)', async () => {
+    const calls = serve(envelope(BE_MERGE_ALBUM_PERSON))
+
+    const result = await mergeAlbumPerson(11, 42)
+
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].url).toBe('/api/v1/albums/11/merge-person')
+    // 요청 앨범의 인물이 흡수되는 쪽, body의 personId가 남는 쪽이다
+    expect(bodyOf(calls[0])).toEqual({ personId: 42 })
+    expect(result).toEqual({ albumId: 12, personId: 42, personName: '김민준' })
   })
 
   it('BE 삭제 — 연결 해제와 완전 삭제를 구분해 준다', async () => {
