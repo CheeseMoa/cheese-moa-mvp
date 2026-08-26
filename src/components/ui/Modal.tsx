@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { useOverlayTransition } from '../../hooks/useOverlayTransition'
+import { cx } from '../../lib/cx'
 
 interface ModalProps {
   open: boolean
@@ -11,21 +13,34 @@ interface ModalProps {
 /**
  * 중앙 모달 (dc.html §09). PhoneShell(relative) 내부에서 렌더해 프레임 안쪽만 덮는다.
  * 스크림 rgba(text, .45) 탭 또는 ESC로 닫힘.
+ * 열림·닫힘 모두 전환을 탄다(CHMO-711) — 스크림은 페이드, 대화상자는 제자리 팝.
+ * 자리를 옮기며 나타나지 않는 건 어디서 왔는지 눈이 따라갈 필요가 없어서다.
  * 긴 화면에서 프레임이 뷰포트보다 자라도 대화상자가 화면 밖(프레임 중앙)에 열리지 않게,
  * 스크림 안 sticky 컨테이너(h-dvh, 프레임이 더 짧으면 max-h-full)로 현재 뷰포트 중앙에 띄운다.
  */
 export function Modal({ open, onClose, title, children }: ModalProps) {
   useEscapeKey(open, onClose)
-  if (!open) return null
+  const { mounted, leaving } = useOverlayTransition(open)
+  if (!mounted) return null
   return (
-    <div onClick={onClose} className="absolute inset-0 z-40 bg-text/[.45]">
+    <div
+      onClick={onClose}
+      className={cx(
+        'absolute inset-0 z-40 bg-text/[.45]',
+        // 퇴장 중엔 입력을 받지 않는다 — 이미 닫힌 대화상자가 탭을 한 번 더 삼키면 안 된다
+        leaving ? 'pointer-events-none animate-scrim-out' : 'animate-scrim-in',
+      )}
+    >
       <div className="sticky top-0 flex h-dvh max-h-full items-center justify-center p-6">
         <div
           role="dialog"
           aria-modal="true"
           aria-label={title}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-[310px] rounded-[20px] bg-cream p-[22px] shadow-card"
+          className={cx(
+            'w-full max-w-[310px] rounded-[20px] bg-cream p-[22px] shadow-card',
+            leaving ? 'animate-dialog-out' : 'animate-dialog-in',
+          )}
         >
           {title && <h2 className="text-[17px] font-bold text-text">{title}</h2>}
           {children}

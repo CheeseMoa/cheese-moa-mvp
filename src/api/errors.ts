@@ -25,6 +25,8 @@
  *   확인 — CHMO-598 스펙 문서의 USER409 표기는 소스와 달라 소스를 따른다. 실서버 채집은 미완).
  * + 2026-08-11 BE 스펙 대조(SPACE409 — ErrorStatus.JOIN_KEY_TAKEN. 참여 코드·비밀번호 변경
  *   CHMO-673의 신설 코드. 실서버 채집은 BE 배포 후).
+ * + 2026-08-19 BE 소스 대조(PERSON404·PERSON409 — 앨범 인물 병합 CHMO-688 ErrorStatus.
+ *   PERSON_NOT_FOUND·PERSON_PARENT_CONFLICT. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -83,6 +85,14 @@ const BE_CODE_MAP: Record<string, string> = {
   MOMENT404: 'NOT_FOUND',
   /** 앨범 없음(404) */
   ALBUM404: 'NOT_FOUND',
+  /** 인물 없음(404) — 다른 모임의 인물도 존재 자체를 숨긴다(person-parents와 같은 규칙, CHMO-688) */
+  PERSON404: 'NOT_FOUND',
+  /**
+   * 병합하려는 두 인물이 서로 다른 학부모(멤버)에 연결됨(409 — BE PERSON_PARENT_CONFLICT,
+   * CHMO-688). 오병합이면 다른 인물의 사진이 그 멤버에게 노출되므로 서버가 자동 진행을 거부한다
+   * (ADR 012 예약 규칙). 앨범 설정 시트가 화면 어휘(멤버)로 바꿔 안내한다 — BE 메시지는 '학부모'.
+   */
+  PERSON409: 'PERSON_PARENT_CONFLICT',
   /**
    * 공개 시 미검토 사진 존재(409) — 전량 검토 완료가 하드 게이트라(CHMO-488) 우회가 없다.
    * 14는 애초에 버튼을 잠가 이 상태로 호출하지 않으므로, 실제로 오면 동시 작업 레이스다

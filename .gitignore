@@ -42,3 +42,12 @@ test-data/
 
 # 스토리 병행용 git worktree (로컬 체크아웃 — 리포에 담을 내용이 아니다)
 .claude/worktrees/
+
+# 설문 결과 보고서 (내부 공유용 산출물 — git 추적 제외)
+docs/survey-report/
+
+# 작업 스레드 기록 (로컬 메모 — git 추적 제외)
+docs/thread/
+
+# 화면 캡처 (로컬 확인용 · 용량 큼 — git 추적 제외)
+docs/screenshots/

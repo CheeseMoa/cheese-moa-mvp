@@ -176,7 +176,7 @@ export function OnboardingPage() {
               aria-label={`${i + 1}번째 안내 보기`}
               aria-current={i === index || undefined}
               onClick={() => goTo(i)}
-              className={cx('h-2 w-2 rounded-full transition', i === index ? 'bg-primary' : 'bg-border')}
+              className={cx('h-2 w-2 rounded-full transition duration-fast ease-standard', i === index ? 'bg-primary' : 'bg-border')}
             />
           ))}
         </div>
@@ -184,7 +184,7 @@ export function OnboardingPage() {
         <div className="shrink-0 px-5 pb-safe-7">
           {isLast ? (
             <>
-              <Button fullWidth onClick={() => finish('/groups/new')}>
+              <Button variant="accent" fullWidth onClick={() => finish('/groups/new')}>
                 모임 만들기
               </Button>
               {/* 참여는 링크로만 이뤄진다(CHMO-513) — 종전 '초대 코드로 참여하기' 링크는 홈의
@@ -195,7 +195,7 @@ export function OnboardingPage() {
               </p>
             </>
           ) : (
-            <Button fullWidth onClick={() => goTo(index + 1)}>
+            <Button variant="accent" fullWidth onClick={() => goTo(index + 1)}>
               다음
             </Button>
           )}

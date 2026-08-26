@@ -41,6 +41,7 @@ import {
   type DbEvent,
   type DbGroup,
   type DbMembership,
+  type DbPerson,
   type DbPhoto,
   type DbUser,
 } from '../db'
@@ -387,6 +388,11 @@ export function toCreateAlbumResponse(album: DbAlbum) {
     personName: personNameOf(album),
     photoCount: photoCountOfAlbum(album.id),
   }
+}
+
+/** BE MergeAlbumPersonResponse(CHMO-688) — 병합 후 남은 앨범 id와 대상(남은) 인물 */
+export function toMergeAlbumPersonResponse(survivingAlbumId: number, person: DbPerson) {
+  return { albumId: survivingAlbumId, personId: person.id, personName: person.name }
 }
 
 // ── 공개 요약 (화면 14) ──────────────────────────────────────

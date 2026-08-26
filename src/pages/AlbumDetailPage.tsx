@@ -512,11 +512,11 @@ function AlbumDetailView() {
             ) : (
               <>
                 {/* 앨범 전체 저장(미검토 포함) — 개별 요청 파이프라인(CHMO-473, ZIP 폐지).
-                    일반 모임에선 이게 유일한 CTA라 primary — 색이 위계를 만드는 규칙(CHMO-530)에서
+                    일반 모임에선 이게 유일한 CTA라 강조색(accent) — 색이 위계를 만드는 규칙(CHMO-530)에서
                     혼자 남은 secondary는 할 일이 없는 화면처럼 읽힌다(08 [＋ 사진 추가] 선례) */}
                 {bulkSaveEligible && (
                   <Button
-                    variant={business ? 'secondary' : 'primary'}
+                    variant={business ? 'secondary' : 'accent'}
                     className="flex-1 gap-1.5 whitespace-nowrap !px-2"
                     disabled={save.busy}
                     onClick={() => handleSave(photos)}
@@ -534,6 +534,7 @@ function AlbumDetailView() {
                 {business && (
                   <div className="relative flex-1">
                     <Button
+                      variant="accent"
                       fullWidth
                       className="!px-2"
                       disabled={locked || allReviewed}
@@ -697,6 +698,18 @@ function AlbumDetailView() {
           groupType={groupApi.data?.groupType}
           onClose={() => setSettingsOpen(false)}
           onUpdated={albumApi.refetch}
+          // 인물 병합(CHMO-689) — 이 앨범이 대상 앨범과 통합돼 사라졌으면 남은 앨범으로 교체
+          // 진입한다(09→09 replace — 검토 이어가기와 같은 관용, key 재마운트로 상태 초기화).
+          // 앨범이 남았으면(이 이벤트에 대상 앨범이 없어 이관만) 이름·인물이 바뀌었으니 재조회.
+          onMerged={(result) => {
+            setSettingsOpen(false)
+            if (result.albumId === albumId) {
+              albumApi.refetch()
+              albumsApi.refetch()
+            } else {
+              navigate(`${eventPath}/albums/${result.albumId}`, { replace: true })
+            }
+          }}
           // 삭제 확인은 이 화면 소유(앨범이 사라지면 08로 나가야 한다) — 시트를 닫고 다이얼로그를 연다
           onDeleteRequest={() => {
             setSettingsOpen(false)

@@ -3,9 +3,19 @@ import type { ChangeEvent } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { GuardianConsentDialog } from '../components/GuardianConsentDialog'
 import { PhoneShell } from '../components/PhoneShell'
-import { Button, Header, LoadState, PhotoGrid, PhotoTile, Toggle, useToast } from '../components/ui'
+import {
+  Button,
+  ConfirmDialog,
+  Header,
+  LoadState,
+  PhotoGrid,
+  PhotoTile,
+  Toggle,
+  useToast,
+} from '../components/ui'
 import { useAlive } from '../hooks/useAlive'
 import { useApi } from '../hooks/useApi'
+import { useLeaveGuard } from '../hooks/useLeaveGuard'
 import { attestGuardianConsent } from '../api/agreements'
 import { ApiRequestError, toErrorMessage } from '../api/client'
 import { getEvent, presignUploads, registerPhotos, uploadToPresignedUrl } from '../api/events'
@@ -146,6 +156,14 @@ export function PhotoUploadPage() {
   const selectedCount = photos.filter((p) => p.selected).length
   const overBatchLimit = selectedCount > MAX_UPLOAD_PICK
   const busy = phase !== 'idle'
+  // 전송 중 이탈 경고(CHMO-712) — 업로드는 이 탭이 살아 있는 동안만 진행된다(presign → S3 PUT
+  // → 등록). 나가면 이미 올라간 객체는 등록되지 않은 채 남고 사용자는 처음부터 다시 골라야 한다.
+  // leave()는 화면이 스스로 내보내는 이동용 — 성공 후 이벤트 상세로 가는 길까지 막으면 안 된다.
+  const { blocker, leave } = useLeaveGuard(busy)
+  // 전송 중 AbortController — [나가기]를 고르면 진행 중 PUT을 끊는다(끊지 않으면 떠난 화면의
+  // 전송이 대역폭을 계속 쓴다). 시도마다 새 controller로 덮어쓰고 따로 비우지는 않는다 —
+  // 이미 끝난 controller를 abort해도 아무 일이 없고, 다이얼로그는 전송 중에만 열린다.
+  const transferAbortRef = useRef<AbortController | null>(null)
 
   const handlePick = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -248,8 +266,10 @@ export function PhotoUploadPage() {
     // 이전 시도에서 PUT까지 끝난 사진은 그 s3Key를 재사용한다(같은 파일을 두 번 올리지 않게)
     const toUpload = pending.filter((p) => !p.s3Key)
     const attempt = ++attemptRef.current
-    // 시도 실패 시 진행 중이던 PUT을 끊는다 — 늦게 도착한 성공이 다음 시도와 뒤섞이지 않게
+    // 시도 실패 시 진행 중이던 PUT을 끊는다 — 늦게 도착한 성공이 다음 시도와 뒤섞이지 않게.
+    // ref에도 담는다 — 이탈 확인에서 [나가기]를 고르면 화면 밖에서 이 전송을 끊어야 한다(CHMO-712)
     const controller = new AbortController()
+    transferAbortRef.current = controller
     // 등록 실패 시 "서버에 실제로 등록됐는지" 판정 기준(아래 catch) — 요청 전 사진 수를 잡아 둔다
     const photoCountBefore = event?.photoCount ?? 0
     let registerAttempted = false
@@ -382,7 +402,7 @@ export function PhotoUploadPage() {
       // registeredCount만 더한다 — 중복으로 걸러진 사진(duplicateCount)은 photoCount를 안 늘린다.
       // replace — 06-U는 히스토리에 남지 않는 지나가는 화면이다(CHMO-486의 내비 관용 유지).
       // 남기면 이벤트 상세에서 뒤로가기가 빈 업로드 화면으로 헛돈다
-      navigate(eventPath, {
+      leave(eventPath, {
         replace: true,
         state: {
           analysisKick: {
@@ -397,7 +417,7 @@ export function PhotoUploadPage() {
       // 401 = 토큰 무효(apiFetch가 이미 지움) — 재시도는 영원히 실패하므로 로그인으로 복귀.
       // 단 S3 PUT의 401(UPLOAD_FAILED — presign URL 만료 등)은 세션과 무관하니 제외
       if (err instanceof ApiRequestError && err.status === 401 && err.code !== 'UPLOAD_FAILED') {
-        navigate('/login', { replace: true })
+        leave('/login', { replace: true })
         return
       }
       // 이 모임의 보호자 동의 확보 확인이 아직 없다(CHMO-516) — 실패가 아니라 조건이 빈 것이라
@@ -415,7 +435,7 @@ export function PhotoUploadPage() {
       if (registerAttempted && (await registrationLanded(eventId, photoCountBefore))) {
         if (!alive.current) return
         toast.show('🧀 사진 분류를 시작했어요')
-        navigate(eventPath, { replace: true })
+        leave(eventPath, { replace: true })
         return
       }
       if (!alive.current) return
@@ -460,11 +480,13 @@ export function PhotoUploadPage() {
   return (
     <PhoneShell>
       {/* 헤더 ‹ 도 replace — 06-U는 히스토리에 남지 않는 지나가는 화면이라는 규칙을 여기서도
-          지킨다(Link는 push라 backTo 대신 onBack). 안 그러면 06-E에서 뒤로가면 06-U로 되돌아온다 */}
+          지킨다(Link는 push라 backTo 대신 onBack). 안 그러면 06-E에서 뒤로가면 06-U로 되돌아온다.
+          전송 중에도 잠그지 않는다(CHMO-712) — 이탈은 이제 확인 다이얼로그가 맡는다. 눌러도
+          아무 일이 없던 종전 동작은 브라우저 뒤로가기로는 그냥 나가지던 것과 어긋나 있었고,
+          이유를 말하지 않는 잠긴 버튼보다 "나갈까요?"를 묻는 쪽이 사용자에게 답을 준다 */}
       <Header
         onBack={() => navigate(eventPath, { replace: true })}
         backLabel={event?.name ?? '이벤트 상세'}
-        backDisabled={busy}
       />
       {/* 바닥 여백 소유가 분기별로 다르다 — 피커 분기는 스크롤 밖 하단 액션바가 pb-safe-9를 갖는다 */}
       <main
@@ -602,7 +624,16 @@ export function PhotoUploadPage() {
             </p>
           ) : null}
 
+          {/* 전송 중 이탈 주의(CHMO-712) — 겁주지 않되 사실은 말한다. 업로드가 이 탭에 묶여
+              있다는 건 화면에 드러나지 않는 사실이라 자명하지 않다 */}
+          {busy ? (
+            <p className="mb-2.5 text-xs leading-relaxed text-muted">
+              올리는 동안 이 화면에 머물러 주세요. 화면을 벗어나면 업로드가 멈춰요.
+            </p>
+          ) : null}
+
           <Button
+            variant="accent"
             fullWidth
             disabled={selectedCount === 0 || overBatchLimit || busy}
             onClick={handleAnalyze}
@@ -615,6 +646,23 @@ export function PhotoUploadPage() {
           </Button>
         </div>
       ) : null}
+
+      {/* 이탈 확인(CHMO-712) — 전송 중 앱 내 이동을 가로챈 자리다. 브라우저 이탈(새로고침·탭
+          닫기)은 표준 확인창이 맡아 여기까지 오지 않는다.
+          [나가기]는 진행 중 PUT을 끊고 나간다 — 안 끊으면 떠난 화면의 전송이 대역폭을 계속 쓴다.
+          스크림 탭·ESC는 reset(머무르기)이라, 실수로 닫아도 업로드를 잃지 않는다 */}
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title="업로드를 멈추고 나갈까요?"
+        description="지금 나가면 올리던 사진이 등록되지 않아요. 다시 처음부터 골라야 해요."
+        confirmLabel="나가기"
+        cancelLabel="계속 올리기"
+        onConfirm={() => {
+          transferAbortRef.current?.abort()
+          blocker.proceed?.()
+        }}
+        onClose={() => blocker.reset?.()}
+      />
 
       {/* 업로드 게이트 — 닫으면(나중에) 사진 선택 상태가 그대로 남아 다시 [사진 분류하기]를 누를 수 있다 */}
       <GuardianConsentDialog

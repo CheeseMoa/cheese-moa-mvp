@@ -12,6 +12,7 @@ import {
   useToast,
 } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useEntrance } from '../hooks/useEntrance'
 import { listGroups } from '../api/groups'
 
 /**
@@ -46,6 +47,8 @@ export function HomePage() {
   const [joinOpen, setJoinOpen] = useState(false)
 
   const groups = data ?? []
+  // 05 이벤트 목록·08 앨범 그리드와 같은 진입 효과(CHMO-711) — 같은 꼴의 목록은 같게 들어온다
+  const groupListRef = useEntrance<HTMLUListElement>(groups.length > 0, 'rise')
 
   return (
     <PhoneShell>
@@ -93,7 +96,7 @@ export function HomePage() {
               }
             />
           ) : (
-            <ul className="flex flex-col gap-3">
+            <ul ref={groupListRef} className="flex flex-col gap-3">
               {groups.map((g) => {
                 const membership = g.myMembership
                 const pending = membership?.status === 'pending'
@@ -139,7 +142,7 @@ export function HomePage() {
             `＋ 모임 만들기`가 이미 그 폭을 거의 채워(05 하단 실측, CHMO-530) 라벨이 잘린다.
             위계는 색이 만든다: 만들기 primary · 참여 secondary */}
         <div className="flex shrink-0 flex-col gap-3 pb-safe-9 pt-4">
-          <ButtonLink to="/groups/new" fullWidth>
+          <ButtonLink to="/groups/new" variant="accent" fullWidth>
             ＋ 모임 만들기
           </ButtonLink>
           <Button variant="secondary" fullWidth onClick={() => setJoinOpen(true)}>

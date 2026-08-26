@@ -1,0 +1,732 @@
+<title>chz 워드마크 시안</title>
+<style>
+  :root {
+    /* 무대는 순백이 아니라 웜 중성 회색 — 흰 배경에선 크림 아이콘(C)의 경계가 사라져 심사가 왜곡된다 */
+    --bg: #E9E7E2;
+    --panel: #FAF9F7;
+    --panel-2: #F1EFEA;
+    --ink: #1B1917;
+    --ink-2: #57534E;
+    --muted: #8A857D;
+    --line: #D6D2CA;
+    --line-soft: #E2DED7;
+    --pick: #1F5F57;
+    --pick-bg: #DBE8E5;
+    --pick-on: #FFFFFF;
+    --shadow: 0 2px 10px rgba(28, 24, 20, .07);
+    --shadow-lift: 0 10px 34px rgba(28, 24, 20, .13);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171613;
+      --panel: #201F1B;
+      --panel-2: #2A2823;
+      --ink: #F0EEE8;
+      --ink-2: #C3BDB3;
+      --muted: #8E877C;
+      --line: #38342C;
+      --line-soft: #2E2B24;
+      --pick: #86D0C3;
+      --pick-bg: #1D322E;
+      --pick-on: #10201D;
+      --shadow: 0 2px 10px rgba(0, 0, 0, .35);
+      --shadow-lift: 0 12px 36px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171613;
+    --panel: #201F1B;
+    --panel-2: #2A2823;
+    --ink: #F0EEE8;
+    --ink-2: #C3BDB3;
+    --muted: #8E877C;
+    --line: #38342C;
+    --line-soft: #2E2B24;
+    --pick: #86D0C3;
+    --pick-bg: #1D322E;
+    --pick-on: #10201D;
+    --shadow: 0 2px 10px rgba(0, 0, 0, .35);
+    --shadow-lift: 0 12px 36px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard Variable", Pretendard, "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 56px 24px 96px; }
+  @media (max-width: 640px) { .wrap { padding: 36px 18px 64px; } }
+
+  h1 {
+    font-size: clamp(30px, 5vw, 42px);
+    line-height: 1.14;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 20px;
+    letter-spacing: -0.015em;
+    font-weight: 700;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+  .lede { color: var(--ink-2); max-width: 62ch; }
+  .note { font-size: 13px; line-height: 1.65; color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  section { margin-top: 64px; }
+  .sec-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+
+  /* ── 결정 배너 ─────────────────────────────── */
+  .decision {
+    margin-top: 30px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--pick-bg);
+    border: 1px solid color-mix(in srgb, var(--pick) 26%, transparent);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .decision .mark {
+    flex: none; width: 22px; height: 22px; margin-top: 2px;
+    border-radius: 50%; background: var(--pick);
+    display: grid; place-items: center;
+  }
+  .decision .mark svg { width: 12px; height: 12px; }
+  .decision b { color: var(--ink); }
+  .decision p { font-size: 14px; line-height: 1.65; color: var(--ink-2); }
+
+  /* ── 후보 카드 ─────────────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .card-top { display: flex; align-items: center; gap: 18px; }
+  .card-top .art {
+    flex: none; width: 108px; height: 108px;
+    border-radius: 26px; overflow: hidden;
+    box-shadow: var(--shadow-lift);
+  }
+  .card-id {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--pick);
+  }
+  .card h3 { margin-top: 3px; }
+  .card .ref { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .card .body { font-size: 13.5px; line-height: 1.7; color: var(--ink-2); }
+  .card .body b { color: var(--ink); font-weight: 600; }
+
+  .sizes {
+    display: flex; align-items: flex-end; gap: 16px;
+    padding-top: 16px; border-top: 1px solid var(--line-soft);
+  }
+  .size { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .size .art { border-radius: 22%; overflow: hidden; box-shadow: var(--shadow); }
+  .size span { font-size: 10.5px; color: var(--muted); }
+  .verdict { margin-left: auto; text-align: right; font-size: 12px; line-height: 1.5; max-width: 19ch; text-wrap: balance; color: var(--muted); }
+
+  /* ── 무대 ─────────────────────────────────── */
+  .stage-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stage-bar button {
+    font: inherit; font-size: 13px; font-weight: 600;
+    color: var(--ink-2); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 15px; cursor: pointer;
+  }
+  .stage-bar button[aria-pressed="true"] {
+    background: var(--pick); border-color: var(--pick);
+    color: var(--pick-on);
+  }
+  .stage-bar button:focus-visible { outline: 2px solid var(--pick); outline-offset: 2px; }
+
+  .stage {
+    border: 1px solid var(--line-soft);
+    border-radius: 18px;
+    padding: 40px 24px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px 18px;
+    background: #FFFDF5;
+    transition: background-color .18s ease;
+  }
+  .stage[data-stage="white"] { background: #FFFFFF; }
+  .stage[data-stage="dark"] { background: #191713; }
+  .stage[data-stage="photo"] {
+    background:
+      radial-gradient(120% 90% at 20% 10%, #6E7F8C 0%, #3F4A55 45%, #262E38 100%);
+  }
+  .stage-cell { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .stage-cell .art { width: 92px; height: 92px; border-radius: 22px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,.16); }
+  .stage-cell span { font-size: 11px; font-weight: 600; color: #6B6660; }
+  .stage[data-stage="dark"] .stage-cell span,
+  .stage[data-stage="photo"] .stage-cell span { color: rgba(255,255,255,.68); }
+  @media (max-width: 560px) { .stage { grid-template-columns: repeat(2, 1fr); gap: 26px; } }
+
+  /* ── 헤더 목업 ─────────────────────────────── */
+  .headers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 720px) { .headers { grid-template-columns: 1fr; } }
+  .hdr {
+    background: #FFFDF5; border: 1px solid #E6E0D4; border-radius: 14px;
+    height: 62px; display: flex; align-items: center; gap: 9px; padding: 0 16px;
+  }
+  .hdr .art { width: 34px; height: 34px; border-radius: 9px; overflow: hidden; flex: none; }
+  .hdr .name { font-size: 21px; color: #4A3415; letter-spacing: -0.01em; font-weight: 700; }
+  .hdr-wrap { display: flex; flex-direction: column; gap: 7px; }
+  .hdr-wrap .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted); }
+
+  /* ── 홈 화면 ───────────────────────────────── */
+  .home {
+    background: radial-gradient(115% 80% at 25% 12%, #5C6B78 0%, #39424D 48%, #232A33 100%);
+    border-radius: 22px; padding: 28px 22px 34px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 14px;
+  }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .app .art { width: 58px; height: 58px; border-radius: 14px; overflow: hidden; box-shadow: 0 5px 14px rgba(0,0,0,.3); }
+  .app span { font-size: 10.5px; color: rgba(255,255,255,.9); text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+  .app.dummy .art { background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.07); }
+  .app.dummy span { color: rgba(255,255,255,.45); }
+
+  /* ── 기각·2군 ──────────────────────────────── */
+  .rejected { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 720px) { .rejected { grid-template-columns: 1fr; } }
+  .rej {
+    display: flex; gap: 14px; align-items: flex-start;
+    background: var(--panel-2); border: 1px dashed var(--line);
+    border-radius: 14px; padding: 16px;
+  }
+  .rej .art { width: 52px; height: 52px; border-radius: 13px; overflow: hidden; flex: none; opacity: .55; filter: saturate(.5); }
+  .rej h3 { font-size: 14px; color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+  .rej p { font-size: 12.5px; line-height: 1.6; color: var(--muted); margin-top: 4px; }
+
+  /* ── 질문 ──────────────────────────────────── */
+  .question {
+    background: var(--panel); border: 1px solid var(--line-soft);
+    border-radius: 18px; padding: 26px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+  .opt { display: flex; flex-direction: column; gap: 9px; }
+  .opt .k { font-size: 13px; font-weight: 700; }
+  .opt .v { font-size: 12.5px; line-height: 1.65; color: var(--ink-2); }
+  .opt .who { font-size: 11px; color: var(--pick); font-weight: 700; letter-spacing: .04em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- 소문자 chz — 획 골격을 직접 그린 벡터. 어센더는 x-height의 1.5배(획이 굵으면 그래야 h로 읽힌다) -->
+    <symbol id="lt" viewBox="0 0 300 130">
+      <g fill="none" stroke="currentColor" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M76 59 A29 29 0 1 0 76 99"></path>
+        <path d="M128 16 V108"></path>
+        <path d="M128 72 A22 22 0 0 1 172 72 V108"></path>
+        <polyline points="213,50 275,50 213,108 275,108"></polyline>
+      </g>
+    </symbol>
+    <!-- 대문자 CHZ — 아웃라인 전용 -->
+    <symbol id="ltCaps" viewBox="0 0 300 110">
+      <g fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M82 33 A35 35 0 1 0 82 77"></path>
+        <path d="M140 20 V90 M190 20 V90 M140 55 H190"></path>
+        <polyline points="228,20 288,20 228,90 288,90"></polyline>
+      </g>
+    </symbol>
+
+    <symbol id="A" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#2A1D0C"></rect>
+      <g transform="translate(30,83) scale(0.6)" color="#FFC93C"><use href="#lt" width="300" height="130"></use></g>
+      <circle cx="216" cy="148" r="10" fill="#FFC93C"></circle>
+    </symbol>
+
+    <symbol id="B" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFC93C"></rect>
+      <ellipse cx="46" cy="46" rx="13" ry="12" fill="#E0A81C"></ellipse>
+      <ellipse cx="196" cy="52" rx="10" ry="10" fill="#E0A81C"></ellipse>
+      <ellipse cx="52" cy="196" rx="10" ry="9" fill="#E0A81C"></ellipse>
+      <ellipse cx="192" cy="192" rx="13" ry="12" fill="#E0A81C"></ellipse>
+      <g transform="translate(26,92) scale(0.63)" color="#FFFDF5"><use href="#ltCaps" width="300" height="110"></use></g>
+    </symbol>
+
+    <symbol id="C" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFFDF5"></rect>
+      <g transform="translate(30,83) scale(0.6)" color="#FFC93C"><use href="#lt" width="300" height="130"></use></g>
+      <circle cx="45.6" cy="130.4" r="5" fill="#FFFDF5"></circle>
+      <circle cx="50.7" cy="142.7" r="4.5" fill="#FFFDF5"></circle>
+      <circle cx="106.8" cy="122" r="5" fill="#FFFDF5"></circle>
+      <circle cx="176" cy="113" r="4.5" fill="#FFFDF5"></circle>
+      <circle cx="176" cy="148" r="4.5" fill="#FFFDF5"></circle>
+    </symbol>
+
+    <symbol id="E" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFC93C"></rect>
+      <g fill="none" stroke="#3D2A0F" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M96 56 A32 32 0 1 0 96 100"></path>
+        <path d="M150 22 V108 M150 76 A22 22 0 0 1 194 76 V108"></path>
+        <polyline points="60,140 180,140 60,200 180,200"></polyline>
+      </g>
+    </symbol>
+
+    <!-- 기각안: 렌즈 계승 2종 -->
+    <symbol id="D" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFFDF5"></rect>
+      <g transform="translate(30,83) scale(0.6)" color="#FFC93C"><use href="#lt" width="300" height="130"></use></g>
+      <circle cx="63" cy="130.4" r="7" fill="#4A3415"></circle>
+      <circle cx="60.4" cy="128" r="2.3" fill="#FFF7E6" opacity="0.9"></circle>
+    </symbol>
+    <symbol id="K" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFFDF5"></rect>
+      <g transform="translate(30,83) scale(0.6)" color="#FFC93C"><use href="#lt" width="300" height="130"></use></g>
+      <circle cx="63" cy="130.4" r="18" fill="#FFFDF5"></circle>
+      <circle cx="63" cy="130.4" r="14" fill="#FFF4D6"></circle>
+      <circle cx="63" cy="130.4" r="11" fill="#D99421"></circle>
+      <circle cx="63" cy="130.4" r="8" fill="#4A3415"></circle>
+    </symbol>
+
+    <!-- 스크립트 — 웹폰트를 못 쓰는 자리라 손글씨를 모노라인 벡터로 직접 그렸다(기울기 skewX) -->
+    <symbol id="H" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFC93C"></rect>
+      <g transform="translate(10,8.5) skewX(-9)" fill="none" stroke="#FFFDF5" stroke-width="17" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M103 101 C95 92 70 91 59 105 C48 119 55 141 74 143 C86 144 94 139 99 132"></path>
+        <path d="M118 141 C118 118 122 88 132 72 C138 62 146 66 143 78 C140 92 128 108 123 120 C129 111 141 104 150 108 C159 112 157 124 154 141"></path>
+        <path d="M172 112 C186 110 200 110 210 112 C199 124 186 134 176 141 C188 143 200 141 210 136"></path>
+      </g>
+    </symbol>
+
+    <symbol id="F" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#1C1409"></rect>
+      <g transform="translate(30,83) scale(0.6)" color="#FFC93C">
+        <g fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M76 59 A29 29 0 1 0 76 99"></path>
+          <path d="M128 16 V108"></path>
+          <path d="M128 72 A22 22 0 0 1 172 72 V108"></path>
+          <polyline points="213,50 275,50 213,108 275,108"></polyline>
+        </g>
+      </g>
+    </symbol>
+    <symbol id="G" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFFDF5"></rect>
+      <g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" style="mix-blend-mode:multiply">
+        <path d="M74.8 113.2 A28 28 0 1 0 74.8 152.8" stroke="#FFDE8E"></path>
+        <path d="M108 72 V162 M108 126 A22 22 0 0 1 152 126 V162" stroke="#FFC93C"></path>
+        <polyline points="160,104 212,104 160,162 212,162" stroke="#EFA51B"></polyline>
+      </g>
+    </symbol>
+    <symbol id="I" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFFDF5"></rect>
+      <rect x="26" y="84" width="188" height="72" rx="10" fill="#3D2A0F"></rect>
+      <g transform="translate(45,89) scale(0.5)" color="#FFC93C"><use href="#lt" width="300" height="130"></use></g>
+      <rect x="26" y="166" width="188" height="12" rx="6" fill="#FFC93C"></rect>
+    </symbol>
+    <symbol id="J" viewBox="0 0 240 240">
+      <rect width="240" height="240" fill="#FFFDF5"></rect>
+      <path d="M34 176 L34 96 Q34 84 46 80 L196 46 Q208 43 208 55 L208 176 Q208 188 196 188 L46 188 Q34 188 34 176 Z" fill="#FFC93C"></path>
+      <ellipse cx="70" cy="150" rx="10" ry="9" fill="#E0A81C"></ellipse>
+      <ellipse cx="178" cy="86" rx="9" ry="8" fill="#E0A81C"></ellipse>
+      <g transform="translate(49,105) scale(0.48)" color="#3D2A0F"><use href="#lt" width="300" height="130"></use></g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">치즈모아 · 로고 리브랜딩</p>
+    <h1>렌즈를 떼고 남은 아홉 안</h1>
+    <p class="lede" style="margin-top:14px;">
+      치즈를 세 글자로 줄인 <b>chz</b> 워드마크. 11안 중 카메라 렌즈를 계승하는 두 안을 접었고,
+      아홉 안이 남았다. 넷은 지금 유력하고 다섯은 방향이 뒤집히면 앞줄로 나올 자리다 —
+      아래에서 <b>같은 조건으로 나란히</b> 볼 수 있다.
+    </p>
+
+    <div class="decision">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l6 6L20 6"/></svg>
+      </span>
+      <p>
+        <b>결정 — 체다(렌즈)는 계승하지 않는다.</b>
+        3글자 폭에 렌즈를 넣으면 c의 획이 h·z보다 얇아지고, 작아지면 c의 입이 닫혀 <span class="mono">ohz</span>로 읽혔다.
+        글자와 심볼이 한 자리를 두고 다투는 구조라 어느 쪽도 온전하지 못했다.
+        사용자가 0명인 지금이 버리기 가장 싼 시점이기도 하다.
+      </p>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>유력한 네 안</h2>
+      <p class="note">레터폼은 폰트 타이핑이 아니라 획 골격을 직접 그린 벡터다 — c(열린 원호)·h(스템+어깨)·z(지그재그). 아홉 안이 같은 골격을 공유해서, 스타일만 갈아 끼운 비교가 된다.</p>
+    </div>
+
+    <div class="cards">
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#A"></use></svg></div>
+          <div>
+            <div class="card-id">A</div>
+            <h3>chz. 다크 스탬프</h3>
+            <p class="ref">ref. FUTSAL-K · 뮤지직</p>
+          </div>
+        </div>
+        <p class="body">딥브라운 면에 옐로우 한 색. <b>대비가 최대라 홈 화면에서 가장 멀리서 읽힌다.</b> 마침표가 세 글자를 한 단어로 끝맺어, 줄임말이 아니라 이름으로 보이게 한다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#A"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#A"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#A"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">20px까지 온전히 버틴다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#E"></use></svg></div>
+          <div>
+            <div class="card-id">E</div>
+            <h3>격자 조립</h3>
+            <p class="ref">ref. 지금</p>
+          </div>
+        </div>
+        <p class="body">c·h는 윗줄, z는 아랫줄 전폭. 글자를 <b>레이아웃으로 쌓아</b> 정사각을 꽉 채운다. 여백이 없어 축소 손실이 가장 적지만, 읽는 순서가 한 번 꺾인다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#E"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#E"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#E"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">덩어리는 남고 글자는 뭉갠다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#C"></use></svg></div>
+          <div>
+            <div class="card-id">C</div>
+            <h3>구멍 뚫린 chz</h3>
+            <p class="ref">ref. 지금 + 브랜드 자산</p>
+          </div>
+        </div>
+        <p class="body">글자 획 자체에 치즈 구멍을 뚫는다. 심볼을 따로 붙이지 않고 <b>글자가 곧 치즈가 되는</b> 안 — 렌즈를 버린 뒤 브랜드 자산이 남아 있는 유일한 안이다. 흰 배경에선 면적이 약하다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#C"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#C"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#C"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">30px부터 구멍이 사라진다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#B"></use></svg></div>
+          <div>
+            <div class="card-id">B</div>
+            <h3>CHZ 아웃라인</h3>
+            <p class="ref">ref. HERE</p>
+          </div>
+        </div>
+        <p class="body">옐로우 면 위 크림 아웃라인 대문자. 글자를 비우니 <b>배경이 치즈 덩어리가 되고</b>, 네 귀퉁이 구멍이 말 안 하고 치즈를 말한다. 획이 가늘어 작은 크기에 약하다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#B"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#B"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#B"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">20px에서 흐려진다</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>함께 검토한 다섯 안</h2>
+      <p class="note">지금 앞줄은 아니지만 각자 앞의 넷이 못 하는 일을 하나씩 한다 — 워터마크로 확장되거나, 서비스 톤에 더 가깝거나, 형태만으로 치즈를 말하거나. 판단 기준이 바뀌면 순서도 바뀐다.</p>
+    </div>
+
+    <div class="cards">
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#I"></use></svg></div>
+          <div>
+            <div class="card-id">I</div>
+            <h3>스텐실 박스</h3>
+            <p class="ref">ref. Letty</p>
+          </div>
+        </div>
+        <p class="body">글자를 상자에 가둔 스탬프형. <b>사진 위에 얹어도 읽히는 유일한 안</b>이라 공개 사진 하단 마킹 같은 워터마크로 그대로 확장된다. 글자가 상자에 눌려 작다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#I"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#I"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#I"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">20px에선 막대만 남는다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#H"></use></svg></div>
+          <div>
+            <div class="card-id">H</div>
+            <h3>스크립트</h3>
+            <p class="ref">ref. pilla</p>
+          </div>
+        </div>
+        <p class="body">옐로우 면에 흰 손글씨. <b>지금 서비스 톤(둥근 Jua·친근함)에 가장 가깝다.</b> 다만 라틴 필기체는 한글 '치즈모아'와 얼굴이 안 맞아, 헤더에서 두 서체가 따로 논다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#H"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#H"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#H"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">기운 획이 작을수록 뭉갠다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#J"></use></svg></div>
+          <div>
+            <div class="card-id">J</div>
+            <h3>치즈 조각</h3>
+            <p class="ref">ref. 크랜 · 뉴플랫</p>
+          </div>
+        </div>
+        <p class="body">잘린 치즈 덩어리 실루엣 위에 글자를 얹는다. <b>글자 없이도 치즈로 읽히는</b> 유일한 안 — 형태가 이름을 대신한다. 대신 면이 복잡해 글자 자리가 좁아진다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#J"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#J"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#J"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">기울어진 윗면이 먼저 사라진다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#G"></use></svg></div>
+          <div>
+            <div class="card-id">G</div>
+            <h3>겹침 3단</h3>
+            <p class="ref">ref. 워니노트 U · AQ</p>
+          </div>
+        </div>
+        <p class="body">세 글자를 겹치고 겹친 자리를 어둡게. 옐로우 한 계열만 써서 <b>단색 규칙을 안 깨고 깊이를 얻는다.</b> 글자끼리 붙어 가독은 아홉 안 중 가장 약하다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#G"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#G"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#G"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">겹친 자리가 덩어리로 뭉친다</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <div class="art"><svg viewBox="0 0 240 240" width="108" height="108"><use href="#F"></use></svg></div>
+          <div>
+            <div class="card-id">F</div>
+            <h3>라인 모노그램</h3>
+            <p class="ref">ref. DEEPTH</p>
+          </div>
+        </div>
+        <p class="body">획을 한 겹으로 줄인 미니멀. <b>아홉 안 중 톤이 가장 차분하다.</b> 그 차분함이 유치원 현장과는 거리가 있고, 가는 획이라 작은 크기에서 가장 먼저 무너진다.</p>
+        <div class="sizes">
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="48" height="48"><use href="#F"></use></svg></div><span class="mono">48</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="30" height="30"><use href="#F"></use></svg></div><span class="mono">30</span></div>
+          <div class="size"><div class="art"><svg viewBox="0 0 240 240" width="20" height="20"><use href="#F"></use></svg></div><span class="mono">20</span></div>
+          <p class="verdict">20px에서 사실상 사라진다</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>같은 조건, 바탕만 바꿔서</h2>
+      <p class="note">아이콘은 늘 무언가 위에 놓인다 — 앱의 크림 배경, 브라우저의 흰 탭, 다크 모드, 사진 벽지. 바탕을 바꿔 보면 어느 안이 자기 경계를 스스로 갖는지가 드러난다.</p>
+    </div>
+
+    <div class="stage-bar" role="group" aria-label="바탕 바꾸기">
+      <button type="button" data-set="cream" aria-pressed="true">앱 크림 배경</button>
+      <button type="button" data-set="white" aria-pressed="false">흰 배경</button>
+      <button type="button" data-set="dark" aria-pressed="false">다크 모드</button>
+      <button type="button" data-set="photo" aria-pressed="false">사진 벽지</button>
+    </div>
+
+    <div class="stage" id="stage" data-stage="cream">
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#A"></use></svg></div><span>A</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#E"></use></svg></div><span>E</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#C"></use></svg></div><span>C</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#B"></use></svg></div><span>B</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#I"></use></svg></div><span>I</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#H"></use></svg></div><span>H</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#J"></use></svg></div><span>J</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#G"></use></svg></div><span>G</span></div>
+      <div class="stage-cell"><div class="art"><svg viewBox="0 0 240 240" width="92" height="92"><use href="#F"></use></svg></div><span>F</span></div>
+    </div>
+    <p class="note" style="margin-top:12px;">
+      크림 바탕(C·G·I·J)은 아이콘 배경(<span class="mono">#FFFDF5</span>)이 앱 배경과 같은 색이라, 크림 위에서 테두리가 사라지고 내용물만 떠 있다.
+      바탕이 어두워지면 정반대로 가장 밝게 튄다 — 이 넷은 <b>놓이는 곳에 따라 인상이 뒤집히는</b> 안이다.
+    </p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>홈 화면에서</h2>
+      <p class="note">진짜 시험대. 남의 앱 아이콘 사이에 끼어 있을 때 눈에 걸리는가.</p>
+    </div>
+    <div class="home">
+      <div class="app dummy"><div class="art"></div><span>메모</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#A"></use></svg></div><span>치즈모아</span></div>
+      <div class="app dummy"><div class="art"></div><span>지도</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#I"></use></svg></div><span>치즈모아</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#E"></use></svg></div><span>치즈모아</span></div>
+      <div class="app dummy"><div class="art"></div><span>날씨</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#H"></use></svg></div><span>치즈모아</span></div>
+      <div class="app dummy"><div class="art"></div><span>캘린더</span></div>
+      <div class="app dummy"><div class="art"></div><span>사진</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#C"></use></svg></div><span>치즈모아</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#J"></use></svg></div><span>치즈모아</span></div>
+      <div class="app dummy"><div class="art"></div><span>설정</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#B"></use></svg></div><span>치즈모아</span></div>
+      <div class="app dummy"><div class="art"></div><span>전화</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#G"></use></svg></div><span>치즈모아</span></div>
+      <div class="app"><div class="art"><svg viewBox="0 0 240 240" width="58" height="58"><use href="#F"></use></svg></div><span>치즈모아</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>앱 헤더에 세워 보면</h2>
+      <p class="note">아이콘만으로는 못 고른다. 헤더에는 심볼과 한글 서비스명이 나란히 서고, 이때 두 얼굴이 싸우는지가 갈림길이다. 규격은 현행 그대로(높이 60 · 심볼 34 · 워드마크 22px).</p>
+    </div>
+    <div class="headers">
+      <div class="hdr-wrap">
+        <span class="tag">A</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#A"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">E</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#E"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">C</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#C"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">B</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#B"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">I</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#I"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">H</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#H"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">J</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#J"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">G</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#G"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+      <div class="hdr-wrap">
+        <span class="tag">F</span>
+        <div class="hdr"><div class="art"><svg viewBox="0 0 240 240" width="34" height="34"><use href="#F"></use></svg></div><span class="name">치즈모아</span></div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:14px;">
+      H는 여기서 약점이 가장 크게 드러난다 — 라틴 필기체와 한글 Jua가 한 줄에 서면 서로 다른 손이 쓴 것처럼 보인다.
+    </p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>남은 질문 하나</h2>
+      <p class="note">렌즈를 버리면서 갈림길 둘 중 하나가 닫혔다. 남은 건 바탕색이고, 그건 취향이 아니라 앱을 여는 순간의 경험에 관한 질문이다.</p>
+    </div>
+    <div class="question">
+      <div class="split">
+        <div class="opt">
+          <span class="who">A · F</span>
+          <span class="k">어두운 바탕</span>
+          <span class="v">멀리서 가장 잘 읽히고 스플래시에서 존재감이 크다. 대신 앱 전체가 크림 톤이라 <b>아이콘만 어두우면 앱을 열 때 톤이 한 번 꺾인다</b>(스플래시로 완충 가능).</span>
+        </div>
+        <div class="opt">
+          <span class="who">E · B · H</span>
+          <span class="k">옐로우 바탕</span>
+          <span class="v">브랜드 색이 아이콘 면 전체를 차지한다. 앱 안팎의 톤이 이어지고 <b>어떤 바탕 위에서도 경계가 선다.</b> 대신 옐로우 앱은 흔해서, 형태로 구별을 벌어야 한다.</span>
+        </div>
+        <div class="opt">
+          <span class="who">C · I · J · G</span>
+          <span class="k">크림 바탕</span>
+          <span class="v">가장 조용하고 앱 배경과 완전히 이어진다. 대신 <b>놓이는 곳에 따라 인상이 뒤집힌다</b> — 크림 위에선 경계가 사라지고 어두운 벽지 위에선 가장 밝게 튄다.</span>
+        </div>
+      </div>
+      <p class="note" style="border-top:1px solid var(--line-soft); padding-top:16px;">
+        고르면 그 안만 파고들어 자간·획 두께·구멍 배치를 다듬고, <span class="mono">Cheddar.tsx</span> 자리에 들어갈 컴포넌트로 뽑는다.
+        헤더·스플래시·파비콘·앱 아이콘까지 한 벌로.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>접은 안들</h2>
+    </div>
+    <div class="rejected">
+      <div class="rej">
+        <div class="art"><svg viewBox="0 0 240 240" width="52" height="52"><use href="#K"></use></svg></div>
+        <div>
+          <h3>K · c = 렌즈 링</h3>
+          <p>c의 획을 렌즈 테두리로 삼은 안. 작아지면 c의 입이 닫혀 <span class="mono">ohz</span>가 된다.</p>
+        </div>
+      </div>
+      <div class="rej">
+        <div class="art"><svg viewBox="0 0 240 240" width="52" height="52"><use href="#D"></use></svg></div>
+        <div>
+          <h3>D · c 안의 눈</h3>
+          <p>3글자 폭에서 눈이 지름 17px밖에 안 나온다. 30px 아이콘에서 이미 사라진다.</p>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</div>
+
+<script>
+  const stage = document.getElementById('stage');
+  const buttons = document.querySelectorAll('.stage-bar button');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      stage.dataset.stage = btn.dataset.set;
+    });
+  });
+</script>

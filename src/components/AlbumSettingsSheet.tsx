@@ -2,10 +2,18 @@ import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useApi } from '../hooks/useApi'
 import { useDelayedFlag } from '../hooks/useDelayedFlag'
+import { useDragScrollX } from '../hooks/useDragScrollX'
 import { useMutation } from '../hooks/useMutation'
-import { renamePersonAlbum } from '../api/albums'
-import { linkPersonParent, listGroupMembers, unlinkPersonParent } from '../api/groups'
-import type { GroupMember, GroupType, ID } from '../types/api'
+import { ApiRequestError } from '../api/client'
+import { mergeAlbumPerson, renamePersonAlbum, type MergeAlbumPersonResult } from '../api/albums'
+import {
+  linkPersonParent,
+  listGroupMembers,
+  listGroupPersons,
+  unlinkPersonParent,
+} from '../api/groups'
+import { cx } from '../lib/cx'
+import type { GroupMember, GroupPerson, GroupType, ID } from '../types/api'
 import { BottomSheet, Button, ConfirmDialog, IconClose, TextField, useToast } from './ui'
 
 /** 설정 대상 인물 앨범 — 멤버 연결의 키는 앨범이 아니라 personId(모임 단위 인물)다 */
@@ -28,6 +36,11 @@ interface AlbumSettingsSheetProps {
   /** 이름 저장 성공 — 호출부가 앨범 목록/상세를 refetch 한다(멤버 연결은 시트 안에서만 갱신) */
   onUpdated: () => void
   /**
+   * 인물 병합 성공(CHMO-689) — 호출부가 시트를 닫고 후속을 정한다: 08은 목록 refetch,
+   * 09는 남은 앨범(result.albumId)이 지금 앨범이면 refetch·통합돼 사라졌으면 그 앨범으로 replace.
+   */
+  onMerged: (result: MergeAlbumPersonResult) => void
+  /**
    * 주면 하단에 [앨범 삭제]가 붙는다(09 전용 — 헤더 🗑을 여기로 합쳤다).
    * 확인 다이얼로그는 호출부 소유 — 시트를 닫고 열어 대화상자 두 겹을 피한다.
    */
@@ -49,6 +62,12 @@ interface AlbumSettingsSheetProps {
  * 그래서 붙일 대상도 없다 — 섹션과 함께 멤버 조회(비즈니스 전용 API)도 보내지 않는다.
  * 이름 수정은 유형과 무관하게 남는다(인물 앨범 이름은 두 유형 다 쓴다).
  *
+ * **기존 인물로 합치기**(CHMO-689 — BE CHMO-688): AI가 같은 인물을 새 인물("인물 N")로 잘못
+ * 나눴을 때의 수동 보정. 요청 앨범의 인물이 흡수되는 쪽이고 고른 인물이 남는 쪽이다 — 흡수
+ * 인물의 전 이벤트 앨범이 이관·통합되고 인물 자체가 삭제돼 재업로드에도 되살아나지 않는다.
+ * 후보는 20-1과 같은 원천(listGroupPersons 파생)인데 팬아웃 조회라 펼쳤을 때만 읽고,
+ * 유형 분기가 없다(BE 정책 — 검수·공개 축이 아니라 인물 정리 축이라 일반 모임도 허용).
+ *
  * 이름 저장은 성공 시 시트를 닫는다(RenameModal과 동일) — 호출부가 들고 있는 album prop이
  * 옛 이름 그대로라 열어 둔 채로는 부제·placeholder가 갱신되지 않는다.
  * 멤버 연결/해제는 시트를 유지하고 멤버 목록만 다시 읽는다(연달아 여러 명 붙이는 자리라서).
@@ -59,6 +78,7 @@ export function AlbumSettingsSheet({
   groupType,
   onClose,
   onUpdated,
+  onMerged,
   onDeleteRequest,
 }: AlbumSettingsSheetProps) {
   const toast = useToast()
@@ -79,10 +99,24 @@ export function AlbumSettingsSheet({
   const [linkingUserId, setLinkingUserId] = useState<ID | null>(null)
   const [unlinkTarget, setUnlinkTarget] = useState<GroupMember | null>(null)
   const [unlinking, setUnlinking] = useState(false)
+  // 인물 병합(CHMO-689) — 후보 목록은 시트가 열릴 때 함께 조회한다(아래 personsApi)
+  const [mergeTarget, setMergeTarget] = useState<GroupPerson | null>(null)
+  const [merging, setMerging] = useState(false)
   // 동기 락 — setState 반영 전 같은 프레임의 연타가 두 번 요청되는 것을 막는다(MovePhotosSheet 선례)
   const busyRef = useRef(false)
 
-  const busy = saving || linkingUserId !== null || unlinking
+  // 병합 후보 = 모임의 다른 인물(listGroupPersons 파생 — 별도 인물 목록 API 없음, 20-1과 같은
+  // 원천). 시트를 열면 바로 조회한다(버튼 한 단계를 없앴다 — 팬아웃이지만 모임당 이벤트 수가 작다).
+  // 병합은 모임 유형 무관이라(BE 정책 — 검수·공개 축이 아니라 인물 정리 축) groupType을 보지 않는다.
+  const personsApi = useApi(
+    album.personId != null ? `group-persons:${groupId}` : null,
+    (signal) => listGroupPersons(groupId, signal),
+  )
+  const showPersonsLoading = useDelayedFlag(personsApi.loading)
+  const dragScroll = useDragScrollX()
+  const mergeCandidates = (personsApi.data ?? []).filter((p) => p.personId !== album.personId)
+
+  const busy = saving || linkingUserId !== null || unlinking || merging
   const viewers = (membersApi.data ?? []).filter((m) => m.role === 'viewer')
   const isLinked = (member: GroupMember) => member.mappings.some((m) => m.personId === personId)
   const linked = viewers.filter(isLinked)
@@ -126,6 +160,30 @@ export function AlbumSettingsSheet({
         toast.show(msg)
         busyRef.current = false
         setLinkingUserId(null)
+      },
+    })
+  }
+
+  const handleMerge = async () => {
+    if (!mergeTarget || busyRef.current) return
+    busyRef.current = true
+    setMerging(true)
+    const target = mergeTarget
+    await mutate(() => mergeAlbumPerson(album.id, target.personId), {
+      onSuccess: (result) => {
+        toast.show(`🧀 '${target.name}'(으)로 합쳤어요`)
+        // 시트 닫기·이동/refetch는 호출부 몫 — 이 앨범이 통합돼 사라졌을 수 있어 화면이 정한다
+        onMerged(result)
+      },
+      onError: (msg, err) => {
+        // 서로 다른 멤버에 연결된 인물(PERSON409) — BE 메시지는 '학부모' 어휘라 화면 어휘로 바꾼다
+        const conflict = err instanceof ApiRequestError && err.code === 'PERSON_PARENT_CONFLICT'
+        toast.show(
+          conflict ? '서로 다른 멤버에 연결된 인물이라 합칠 수 없어요. 연결을 먼저 해제해 주세요.' : msg,
+        )
+        busyRef.current = false
+        setMerging(false)
+        setMergeTarget(null)
       },
     })
   }
@@ -271,6 +329,74 @@ export function AlbumSettingsSheet({
           </section>
         )}
 
+        {/* 기존 인물로 합치기(CHMO-689) — AI가 같은 인물을 새 인물로 잘못 나눈 앨범의 수동 보정.
+            모임 유형 무관·인물 앨범만. 후보 타일 탭 = 확인 다이얼로그(비가역이라 즉시 실행하지 않는다) */}
+        {album.personId != null && (
+          <section className="mt-5 border-t border-border pt-4">
+            <h3 className="text-[13px] font-bold text-text">기존 인물로 합치기</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              같은 인물이 새 인물로 잘못 나뉘었다면 기존 인물을 골라 합쳐요. 모임의 모든 이벤트에
+              함께 적용돼요.
+            </p>
+
+            {personsApi.data === null ? (
+              personsApi.loading ? (
+                showPersonsLoading ? (
+                  <p className="mt-3 text-sm text-muted">인물을 불러오는 중…</p>
+                ) : null
+              ) : (
+                // 조회 실패는 이름 수정·멤버 연결을 막지 않는다 — 이 섹션 안에서만 알린다(멤버 조회와 같은 결)
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3">
+                  <p className="min-w-0 text-[13px] text-muted">인물을 불러오지 못했어요</p>
+                  <button
+                    type="button"
+                    onClick={personsApi.refetch}
+                    className="shrink-0 text-[13px] font-medium text-accent"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              )
+            ) : mergeCandidates.length === 0 ? (
+              <p className="mt-3 text-[13px] text-muted">합칠 다른 인물이 없어요.</p>
+            ) : (
+              <div {...dragScroll} className="mt-3 flex select-none gap-3 overflow-x-auto pb-1">
+                {mergeCandidates.map((p) => (
+                  <button
+                    key={p.personId}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setMergeTarget(p)}
+                    className={cx(
+                      'press flex w-[88px] flex-none flex-col items-start gap-1.5',
+                      busy && 'opacity-50',
+                    )}
+                  >
+                    {p.coverThumbnailUrl ? (
+                      <img
+                        src={p.coverThumbnailUrl}
+                        alt=""
+                        // 마우스 끌기 스크롤(useDragScrollX)과 충돌하는 네이티브 이미지 드래그 차단
+                        draggable={false}
+                        className="h-[88px] w-[88px] rounded-2xl object-cover"
+                      />
+                    ) : (
+                      <span
+                        className="cheese-dots h-[88px] w-[88px] rounded-2xl bg-photo"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="max-w-full truncate text-[13px] font-bold text-text">
+                      {p.name}
+                    </span>
+                    <span className="text-[11px] text-muted">사진 {p.photoCount}장</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* 09에서만 — 위험 동작이지만 확인 다이얼로그가 한 번 더 뜨므로 여기선 톤을 낮춘다(RenameModal 선례) */}
         {onDeleteRequest && (
           <Button
@@ -284,6 +410,26 @@ export function AlbumSettingsSheet({
           </Button>
         )}
       </BottomSheet>
+
+      {/* 병합 확인(CHMO-689) — 흡수 인물이 삭제되는 비가역 동작이라 검토 완료·앨범 삭제와 같은
+          무게로 받는다. 다른 이벤트의 앨범까지 함께 합쳐진다는 사실을 여기서 한 번 더 말한다 */}
+      <ConfirmDialog
+        open={mergeTarget !== null}
+        danger
+        busy={merging}
+        busyLabel="합치는 중…"
+        title={mergeTarget ? `'${mergeTarget.name}'(으)로 합칠까요?` : ''}
+        description={
+          mergeTarget
+            ? `'${album.name}'의 사진이 모든 이벤트에서 '${mergeTarget.name}' 앨범으로 합쳐지고, 이 인물은 사라져요. 되돌릴 수 없어요.`
+            : ''
+        }
+        confirmLabel="합치기"
+        onConfirm={() => void handleMerge()}
+        onClose={() => {
+          if (!merging) setMergeTarget(null)
+        }}
+      />
 
       {/* 연결 해제 확인 — 해제하면 그 멤버에게 이 인물 앨범이 더는 보이지 않는다(§7-1 미연결 회귀).
           20 초대 관리와 같은 문구·같은 무게로 받는다(다시 연결할 수 있음을 함께 알린다) */}

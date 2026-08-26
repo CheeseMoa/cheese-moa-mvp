@@ -137,7 +137,7 @@ export function SocialLoginButtons({ returnTo }: SocialLoginButtonsProps) {
             key={provider}
             type="button"
             onClick={() => void start(provider)}
-            className={`flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold transition active:scale-[0.98] ${className}`}
+            className={`press flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold ${className}`}
           >
             {icon}
             {label}

@@ -2,6 +2,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PhoneShell } from '../components/PhoneShell'
 import { ButtonLink, EmptyState, Header, LoadState } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useEntrance } from '../hooks/useEntrance'
 import { listGroups } from '../api/groups'
 import { listGroupEvents } from '../api/events'
 import { formatEventDate } from '../lib/eventDate'
@@ -27,6 +28,8 @@ export function ParentGroupPage() {
   const group = groupsApi.data?.find((g) => String(g.id) === groupId) ?? null
   const membership = group?.myMembership
   const events = eventsApi.data ?? []
+  // 05 이벤트 목록과 같은 카드 목록이라 진입도 같게(CHMO-711)
+  const eventListRef = useEntrance<HTMLUListElement>(events.length > 0, 'rise')
 
   // role 분기 안전망 — 홈 카드가 분기하지만 딥링크·새로고침으로 직접 와도 제자리로 보낸다
   if (group && (!membership || membership.role === 'editor'))
@@ -79,13 +82,13 @@ export function ParentGroupPage() {
                   }
                 />
               ) : (
-                <ul className="flex flex-col gap-3">
+                <ul ref={eventListRef} className="flex flex-col gap-3">
                   {events.map((event) => (
                     <li key={event.id}>
                       <button
                         type="button"
                         onClick={() => navigate(`/parent/groups/${groupId}/events/${event.id}`)}
-                        className="w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card transition active:scale-[0.98]"
+                        className="press-card w-full rounded-2xl border border-border bg-white p-4 text-left shadow-card"
                       >
                         <span className="block truncate text-base font-bold text-text">
                           {event.name}

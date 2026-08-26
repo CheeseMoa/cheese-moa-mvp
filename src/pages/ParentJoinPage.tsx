@@ -138,7 +138,7 @@ export function ParentJoinPage({ joinKey, groupName }: ParentJoinPageProps) {
                     type="button"
                     aria-label={`${label} 삭제`}
                     onClick={() => setPersonNames((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="flex h-12 w-10 shrink-0 items-center justify-center text-muted transition-colors active:text-text"
+                    className="flex h-12 w-10 shrink-0 items-center justify-center text-muted transition-colors duration-fast ease-standard active:text-text"
                   >
                     <IconClose size={16} />
                   </button>

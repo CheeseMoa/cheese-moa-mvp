@@ -190,6 +190,7 @@ export function ParentEventPhotosPage() {
         {data && hasPhotos && (
           <div className="px-5 pb-safe-9 pt-4">
             <Button
+              variant="accent"
               fullWidth
               className="gap-1.5 whitespace-nowrap"
               disabled={save.busy || (selectMode && selected.size === 0)}

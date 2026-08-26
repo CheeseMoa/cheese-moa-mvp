@@ -110,6 +110,33 @@ export function deleteAlbum(albumId: ID | string): Promise<void> {
   return apiFetch<unknown>(`/albums/${albumId}`, { method: 'DELETE' }).then(() => undefined)
 }
 
+/** BE MergeAlbumPersonResponse(CHMO-688) — 필드가 FE 그대로라 매퍼 없이 쓴다 */
+export interface MergeAlbumPersonResult {
+  /** 요청 앨범이 있던 이벤트에서 병합 후 남은 앨범 — 대상 인물 앨범과 통합됐으면 그 앨범이다 */
+  albumId: ID
+  /** 남은(흡수한) 인물 */
+  personId: ID
+  /** 대상 인물 이름(모임 전체 전파) — 이름을 아직 안 붙인 인물이면 null */
+  personName: string | null
+}
+
+/**
+ * POST /albums/:id/merge-person — 앨범 인물 병합(CHMO-689 — BE CHMO-688).
+ * 요청 앨범의 인물이 **흡수되는 쪽**, body의 personId가 **남는 쪽**이다. 흡수 인물의
+ * 모든 이벤트 앨범이 대상 인물로 이관되고(대상 앨범이 이미 있는 이벤트는 통합·검토 상태 보존),
+ * 흡수 인물은 벡터째 삭제된다 — 같은 이벤트에 사진을 다시 올려도 그 인물이 되살아나지 않는다.
+ * 서로 다른 멤버(학부모)에 연결된 인물 간에는 PERSON409(오병합 노출 방지 — 자동 진행 없음).
+ */
+export function mergeAlbumPerson(
+  albumId: ID | string,
+  personId: ID,
+): Promise<MergeAlbumPersonResult> {
+  return apiFetch<MergeAlbumPersonResult>(`/albums/${albumId}/merge-person`, {
+    method: 'POST',
+    body: { personId },
+  })
+}
+
 /** GET /albums/:id/move-suggestions — 선택 사진 기준 이동 추천(유사도순 + 공통, bare 배열) */
 export function getMoveSuggestions(
   albumId: ID | string,

@@ -375,6 +375,11 @@ export function findPhoto(photoId: number | null): DbPhoto | undefined {
   return db.photos.find((p) => p.id === photoId)
 }
 
+/** 모임 스코프 인물 조회 — 다른 모임의 인물은 존재 자체를 숨긴다(BE person-parents·병합 공통 규칙) */
+export function findGroupPerson(groupId: number, personId: number): DbPerson | undefined {
+  return db.persons.find((p) => p.id === personId && p.groupId === groupId)
+}
+
 // ── 멤버십·신청 (학부모 전환 CHMO-444 — role·승인제) ─────────
 
 export function membershipOf(userId: number, groupId: number): DbMembership | undefined {
@@ -845,6 +850,59 @@ export function deleteAlbumCascade(albumId: number): void {
     if (photo.albumIds.length === 0) db.photos = db.photos.filter((p) => p.id !== photo.id)
   }
   db.albums = db.albums.filter((a) => a.id !== albumId)
+}
+
+/**
+ * 앨범 인물 병합(CHMO-688) — 요청 앨범의 인물(source)을 대상 인물(target)로 흡수한다.
+ * BE MergeAlbumPersonUseCase 대응: 학부모 매핑 이관(양쪽이 서로 다른 학부모면 중단 — ADR 012
+ * 예약 규칙, 오병합 노출 방지) → 흡수 인물의 **전 이벤트** 앨범 이관(대상 앨범이 이미 있는
+ * 이벤트는 통합 — 중복 매핑은 대상 쪽 유지·빈 원본 앨범 삭제·커버는 min photoId 재계산,
+ * CHMO-402) → 인물 행 삭제(벡터 파기의 목 대응 — 같은 이벤트 재업로드에 되살아나지 않는다).
+ * 검토 상태는 사진 단위(목 근사)라 이관해도 저절로 보존되고(AC-4), 이벤트 상태 재계산도
+ * BE처럼 하지 않는다(미검토 수가 중복 제거분 외 불변).
+ * 반환: 요청 앨범이 있던 이벤트에서 병합 후 남은 앨범 id, 상충이면 'parent_conflict'.
+ */
+export function mergePersonInto(
+  requested: DbAlbum,
+  targetPersonId: number,
+): number | 'parent_conflict' {
+  const sourcePersonId = requested.personId
+  if (sourcePersonId === null) return requested.id // 방어 — 핸들러가 인물 앨범만 들여보낸다
+  const sourceMappings = db.personParents.filter((pp) => pp.personId === sourcePersonId)
+  const targetUserIds = new Set(
+    db.personParents.filter((pp) => pp.personId === targetPersonId).map((pp) => pp.userId),
+  )
+  const movable = sourceMappings.filter((pp) => !targetUserIds.has(pp.userId))
+  if (targetUserIds.size > 0 && movable.length > 0) return 'parent_conflict'
+  for (const pp of movable) pp.personId = targetPersonId
+  // 아직 source를 가리키는 행 = 같은 학부모가 양쪽에 매핑된 중복 — 대상 쪽을 남기고 제거
+  db.personParents = db.personParents.filter((pp) => pp.personId !== sourcePersonId)
+
+  let survivingAlbumId = requested.id
+  for (const album of db.albums.filter((a) => a.personId === sourcePersonId)) {
+    const target = db.albums.find(
+      (a) => a.eventId === album.eventId && a.personId === targetPersonId,
+    )
+    if (!target) {
+      // 이 이벤트엔 대상 인물 앨범이 없다 — 앨범째 이관(사진·커버 그대로)
+      album.personId = targetPersonId
+      continue
+    }
+    for (const photo of photosOfAlbum(album.id)) {
+      photo.albumIds = photo.albumIds.includes(target.id)
+        ? photo.albumIds.filter((id) => id !== album.id) // 중복 매핑 — 대상 연결만 남긴다
+        : photo.albumIds.map((id) => (id === album.id ? target.id : id)) // 이관(reviewed 보존)
+    }
+    db.albums = db.albums.filter((a) => a.id !== album.id)
+    // 통합으로 더 이른 사진이 들어왔을 수 있다 — BE 커버 규칙(min photoId) 그대로 재계산
+    target.coverPhotoId = photosOfAlbum(target.id).reduce<number | null>(
+      (min, p) => (min === null || p.id < min ? p.id : min),
+      null,
+    )
+    if (album.id === requested.id) survivingAlbumId = target.id
+  }
+  db.persons = db.persons.filter((p) => p.id !== sourcePersonId)
+  return survivingAlbumId
 }
 
 // ── 모임·이벤트 삭제 (연쇄) ──────────────────────────────────
