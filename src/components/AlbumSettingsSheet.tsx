@@ -99,18 +99,17 @@ export function AlbumSettingsSheet({
   const [linkingUserId, setLinkingUserId] = useState<ID | null>(null)
   const [unlinkTarget, setUnlinkTarget] = useState<GroupMember | null>(null)
   const [unlinking, setUnlinking] = useState(false)
-  // 인물 병합(CHMO-689) — 후보 목록은 펼쳤을 때만 조회한다(아래 personsApi)
-  const [mergeOpen, setMergeOpen] = useState(false)
+  // 인물 병합(CHMO-689) — 후보 목록은 시트가 열릴 때 함께 조회한다(아래 personsApi)
   const [mergeTarget, setMergeTarget] = useState<GroupPerson | null>(null)
   const [merging, setMerging] = useState(false)
   // 동기 락 — setState 반영 전 같은 프레임의 연타가 두 번 요청되는 것을 막는다(MovePhotosSheet 선례)
   const busyRef = useRef(false)
 
   // 병합 후보 = 모임의 다른 인물(listGroupPersons 파생 — 별도 인물 목록 API 없음, 20-1과 같은
-  // 원천). 팬아웃 조회라 시트가 열릴 때가 아니라 [합칠 인물 고르기]를 눌렀을 때만 나간다.
+  // 원천). 시트를 열면 바로 조회한다(버튼 한 단계를 없앴다 — 팬아웃이지만 모임당 이벤트 수가 작다).
   // 병합은 모임 유형 무관이라(BE 정책 — 검수·공개 축이 아니라 인물 정리 축) groupType을 보지 않는다.
   const personsApi = useApi(
-    mergeOpen && album.personId != null ? `group-persons:${groupId}` : null,
+    album.personId != null ? `group-persons:${groupId}` : null,
     (signal) => listGroupPersons(groupId, signal),
   )
   const showPersonsLoading = useDelayedFlag(personsApi.loading)
@@ -340,17 +339,7 @@ export function AlbumSettingsSheet({
               함께 적용돼요.
             </p>
 
-            {!mergeOpen ? (
-              <Button
-                variant="secondary"
-                fullWidth
-                className="mt-3"
-                disabled={busy}
-                onClick={() => setMergeOpen(true)}
-              >
-                합칠 인물 고르기
-              </Button>
-            ) : personsApi.data === null ? (
+            {personsApi.data === null ? (
               personsApi.loading ? (
                 showPersonsLoading ? (
                   <p className="mt-3 text-sm text-muted">인물을 불러오는 중…</p>
