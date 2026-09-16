@@ -406,6 +406,107 @@ export function createFixtures(): Db {
     // 푸시 기기는 앱에서 등록되는 값이라 시드가 없다(CHMO-667) — 목 모드에서도
     // POST /me/devices를 실제로 타야 행이 생긴다(브라우저에선 브리지가 없어 영영 비어 있다)
     devices: [],
+    /**
+     * 기관 도입 문의 (CHMO-811) — 접수는 앱(CHMO-802)이 하므로 웹에는 생성 경로가 없고
+     * 시드가 곧 전부다. 탭 넷이 다 채워지도록 상태별로 깔고, 화면에서만 드러나는 경우 셋을
+     * 일부러 섞었다: 역할 미입력(null) · PIN 계정(소셜 빈 배열) · 소셜 복수 연결.
+     * 문의 5·6은 **같은 유저(치즈냥이88)의 종료분 + 재접수분**이라, 5를 '접수됨'으로
+     * 되돌리면 INQUIRY409(진행 중 1건 제약 — CHMO-802)가 목에서도 그대로 재현된다.
+     */
+    organizationInquiries: [
+      {
+        id: 6,
+        userId: 7,
+        status: 'RECEIVED',
+        organizationType: 'KINDERGARTEN',
+        organizationName: '달빛유치원',
+        region: '대전 유성구',
+        contactName: '한소라',
+        contactPhone: '01077778888',
+        contactRole: 'DIRECTOR',
+        privacyConsentVersion: '1.0',
+        socialProviders: ['NAVER'],
+        createdAt: '2026-09-15T14:20:00+09:00',
+        updatedAt: '2026-09-15T14:20:00+09:00',
+      },
+      {
+        id: 1,
+        userId: 2,
+        status: 'RECEIVED',
+        organizationType: 'KINDERGARTEN',
+        organizationName: '치즈유치원',
+        region: '서울 강동구',
+        contactName: '김지은',
+        contactPhone: '01012345678',
+        contactRole: 'DIRECTOR',
+        privacyConsentVersion: '1.0',
+        socialProviders: ['KAKAO'],
+        createdAt: '2026-09-15T10:00:00+09:00',
+        updatedAt: '2026-09-15T10:00:00+09:00',
+      },
+      {
+        id: 2,
+        userId: 3,
+        status: 'RECEIVED',
+        organizationType: 'DAYCARE',
+        organizationName: '햇살어린이집',
+        region: '경기 성남시',
+        // 역할은 선택 항목 — 담당자 칸이 '—'로 수렴하는 경우
+        contactRole: null,
+        contactName: '박수민',
+        contactPhone: '01098765432',
+        privacyConsentVersion: '1.0',
+        // PIN 계정 — 소셜 연결이 없다(사용자 칸에 'PIN'으로 뜬다)
+        socialProviders: [],
+        createdAt: '2026-09-14T16:40:00+09:00',
+        updatedAt: '2026-09-14T16:40:00+09:00',
+      },
+      {
+        id: 3,
+        userId: 6,
+        status: 'CONTACTED',
+        organizationType: 'ACADEMY',
+        organizationName: '초록미술학원',
+        region: '부산 해운대구',
+        contactName: '지호네',
+        contactPhone: '0212345678',
+        contactRole: 'STAFF',
+        privacyConsentVersion: '1.0',
+        socialProviders: ['GOOGLE', 'KAKAO'],
+        createdAt: '2026-09-12T09:30:00+09:00',
+        updatedAt: '2026-09-13T11:00:00+09:00',
+      },
+      {
+        id: 4,
+        userId: 5,
+        status: 'ONBOARDED',
+        organizationType: 'KINDERGARTEN',
+        organizationName: '별님유치원',
+        region: '서울 마포구',
+        contactName: '서연맘',
+        contactPhone: '01055556666',
+        contactRole: 'TEACHER',
+        privacyConsentVersion: '1.0',
+        socialProviders: ['APPLE'],
+        createdAt: '2026-09-05T10:00:00+09:00',
+        updatedAt: '2026-09-06T09:10:00+09:00',
+      },
+      {
+        id: 5,
+        userId: 7,
+        status: 'CLOSED',
+        organizationType: 'KINDERGARTEN',
+        organizationName: '달빛유치원',
+        region: '대전 유성구',
+        contactName: '한소라',
+        contactPhone: '01077778888',
+        contactRole: 'DIRECTOR',
+        privacyConsentVersion: '1.0',
+        socialProviders: ['NAVER'],
+        createdAt: '2026-08-28T13:00:00+09:00',
+        updatedAt: '2026-09-10T17:20:00+09:00',
+      },
+    ],
     // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다
     uploadedKeys: [],
   }

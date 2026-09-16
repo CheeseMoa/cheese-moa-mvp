@@ -8,10 +8,12 @@ import { clearAuthTokens, getRefreshToken, setAuthTokens, setCurrentUserId } fro
 import {
   toAdminGroupDetail,
   toAdminGroupRow,
+  toAdminInquiry,
   toAdminProfile,
   toAdminStats,
   type RawAdminGroupDetail,
   type RawAdminGroupRow,
+  type RawAdminInquiry,
   type RawAdminProfile,
   type RawAdminStats,
 } from './mappers'
@@ -19,6 +21,9 @@ import type {
   AdminGroupDetail,
   AdminGroupListParams,
   AdminGroupRow,
+  AdminInquiry,
+  AdminInquiryListParams,
+  AdminInquiryStatus,
   AdminProfile,
   AdminStats,
 } from './types'
@@ -124,4 +129,50 @@ export function getAdminGroupDetail(
   return apiFetch<RawAdminGroupDetail>(`/admin/groups/${groupId}`, { signal }).then(
     toAdminGroupDetail,
   )
+}
+
+// ── 기관 도입 문의 (CHMO-811 — BE CHMO-810) ─────────────────────────
+
+export interface AdminInquiryPage {
+  items: AdminInquiry[]
+  pageInfo: BePageInfo | null
+}
+
+/**
+ * GET /admin/organization-inquiries — 기관 도입 문의 목록.
+ * 정렬은 `createdAt,desc` 고정이라 `sort` 파라미터가 아예 없다(모임 목록과 갈리는 지점).
+ * `status`를 생략하면 BE 기본값이 `RECEIVED,CONTACTED`(=진행 중)라, 대시보드 카드는 그대로
+ * `size=1`만 실어 `pageInfo.totalElements`를 대기 건수로 읽는다(별도 카운트 API가 없다).
+ */
+export async function listAdminInquiries(
+  params: AdminInquiryListParams,
+  signal?: AbortSignal,
+): Promise<AdminInquiryPage> {
+  const search = new URLSearchParams({ page: String(params.page) })
+  if (params.size !== undefined) search.set('size', String(params.size))
+  if (params.status) search.set('status', params.status)
+
+  const { items, pageInfo } = await apiFetchPaged<RawAdminInquiry[]>(
+    `/admin/organization-inquiries?${search.toString()}`,
+    { signal },
+  )
+  return { items: (items ?? []).map(toAdminInquiry), pageInfo }
+}
+
+/**
+ * PATCH /admin/organization-inquiries/:id — 상태 전이(어드민의 첫 쓰기 액션).
+ * 전이 규칙이 없어 4개 값 전부 보낼 수 있고, 응답은 **갱신된 행**이라 호출부가 재조회 없이
+ * 그 행만 바꿔 끼운다. 실패는 INQUIRY404(없는 id)·INQUIRY409(되돌리기 충돌 — 그 사용자에게
+ * 이미 진행 중 문의가 있음) 둘뿐이고, 둘 다 화면이 안내 후 목록을 다시 읽는다.
+ */
+export function updateAdminInquiryStatus(
+  id: number,
+  status: AdminInquiryStatus,
+  signal?: AbortSignal,
+): Promise<AdminInquiry> {
+  return apiFetch<RawAdminInquiry>(`/admin/organization-inquiries/${id}`, {
+    method: 'PATCH',
+    body: { status },
+    signal,
+  }).then(toAdminInquiry)
 }

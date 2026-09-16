@@ -104,3 +104,61 @@ export interface AdminGroupListParams {
   size?: number
   sort?: AdminGroupSort
 }
+
+// ── 기관 도입 문의 (CHMO-811 — BE CHMO-810) ─────────────────────────
+
+/**
+ * BE OrganizationInquiryStatus — 접수됨 → 연락 완료 → 개통 / 종료.
+ *
+ * **전이 규칙이 없다**(BE CHMO-810 결정): 어느 상태에서 어느 상태로든 바꿀 수 있고, 같은 값을
+ * 다시 보내도 에러가 아니다. 관리자가 잘못 누른 값을 화면에서 직접 고칠 수 있어야 한다는
+ * 결정이라, 화면도 '허용 전이표'를 들지 않는다 — 종료 상태(개통·종료) 행에도 액션이 뜬다.
+ * (초안에 있던 `INQUIRY400`은 폐기돼 존재하지 않는다 — 처리 코드를 두지 않는다.)
+ */
+export type AdminInquiryStatus = 'RECEIVED' | 'CONTACTED' | 'ONBOARDED' | 'CLOSED'
+
+/** BE OrganizationType */
+export type AdminOrganizationType = 'KINDERGARTEN' | 'DAYCARE' | 'ACADEMY' | 'OTHER'
+
+/** BE ContactRole — 문의 폼의 선택 항목이라 null이 온다 */
+export type AdminContactRole = 'DIRECTOR' | 'TEACHER' | 'STAFF'
+
+/**
+ * BE OrganizationInquiryResponse — 목록 한 행이자 **PATCH 응답과 같은 형태**라
+ * 전이 성공 시 재조회 없이 그 행만 바꿔 끼운다.
+ *
+ * `contactPhone`은 마스킹하지 않는다(팀이 전화하려고 받은 값 · 관리자 전용 화면 — CHMO-802
+ * 정책). 같은 `userId`가 여러 행일 수 있다(종료 후 재접수) — id가 행의 정체성이다.
+ */
+export interface AdminInquiry {
+  id: number
+  status: AdminInquiryStatus
+  organizationType: AdminOrganizationType
+  organizationName: string
+  region: string
+  contactName: string
+  /** 하이픈 없는 숫자열 — 표시 포맷·tel: 링크는 lib/format이 만든다 */
+  contactPhone: string
+  contactRole: AdminContactRole | null
+  privacyConsentVersion: string
+  userId: number
+  userNickname: string
+  /** KAKAO/NAVER/GOOGLE/APPLE 복수 가능 — PIN 계정은 빈 배열 */
+  socialProviders: string[]
+  createdAt: string
+  /** 마지막 전이 시각(감사 — 전이 이력 자체는 CloudWatch 액세스 로그, ADR 017) */
+  updatedAt: string
+}
+
+/**
+ * 목록 `status` 쿼리 값 그대로 — 탭 4개가 이 넷에 1:1로 대응한다(콤마 복수·`ALL` 지원).
+ * 목록 밖 값은 COMMON400이라, 화면이 자유 입력으로 조합하지 않고 이 유니온만 쓴다.
+ */
+export type AdminInquiryFilter = 'RECEIVED,CONTACTED' | 'ONBOARDED' | 'CLOSED' | 'ALL'
+
+export interface AdminInquiryListParams {
+  page: number
+  size?: number
+  /** 생략하면 BE 기본값(`RECEIVED,CONTACTED` = 진행 중) */
+  status?: AdminInquiryFilter
+}

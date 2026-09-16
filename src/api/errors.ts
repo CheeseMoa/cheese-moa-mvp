@@ -25,6 +25,8 @@
  *   확인 — CHMO-598 스펙 문서의 USER409 표기는 소스와 달라 소스를 따른다. 실서버 채집은 미완).
  * + 2026-08-11 BE 스펙 대조(SPACE409 — ErrorStatus.JOIN_KEY_TAKEN. 참여 코드·비밀번호 변경
  *   CHMO-673의 신설 코드. 실서버 채집은 BE 배포 후).
+ * + 2026-09-16 BE 소스 대조(INQUIRY404·INQUIRY409 — 기관 도입 문의 상태 전이 CHMO-810 PR #271.
+ *   실서버 채집은 BE 배포 후).
  * + 2026-08-19 BE 소스 대조(PERSON404·PERSON409 — 앨범 인물 병합 CHMO-688 ErrorStatus.
  *   PERSON_NOT_FOUND·PERSON_PARENT_CONFLICT. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
@@ -75,6 +77,18 @@ const BE_CODE_MAP: Record<string, string> = {
   ADMIN403: 'NOT_ADMIN',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
+  /**
+   * 기관 도입 문의 없음(404 — BE CHMO-810). 다른 관리자가 처리했거나 계정이 삭제된 경우라,
+   * 어드민 목록은 안내 후 다시 읽는다(CHMO-811).
+   */
+  INQUIRY404: 'NOT_FOUND',
+  /**
+   * 종료된 문의를 진행 중으로 되돌리려는데 그 사용자에게 **이미 진행 중 문의가 있음**
+   * (409 — BE CHMO-810). CHMO-802의 "진행 중 문의는 사용자당 1건"(DB 부분 유니크 인덱스)
+   * 제약이라, 되돌리기를 허용하면서 생긴 유일한 실패 경로다. 전이 규칙 위반이 아니다 —
+   * 전이 규칙 자체가 없다(INQUIRY400은 존재하지 않는다).
+   */
+  INQUIRY409: 'OPEN_INQUIRY_EXISTS',
   /**
    * 참여 코드 중복(409 — BE JOIN_KEY_TAKEN, CHMO-673). 사용자가 정한 코드가 이미 다른 모임의
    * 참여 코드거나 멤버 채널 키(shareToken)와 겹칠 때. 20 변경 모달이 인라인 에러로 받아

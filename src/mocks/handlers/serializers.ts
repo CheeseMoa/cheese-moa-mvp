@@ -41,6 +41,7 @@ import {
   type DbEvent,
   type DbGroup,
   type DbMembership,
+  type DbOrganizationInquiry,
   type DbPerson,
   type DbPhoto,
   type DbUser,
@@ -660,5 +661,29 @@ export function toAdminGroupDetailResponse(group: DbGroup) {
         createdAt: e.createdAt,
         publishedAt: e.publishedAt,
       })),
+  }
+}
+
+/**
+ * BE OrganizationInquiryResponse (CHMO-811 — BE CHMO-810) — 목록 한 행이자 PATCH 응답.
+ * 닉네임은 유저 행에서 파생하고(계정이 지워졌으면 '(알 수 없음)' — 멤버 직렬화와 같은 규칙),
+ * 나머지는 문의 행 그대로다. 연락처는 마스킹하지 않는다(관리자 전용 — CHMO-802 정책).
+ */
+export function toAdminInquiryResponse(inquiry: DbOrganizationInquiry) {
+  return {
+    id: inquiry.id,
+    status: inquiry.status,
+    organizationType: inquiry.organizationType,
+    organizationName: inquiry.organizationName,
+    region: inquiry.region,
+    contactName: inquiry.contactName,
+    contactPhone: inquiry.contactPhone,
+    contactRole: inquiry.contactRole,
+    privacyConsentVersion: inquiry.privacyConsentVersion,
+    userId: inquiry.userId,
+    userNickname: db.users.find((u) => u.id === inquiry.userId)?.nickname ?? '(알 수 없음)',
+    socialProviders: inquiry.socialProviders,
+    createdAt: inquiry.createdAt,
+    updatedAt: inquiry.updatedAt,
   }
 }

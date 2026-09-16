@@ -98,6 +98,12 @@ export const BE_ERRORS = {
   },
   /** 관리자가 아님 — GET /admin/stats (비관리자 토큰 · 2026-08-04 실서버 채집, CHMO-379 프로브) */
   ADMIN403: { status: 403, payload: errorEnvelope('ADMIN403', '관리자 권한이 필요합니다.') },
+  /**
+   * 기관 도입 문의 전이 실패 2종 — BE CHMO-810 티켓 코멘트 대조(코드 확정·**메시지 미채집**이라
+   * BE 어투로 둔다). 409는 종료분을 진행 중으로 되돌리는데 그 사용자가 이미 새 문의를 낸 경우.
+   */
+  INQUIRY404: { status: 404, payload: errorEnvelope('INQUIRY404', '문의를 찾을 수 없습니다.') },
+  INQUIRY409: { status: 409, payload: errorEnvelope('INQUIRY409', '이미 진행 중인 문의가 있습니다.') },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -542,6 +548,46 @@ export const BE_ADMIN_GROUP_ROWS = [
     eventCount: 12,
     photoCount: 830,
     createdAt: '2026-08-01T10:00:00',
+  },
+]
+
+/**
+ * GET /admin/organization-inquiries — OrganizationInquiryResponse(PATCH 응답도 같은 형태).
+ * BE CHMO-810 PR #271 계약(티켓 코멘트 대조 — 실서버 채집은 배포 후). 둘째 행은 선택 항목이
+ * 빈 경우: contactRole null · PIN 계정이라 socialProviders 빈 배열.
+ */
+export const BE_ADMIN_INQUIRY_ROWS = [
+  {
+    id: 12,
+    status: 'RECEIVED',
+    organizationType: 'KINDERGARTEN',
+    organizationName: '치즈유치원',
+    region: '서울',
+    contactName: '김선생',
+    contactPhone: '01012345678',
+    contactRole: 'DIRECTOR',
+    privacyConsentVersion: '1.0',
+    userId: 7,
+    userNickname: '치즈',
+    socialProviders: ['KAKAO'],
+    createdAt: '2026-09-15T10:00:00+09:00',
+    updatedAt: '2026-09-15T10:00:00+09:00',
+  },
+  {
+    id: 11,
+    status: 'CONTACTED',
+    organizationType: 'DAYCARE',
+    organizationName: '햇살어린이집',
+    region: '경기',
+    contactName: '박선생',
+    contactPhone: '01098765432',
+    contactRole: null,
+    privacyConsentVersion: '1.0',
+    userId: 8,
+    userNickname: '햇살',
+    socialProviders: [],
+    createdAt: '2026-09-14T09:00:00',
+    updatedAt: '2026-09-14T11:30:00',
   },
 ]
 
