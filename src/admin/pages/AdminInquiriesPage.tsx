@@ -9,6 +9,7 @@ import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
 import { AdminConfirmDialog } from '../components/AdminConfirmDialog'
 import { AdminToast } from '../components/AdminToast'
+import { AdminRowMenu } from '../components/AdminRowMenu'
 import { InquiryStatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
 import {
@@ -34,12 +35,49 @@ const TABS: { key: string; label: string; filter: AdminInquiryFilter; emptyText:
 ]
 
 /**
- * 접수 → 연락 → 개통/종료 순서. 액션 버튼은 여기서 **현재 상태만 뺀 나머지 전부**라,
- * 되돌리기(개통·종료 행 → 접수됨/연락 완료)도 같은 줄에 선다: 전이 규칙이 없으므로
- * 잘못 누른 값을 화면에서 그대로 고칠 수 있어야 한다(BE CHMO-810 결정 — types.ts 주석).
- * 순서를 파이프라인대로 둔 건 버튼 위치가 곧 방향(앞으로 보내기 / 되돌리기)이기 때문이다.
+ * 행에서 할 수 있는 일 — 전이 규칙이 없어(BE CHMO-810) 현재 상태만 빼면 언제나 셋이지만,
+ * **셋을 나란히 두지 않는다**: 같은 무게의 버튼 셋은 "지금 뭘 해야 하는지"를 지운다.
+ * 주 동작(개통) 하나만 버튼으로 세우고 나머지는 `⋯`로 접는다.
+ *
+ * `개통` 행은 주 동작이 없다 — 셋 다 결과가 같아서다(어느 상태로 보내든 그 계정은 승인 대기
+ * 화면으로 돌아간다). 그래서 목적지를 셋 다 열어 두되 `개통을 취소하고`라는 한 제목 아래 묶어,
+ * 무슨 일이 일어나는지를 항목마다 되풀이하지 않는다.
  */
-const PIPELINE: AdminInquiryStatus[] = ['RECEIVED', 'CONTACTED', 'ONBOARDED', 'CLOSED']
+function rowActions(status: AdminInquiryStatus): {
+  primary: AdminInquiryStatus | null
+  groups: { label?: string; targets: AdminInquiryStatus[] }[]
+} {
+  if (status === 'RECEIVED') {
+    return { primary: 'ONBOARDED', groups: [{ targets: ['CONTACTED', 'CLOSED'] }] }
+  }
+  if (status === 'CONTACTED') {
+    return { primary: 'ONBOARDED', groups: [{ targets: ['RECEIVED', 'CLOSED'] }] }
+  }
+  if (status === 'ONBOARDED') {
+    return {
+      primary: null,
+      groups: [{ label: '개통을 취소하고', targets: ['RECEIVED', 'CONTACTED', 'CLOSED'] }],
+    }
+  }
+  return { primary: null, groups: [{ targets: ['RECEIVED', 'CONTACTED', 'ONBOARDED'] }] }
+}
+
+/**
+ * 액션 라벨은 **상태 이름이 아니라 동사**다 — `접수됨`이라고 쓰인 버튼은 지금 상태를 말하는지
+ * 누르면 그리로 간다는 건지 읽히지 않는다.
+ * `개통` 행에서 나가는 항목만 목적지로 끝나는데, 묶음 제목이 이미 `개통을 취소하고`라서다.
+ */
+function actionLabel(from: AdminInquiryStatus, to: AdminInquiryStatus): string {
+  if (from === 'ONBOARDED') {
+    if (to === 'CLOSED') return '종료로'
+    if (to === 'CONTACTED') return '연락 완료로'
+    return '접수됨으로'
+  }
+  if (to === 'ONBOARDED') return '개통하기'
+  if (to === 'CONTACTED') return '연락 완료로 표시'
+  if (to === 'RECEIVED') return '접수됨으로 되돌리기'
+  return '종료하기'
+}
 
 /** 개통 뒤 사용자 쪽 동작(앱 CHMO-809 승인 대기 화면 규칙) — 운영자가 전화로 알려 줄 말이다 */
 const AFTER_ONBOARD_NOTE =
@@ -249,26 +287,38 @@ export function AdminInquiriesPage() {
     {
       key: 'actions',
       header: '상태 변경',
-      widthClassName: 'w-64',
-      render: (i) => (
-        <div className="flex flex-wrap gap-1.5">
-          {PIPELINE.filter((to) => to !== i.status).map((to) => (
-            <button
-              key={to}
-              type="button"
-              onClick={() => requestTransition(i, to)}
+      align: 'right',
+      widthClassName: 'w-36',
+      render: (inquiry, index) => {
+        const actions = rowActions(inquiry.status)
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            {actions.primary ? (
+              <button
+                type="button"
+                onClick={() => requestTransition(inquiry, actions.primary as AdminInquiryStatus)}
+                disabled={busyId !== null}
+                className="h-7 whitespace-nowrap rounded-md border border-primary bg-primary px-2.5 text-xs font-semibold text-admin-text hover:brightness-95 disabled:opacity-40"
+              >
+                {actionLabel(inquiry.status, actions.primary)}
+              </button>
+            ) : null}
+            <AdminRowMenu
               disabled={busyId !== null}
-              className={`h-7 whitespace-nowrap rounded-md border px-2 text-xs disabled:opacity-40 ${
-                to === 'ONBOARDED'
-                  ? 'border-primary bg-primary font-semibold text-admin-text hover:brightness-95'
-                  : 'border-admin-border bg-admin-surface text-admin-muted hover:bg-admin-bg hover:text-admin-text'
-              }`}
-            >
-              {inquiryStatusLabel(to)}
-            </button>
-          ))}
-        </div>
-      ),
+              // 아래쪽 행은 위로 연다 — 본문이 스크롤 영역이라 아래로 열면 잘린다
+              openUp={rows.length > 4 && index >= rows.length - 3}
+              groups={actions.groups.map((group) => ({
+                label: group.label,
+                items: group.targets.map((to) => ({
+                  key: to,
+                  label: actionLabel(inquiry.status, to),
+                  onSelect: () => requestTransition(inquiry, to),
+                })),
+              }))}
+            />
+          </div>
+        )
+      },
     },
   ]
 
@@ -311,6 +361,12 @@ export function AdminInquiriesPage() {
             새로고침
           </button>
         </div>
+
+        {/* 상태 이름만으로는 무엇이 달라지는지 알 수 없다 — 개통의 뜻을 화면이 한 줄로 말한다 */}
+        <p className="text-xs text-admin-muted">
+          접수됨 · 연락 완료는 아직 진행 중이에요. <b className="font-semibold text-admin-text">개통</b>
+          하면 그 계정이 앱에서 모임을 만들고 사진을 올릴 수 있어요.
+        </p>
 
         {list.error ? (
           <AdminErrorMessage error={list.error} onRetry={list.refetch} />
