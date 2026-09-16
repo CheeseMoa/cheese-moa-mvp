@@ -1,113 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { PhoneShell } from '../components/PhoneShell'
-import { JoinGroupModal } from '../components/JoinGroupModal'
-import { InAppBrowserGuide } from '../components/InAppBrowserGuide'
-import { ParentJoinPage } from './ParentJoinPage'
-import { useToast } from '../components/ui'
-import { useApi } from '../hooks/useApi'
-import { findMyGroupByJoinKey } from '../api/groups'
-import { isAuthenticated } from '../lib/auth'
-import {
-  detectInAppBrowser,
-  hasDismissedInAppGuide,
-  markInAppGuideDismissed,
-} from '../lib/inAppBrowser'
+import { useSearchParams } from 'react-router-dom'
+import { AppOpenGuide } from '../components/AppOpenGuide'
 import { parseJoinLinkInfo } from '../lib/joinLink'
 
 /**
- * 02-1. 모임 참여 (초대 링크 진입) · node 371:31 · POST /groups/join.
- * 참여는 로그인 전제 — 미로그인이면 returnTo를 실어 로그인으로 보내고, 완료 후 이 링크로 복귀한다.
+ * 02-1. 초대 링크 착지 `/join/:joinKey` — **앱 유도 전용** (CHMO-820, 2026-09-16 "무조건 앱으로").
  *
- * 단 **카카오톡 인앱 브라우저면 그보다 먼저 앱 유도(02-K)가 선다**(CHMO-661) — 그 웹뷰는
- * 딥링크를 가로채지 않고 구글 로그인도 거부해, 로그인으로 보내면 돌아올 길이 없다.
+ * 이 경로는 앱이 AASA·assetlinks.json으로 등록한 유니버설/앱 링크다(CHMO-538). 앱이 깔려 있으면
+ * OS가 여기 오기 전에 앱을 열고, 웹이 그려진다는 건 앱이 없거나 링크가 발동하지 않는 자리(카톡
+ * 인앱 브라우저·주소창 입력)라는 뜻이다 — 그래서 웹은 합류(로그인 → 02-1 모달·02-2 단일 화면)를
+ * 더는 그리지 않고 앱 열기·스토어 안내만 한다(AppOpenGuide). 종전 웹 합류 흐름(로그인 returnTo·
+ * 이미 멤버 사전 감지·ParentJoinPage)은 여기서 걷었다. 홈 [모임 참여하기](JoinGroupModal)의
+ * viewer 코드 인계도 이 경로로 오므로 같은 안내에 착지한다 — 학부모 합류는 앱에서만.
  *
- * 갈래는 링크 마커가 정한다(lib/joinLink — joinKey는 불투명이라 진입 시점 근거가 URL뿐, CHMO-607):
- * viewer(멤버) 키 → 02-2 단일 화면(ParentJoinPage) · 그 외(일반·비즈니스 관리자·마커 없음) →
- * 02-1 모달(일반은 참여 꼴, 나머지는 신청 꼴 — JoinGroupModal이 linkInfo로 가른다).
- * 마커 없는 viewer 코드는 모달의 서버 400(인물 이름 필요) 감지가 02-2로 인계한다(안전망).
- *
- * 이미 참여한 모임의 링크 재진입은 비밀번호를 묻지 않고 바로 모임 상세로 보낸다(사전 감지).
- * 단 **승인 대기(PENDING) 중인 모임은 사전 감지에 걸리지 않는다** — 초대 정보 조회가 ACTIVE
- * TEACHER 전용이라 대기 중엔 404로 은닉되기 때문(CHMO-475로 선생님도 이 구간이 생겼다).
- * 이 경우 모달이 뜨고, 비밀번호를 넣으면 서버 409("이미 참여 신청한 모임입니다.")가 안내한다.
- * viewer 링크는 사전 감지를 건너뛴다 — 초대 정보 대조가 TEACHER 전용(Q3)이라 viewer 멤버십에선
- * ROLE403/404로 항상 실패하고, 중복 신청·참여는 제출의 409가 그 자리에서 안내한다.
+ * 링크 마커(lib/joinLink)는 모임명만 읽는다 — 안내 문구용. joinKey는 URL에 그대로 남아 앱이
+ * 열릴 때 스킴/intent에 실려 간다.
  */
 export function JoinPage() {
-  const { joinKey } = useParams<{ joinKey: string }>()
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const toast = useToast()
-  const authed = isAuthenticated()
-
-  // 코드가 비는 잘못된 링크(/join/%20 등)는 고정 모드로 죽은 폼이 되므로 직접 입력 모드로 폴백
-  // joinKey는 대소문자 구분 — 대소문자 변환 없이 그대로 쓴다(CHMO-285)
-  const fixedJoinKey = joinKey?.trim() ? joinKey.trim() : undefined
-  const linkInfo = parseJoinLinkInfo(searchParams)
-  const isViewerLink = linkInfo.role === 'viewer'
-
-  // 카카오톡 인앱 브라우저면 합류보다 먼저 앱·브라우저 유도가 선다(CHMO-661) — 딥링크가
-  // 발동하지 않는 환경이고 구글 로그인도 막혀, 여기서부터 태우면 로그인에서 멈춘다.
-  const [guideDismissed, setGuideDismissed] = useState(hasDismissedInAppGuide)
-  const showInAppGuide = detectInAppBrowser() !== null && !guideDismissed
-
-  // 이미 멤버인지 사전 감지 — 목록 응답엔 joinKey가 없어(시크릿 미노출, CHMO-192)
-  // 내 모임들의 초대 정보로 대조한다. 조회 실패 시에는 기존처럼 모달을 띄운다(참여를 막지 않음)
-  // 안내가 서 있는 동안은 조회하지 않는다 — 뒤에서 모임 상세로 튕겨 안내가 사라지면 안 된다
-  const { data: memberGroup, loading } = useApi(
-    authed && fixedJoinKey && !isViewerLink && !showInAppGuide
-      ? `member-group:${fixedJoinKey}`
-      : null,
-    (signal) => findMyGroupByJoinKey(fixedJoinKey ?? '', signal),
-  )
-
-  const redirected = useRef(false)
-  useEffect(() => {
-    if (!memberGroup || redirected.current) return
-    redirected.current = true
-    toast.show('🧀 이미 참여 중인 모임이에요')
-    navigate(`/groups/${memberGroup.id}`, { replace: true })
-  }, [memberGroup, navigate, toast])
-
-  // 로그인 리다이렉트보다 앞이다 — 인앱 브라우저에서 로그인 화면으로 보내면 소셜 로그인이
-  // 거부(disallowed_useragent)돼 되돌아올 길이 없다
-  if (showInAppGuide) {
-    return (
-      <InAppBrowserGuide
-        groupName={linkInfo.groupName}
-        onContinue={() => {
-          markInAppGuideDismissed()
-          setGuideDismissed(true)
-        }}
-      />
-    )
-  }
-
-  if (!authed) {
-    // 마커(유형·모임명·카운트)를 잃으면 로그인 복귀 후 갈래·표시 정보가 사라진다 — 쿼리째 보존
-    const query = searchParams.toString()
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ returnTo: `/join/${joinKey ?? ''}${query ? `?${query}` : ''}` }}
-      />
-    )
-  }
-
-  if (isViewerLink && fixedJoinKey)
-    return <ParentJoinPage joinKey={fixedJoinKey} groupName={linkInfo.groupName} />
-
-  return (
-    <PhoneShell>
-      {/* 멤버십 확인 중·이동 대기 중엔 비밀번호 모달을 띄우지 않는다(깜빡임·불필요한 입력 방지) */}
-      <JoinGroupModal
-        open={!loading && !memberGroup}
-        fixedJoinKey={fixedJoinKey}
-        linkInfo={linkInfo}
-        onClose={() => navigate('/home', { replace: true })}
-      />
-    </PhoneShell>
-  )
+  const { groupName } = parseJoinLinkInfo(searchParams)
+  return <AppOpenGuide groupName={groupName} />
 }
