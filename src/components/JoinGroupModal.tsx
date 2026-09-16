@@ -40,7 +40,12 @@ interface JoinGroupModalProps {
  * 미리 보여줄 수 없다 — 확인 단계를 두려면 BE 조회 엔드포인트가 선행돼야 한다.
  *
  * viewer(멤버) 코드를 마커 없이 넣으면(수동 입력 등) 서버 400(인물 이름 필요)으로 감지해
- * 02-2 단일 화면(ParentJoinPage)으로 인계한다(CHMO-445 관용 — 안전망으로 유지).
+ * `/join/:joinKey?role=viewer`로 인계한다(CHMO-445 관용) — 그 경로는 CHMO-820부터 앱 유도 화면
+ * (AppOpenGuide)이다. 학부모 합류는 앱에서만 하므로 웹 홈에서 학부모 코드를 넣은 사람은 앱으로
+ * 안내받는다(종전 02-2 ParentJoinPage는 삭제).
+ *
+ * `fixedJoinKey`·`linkInfo`(초대 링크 진입) 인자는 CHMO-820으로 호출부(JoinPage)가 사라져 지금은
+ * 홈 진입만 남았다 — 웹 축소(CHMO-737)에서 함께 정리한다.
  */
 export function JoinGroupModal({
   open,

@@ -5,7 +5,9 @@
       "namespace": "android_app",
       "package_name": "com.cheesemoa.app",
       "sha256_cert_fingerprints": [
-        "7E:A8:5B:CC:EF:F8:7A:57:E8:9A:0A:9E:F2:BA:3E:30:EC:C7:4E:82:B8:88:90:F2:C9:75:C6:56:0E:89:15:C2"
+        "A3:2F:EC:4D:E1:BD:1A:2D:2D:B4:08:0B:D9:68:A2:4A:79:1F:51:8F:E8:2E:B7:AE:B8:62:AF:F1:69:46:2D:1E",
+        "2C:28:43:50:95:7E:38:3B:04:C2:D2:35:4F:EF:05:19:97:E4:06:75:AC:3D:D2:95:88:FE:B1:0F:A9:20:6E:08",
+        "BE:2B:3B:DD:AC:78:09:6E:D6:42:B5:97:C3:BD:06:C4:05:15:63:EA:03:B0:81:12:08:18:B3:AA:97:3D:6E:4F"
       ]
     }
   }

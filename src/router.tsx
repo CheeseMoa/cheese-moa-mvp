@@ -53,7 +53,7 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LandingPage /> },
     ],
   },
-  { path: '/join/:joinKey', element: <JoinPage /> }, // 02-1 모임 참여(초대 링크 진입) — 로그인 제작자도 사용하므로 GuestGuard 밖
+  { path: '/join/:joinKey', element: <JoinPage /> }, // 02-K 초대 링크 착지 = 앱 유도(CHMO-820) — 로그인 무관, GuestGuard 밖
   { path: '/auth/callback', element: <SocialCallbackPage /> }, // 01-C 소셜 로그인 콜백(CHMO-359) — BE 리다이렉트 착지라 가드 밖
 
   // ── 약관·정책 전문 — 설정·동의 화면·외부 공개 URL(스토어 심사 등) 공용이라 가드 밖 (CHMO-478) ──
