@@ -39,6 +39,7 @@ import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
 import {
   toAdminGroupDetailResponse,
   toAdminGroupSummary,
+  toAdminInquiryResponse,
   toAdminProfileResponse,
   toAdminRecentGroup,
   toAgreementStatusResponse,
@@ -90,6 +91,7 @@ import {
 import {
   toAdminGroupDetail,
   toAdminGroupRow,
+  toAdminInquiry,
   toAdminProfile,
   toAdminStats,
 } from '../admin/api/mappers'
@@ -874,5 +876,42 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
     expect(serialized).not.toContain(group.password)
     expect(serialized).not.toContain(group.share.token)
     expect(serialized).not.toContain(group.share.password)
+  })
+})
+
+describe('어드민 기관 도입 문의 (CHMO-811 — BE CHMO-810 계약)', () => {
+  it('목록 행 — 닉네임은 유저 행에서 파생되고 연락처는 마스킹하지 않는다', () => {
+    const inquiry = db.organizationInquiries.find((i) => i.id === 1)!
+    expect(toAdminInquiry(toAdminInquiryResponse(inquiry))).toEqual({
+      id: 1,
+      status: 'RECEIVED',
+      organizationType: 'KINDERGARTEN',
+      organizationName: '치즈유치원',
+      region: '서울 강동구',
+      contactName: '김지은',
+      contactPhone: '01012345678',
+      contactRole: 'DIRECTOR',
+      privacyConsentVersion: '1.0',
+      userId: 2,
+      userNickname: '김지은', // 유저 행에서 파생 — 문의 행엔 닉네임이 없다
+      socialProviders: ['KAKAO'],
+      createdAt: '2026-09-15T10:00:00+09:00',
+      updatedAt: '2026-09-15T10:00:00+09:00',
+    })
+  })
+
+  it('선택 항목이 빈 행 — 역할 null·PIN 계정(소셜 빈 배열)이 그대로 건너온다', () => {
+    const inquiry = db.organizationInquiries.find((i) => i.id === 2)!
+    const row = toAdminInquiry(toAdminInquiryResponse(inquiry))
+    expect(row.contactRole).toBeNull()
+    expect(row.socialProviders).toEqual([])
+  })
+
+  it('같은 유저의 종료분 + 재접수분이 함께 있다 — 되돌리기 충돌(INQUIRY409) 시연 시드', () => {
+    const closed = db.organizationInquiries.find((i) => i.id === 5)!
+    const reopened = db.organizationInquiries.find((i) => i.id === 6)!
+    expect(closed.status).toBe('CLOSED')
+    expect(reopened.status).toBe('RECEIVED')
+    expect(reopened.userId).toBe(closed.userId)
   })
 })

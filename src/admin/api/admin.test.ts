@@ -14,12 +14,15 @@ import {
   getAdminProfile,
   getAdminStats,
   listAdminGroups,
+  listAdminInquiries,
+  updateAdminInquiryStatus,
 } from './admin'
 import { ApiRequestError } from '../../api/client'
 import { getAccessToken, getRefreshToken, setAuthTokens } from '../../lib/auth'
 import {
   BE_ADMIN_GROUP_DETAIL,
   BE_ADMIN_GROUP_ROWS,
+  BE_ADMIN_INQUIRY_ROWS,
   BE_ADMIN_PAGE_INFO,
   BE_ADMIN_PROFILE,
   BE_ADMIN_STATS,
@@ -202,6 +205,95 @@ describe('어드민 모임 상세 (GET /admin/groups/:groupId)', () => {
   it('없는 모임은 SPACE404 → NOT_FOUND(status 404)로 온다', async () => {
     serve(BE_ERRORS.SPACE404.payload, BE_ERRORS.SPACE404.status)
     const err = await getAdminGroupDetail(999999).catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(404)
+    expect((err as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+})
+
+describe('기관 도입 문의 목록 (GET /admin/organization-inquiries — CHMO-811)', () => {
+  it('status·page·size를 조립하고 봉투 pageInfo를 함께 꺼낸다', async () => {
+    const calls = stubFetch(() =>
+      jsonResponse({
+        isSuccess: true,
+        code: 'COMMON200',
+        message: '성공입니다.',
+        pageInfo: BE_ADMIN_PAGE_INFO,
+        result: BE_ADMIN_INQUIRY_ROWS,
+      }),
+    )
+
+    const page = await listAdminInquiries({ page: 0, size: 20, status: 'RECEIVED,CONTACTED' })
+    expect(calls[0].url).toBe(
+      '/api/v1/admin/organization-inquiries?page=0&size=20&status=RECEIVED%2CCONTACTED',
+    )
+    expect(page.pageInfo).toEqual(BE_ADMIN_PAGE_INFO)
+    expect(page.items[0]).toEqual({
+      id: 12,
+      status: 'RECEIVED',
+      organizationType: 'KINDERGARTEN',
+      organizationName: '치즈유치원',
+      region: '서울',
+      contactName: '김선생',
+      // 마스킹하지 않는다 — 관리자 전용 화면에서 전화를 거는 값이다(CHMO-802)
+      contactPhone: '01012345678',
+      contactRole: 'DIRECTOR',
+      privacyConsentVersion: '1.0',
+      userId: 7,
+      userNickname: '치즈',
+      socialProviders: ['KAKAO'],
+      createdAt: '2026-09-15T10:00:00+09:00',
+      updatedAt: '2026-09-15T10:00:00+09:00',
+    })
+  })
+
+  it('선택 항목이 빈 행 — contactRole은 null, PIN 계정은 socialProviders 빈 배열', async () => {
+    serve(envelope(BE_ADMIN_INQUIRY_ROWS))
+    const page = await listAdminInquiries({ page: 0 })
+    expect(page.items[1].contactRole).toBeNull()
+    expect(page.items[1].socialProviders).toEqual([])
+    // 오프셋 없는 시각에는 Z가 붙는다(client.ts 보정)
+    expect(page.items[1].updatedAt).toBe('2026-09-14T11:30:00Z')
+  })
+
+  it('socialProviders 키가 생략돼도 빈 배열로 정규화된다', async () => {
+    const { socialProviders, ...withoutProviders } = BE_ADMIN_INQUIRY_ROWS[0]
+    expect(socialProviders).toBeDefined()
+    serve(envelope([withoutProviders]))
+    const page = await listAdminInquiries({ page: 0 })
+    expect(page.items[0].socialProviders).toEqual([])
+  })
+
+  it('status를 안 넘기면 page만 실린다 — BE 기본값이 진행 중이라 대시보드 카드가 그대로 쓴다', async () => {
+    const calls = serve(envelope([]))
+    await listAdminInquiries({ page: 0, size: 1 })
+    expect(calls[0].url).toBe('/api/v1/admin/organization-inquiries?page=0&size=1')
+  })
+})
+
+describe('기관 도입 문의 상태 전이 (PATCH /admin/organization-inquiries/:id — CHMO-811)', () => {
+  it('status만 실어 보내고 갱신된 행을 그대로 돌려받는다(재조회 불필요)', async () => {
+    const calls = serve(
+      envelope({ ...BE_ADMIN_INQUIRY_ROWS[0], status: 'ONBOARDED', updatedAt: '2026-09-16T09:00:00' }),
+    )
+    const updated = await updateAdminInquiryStatus(12, 'ONBOARDED')
+    expect(calls[0].url).toBe('/api/v1/admin/organization-inquiries/12')
+    expect(calls[0].method).toBe('PATCH')
+    expect(bodyOf(calls[0])).toEqual({ status: 'ONBOARDED' })
+    expect(updated.status).toBe('ONBOARDED')
+    expect(updated.updatedAt).toBe('2026-09-16T09:00:00Z')
+  })
+
+  it('되돌리기 충돌 INQUIRY409는 OPEN_INQUIRY_EXISTS로 정규화된다', async () => {
+    serve(BE_ERRORS.INQUIRY409.payload, BE_ERRORS.INQUIRY409.status)
+    const err = await updateAdminInquiryStatus(12, 'RECEIVED').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiRequestError)
+    expect((err as ApiRequestError).status).toBe(409)
+    expect((err as ApiRequestError).code).toBe('OPEN_INQUIRY_EXISTS')
+  })
+
+  it('없는 문의 INQUIRY404는 NOT_FOUND(404)로 온다', async () => {
+    serve(BE_ERRORS.INQUIRY404.payload, BE_ERRORS.INQUIRY404.status)
+    const err = await updateAdminInquiryStatus(999999, 'CLOSED').catch((e: unknown) => e)
     expect((err as ApiRequestError).status).toBe(404)
     expect((err as ApiRequestError).code).toBe('NOT_FOUND')
   })

@@ -7,7 +7,8 @@ export interface AdminColumn<T> {
   align?: 'left' | 'right'
   /** 고정폭 컬럼용 tailwind width 클래스(w-24 등) — 이름 컬럼만 가변 */
   widthClassName?: string
-  render: (row: T) => ReactNode
+  /** index는 표 안 행 번호 — 아래쪽 행의 팝오버를 위로 여는 데 쓴다(CHMO-811) */
+  render: (row: T, index: number) => ReactNode
 }
 
 interface AdminTableProps<T> {
@@ -55,7 +56,7 @@ export function AdminTable<T>({
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
+        {rows.map((row, index) => (
           <tr
             key={rowKey(row)}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -70,7 +71,7 @@ export function AdminTable<T>({
                   column.align === 'right' ? 'text-right text-admin-muted' : 'text-left'
                 }`}
               >
-                {column.render(row)}
+                {column.render(row, index)}
               </td>
             ))}
           </tr>

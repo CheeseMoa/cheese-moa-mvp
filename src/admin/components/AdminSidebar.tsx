@@ -3,8 +3,8 @@ import { Cheddar } from '../../components/ui/Cheddar'
 import type { AdminProfile } from '../api/types'
 
 /**
- * 사이드바(어드민/사이드바 288:86) — 폭 240 고정·우측 1px 보더. 1차 메뉴는 대시보드·모임뿐이고
- * 시안의 2차 자리(유저·분석 모니터·기관 검수)는 구현하지 않는다(admin-spec §3-0).
+ * 사이드바(어드민/사이드바 288:86) — 폭 240 고정·우측 1px 보더. 시안의 2차 자리 중
+ * 기관 검수는 기관 문의(CHMO-811)로 앞당겨졌고, 유저·분석 모니터는 아직 없다(admin-spec §3-0).
  * 로고는 서비스와 같은 체다 심볼 — 엠블럼 타일은 서비스에서 폐지돼(CHMO-512) 심볼 단독이다.
  * 하단 프로필 곁 [로그아웃](CHMO-595)은 서버 무효화 후 게이트 재판정 — 라우팅 이동 없이
  * 로그인 카드로 돌아간다(처리는 AdminLayout 소유).
@@ -28,6 +28,8 @@ export function AdminSidebar({
 
       <nav className="mt-1 flex flex-col gap-1" aria-label="관리자 메뉴">
         <SidebarLink to="/admin" end label="대시보드" />
+        {/* 기관 문의는 매일 처리하는 일이라 조회 화면(모임)보다 위에 둔다 — CHMO-811 */}
+        <SidebarLink to="/admin/inquiries" label="기관 문의" />
         <SidebarLink to="/admin/groups" label="모임" />
       </nav>
 

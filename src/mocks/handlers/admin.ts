@@ -7,14 +7,24 @@
  * 응답 조립 전에 분석을 정산해(settleAnalysis) 서비스 화면과 상태·사진 수가 일치한다.
  */
 import { http } from 'msw'
-import { db, eventsOfGroup, findGroup, settleAnalysis, type DbUser } from '../db'
+import {
+  db,
+  eventsOfGroup,
+  findGroup,
+  settleAnalysis,
+  type DbOrganizationInquiry,
+  type DbUser,
+} from '../db'
 import {
   adminForbidden,
   api,
   commonBadRequest,
+  errorResponse,
   groupNotFound,
+  invalidBody,
   ok,
   okPaged,
+  readJson,
   toId,
   unauthorized,
   userFrom,
@@ -22,6 +32,7 @@ import {
 import {
   toAdminGroupDetailResponse,
   toAdminGroupSummary,
+  toAdminInquiryResponse,
   toAdminProfileResponse,
   toAdminRecentGroup,
 } from './serializers'
@@ -160,5 +171,103 @@ export const adminHandlers = [
     if (!group) return groupNotFound()
     for (const event of eventsOfGroup(group.id)) settleAnalysis(event.id)
     return ok(toAdminGroupDetailResponse(group))
+  }),
+]
+
+// ── 기관 도입 문의 (CHMO-811 — BE CHMO-810 PR #271) ─────────────────
+
+const INQUIRY_STATUSES: DbOrganizationInquiry['status'][] = [
+  'RECEIVED',
+  'CONTACTED',
+  'ONBOARDED',
+  'CLOSED',
+]
+
+/** '진행 중' = 접수됨·연락 완료 — 목록 기본 필터이자 "사용자당 1건" 제약의 범위(CHMO-802) */
+const OPEN_INQUIRY_STATUSES: DbOrganizationInquiry['status'][] = ['RECEIVED', 'CONTACTED']
+
+/**
+ * `status` 쿼리 해석 — 생략하면 기본값(진행 중), `ALL`이면 전부, 그 외는 콤마 복수.
+ * 목록 밖 값이 하나라도 섞이면 null(COMMON400) — BE와 같은 판정이다.
+ */
+function inquiryStatusFilter(raw: string | null): DbOrganizationInquiry['status'][] | null {
+  const value = raw?.trim() ? raw.trim() : 'RECEIVED,CONTACTED'
+  if (value === 'ALL') return INQUIRY_STATUSES
+  const parts = value.split(',').map((part) => part.trim())
+  const matched = parts.filter((part): part is DbOrganizationInquiry['status'] =>
+    (INQUIRY_STATUSES as string[]).includes(part),
+  )
+  return matched.length === parts.length && matched.length > 0 ? matched : null
+}
+
+/** 그 유저에게 진행 중 문의가 (이 행 말고) 또 있나 — 되돌리기 충돌(INQUIRY409) 판정 */
+function hasOtherOpenInquiry(inquiry: DbOrganizationInquiry): boolean {
+  return db.organizationInquiries.some(
+    (other) =>
+      other.userId === inquiry.userId &&
+      other.id !== inquiry.id &&
+      OPEN_INQUIRY_STATUSES.includes(other.status),
+  )
+}
+
+export const adminInquiryHandlers = [
+  // GET /admin/organization-inquiries — 목록(정렬 createdAt,desc 고정 · sort 파라미터 없음)
+  http.get(api('/admin/organization-inquiries'), ({ request }) => {
+    const gate = adminGate(request)
+    if (gate instanceof Response) return gate
+
+    const url = new URL(request.url)
+    const page = intParam(url, 'page', 0)
+    const size = intParam(url, 'size', 20)
+    const statuses = inquiryStatusFilter(url.searchParams.get('status'))
+    if (page === null || page < 0 || size === null || size < 1 || size > 100 || !statuses) {
+      return commonBadRequest()
+    }
+
+    const matched = db.organizationInquiries
+      .filter((inquiry) => statuses.includes(inquiry.status))
+      // 접수 역순 — 동시각은 id DESC로 고정해 페이지 경계가 흔들리지 않는다(모임 목록과 동일)
+      .sort((a, b) => epochOf(b.createdAt) - epochOf(a.createdAt) || b.id - a.id)
+
+    const totalElements = matched.length
+    const totalPages = Math.ceil(totalElements / size)
+    const items = matched.slice(page * size, page * size + size).map(toAdminInquiryResponse)
+
+    return okPaged(items, {
+      page,
+      size,
+      hasNext: page + 1 < totalPages,
+      totalElements,
+      totalPages,
+    })
+  }),
+
+  /**
+   * PATCH /admin/organization-inquiries/:id — 상태 전이.
+   * **전이 규칙을 두지 않는다**(BE CHMO-810 결정) — 어느 상태에서 어느 상태로든 가고, 같은
+   * 값 재요청도 그대로 저장한다. 실패는 없는 id(INQUIRY404)와 되돌리기 충돌(INQUIRY409) 둘뿐.
+   * 두 코드는 BE 티켓 코멘트(CHMO-810) 대조분이고 **메시지 문구는 미채집**이라 BE 어투로 둔다.
+   */
+  http.patch(api('/admin/organization-inquiries/:id'), async ({ request, params }) => {
+    const gate = adminGate(request)
+    if (gate instanceof Response) return gate
+
+    const body = await readJson<{ status?: unknown }>(request)
+    if (!body) return invalidBody()
+    const next = INQUIRY_STATUSES.find((status) => status === body.status)
+    if (!next) return commonBadRequest()
+
+    const id = toId(params.id)
+    const inquiry = db.organizationInquiries.find((row) => row.id === id)
+    if (!inquiry) return errorResponse(404, 'INQUIRY404', '문의를 찾을 수 없습니다.')
+
+    // 종료분을 진행 중으로 되돌리는데 그 사용자가 이미 새 문의를 낸 경우 — 진행 중은 1건뿐이다
+    if (OPEN_INQUIRY_STATUSES.includes(next) && hasOtherOpenInquiry(inquiry)) {
+      return errorResponse(409, 'INQUIRY409', '이미 진행 중인 문의가 있습니다.')
+    }
+
+    inquiry.status = next
+    inquiry.updatedAt = new Date().toISOString()
+    return ok(toAdminInquiryResponse(inquiry))
   }),
 ]
