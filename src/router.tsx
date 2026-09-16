@@ -125,6 +125,12 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: 'inquiries',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminInquiriesPage')).AdminInquiriesPage,
+        }),
+      }, // 기관 도입 문의 — 어드민의 첫 쓰기 화면(CHMO-811)
+      {
         path: 'groups',
         lazy: async () => ({
           Component: (await import('./admin/pages/AdminGroupsPage')).AdminGroupsPage,

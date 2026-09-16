@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi'
-import { getAdminStats } from '../api/admin'
+import { getAdminStats, listAdminInquiries } from '../api/admin'
 import type { AdminRecentGroup } from '../api/types'
 import { AdminTopbar } from '../components/AdminTopbar'
 import { StatCard } from '../components/StatCard'
@@ -13,6 +13,18 @@ import { formatCount, formatDate, formatDateTime, groupLabel } from '../lib/form
 export function AdminDashboardPage() {
   const navigate = useNavigate()
   const stats = useApi('admin-stats', (signal) => getAdminStats(signal))
+
+  /**
+   * 대기 중 문의 건수 — 전용 카운트 API가 없어 목록을 `size=1`로 한 번 부르고 봉투의
+   * `pageInfo.totalElements`만 읽는다(BE CHMO-810). `status`를 생략하면 BE 기본값이
+   * 진행 중(RECEIVED·CONTACTED)이라 그대로 "대기 중"이 된다.
+   * 지표(stats)와 별개 요청이라 한쪽이 실패해도 다른 쪽은 그려진다 — 이 카드는 운영자가
+   * 손대야 할 일이고, 통계 조회 실패에 가려지면 안 된다.
+   */
+  const pendingInquiries = useApi('admin-inquiries-pending', (signal) =>
+    listAdminInquiries({ page: 0, size: 1 }, signal),
+  )
+  const pendingInquiryCount = pendingInquiries.data?.pageInfo?.totalElements ?? null
 
   // '마지막 갱신' = 이 화면이 지표를 받아온 시각(서버가 주는 값이 아니다 — 집계는 요청 시점 계산)
   const updatedAt = useMemo(() => (stats.data ? new Date().toISOString() : null), [stats.data])
@@ -53,6 +65,17 @@ export function AdminDashboardPage() {
         right={updatedAt ? `마지막 갱신 ${formatDateTime(updatedAt)}` : undefined}
       />
       <div className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
+        <Section title="처리할 일" caption="운영자가 손대야 하는 것">
+          <div className="grid grid-cols-4 gap-4">
+            <StatCard
+              label="대기 중 기관 문의"
+              value={pendingInquiryCount}
+              unit="건"
+              to="/admin/inquiries"
+            />
+          </div>
+        </Section>
+
         {stats.loading && !stats.data ? <AdminMessage text="불러오는 중이에요…" /> : null}
         {stats.error ? <AdminErrorMessage error={stats.error} onRetry={stats.refetch} /> : null}
 

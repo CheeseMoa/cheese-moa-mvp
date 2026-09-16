@@ -54,6 +54,31 @@ export interface DbDevice {
   createdAt: ISODateTime
 }
 
+/**
+ * 기관 도입 문의 (CHMO-811 — BE CHMO-810). 접수는 앱(CHMO-802·803)이 하고 웹은 어드민에서
+ * **읽고 상태만 바꾼다** — 그래서 목에도 생성 경로가 없고 시드가 곧 전부다.
+ *
+ * `socialProviders`는 실 BE가 그 유저의 소셜 계정에서 파생하지만, 목엔 소셜 계정 테이블이
+ * 없어(가입 계정 보존소만 있다 — lib/mockSocial) 행에 직접 둔다. 화면이 읽는 값은 같다.
+ */
+export interface DbOrganizationInquiry {
+  id: number
+  userId: number
+  status: 'RECEIVED' | 'CONTACTED' | 'ONBOARDED' | 'CLOSED'
+  organizationType: 'KINDERGARTEN' | 'DAYCARE' | 'ACADEMY' | 'OTHER'
+  organizationName: string
+  region: string
+  contactName: string
+  /** 하이픈 없는 숫자열 — 관리자 전용 화면이라 마스킹하지 않는다(CHMO-802 정책) */
+  contactPhone: string
+  /** 문의 폼의 선택 항목 */
+  contactRole: 'DIRECTOR' | 'TEACHER' | 'STAFF' | null
+  privacyConsentVersion: string
+  socialProviders: string[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+}
+
 export interface DbGroup {
   id: number
   name: string
@@ -199,6 +224,8 @@ export interface Db {
   analysisJobs: DbAnalysisJob[]
   /** 등록된 푸시 기기 (CHMO-667) */
   devices: DbDevice[]
+  /** 기관 도입 문의 (CHMO-811) — 접수는 앱이 하고 어드민은 읽기·상태 전이만 한다 */
+  organizationInquiries: DbOrganizationInquiry[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
 }
@@ -215,6 +242,7 @@ export const db: Db = {
   agreements: [],
   analysisJobs: [],
   devices: [],
+  organizationInquiries: [],
   uploadedKeys: [],
 }
 
@@ -231,6 +259,7 @@ export function seedDb(data: Db): void {
   db.agreements = data.agreements
   db.analysisJobs = data.analysisJobs
   db.devices = data.devices
+  db.organizationInquiries = data.organizationInquiries
   db.uploadedKeys = data.uploadedKeys
 }
 

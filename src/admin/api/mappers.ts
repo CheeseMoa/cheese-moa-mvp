@@ -10,6 +10,7 @@ import type {
   AdminGroupEvent,
   AdminGroupMember,
   AdminGroupRow,
+  AdminInquiry,
   AdminProfile,
   AdminRecentGroup,
   AdminStats,
@@ -142,5 +143,48 @@ function toAdminGroupEvent(raw: RawAdminGroupEvent): AdminGroupEvent {
     albumCount: raw.albumCount ?? 0,
     createdAt: raw.createdAt,
     publishedAt: raw.publishedAt ?? null,
+  }
+}
+
+// ── 기관 도입 문의 (CHMO-811 — BE CHMO-810) ─────────────────────────
+
+export interface RawAdminInquiry {
+  id: number
+  status: string
+  organizationType: string
+  organizationName: string
+  region: string
+  contactName: string
+  contactPhone: string
+  contactRole?: string | null
+  privacyConsentVersion: string
+  userId: number
+  userNickname: string
+  socialProviders?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * 정규화 대상은 둘뿐이다 — 선택 항목 `contactRole`(null)과 `socialProviders`(PIN 계정은 빈
+ * 배열이고 키 자체가 생략될 수 있다). enum은 대문자 원문 그대로 두고 표시명은 lib/format이
+ * 맡는다(미지 값은 원문 폴백 — 어드민 공통 규칙).
+ */
+export function toAdminInquiry(raw: RawAdminInquiry): AdminInquiry {
+  return {
+    id: raw.id,
+    status: raw.status as AdminInquiry['status'],
+    organizationType: raw.organizationType as AdminInquiry['organizationType'],
+    organizationName: raw.organizationName,
+    region: raw.region,
+    contactName: raw.contactName,
+    contactPhone: raw.contactPhone,
+    contactRole: (raw.contactRole ?? null) as AdminInquiry['contactRole'],
+    privacyConsentVersion: raw.privacyConsentVersion,
+    userId: raw.userId,
+    userNickname: raw.userNickname,
+    socialProviders: raw.socialProviders ?? [],
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
   }
 }
