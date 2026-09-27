@@ -12,10 +12,16 @@ export function AdminToast({
   message,
   nonce,
   onDismiss,
+  placement = 'right',
 }: {
   message: string
   nonce: number
   onDismiss: () => void
+  /**
+   * 기본은 콘텐츠 우측 하단. `center`는 화면 하단 가운데 — 오른쪽에 곁 패널이 붙은 화면(신고·문의
+   * CHMO-862)에서 패널 하단 버튼을 가리지 않게 한다
+   */
+  placement?: 'right' | 'center'
 }) {
   useEffect(() => {
     const timer = window.setTimeout(onDismiss, 4000)
@@ -23,7 +29,11 @@ export function AdminToast({
   }, [nonce, onDismiss])
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-7 z-50">
+    <div
+      className={`pointer-events-none fixed bottom-6 z-50 ${
+        placement === 'center' ? 'left-1/2 -translate-x-1/2' : 'right-7'
+      }`}
+    >
       <div
         role="status"
         className="pointer-events-auto max-w-md rounded-lg bg-admin-text px-4 py-3 text-[13px] leading-relaxed text-white shadow-lg"

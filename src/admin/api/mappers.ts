@@ -12,6 +12,8 @@ import type {
   AdminGroupRow,
   AdminInquiry,
   AdminProfile,
+  AdminReportDetail,
+  AdminReportRow,
   AdminRecentGroup,
   AdminStats,
 } from './types'
@@ -186,5 +188,93 @@ export function toAdminInquiry(raw: RawAdminInquiry): AdminInquiry {
     socialProviders: raw.socialProviders ?? [],
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+  }
+}
+
+// ── 신고·문의 (CHMO-862 — BE CHMO-861) ──────────────────────────────
+
+export interface RawAdminReportRow {
+  id: number
+  type: string
+  status: string
+  preview?: string | null
+  userId: number
+  userNickname?: string | null
+  socialProviders?: string[]
+  groupId?: number | null
+  groupName?: string | null
+  photoId?: number | null
+  hasAttachments?: boolean
+  createdAt: string
+  answeredAt?: string | null
+  updatedAt: string
+}
+
+export interface RawAdminReportDetail extends RawAdminReportRow {
+  content?: string | null
+  attachments?: { url: string }[] | null
+  photo?: { id: number; url: string; eventId: number; eventName: string } | null
+  photoDeleted?: boolean
+  reporterRole?: string | null
+  client?: {
+    appVersion?: string | null
+    platform?: string | null
+    osVersion?: string | null
+    deviceModel?: string | null
+  } | null
+  followUpOf?: { id: number; preview?: string | null } | null
+  reply?: { content: string; answeredAt: string; answeredBy?: number | null } | null
+}
+
+/**
+ * 목록 행 — nullable은 명시적 null로, 배열은 빈 배열로 접는다. BE record는 null 필드도 키를
+ * 싣지만(@JsonInclude 없음) 키 생략에도 같은 값이 나오게 둔다(어드민 공통 규칙).
+ */
+export function toAdminReportRow(raw: RawAdminReportRow): AdminReportRow {
+  return {
+    id: raw.id,
+    type: raw.type as AdminReportRow['type'],
+    status: raw.status as AdminReportRow['status'],
+    preview: raw.preview ?? null,
+    userId: raw.userId,
+    userNickname: raw.userNickname ?? null,
+    socialProviders: raw.socialProviders ?? [],
+    groupId: raw.groupId ?? null,
+    groupName: raw.groupName ?? null,
+    photoId: raw.photoId ?? null,
+    hasAttachments: raw.hasAttachments ?? false,
+    createdAt: raw.createdAt,
+    answeredAt: raw.answeredAt ?? null,
+    updatedAt: raw.updatedAt,
+  }
+}
+
+/** 상세 — 목록 행 정규화 위에 상세 필드를 같은 규칙으로 얹는다 */
+export function toAdminReportDetail(raw: RawAdminReportDetail): AdminReportDetail {
+  return {
+    ...toAdminReportRow(raw),
+    content: raw.content ?? null,
+    attachments: raw.attachments ?? [],
+    photo: raw.photo ?? null,
+    photoDeleted: raw.photoDeleted ?? false,
+    reporterRole: raw.reporterRole ?? null,
+    client: raw.client
+      ? {
+          appVersion: raw.client.appVersion ?? null,
+          platform: raw.client.platform ?? null,
+          osVersion: raw.client.osVersion ?? null,
+          deviceModel: raw.client.deviceModel ?? null,
+        }
+      : null,
+    followUpOf: raw.followUpOf
+      ? { id: raw.followUpOf.id, preview: raw.followUpOf.preview ?? null }
+      : null,
+    reply: raw.reply
+      ? {
+          content: raw.reply.content,
+          answeredAt: raw.reply.answeredAt,
+          answeredBy: raw.reply.answeredBy ?? null,
+        }
+      : null,
   }
 }

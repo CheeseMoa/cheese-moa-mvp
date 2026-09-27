@@ -14,8 +14,12 @@ import {
   getAdminProfile,
   getAdminStats,
   listAdminGroups,
+  getAdminReport,
   listAdminInquiries,
+  listAdminReports,
+  replyAdminReport,
   updateAdminInquiryStatus,
+  updateAdminReportStatus,
 } from './admin'
 import { ApiRequestError } from '../../api/client'
 import { getAccessToken, getRefreshToken, setAuthTokens } from '../../lib/auth'
@@ -25,6 +29,10 @@ import {
   BE_ADMIN_INQUIRY_ROWS,
   BE_ADMIN_PAGE_INFO,
   BE_ADMIN_PROFILE,
+  BE_ADMIN_REPORT_DETAIL,
+  BE_ADMIN_REPORT_DETAIL_SPARSE,
+  BE_ADMIN_REPORT_PHOTO_DETAIL,
+  BE_ADMIN_REPORT_ROWS,
   BE_ADMIN_STATS,
   BE_ERRORS,
   envelope,
@@ -294,6 +302,198 @@ describe('기관 도입 문의 상태 전이 (PATCH /admin/organization-inquirie
   it('없는 문의 INQUIRY404는 NOT_FOUND(404)로 온다', async () => {
     serve(BE_ERRORS.INQUIRY404.payload, BE_ERRORS.INQUIRY404.status)
     const err = await updateAdminInquiryStatus(999999, 'CLOSED').catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(404)
+    expect((err as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+})
+
+describe('신고·문의 목록 (GET /admin/reports — CHMO-862)', () => {
+  it('status·type·page·size를 조립하고 봉투 pageInfo를 함께 꺼낸다', async () => {
+    const calls = stubFetch(() =>
+      jsonResponse({
+        isSuccess: true,
+        code: 'COMMON200',
+        message: '성공입니다.',
+        pageInfo: BE_ADMIN_PAGE_INFO,
+        result: BE_ADMIN_REPORT_ROWS,
+      }),
+    )
+
+    const page = await listAdminReports({
+      page: 0,
+      size: 20,
+      status: 'RECEIVED,IN_PROGRESS',
+      type: 'DELETION_REQUEST,INAPPROPRIATE',
+    })
+    expect(calls[0].url).toBe(
+      '/api/v1/admin/reports?page=0&size=20&status=RECEIVED%2CIN_PROGRESS&type=DELETION_REQUEST%2CINAPPROPRIATE',
+    )
+    expect(page.pageInfo).toEqual(BE_ADMIN_PAGE_INFO)
+    expect(page.items[0]).toEqual({
+      id: 2,
+      type: 'DELETION_REQUEST',
+      status: 'RECEIVED',
+      // 사진 신고는 내용 없이 접수된다 — preview도 null
+      preview: null,
+      userId: 3,
+      userNickname: 'test',
+      socialProviders: [],
+      groupId: 28,
+      groupName: '터터',
+      photoId: 4901,
+      hasAttachments: false,
+      // 실측 — 오프셋이 붙어 와서 client.ts가 손대지 않는다(Z를 덧붙이지 않는다)
+      createdAt: '2026-09-27T17:20:19.758082+09:00',
+      answeredAt: null,
+      updatedAt: '2026-09-27T17:20:19.758082+09:00',
+    })
+  })
+
+  it('모임·사진이 없는 문의 — groupId·groupName·photoId가 null로 온다', async () => {
+    serve(envelope(BE_ADMIN_REPORT_ROWS))
+    const row = (await listAdminReports({ page: 0 })).items[1]
+    expect(row.preview).toBe('스테이징 문의 테스트입니다.')
+    expect(row.groupId).toBeNull()
+    expect(row.groupName).toBeNull()
+    expect(row.photoId).toBeNull()
+    expect(row.socialProviders).toEqual([])
+  })
+
+  it('null 필드의 키가 생략돼도 같은 값으로 정규화된다', async () => {
+    const { groupId, groupName, photoId, socialProviders, answeredAt, ...rest } =
+      BE_ADMIN_REPORT_ROWS[1]
+    expect(socialProviders).toEqual([])
+    expect([groupId, groupName, photoId, answeredAt]).toEqual([null, null, null, null])
+    serve(envelope([rest]))
+    const row = (await listAdminReports({ page: 0 })).items[0]
+    expect(row.groupId).toBeNull()
+    expect(row.groupName).toBeNull()
+    expect(row.photoId).toBeNull()
+    expect(row.socialProviders).toEqual([])
+    expect(row.answeredAt).toBeNull()
+  })
+
+  it('필터를 안 넘기면 page·size만 실린다 — BE 기본값이 처리 대기라 사이드바 배지가 그대로 쓴다', async () => {
+    const calls = serve(envelope([]))
+    await listAdminReports({ page: 0, size: 1 })
+    expect(calls[0].url).toBe('/api/v1/admin/reports?page=0&size=1')
+  })
+})
+
+describe('신고·문의 상세 (GET /admin/reports/:id — CHMO-862)', () => {
+  it('첨부·사진·역할·기기·이어서 문의·답변을 그대로 건넨다', async () => {
+    const calls = serve(envelope(BE_ADMIN_REPORT_DETAIL))
+    const detail = await getAdminReport(41)
+    expect(calls[0].url).toBe('/api/v1/admin/reports/41')
+    expect(detail).toMatchObject({
+      id: 41,
+      status: 'ANSWERED',
+      content: '사진 30장을 올리다가 앱이 꺼졌어요.',
+      attachments: [{ url: 'https://cdn.example/reports/128/a.jpg?X-Amz-Signature=1' }],
+      photo: {
+        id: 91,
+        url: 'https://cdn.example/originals/events/17/p.jpg?X-Amz-Signature=2',
+        eventId: 17,
+        eventName: '운동회',
+      },
+      photoDeleted: false,
+      reporterRole: 'EDITOR',
+      client: {
+        appVersion: '2.4.0+28',
+        platform: 'IOS',
+        osVersion: '26.0',
+        deviceModel: 'iPhone15,4',
+      },
+      followUpOf: { id: 33, preview: '이전 문의 내용' },
+      reply: {
+        content: '확인 후 수정했습니다.',
+        answeredAt: '2026-09-28T09:00:00.654321+09:00',
+        answeredBy: 3,
+      },
+    })
+  })
+
+  it('사진 신고(실채집) — 원본 URL·이벤트명·신고자 역할·기기 정보가 오고 content는 null', async () => {
+    serve(envelope(BE_ADMIN_REPORT_PHOTO_DETAIL))
+    const detail = await getAdminReport(2)
+    expect(detail.content).toBeNull()
+    expect(detail.photo).toEqual({
+      id: 4901,
+      url: BE_ADMIN_REPORT_PHOTO_DETAIL.photo.url,
+      eventId: 72,
+      eventName: '확인',
+    })
+    expect(detail.photoDeleted).toBe(false)
+    expect(detail.reporterRole).toBe('EDITOR')
+    expect(detail.client).toEqual({
+      appVersion: '2.4.0+28',
+      platform: 'IOS',
+      osVersion: '26.5',
+      deviceModel: 'iPhone18,1',
+    })
+  })
+
+  it('지워진 사진 신고 — photo는 null이고 photoDeleted가 그 사실을 말한다', async () => {
+    serve(envelope(BE_ADMIN_REPORT_DETAIL_SPARSE))
+    const detail = await getAdminReport(2)
+    expect(detail.photoId).toBe(4901) // 식별자는 접수 시점 값을 유지한다(BE 정책)
+    expect(detail.photo).toBeNull()
+    expect(detail.photoDeleted).toBe(true)
+    expect(detail.content).toBeNull()
+    expect(detail.attachments).toEqual([])
+    expect(detail.reporterRole).toBeNull()
+    expect(detail.client).toBeNull()
+    expect(detail.followUpOf).toBeNull()
+    expect(detail.reply).toBeNull()
+  })
+
+  it('없는 신고·문의 REPORT404는 NOT_FOUND(404)로 온다', async () => {
+    serve(BE_ERRORS.REPORT404.payload, BE_ERRORS.REPORT404.status)
+    const err = await getAdminReport(999999).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiRequestError)
+    expect((err as ApiRequestError).status).toBe(404)
+    expect((err as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+})
+
+describe('신고·문의 답변 (POST /admin/reports/:id/reply — CHMO-862)', () => {
+  it('content만 실어 보내고 상세 형태를 돌려받는다(패널 재조회 불필요)', async () => {
+    const calls = serve(envelope(BE_ADMIN_REPORT_DETAIL))
+    const detail = await replyAdminReport(41, '확인 후 수정했습니다.')
+    expect(calls[0].url).toBe('/api/v1/admin/reports/41/reply')
+    expect(calls[0].method).toBe('POST')
+    expect(bodyOf(calls[0])).toEqual({ content: '확인 후 수정했습니다.' })
+    expect(detail.status).toBe('ANSWERED')
+    expect(detail.reply?.content).toBe('확인 후 수정했습니다.')
+  })
+
+  it('길이 위반 VALID400은 status 400 그대로 온다 — 패널이 인라인 문구로 받는다', async () => {
+    serve(BE_ERRORS.VALID400.payload, BE_ERRORS.VALID400.status)
+    const err = await replyAdminReport(41, 'x').catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(400)
+  })
+})
+
+describe('신고·문의 상태 전이 (PATCH /admin/reports/:id — CHMO-862)', () => {
+  it('status만 실어 보내고 갱신된 행을 돌려받는다', async () => {
+    const calls = serve(
+      envelope({
+        ...BE_ADMIN_REPORT_ROWS[0],
+        status: 'IN_PROGRESS',
+        updatedAt: '2026-09-27T18:00:00.000001+09:00',
+      }),
+    )
+    const row = await updateAdminReportStatus(2, 'IN_PROGRESS')
+    expect(calls[0].url).toBe('/api/v1/admin/reports/2')
+    expect(calls[0].method).toBe('PATCH')
+    expect(bodyOf(calls[0])).toEqual({ status: 'IN_PROGRESS' })
+    expect(row.status).toBe('IN_PROGRESS')
+    expect(row.updatedAt).toBe('2026-09-27T18:00:00.000001+09:00')
+  })
+
+  it('없는 신고·문의 REPORT404는 NOT_FOUND(404)로 온다', async () => {
+    serve(BE_ERRORS.REPORT404.payload, BE_ERRORS.REPORT404.status)
+    const err = await updateAdminReportStatus(999999, 'CLOSED').catch((e: unknown) => e)
     expect((err as ApiRequestError).status).toBe(404)
     expect((err as ApiRequestError).code).toBe('NOT_FOUND')
   })

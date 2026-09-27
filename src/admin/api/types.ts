@@ -162,3 +162,113 @@ export interface AdminInquiryListParams {
   /** 생략하면 BE 기본값(`RECEIVED,CONTACTED` = 진행 중) */
   status?: AdminInquiryFilter
 }
+
+// ── 신고·문의 (CHMO-862 — BE CHMO-861) ──────────────────────────────
+
+/**
+ * BE ReportType — 앱 신고·문의 폼의 유형(CHMO-860 확정 6종). 뒤의 둘이 **신고**(사진·사람에 대한
+ * 조치 요청)이고 나머지 넷이 **문의**다(BE `ReportType.isReport()`와 같은 경계).
+ * 표시명은 lib/format이 맡는다 — 미지 값이 와도 원문으로 폴백한다.
+ */
+export type AdminReportType =
+  'APP_ERROR' | 'CLASSIFICATION' | 'ACCOUNT' | 'OTHER' | 'DELETION_REQUEST' | 'INAPPROPRIATE'
+
+/**
+ * BE ReportStatus — 접수됨 → 확인 중 → 답변 완료 / 종료.
+ * 기관 문의(CHMO-810)와 같은 결정으로 **전이 규칙이 없다**(잘못 누른 값을 되돌릴 수 있게).
+ * 예외 하나: 답변이 없는 건을 `ANSWERED`로 직접 바꾸면 VALID400(답 없는 '답변 완료' 방지) —
+ * 답변 완료는 [답변 보내기]가 만드는 상태다.
+ */
+export type AdminReportStatus = 'RECEIVED' | 'IN_PROGRESS' | 'ANSWERED' | 'CLOSED'
+
+/**
+ * BE AdminReportSummaryResponse — 목록 한 행이자 **PATCH 응답과 같은 형태**(기관 문의와 같은 결 —
+ * 전이 성공 시 재조회 없이 그 행만 바꿔 끼운다).
+ *
+ * `groupId`·`photoId`는 **접수 시점 식별자를 유지**하고, 가리키던 자원이 지워지면 이름만 null이
+ * 된다(BE 정책) — 그래서 `groupId`가 있는데 `groupName`이 null이면 "지워진 모임"이다.
+ */
+export interface AdminReportRow {
+  id: number
+  type: AdminReportType
+  status: AdminReportStatus
+  /** 내용 앞 60자 — 사진 신고는 내용 없이 접수될 수 있어 null */
+  preview: string | null
+  userId: number
+  userNickname: string | null
+  /** KAKAO/NAVER/GOOGLE/APPLE 복수 가능 — PIN 계정은 빈 배열 */
+  socialProviders: string[]
+  groupId: number | null
+  groupName: string | null
+  /** 사진 신고면 그 사진 — 목록 행엔 이벤트명이 없다(상세 `photo.eventName`에만) */
+  photoId: number | null
+  hasAttachments: boolean
+  createdAt: string
+  /** 마지막 답변 시각 — 재답변도 갱신한다 */
+  answeredAt: string | null
+  updatedAt: string
+}
+
+/** BE AdminReportDetailResponse.Photo — `url`은 운영 확인용 **원본** presigned GET(짧은 만료) */
+export interface AdminReportPhoto {
+  id: number
+  url: string
+  eventId: number
+  eventName: string
+}
+
+/** BE AdminReportDetailResponse.Client — 앱이 접수 때 자동으로 싣는 진단 정보(전부 선택) */
+export interface AdminReportClient {
+  appVersion: string | null
+  /** BE ReportClientPlatform(IOS|ANDROID) */
+  platform: string | null
+  osVersion: string | null
+  deviceModel: string | null
+}
+
+/** BE AdminReportDetailResponse.Reply — `answeredBy`는 답한 관리자의 userId(FK 없음 — 감사 단서) */
+export interface AdminReportReply {
+  content: string
+  answeredAt: string
+  answeredBy: number | null
+}
+
+/**
+ * BE AdminReportDetailResponse — 목록 행 + 상세. `POST …/reply`의 응답도 이 형태다
+ * (답변을 보낸 뒤 패널을 재조회 없이 그대로 갱신한다).
+ */
+export interface AdminReportDetail extends AdminReportRow {
+  /** 내용 전문 — 사진 신고는 사유 선택만으로 접수돼 null일 수 있다 */
+  content: string | null
+  /** 첨부 스크린샷(최대 3) — presigned GET */
+  attachments: { url: string }[]
+  /** 신고 사진 — 지워졌으면 null이고 `photoDeleted`가 true */
+  photo: AdminReportPhoto | null
+  photoDeleted: boolean
+  /** 신고자의 그 모임 역할(BE SpaceRole EDITOR|VIEWER) — 모임이 없거나 이미 나갔으면 null */
+  reporterRole: string | null
+  /** 네 값이 모두 비면 null(웹 접수·구버전 앱) */
+  client: AdminReportClient | null
+  /** [이어서 문의하기]로 접수됐으면 이전 문의 — 지워졌으면 null */
+  followUpOf: { id: number; preview: string | null } | null
+  reply: AdminReportReply | null
+}
+
+/**
+ * 목록 `status` 쿼리 값 그대로 — 탭 4개가 이 넷에 1:1로 대응한다. 목록 밖 값은 COMMON400이라
+ * 화면이 자유 조합하지 않고 이 유니온만 쓴다(기관 문의 필터와 같은 규칙).
+ */
+export type AdminReportStatusFilter = 'RECEIVED,IN_PROGRESS' | 'ANSWERED' | 'CLOSED' | 'ALL'
+
+/** 목록 `type` 쿼리 값 — `신고만`은 신고 2종 콤마 복수 */
+export type AdminReportTypeFilter =
+  'ALL' | 'DELETION_REQUEST,INAPPROPRIATE' | 'APP_ERROR' | 'CLASSIFICATION' | 'ACCOUNT' | 'OTHER'
+
+export interface AdminReportListParams {
+  page: number
+  size?: number
+  /** 생략하면 BE 기본값(`RECEIVED,IN_PROGRESS` = 처리 대기) */
+  status?: AdminReportStatusFilter
+  /** 생략하면 BE 기본값(`ALL`) */
+  type?: AdminReportTypeFilter
+}
