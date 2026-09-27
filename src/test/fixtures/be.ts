@@ -104,6 +104,8 @@ export const BE_ERRORS = {
    */
   INQUIRY404: { status: 404, payload: errorEnvelope('INQUIRY404', '문의를 찾을 수 없습니다.') },
   INQUIRY409: { status: 409, payload: errorEnvelope('INQUIRY409', '이미 진행 중인 문의가 있습니다.') },
+  /** 없는 신고·문의 — GET /admin/reports/999999 (2026-09-27 스테이징 실채집) */
+  REPORT404: { status: 404, payload: errorEnvelope('REPORT404', '신고·문의를 찾을 수 없습니다.') },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -590,6 +592,130 @@ export const BE_ADMIN_INQUIRY_ROWS = [
     updatedAt: '2026-09-14T11:30:00',
   },
 ]
+
+/**
+ * GET /admin/reports — AdminReportSummaryResponse(PATCH 응답도 같은 형태).
+ * **2026-09-27 스테이징 실채집**(BE CHMO-861 develop 배포분 — 관리자 계정으로 `?status=ALL`).
+ * 시각은 스펙 문서 예시(오프셋 없는 UTC)와 달리 **`+09:00` 오프셋·마이크로초**가 붙어 온다 —
+ * client.ts는 오프셋이 있으면 손대지 않는다. 첫 행은 내용 없는 사진 신고, 둘째 행은 모임·사진이
+ * 없는 문의다(둘 다 PIN 계정이라 socialProviders 빈 배열). null 필드도 키를 싣는다.
+ */
+export const BE_ADMIN_REPORT_ROWS = [
+  {
+    id: 2,
+    type: 'DELETION_REQUEST',
+    status: 'RECEIVED',
+    preview: null,
+    userId: 3,
+    userNickname: 'test',
+    socialProviders: [],
+    groupId: 28,
+    groupName: '터터',
+    photoId: 4901,
+    hasAttachments: false,
+    createdAt: '2026-09-27T17:20:19.758082+09:00',
+    answeredAt: null,
+    updatedAt: '2026-09-27T17:20:19.758082+09:00',
+  },
+  {
+    id: 1,
+    type: 'OTHER',
+    status: 'RECEIVED',
+    preview: '스테이징 문의 테스트입니다.',
+    userId: 27,
+    userNickname: 'staging-admin-0927',
+    socialProviders: [],
+    groupId: null,
+    groupName: null,
+    photoId: null,
+    hasAttachments: false,
+    createdAt: '2026-09-27T16:59:38.582479+09:00',
+    answeredAt: null,
+    updatedAt: '2026-09-27T16:59:38.582479+09:00',
+  },
+]
+
+/**
+ * GET /admin/reports/2 — 사진 신고 상세 **2026-09-27 스테이징 실채집**(presigned 쿼리는 치환).
+ * 사진 신고는 내용 없이 접수돼 content null, 앱이 싣는 기기 정보가 온다.
+ */
+export const BE_ADMIN_REPORT_PHOTO_DETAIL = {
+  ...BE_ADMIN_REPORT_ROWS[0],
+  content: null,
+  attachments: [],
+  photo: {
+    id: 4901,
+    url: 'https://cheesemoa-dev.s3.ap-northeast-2.amazonaws.com/originals/events/72/fab0b514-fb1d-4f96-b5b8-9fa7bf50690e.jpg?X-Amz-Signature=<presigned>',
+    eventId: 72,
+    eventName: '확인',
+  },
+  photoDeleted: false,
+  reporterRole: 'EDITOR',
+  client: { appVersion: '2.4.0+28', platform: 'IOS', osVersion: '26.5', deviceModel: 'iPhone18,1' },
+  followUpOf: null,
+  reply: null,
+}
+
+/**
+ * GET /admin/reports/:id — AdminReportDetailResponse(`POST …/reply` 응답도 같은 형태).
+ * BE CHMO-861 스펙 문서 예시 그대로(첨부·사진·역할·기기·이어서 문의·답변이 모두 찬 경우 — 스테이징엔
+ * 아직 이렇게 다 찬 건이 없어 실채집이 아니다. 시각 형식만 실측대로 오프셋을 붙였다).
+ */
+export const BE_ADMIN_REPORT_DETAIL = {
+  id: 41,
+  type: 'APP_ERROR',
+  status: 'ANSWERED',
+  preview: '사진 30장을 올리다가 앱이 꺼졌어요.',
+  userId: 128,
+  userNickname: '치즈',
+  socialProviders: ['KAKAO'],
+  groupId: 32,
+  groupName: '햇살반',
+  photoId: 91,
+  hasAttachments: true,
+  createdAt: '2026-09-27T15:30:00.123456+09:00',
+  answeredAt: '2026-09-28T09:00:00.654321+09:00',
+  updatedAt: '2026-09-28T09:00:00.654321+09:00',
+  content: '사진 30장을 올리다가 앱이 꺼졌어요.',
+  attachments: [{ url: 'https://cdn.example/reports/128/a.jpg?X-Amz-Signature=1' }],
+  photo: {
+    id: 91,
+    url: 'https://cdn.example/originals/events/17/p.jpg?X-Amz-Signature=2',
+    eventId: 17,
+    eventName: '운동회',
+  },
+  photoDeleted: false,
+  reporterRole: 'EDITOR',
+  client: {
+    appVersion: '2.4.0+28',
+    platform: 'IOS',
+    osVersion: '26.0',
+    deviceModel: 'iPhone15,4',
+  },
+  followUpOf: { id: 33, preview: '이전 문의 내용' },
+  reply: {
+    content: '확인 후 수정했습니다.',
+    answeredAt: '2026-09-28T09:00:00.654321+09:00',
+    answeredBy: 3,
+  },
+}
+
+/**
+ * 상세의 빈 경우 — 사진이 지워진 사진 신고(photo null + photoDeleted), 내용·기기·이어서 문의·답변 없음,
+ * 모임을 나간 신고자(reporterRole null). BE assembler가 null을 싣는 자리를 한 번에 모았다(실채집 행 위에
+ * 조립 — photoDeleted true는 스테이징에서 아직 못 만든 상태라 소스 대조분이다).
+ */
+export const BE_ADMIN_REPORT_DETAIL_SPARSE = {
+  ...BE_ADMIN_REPORT_ROWS[0],
+  content: null,
+  attachments: [],
+  photo: null,
+  photoDeleted: true,
+  reporterRole: null,
+  client: null,
+  followUpOf: null,
+  reply: null,
+}
 
 /** 봉투의 pageInfo — BE common/response/PageInfo(Response.onSuccess(status, Page)) */
 export const BE_ADMIN_PAGE_INFO = {

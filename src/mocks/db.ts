@@ -79,6 +79,41 @@ export interface DbOrganizationInquiry {
   updatedAt: ISODateTime
 }
 
+/**
+ * 신고·문의 (CHMO-862 — BE CHMO-860·861). 접수는 앱(`POST /me/reports`)이 하고 웹은 어드민에서
+ * **읽고 답하고 상태만 바꾼다** — 기관 문의처럼 목에도 생성 경로가 없고 시드가 곧 전부다.
+ *
+ * `groupId`·`photoId`는 접수 시점 값을 그대로 둔다(BE 정책 — 모임·사진이 지워져도 기록은 남고
+ * 이름·사진만 null로 나간다). 첨부는 실 BE가 S3 키를 저장했다가 상세 조회 때 presigned GET을
+ * 발급하는데, 목은 그 결과 URL을 행에 직접 둔다. `socialProviders`는 기관 문의와 같은 이유로 행에 둔다.
+ */
+export interface DbReport {
+  id: number
+  userId: number
+  type: 'APP_ERROR' | 'CLASSIFICATION' | 'ACCOUNT' | 'OTHER' | 'DELETION_REQUEST' | 'INAPPROPRIATE'
+  status: 'RECEIVED' | 'IN_PROGRESS' | 'ANSWERED' | 'CLOSED'
+  /** 사진 신고는 사유 선택만으로 접수돼 null일 수 있다 */
+  content: string | null
+  groupId: number | null
+  eventId: number | null
+  photoId: number | null
+  attachmentUrls: string[]
+  client: {
+    appVersion: string | null
+    platform: 'IOS' | 'ANDROID' | null
+    osVersion: string | null
+    deviceModel: string | null
+  } | null
+  followUpOf: number | null
+  replyContent: string | null
+  answeredAt: ISODateTime | null
+  /** 답한 관리자 userId(FK 없음 — BE도 감사 단서로 평문 보관) */
+  answeredBy: number | null
+  socialProviders: string[]
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+}
+
 export interface DbGroup {
   id: number
   name: string
@@ -226,6 +261,8 @@ export interface Db {
   devices: DbDevice[]
   /** 기관 도입 문의 (CHMO-811) — 접수는 앱이 하고 어드민은 읽기·상태 전이만 한다 */
   organizationInquiries: DbOrganizationInquiry[]
+  /** 신고·문의 (CHMO-862) — 접수는 앱이 하고 어드민은 읽기·답변·상태 전이만 한다 */
+  reports: DbReport[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
 }
@@ -243,6 +280,7 @@ export const db: Db = {
   analysisJobs: [],
   devices: [],
   organizationInquiries: [],
+  reports: [],
   uploadedKeys: [],
 }
 
@@ -260,6 +298,7 @@ export function seedDb(data: Db): void {
   db.analysisJobs = data.analysisJobs
   db.devices = data.devices
   db.organizationInquiries = data.organizationInquiries
+  db.reports = data.reports
   db.uploadedKeys = data.uploadedKeys
 }
 

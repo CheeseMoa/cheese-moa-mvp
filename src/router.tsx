@@ -125,6 +125,12 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: 'reports',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminReportsPage')).AdminReportsPage,
+        }),
+      }, // 신고·문의 — 목록·상세 패널·답변(CHMO-862 · BE CHMO-861)
+      {
         path: 'inquiries',
         lazy: async () => ({
           Component: (await import('./admin/pages/AdminInquiriesPage')).AdminInquiriesPage,

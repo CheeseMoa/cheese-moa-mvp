@@ -144,3 +144,86 @@ export function formatPhone(phone: string): string {
   if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
   return phone
 }
+
+// ── 신고·문의 (CHMO-862) ──────────────────────────────────────────
+
+/**
+ * BE ReportType → 표시명. 앱 폼 라벨('사진 분류가 이상해요' 같은 문장형)이 아니라 표 칸에 맞는
+ * 짧은 이름이고, 유형 필터 칩과 배지가 같은 말을 쓴다.
+ */
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  APP_ERROR: '앱 오류',
+  CLASSIFICATION: '사진 분류',
+  ACCOUNT: '계정·참여',
+  OTHER: '제안·기타',
+  DELETION_REQUEST: '삭제 요청',
+  INAPPROPRIATE: '부적절 신고',
+}
+
+/** 미지 유형은 원문 그대로(어드민 공통 폴백) */
+export function reportTypeLabel(type: string): string {
+  return REPORT_TYPE_LABELS[type] ?? type
+}
+
+/**
+ * 신고 2종(사진·사람에 대한 조치 요청)인가 — BE `ReportType.isReport()`와 같은 경계.
+ * 이 둘만 붉은 배지로 띄워 목록에서 먼저 눈에 걸리게 한다(나머지 넷은 문의라 중립 회색).
+ */
+export function isReportType(type: string): boolean {
+  return type === 'DELETION_REQUEST' || type === 'INAPPROPRIATE'
+}
+
+/** 유형 배지 — 신고는 `report`(붉은색), 문의는 중립 회색 토큰 */
+export function reportTypeBadge(type: string): { label: string; token: string } {
+  return { label: reportTypeLabel(type), token: isReportType(type) ? 'report' : 'review' }
+}
+
+/**
+ * BE ReportStatus → 배지. 기관 문의와 같은 원칙으로 **새 색을 만들지 않는다**:
+ * 접수됨=손대야 할 일(주황) · 확인 중=진행 중(갈색) · 답변 완료=끝난 일(초록) · 종료=더는 안 보는 일(회색).
+ */
+const REPORT_STATUS_BADGES: Record<string, { label: string; token: string }> = {
+  RECEIVED: { label: '접수됨', token: 'analyzing' },
+  IN_PROGRESS: { label: '확인 중', token: 'ready' },
+  ANSWERED: { label: '답변 완료', token: 'published' },
+  CLOSED: { label: '종료', token: 'empty' },
+}
+
+export function reportStatusBadge(status: string): { label: string; token: string } {
+  return REPORT_STATUS_BADGES[status] ?? { label: status, token: 'empty' }
+}
+
+export function reportStatusLabel(status: string): string {
+  return reportStatusBadge(status).label
+}
+
+/** 접수 기기 한 줄 — `앱 2.4.0+28 · iOS 26.0 · iPhone15,4`. 네 값이 다 비면 '—' */
+export function reportClientLabel(
+  client: {
+    appVersion: string | null
+    platform: string | null
+    osVersion: string | null
+    deviceModel: string | null
+  } | null,
+): string {
+  if (!client) return '—'
+  const platform =
+    client.platform === 'IOS' ? 'iOS' : client.platform === 'ANDROID' ? 'Android' : client.platform
+  const os = [platform, client.osVersion].filter(Boolean).join(' ')
+  const parts = [
+    client.appVersion ? `앱 ${client.appVersion}` : null,
+    os || null,
+    client.deviceModel,
+  ]
+  const line = parts.filter(Boolean).join(' · ')
+  return line || '—'
+}
+
+/**
+ * 표가 좁을 때(상세 패널이 열려 있을 때)의 시각 — 연도를 떼 `09-27 15:30`.
+ * 같은 해 안의 신고·문의를 훑는 화면이라 연도는 정보가 거의 없다(전체 시각은 패널에 있다).
+ */
+export function formatMonthDayTime(iso: string | null): string {
+  const full = formatDateTime(iso)
+  return full === '—' ? full : full.slice(5)
+}
