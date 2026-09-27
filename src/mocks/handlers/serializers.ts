@@ -44,6 +44,7 @@ import {
   type DbOrganizationInquiry,
   type DbPerson,
   type DbPhoto,
+  type DbReport,
   type DbUser,
 } from '../db'
 
@@ -685,5 +686,87 @@ export function toAdminInquiryResponse(inquiry: DbOrganizationInquiry) {
     socialProviders: inquiry.socialProviders,
     createdAt: inquiry.createdAt,
     updatedAt: inquiry.updatedAt,
+  }
+}
+
+// ── 신고·문의 (CHMO-862 — BE CHMO-861) ──────────────────────────────
+
+/** BE `AdminReportRowAssembler.PREVIEW_LENGTH` — 내용 앞 60자(내용이 없으면 null) */
+const REPORT_PREVIEW_LENGTH = 60
+
+function reportPreviewOf(content: string | null): string | null {
+  return content === null ? null : content.slice(0, REPORT_PREVIEW_LENGTH)
+}
+
+/**
+ * BE AdminReportSummaryResponse — 목록 한 행이자 PATCH 응답. 식별자(groupId·photoId)는 접수 시점
+ * 값을 그대로 싣고, 모임이 지워졌으면 이름만 null(BE 정책). 닉네임도 유저 행이 없으면 null —
+ * BE는 `nicknames.get(userId)`라 기관 문의의 '(알 수 없음)' 치환과 다르다.
+ */
+export function toAdminReportSummary(report: DbReport) {
+  const group = report.groupId === null ? undefined : db.groups.find((g) => g.id === report.groupId)
+  return {
+    id: report.id,
+    type: report.type,
+    status: report.status,
+    preview: reportPreviewOf(report.content),
+    userId: report.userId,
+    userNickname: db.users.find((u) => u.id === report.userId)?.nickname ?? null,
+    socialProviders: report.socialProviders,
+    groupId: report.groupId,
+    groupName: group?.name ?? null,
+    photoId: report.photoId,
+    hasAttachments: report.attachmentUrls.length > 0,
+    createdAt: report.createdAt,
+    answeredAt: report.answeredAt,
+    updatedAt: report.updatedAt,
+  }
+}
+
+/**
+ * BE AdminReportDetailResponse — 목록 행 + 상세. 판정은 BE `AdminReportDetailAssembler`를 따른다:
+ * - 사진은 **앨범 매핑이 있는 사진**만 찾는다(`findFirstByPhotoPhotoId` — 분류를 거치지 않은 사진·
+ *   지워진 사진은 null)이고, 그때 `photoDeleted = photoId != null && photo == null`
+ * - 역할은 멤버십 **상태와 무관하게** 준다(승인 대기 신청자도 역할이 있다) — 멤버십이 없으면 null
+ * - 기기 정보는 네 값이 다 비면 null
+ * - 답변은 `answeredAt`이 있을 때만
+ */
+export function toAdminReportDetailResponse(report: DbReport) {
+  const photo =
+    report.photoId === null
+      ? undefined
+      : db.photos.find((p) => p.id === report.photoId && p.albumIds.length > 0)
+  const event = photo ? db.events.find((e) => e.id === photo.eventId) : undefined
+  const membership =
+    report.groupId === null
+      ? undefined
+      : db.memberships.find((m) => m.userId === report.userId && m.groupId === report.groupId)
+  const previous =
+    report.followUpOf === null ? undefined : db.reports.find((r) => r.id === report.followUpOf)
+  const client = report.client
+  const hasClient = client !== null && Object.values(client).some((value) => value !== null)
+  const reportPhoto =
+    photo && event
+      ? { id: photo.id, url: photoUrlOf(photo), eventId: event.id, eventName: event.name }
+      : null
+
+  return {
+    ...toAdminReportSummary(report),
+    content: report.content,
+    attachments: report.attachmentUrls.map((url) => ({ url })),
+    photo: reportPhoto,
+    photoDeleted: report.photoId !== null && reportPhoto === null,
+    reporterRole: membership ? membership.role.toUpperCase() : null,
+    client: hasClient ? client : null,
+    followUpOf: previous ? { id: previous.id, preview: reportPreviewOf(previous.content) } : null,
+    // BE는 answeredAt만 보지만 둘은 함께 채워진다(답변 저장이 한 번에 쓴다) — 타입을 좁히려고 둘 다 본다
+    reply:
+      report.answeredAt === null || report.replyContent === null
+        ? null
+        : {
+            content: report.replyContent,
+            answeredAt: report.answeredAt,
+            answeredBy: report.answeredBy,
+          },
   }
 }

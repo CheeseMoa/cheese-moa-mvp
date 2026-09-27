@@ -42,6 +42,8 @@ import {
   toAdminInquiryResponse,
   toAdminProfileResponse,
   toAdminRecentGroup,
+  toAdminReportDetailResponse,
+  toAdminReportSummary,
   toAgreementStatusResponse,
   toAlbumDetail,
   toAlbumSummary,
@@ -93,6 +95,8 @@ import {
   toAdminGroupRow,
   toAdminInquiry,
   toAdminProfile,
+  toAdminReportDetail,
+  toAdminReportRow,
   toAdminStats,
 } from '../admin/api/mappers'
 
@@ -913,5 +917,88 @@ describe('어드민 기관 도입 문의 (CHMO-811 — BE CHMO-810 계약)', () 
     expect(closed.status).toBe('CLOSED')
     expect(reopened.status).toBe('RECEIVED')
     expect(reopened.userId).toBe(closed.userId)
+  })
+})
+
+describe('어드민 신고·문의 (CHMO-862 — BE CHMO-861 계약)', () => {
+  const reportOf = (id: number) => db.reports.find((r) => r.id === id)!
+
+  it('목록 행 — 닉네임·모임 이름은 파생되고 식별자는 접수 시점 값 그대로다', () => {
+    expect(toAdminReportRow(toAdminReportSummary(reportOf(7)))).toEqual({
+      id: 7,
+      type: 'DELETION_REQUEST',
+      status: 'RECEIVED',
+      preview: '우리 아이가 눈을 감고 찍힌 사진이라 지워 주셨으면 해요.',
+      userId: 4,
+      userNickname: '민준아빠', // 유저 행에서 파생 — 신고 행엔 닉네임이 없다
+      socialProviders: ['KAKAO'],
+      groupId: 1,
+      groupName: '햇살반',
+      photoId: 204,
+      hasAttachments: false,
+      createdAt: '2026-09-27T09:12:00+09:00',
+      answeredAt: null,
+      updatedAt: '2026-09-27T09:12:00+09:00',
+    })
+  })
+
+  it('preview는 내용 앞 60자다(BE PREVIEW_LENGTH)', () => {
+    const row = toAdminReportRow(toAdminReportSummary(reportOf(6)))
+    expect(row.preview).toHaveLength(60)
+    expect(reportOf(6).content!.startsWith(row.preview!)).toBe(true)
+    expect(row.hasAttachments).toBe(true)
+  })
+
+  it('사진 신고 상세 — 원본 URL·이벤트명이 오고 신고자 역할은 대문자 BE 값이다', () => {
+    const detail = toAdminReportDetail(toAdminReportDetailResponse(reportOf(7)))
+    expect(detail.photo).toMatchObject({ id: 204, eventId: 2, eventName: '봄 소풍' })
+    expect(detail.photo?.url).toContain('picsum.photos/seed/204/')
+    expect(detail.photoDeleted).toBe(false)
+    expect(detail.reporterRole).toBe('VIEWER')
+    expect(detail.client).toEqual({
+      appVersion: '2.4.0+28',
+      platform: 'IOS',
+      osVersion: '26.0',
+      deviceModel: 'iPhone15,4',
+    })
+  })
+
+  it('지워진 사진 — photo null + photoDeleted, 내용 없는 사진 신고는 content null', () => {
+    const detail = toAdminReportDetail(toAdminReportDetailResponse(reportOf(5)))
+    expect(detail.photoId).toBe(9999)
+    expect(detail.photo).toBeNull()
+    expect(detail.photoDeleted).toBe(true)
+    expect(detail.content).toBeNull()
+    expect(detail.preview).toBeNull()
+  })
+
+  it('지워진 모임 — groupId는 남고 이름만 null, 멤버십이 없어 역할도 null', () => {
+    const detail = toAdminReportDetail(toAdminReportDetailResponse(reportOf(8)))
+    expect(detail.groupId).toBe(99)
+    expect(detail.groupName).toBeNull()
+    expect(detail.reporterRole).toBeNull()
+  })
+
+  it('첨부·이어서 문의 — 이전 문의의 id와 앞 60자가 온다', () => {
+    const detail = toAdminReportDetail(toAdminReportDetailResponse(reportOf(6)))
+    expect(detail.attachments).toHaveLength(2)
+    expect(detail.followUpOf).toEqual({ id: 3, preview: '사진을 여러 장 올리면 중간에 앱이 멈춰요.' })
+  })
+
+  it('답변 — answeredAt이 있을 때만 reply가 서고, 기기 정보가 없으면 client는 null', () => {
+    expect(toAdminReportDetail(toAdminReportDetailResponse(reportOf(3))).reply).toEqual({
+      content: reportOf(3).replyContent,
+      answeredAt: '2026-09-21T10:00:00+09:00',
+      answeredBy: 1,
+    })
+    const closed = toAdminReportDetail(toAdminReportDetailResponse(reportOf(2)))
+    expect(closed.reply).toBeNull()
+    expect(closed.client).toBeNull()
+  })
+
+  it('승인 대기 신청자도 역할이 있다 — BE는 멤버십 상태와 무관하게 역할을 준다', () => {
+    const membership = db.memberships.find((m) => m.userId === 7 && m.groupId === 1)!
+    expect(membership.status).toBe('pending')
+    expect(toAdminReportDetail(toAdminReportDetailResponse(reportOf(1))).reporterRole).toBe('VIEWER')
   })
 })

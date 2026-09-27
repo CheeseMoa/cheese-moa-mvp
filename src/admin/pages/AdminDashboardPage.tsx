@@ -8,6 +8,7 @@ import { StatCard } from '../components/StatCard'
 import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
 import { formatCount, formatDate, formatDateTime, groupLabel } from '../lib/format'
+import { useAdminOutlet } from '../outletContext'
 
 /** A1 대시보드(289:3) — 전체 누적 4칸 + 최근 7일 3칸 + 최근 생성 모임 5개 */
 export function AdminDashboardPage() {
@@ -25,6 +26,10 @@ export function AdminDashboardPage() {
     listAdminInquiries({ page: 0, size: 1 }, signal),
   )
   const pendingInquiryCount = pendingInquiries.data?.pageInfo?.totalElements ?? null
+
+  // 처리 대기 신고·문의(CHMO-862) — 사이드바 배지와 같은 수라 셸이 조회한 값을 받아 쓴다
+  // (여기서 또 부르면 대시보드 진입마다 같은 요청이 두 번 나간다)
+  const { pendingReportCount } = useAdminOutlet()
 
   // '마지막 갱신' = 이 화면이 지표를 받아온 시각(서버가 주는 값이 아니다 — 집계는 요청 시점 계산)
   const updatedAt = useMemo(() => (stats.data ? new Date().toISOString() : null), [stats.data])
@@ -67,6 +72,12 @@ export function AdminDashboardPage() {
       <div className="flex-1 space-y-5 overflow-y-auto px-7 py-6">
         <Section title="처리할 일" caption="운영자가 손대야 하는 것">
           <div className="grid grid-cols-4 gap-4">
+            <StatCard
+              label="처리 대기 신고·문의"
+              value={pendingReportCount}
+              unit="건"
+              to="/admin/reports"
+            />
             <StatCard
               label="대기 중 기관 문의"
               value={pendingInquiryCount}

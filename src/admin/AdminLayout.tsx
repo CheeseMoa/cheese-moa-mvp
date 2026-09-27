@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Link, Outlet } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { clearAuthTokens, getAccessToken } from '../lib/auth'
 import { useApi } from '../hooks/useApi'
-import { adminLogout, getAdminProfile } from './api/admin'
+import { adminLogout, getAdminProfile, listAdminReports } from './api/admin'
+import type { AdminOutletContext } from './outletContext'
 import { AdminSidebar } from './components/AdminSidebar'
 import { AdminLoginCard } from './components/AdminLoginCard'
 import { AdminErrorMessage, AdminMessage } from './components/AdminMessage'
@@ -29,6 +30,33 @@ export function AdminLayout() {
   const authed = Boolean(getAccessToken())
   const profile = useApi(authed ? `admin-me:${authTick}` : null, (signal) =>
     getAdminProfile(signal),
+  )
+
+  /**
+   * 처리 대기 신고·문의 건수(CHMO-862) — 사이드바 배지·대시보드 카드 공용(outletContext 주석 참조).
+   * 게이트를 통과한 뒤에만 부른다(비관리자에게 ADMIN403을 한 번 더 받을 이유가 없다).
+   * 전용 카운트 API가 없어 `size=1`로 부르고 `pageInfo.totalElements`만 읽는다 — `status`를
+   * 생략하면 BE 기본값이 처리 대기(접수됨·확인 중)다.
+   */
+  const pendingReports = useApi(profile.data ? 'admin-reports-pending' : null, (signal) =>
+    listAdminReports({ page: 0, size: 1 }, signal),
+  )
+  const pendingReportCount = pendingReports.data?.pageInfo?.totalElements ?? null
+  const refreshPendingReports = pendingReports.refetch
+
+  // 화면을 옮길 때마다 배지를 다시 읽는다 — 새 신고는 앱에서 들어오고 푸시가 없다. 첫 진입은
+  // 위 조회가 맡으므로 경로가 **바뀔 때만**(StrictMode 이중 실행에도 한 번만 돌도록 이전 값 비교)
+  const { pathname } = useLocation()
+  const lastPathname = useRef(pathname)
+  useEffect(() => {
+    if (lastPathname.current === pathname) return
+    lastPathname.current = pathname
+    refreshPendingReports()
+  }, [pathname, refreshPendingReports])
+
+  const outletContext = useMemo<AdminOutletContext>(
+    () => ({ pendingReportCount, refreshPendingReports }),
+    [pendingReportCount, refreshPendingReports],
   )
 
   if (!authed) {
@@ -99,13 +127,14 @@ export function AdminLayout() {
     <div className="flex h-screen min-w-[1024px] bg-admin-bg font-admin text-[14px] text-admin-text">
       <AdminSidebar
         profile={profile.data}
+        pendingReportCount={pendingReportCount}
         onLogout={() => {
           // 서버 무효화는 best-effort(adminLogout이 로컬 정리를 보장) — 완료 후 게이트 재판정
           void adminLogout().then(rerunGate)
         }}
       />
       <main className="flex min-w-0 flex-1 flex-col">
-        <Outlet />
+        <Outlet context={outletContext} />
       </main>
     </div>
   )

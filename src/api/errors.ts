@@ -27,6 +27,8 @@
  *   CHMO-673의 신설 코드. 실서버 채집은 BE 배포 후).
  * + 2026-09-16 BE 소스 대조(INQUIRY404·INQUIRY409 — 기관 도입 문의 상태 전이 CHMO-810 PR #271.
  *   실서버 채집은 BE 배포 후).
+ * + 2026-09-27 BE 소스 대조(REPORT404 — 신고·문의 ErrorStatus.REPORT_NOT_FOUND, CHMO-860·861 develop
+ *   머지분. 어드민 신고·문의 화면(CHMO-862)이 쓴다. 실서버 채집은 BE 배포 후).
  * + 2026-08-19 BE 소스 대조(PERSON404·PERSON409 — 앨범 인물 병합 CHMO-688 ErrorStatus.
  *   PERSON_NOT_FOUND·PERSON_PARENT_CONFLICT. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
@@ -89,6 +91,11 @@ const BE_CODE_MAP: Record<string, string> = {
    * 전이 규칙 자체가 없다(INQUIRY400은 존재하지 않는다).
    */
   INQUIRY409: 'OPEN_INQUIRY_EXISTS',
+  /**
+   * 신고·문의 없음(404 — BE CHMO-860·861). 관리자 화면에선 목록이 낡았다는 뜻이라(사용자가
+   * 계정을 지우면 신고·문의 행도 함께 사라진다) 어드민 목록이 안내 후 다시 읽는다(CHMO-862).
+   */
+  REPORT404: 'NOT_FOUND',
   /**
    * 참여 코드 중복(409 — BE JOIN_KEY_TAKEN, CHMO-673). 사용자가 정한 코드가 이미 다른 모임의
    * 참여 코드거나 멤버 채널 키(shareToken)와 겹칠 때. 20 변경 모달이 인라인 에러로 받아

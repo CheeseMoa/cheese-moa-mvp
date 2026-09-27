@@ -10,11 +10,15 @@ import {
   toAdminGroupRow,
   toAdminInquiry,
   toAdminProfile,
+  toAdminReportDetail,
+  toAdminReportRow,
   toAdminStats,
   type RawAdminGroupDetail,
   type RawAdminGroupRow,
   type RawAdminInquiry,
   type RawAdminProfile,
+  type RawAdminReportDetail,
+  type RawAdminReportRow,
   type RawAdminStats,
 } from './mappers'
 import type {
@@ -25,6 +29,10 @@ import type {
   AdminInquiryListParams,
   AdminInquiryStatus,
   AdminProfile,
+  AdminReportDetail,
+  AdminReportListParams,
+  AdminReportRow,
+  AdminReportStatus,
   AdminStats,
 } from './types'
 
@@ -175,4 +183,70 @@ export function updateAdminInquiryStatus(
     body: { status },
     signal,
   }).then(toAdminInquiry)
+}
+
+// ── 신고·문의 (CHMO-862 — BE CHMO-861) ──────────────────────────────
+
+export interface AdminReportPage {
+  items: AdminReportRow[]
+  pageInfo: BePageInfo | null
+}
+
+/**
+ * GET /admin/reports — 신고·문의 목록. 정렬은 `createdAt,desc`(동률 id DESC) 고정이라 `sort`가 없다.
+ * `status`·`type`을 생략하면 BE 기본값(`RECEIVED,IN_PROGRESS` · `ALL`)이라, 사이드바 배지·대시보드
+ * 카드는 `size=1`만 실어 `pageInfo.totalElements`를 처리 대기 건수로 읽는다(기관 문의와 같은 관례 —
+ * 전용 카운트 API가 없다).
+ */
+export async function listAdminReports(
+  params: AdminReportListParams,
+  signal?: AbortSignal,
+): Promise<AdminReportPage> {
+  const search = new URLSearchParams({ page: String(params.page) })
+  if (params.size !== undefined) search.set('size', String(params.size))
+  if (params.status) search.set('status', params.status)
+  if (params.type) search.set('type', params.type)
+
+  const { items, pageInfo } = await apiFetchPaged<RawAdminReportRow[]>(
+    `/admin/reports?${search.toString()}`,
+    { signal },
+  )
+  return { items: (items ?? []).map(toAdminReportRow), pageInfo }
+}
+
+/** GET /admin/reports/:id — 상세(첨부·사진은 presigned GET). 없으면 REPORT404 */
+export function getAdminReport(
+  id: number | string,
+  signal?: AbortSignal,
+): Promise<AdminReportDetail> {
+  return apiFetch<RawAdminReportDetail>(`/admin/reports/${id}`, { signal }).then(
+    toAdminReportDetail,
+  )
+}
+
+/**
+ * POST /admin/reports/:id/reply — 답변. 상태가 `ANSWERED`가 되고 사용자 앱에 미읽음 답변이 선다.
+ * **최초 답변만** 사용자에게 푸시(`REPORT_ANSWERED`)가 가고, 재답변은 내용·시각만 갱신한다(알림
+ * 폭탄 방지 — BE CHMO-861). 내용은 trim 후 1~2,000자, 벗어나면 VALID400.
+ * 응답은 **상세 형태**라 호출부가 패널을 재조회 없이 바꿔 끼운다.
+ */
+export function replyAdminReport(id: number, content: string): Promise<AdminReportDetail> {
+  return apiFetch<RawAdminReportDetail>(`/admin/reports/${id}/reply`, {
+    method: 'POST',
+    body: { content },
+  }).then(toAdminReportDetail)
+}
+
+/**
+ * PATCH /admin/reports/:id — 상태 전이. 전이 규칙이 없어 4값 전부 보낼 수 있다(같은 값도 성공).
+ * 답변이 없는 건의 `ANSWERED`만 VALID400. 응답은 **목록 행 형태**다.
+ */
+export function updateAdminReportStatus(
+  id: number,
+  status: AdminReportStatus,
+): Promise<AdminReportRow> {
+  return apiFetch<RawAdminReportRow>(`/admin/reports/${id}`, {
+    method: 'PATCH',
+    body: { status },
+  }).then(toAdminReportRow)
 }

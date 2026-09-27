@@ -17,6 +17,8 @@ interface AdminTableProps<T> {
   rowKey: (row: T) => string | number
   /** 있으면 행 전체가 클릭 대상(모임 목록 → 상세) */
   onRowClick?: (row: T) => void
+  /** 지금 곁 패널에 열려 있는 행 — 옅은 치즈 면으로 짚어 준다(신고·문의 목록 — CHMO-862) */
+  isRowSelected?: (row: T) => boolean
   /** 0행일 때 표 대신 보여줄 안내 한 줄 */
   emptyText: string
   /** 페이지 전환 등 재조회 중 표를 흐리게 — 이전 데이터를 유지한 채 알린다 */
@@ -32,6 +34,7 @@ export function AdminTable<T>({
   rows,
   rowKey,
   onRowClick,
+  isRowSelected,
   emptyText,
   dimmed,
 }: AdminTableProps<T>) {
@@ -56,26 +59,30 @@ export function AdminTable<T>({
         </tr>
       </thead>
       <tbody>
-        {rows.map((row, index) => (
-          <tr
-            key={rowKey(row)}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={`border-b border-admin-border last:border-b-0 ${
-              onRowClick ? 'cursor-pointer hover:bg-admin-bg' : ''
-            }`}
-          >
-            {columns.map((column) => (
-              <td
-                key={column.key}
-                className={`px-5 py-3 text-[13px] ${
-                  column.align === 'right' ? 'text-right text-admin-muted' : 'text-left'
-                }`}
-              >
-                {column.render(row, index)}
-              </td>
-            ))}
-          </tr>
-        ))}
+        {rows.map((row, index) => {
+          const selected = isRowSelected?.(row) ?? false
+          return (
+            <tr
+              key={rowKey(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              aria-selected={isRowSelected ? selected : undefined}
+              className={`border-b border-admin-border last:border-b-0 ${
+                selected ? 'bg-admin-nav' : onRowClick ? 'cursor-pointer hover:bg-admin-bg' : ''
+              } ${selected && onRowClick ? 'cursor-pointer' : ''}`}
+            >
+              {columns.map((column) => (
+                <td
+                  key={column.key}
+                  className={`px-5 py-3 text-[13px] ${
+                    column.align === 'right' ? 'text-right text-admin-muted' : 'text-left'
+                  }`}
+                >
+                  {column.render(row, index)}
+                </td>
+              ))}
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

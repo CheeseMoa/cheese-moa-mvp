@@ -13,6 +13,7 @@ import {
   findGroup,
   settleAnalysis,
   type DbOrganizationInquiry,
+  type DbReport,
   type DbUser,
 } from '../db'
 import {
@@ -22,6 +23,7 @@ import {
   errorResponse,
   groupNotFound,
   invalidBody,
+  invalidRequest,
   ok,
   okPaged,
   readJson,
@@ -35,6 +37,8 @@ import {
   toAdminInquiryResponse,
   toAdminProfileResponse,
   toAdminRecentGroup,
+  toAdminReportDetailResponse,
+  toAdminReportSummary,
 } from './serializers'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -269,5 +273,147 @@ export const adminInquiryHandlers = [
     inquiry.status = next
     inquiry.updatedAt = new Date().toISOString()
     return ok(toAdminInquiryResponse(inquiry))
+  }),
+]
+
+// ── 신고·문의 (CHMO-862 — BE CHMO-861 PR #287) ──────────────────────
+
+const REPORT_STATUSES: DbReport['status'][] = ['RECEIVED', 'IN_PROGRESS', 'ANSWERED', 'CLOSED']
+const REPORT_TYPES: DbReport['type'][] = [
+  'APP_ERROR',
+  'CLASSIFICATION',
+  'ACCOUNT',
+  'OTHER',
+  'DELETION_REQUEST',
+  'INAPPROPRIATE',
+]
+
+/** BE `ReplyAdminReportUseCase.MAX_CONTENT_LENGTH` */
+const REPORT_REPLY_MAX = 2000
+
+/**
+ * 콤마 복수·`ALL` 쿼리 해석 — BE `AdminReportController.enumValuesOf`와 같은 판정: 비었으면 기본값,
+ * `ALL`이면 전부, 그 외는 콤마로 갈라 모두 알려진 값이어야 한다(하나라도 모르면 null = COMMON400).
+ */
+function enumFilter<T extends string>(raw: string | null, all: T[], fallback: string): T[] | null {
+  const value = raw?.trim() ? raw.trim() : fallback
+  if (value === 'ALL') return all
+  const parts = value.split(',').map((part) => part.trim())
+  const matched = parts.filter((part): part is T => (all as string[]).includes(part))
+  return matched.length === parts.length && matched.length > 0 ? matched : null
+}
+
+function reportNotFound() {
+  return errorResponse(404, 'REPORT404', '신고·문의를 찾을 수 없습니다.')
+}
+
+export const adminReportHandlers = [
+  // GET /admin/reports — 목록(정렬 createdAt,desc · 동률 id DESC 고정)
+  http.get(api('/admin/reports'), ({ request }) => {
+    const gate = adminGate(request)
+    if (gate instanceof Response) return gate
+
+    const url = new URL(request.url)
+    const page = intParam(url, 'page', 0)
+    const size = intParam(url, 'size', 20)
+    const statuses = enumFilter(
+      url.searchParams.get('status'),
+      REPORT_STATUSES,
+      'RECEIVED,IN_PROGRESS',
+    )
+    const types = enumFilter(url.searchParams.get('type'), REPORT_TYPES, 'ALL')
+    if (
+      page === null ||
+      page < 0 ||
+      size === null ||
+      size < 1 ||
+      size > 100 ||
+      !statuses ||
+      !types
+    ) {
+      return commonBadRequest()
+    }
+
+    const matched = db.reports
+      .filter((report) => statuses.includes(report.status) && types.includes(report.type))
+      .sort((a, b) => epochOf(b.createdAt) - epochOf(a.createdAt) || b.id - a.id)
+
+    const totalElements = matched.length
+    const totalPages = Math.ceil(totalElements / size)
+    const items = matched.slice(page * size, page * size + size).map(toAdminReportSummary)
+
+    return okPaged(items, {
+      page,
+      size,
+      hasNext: page + 1 < totalPages,
+      totalElements,
+      totalPages,
+    })
+  }),
+
+  // GET /admin/reports/:id — 상세(첨부·사진 presigned · 역할 · 기기 · 이어서 문의 · 답변)
+  http.get(api('/admin/reports/:id'), ({ request, params }) => {
+    const gate = adminGate(request)
+    if (gate instanceof Response) return gate
+    const report = db.reports.find((row) => row.id === toId(params.id))
+    if (!report) return reportNotFound()
+    return ok(toAdminReportDetailResponse(report))
+  }),
+
+  /**
+   * POST /admin/reports/:id/reply — 답변. 검증 순서는 BE 그대로: @NotBlank(VALID400 필드 메시지) →
+   * trim 후 1~2,000자(VALID400 일반 메시지) → 조회(REPORT404). 즉 빈 답변은 없는 id보다 먼저 걸린다.
+   * 최초 답변이면 BE가 커밋 후 푸시를 보내는데, 목엔 수신 기기가 없어 발송은 흉내 내지 않는다.
+   * 재답변은 내용·시각·답한 관리자만 갈아 끼운다(알림 없음).
+   */
+  http.post(api('/admin/reports/:id/reply'), async ({ request, params }) => {
+    const gate = adminGate(request)
+    if (gate instanceof Response) return gate
+
+    const body = await readJson<{ content?: unknown }>(request)
+    if (!body) return invalidBody()
+    if (typeof body.content !== 'string' || body.content.trim() === '') {
+      return invalidRequest('답변 내용은 필수입니다.')
+    }
+    const content = body.content.trim()
+    if (content.length > REPORT_REPLY_MAX) return invalidRequest('입력값이 올바르지 않습니다.')
+
+    const report = db.reports.find((row) => row.id === toId(params.id))
+    if (!report) return reportNotFound()
+
+    const now = new Date().toISOString()
+    report.replyContent = content
+    report.answeredAt = now
+    report.answeredBy = gate.id
+    report.status = 'ANSWERED'
+    report.updatedAt = now
+    return ok(toAdminReportDetailResponse(report))
+  }),
+
+  /**
+   * PATCH /admin/reports/:id — 상태 전이. 전이 규칙 없음(같은 값도 성공). 모르는 값은 본문 역직렬화
+   * 실패라 COMMON400, 누락은 @NotNull VALID400. 조회(REPORT404) 뒤에 **답 없는 ANSWERED**만
+   * VALID400으로 거절한다(BE `ChangeAdminReportStatusUseCase`와 같은 순서).
+   */
+  http.patch(api('/admin/reports/:id'), async ({ request, params }) => {
+    const gate = adminGate(request)
+    if (gate instanceof Response) return gate
+
+    const body = await readJson<{ status?: unknown }>(request)
+    if (!body) return invalidBody()
+    if (body.status === undefined || body.status === null)
+      return invalidRequest('상태는 필수입니다.')
+    const next = REPORT_STATUSES.find((status) => status === body.status)
+    if (!next) return commonBadRequest()
+
+    const report = db.reports.find((row) => row.id === toId(params.id))
+    if (!report) return reportNotFound()
+    if (next === 'ANSWERED' && report.replyContent === null) {
+      return invalidRequest('입력값이 올바르지 않습니다.')
+    }
+
+    report.status = next
+    report.updatedAt = new Date().toISOString()
+    return ok(toAdminReportSummary(report))
   }),
 ]
