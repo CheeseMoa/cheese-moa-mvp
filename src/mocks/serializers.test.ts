@@ -71,7 +71,19 @@ import {
   toViewerEventSummary,
   toViewerPhoto as serializeViewerPhoto,
   toViewerUnlockResponse,
+  toCurrentPassResponse,
+  toPassConfirmResponse,
+  toPassOrderResponse,
+  toPassPlanResponse,
 } from './handlers/serializers'
+import { PASS_PLANS, approvePassOrder, createPassOrder } from './db'
+import {
+  toCurrentPass,
+  toPassConfirmation,
+  toPassOrder,
+  toPassPlan,
+} from '../api/mappers'
+import { PASS_CATALOG } from '../lib/passPlans'
 import {
   toAgreementStatus,
   toAlbum,
@@ -1000,5 +1012,75 @@ describe('어드민 신고·문의 (CHMO-862 — BE CHMO-861 계약)', () => {
     const membership = db.memberships.find((m) => m.userId === 7 && m.groupId === 1)!
     expect(membership.status).toBe('pending')
     expect(toAdminReportDetail(toAdminReportDetailResponse(reportOf(1))).reporterRole).toBe('VIEWER')
+  })
+})
+
+describe('기간 이용권 결제 (CHMO-899 — BE CHMO-847)', () => {
+  const key = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+
+  it('상품 — 목 PassPlan이 매퍼를 거쳐 공개 요금 카탈로그와 같은 값이 된다', () => {
+    const plans = PASS_PLANS.map((plan) => toPassPlan(toPassPlanResponse(plan)))
+    expect(plans).toEqual(
+      PASS_CATALOG.map(({ code, durationDays, usdAmount }) => ({ code, durationDays, usdAmount })),
+    )
+  })
+
+  it('국내 주문 — 원 단위 HALF_UP(2137.965 → 2138)과 환율 필드가 매퍼에 그대로 닿는다', () => {
+    const order = createPassOrder({
+      groupId: 1,
+      userId: 1,
+      idempotencyKey: key(1),
+      planCode: 'DAY_3',
+      market: 'DOMESTIC',
+    })
+    const mapped = toPassOrder(toPassOrderResponse(order))
+    expect(mapped.market).toBe('domestic')
+    expect(mapped.amount).toBe(2138)
+    expect(mapped.currency).toBe('KRW')
+    expect(mapped.usdKrwRate).toBe(1425.31)
+    expect(mapped.orderName).toBe('CheeseMoa 3일 이용권')
+  })
+
+  it('해외 주문 — 생략된 환율 필드가 null로, 금액은 USD 소수 그대로', () => {
+    const order = createPassOrder({
+      groupId: 1,
+      userId: 1,
+      idempotencyKey: key(2),
+      planCode: 'DAY_7',
+      market: 'INTERNATIONAL',
+    })
+    const response = toPassOrderResponse(order)
+    expect(response).not.toHaveProperty('usdKrwRate')
+    const mapped = toPassOrder(response)
+    expect(mapped).toMatchObject({ market: 'international', amount: 2.5, currency: 'USD' })
+    expect(mapped.usdKrwRate).toBeNull()
+    expect(mapped.rateDate).toBeNull()
+  })
+
+  it('승인 — 활성 이용권이 있으면 그 만료 시각부터 이어 붙고, 현재 이용권이 그 시각을 말한다', () => {
+    const first = createPassOrder({
+      groupId: 2,
+      userId: 1,
+      idempotencyKey: key(3),
+      planCode: 'DAY_1',
+      market: 'INTERNATIONAL',
+    })
+    const firstResult = toPassConfirmation(toPassConfirmResponse(approvePassOrder(first, 'tgen_1')))
+    const second = createPassOrder({
+      groupId: 2,
+      userId: 1,
+      idempotencyKey: key(4),
+      planCode: 'DAY_3',
+      market: 'INTERNATIONAL',
+    })
+    const secondResult = toPassConfirmation(toPassConfirmResponse(approvePassOrder(second, 'tgen_2')))
+    expect(secondResult.accessFrom).toBe(firstResult.accessUntil)
+    expect(Date.parse(secondResult.accessUntil) - Date.parse(secondResult.accessFrom)).toBe(
+      72 * 3_600_000,
+    )
+    expect(toCurrentPass(toCurrentPassResponse(secondResult.accessUntil))).toEqual({
+      active: true,
+      accessUntil: secondResult.accessUntil,
+    })
   })
 })

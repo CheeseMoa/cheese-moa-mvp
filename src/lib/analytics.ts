@@ -93,6 +93,13 @@ const SCREENS: ReadonlyArray<readonly [pattern: string, screen: string]> = [
   ['/legal/biometric', 'legal-biometric'],
   ['/account-deletion', 'legal-account-deletion'],
   ['/data-deletion', 'legal-data-deletion'],
+  // 기간 이용권(CHMO-899) — 결제 복귀 주소의 쿼리(paymentKey 등)는 원래 싣지 않는다(경로만 매칭)
+  ['/legal/refund', 'legal-refund'],
+  ['/pricing', 'pricing'],
+  ['/pass/guide', 'pass-guide'],
+  ['/pass/checkout', 'pass-checkout'],
+  ['/pass/success', 'pass-success'],
+  ['/pass/fail', 'pass-fail'],
 
   // 어드민·DEV — 집계에서 갈라내려고 이름을 붙여 둔다(빼면 unknown으로 섞인다)
   ['/admin', 'admin-dashboard'],

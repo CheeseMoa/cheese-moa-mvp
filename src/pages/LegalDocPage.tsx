@@ -1,29 +1,21 @@
-import { useNavigate } from 'react-router-dom'
-import { PhoneShell } from '../components/PhoneShell'
+import { PublicPageShell } from '../components/PublicPageShell'
 import { LegalDocBody } from '../components/LegalDocBody'
-import { Header } from '../components/ui'
 import type { LegalDoc } from '../legal/types'
 
 /**
- * 약관·정책 전문 공용 렌더러 (CHMO-478) — /legal/* 3종이 문서 데이터만 바꿔 공유한다.
- * 설정·동의 화면·외부 공개 URL(스토어 심사 등) 어디서든 열리므로 가드 밖 라우트.
+ * 약관·정책 전문 공용 렌더러 (CHMO-478) — /legal/* 문서 데이터만 바꿔 공유한다.
+ * 설정·동의 화면·외부 공개 URL(스토어·결제대행사 심사 등) 어디서든 열리므로 가드 밖 라우트.
  * 본문은 LegalDocBody — 가입 동의 화면(01-A)의 [전문 보기] 시트와 같은 렌더러(CHMO-479).
+ *
+ * 틀은 PublicPageShell(CHMO-899) — 종전 PhoneShell(390 폰 프레임) + 뒤로가기 헤더는 PC로 연
+ * 심사 담당자에게 가운데 작은 폰이 떠 있는 꼴이었다. 문서 페이지라 브라우저 뒤로가기로 충분하고,
+ * 하단 사업자 정보·약관 링크(SiteFooter)를 셸이 함께 그린다(모든 공개 페이지 동일 — AC-6).
  */
 export function LegalDocPage({ doc }: { doc: LegalDoc }) {
-  const navigate = useNavigate()
-  // 진입점이 여럿이라 절대경로 backTo 대신 히스토리 복귀 — 직접 URL 진입(첫 엔트리)이면
-  // -1이 앱 밖으로 나가므로 랜딩으로 폴백
-  const handleBack = () => {
-    if (window.history.state?.idx > 0) navigate(-1)
-    else navigate('/', { replace: true })
-  }
-
   return (
-    <PhoneShell>
-      <Header onBack={handleBack} title={doc.title} />
-      <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
-        <LegalDocBody doc={doc} />
-      </main>
-    </PhoneShell>
+    <PublicPageShell title={doc.title}>
+      <h1 className="mb-4 text-[22px] font-bold text-heading">{doc.title}</h1>
+      <LegalDocBody doc={doc} />
+    </PublicPageShell>
   )
 }
