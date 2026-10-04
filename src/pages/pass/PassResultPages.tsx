@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiRequestError, toErrorMessage } from '../../api/client'
 import { confirmPassOrder, getCurrentPass } from '../../api/billing'
+import { AppPillButton, AppPillLink } from '../../components/AppPillButton'
 import { PublicPageShell } from '../../components/PublicPageShell'
-import { Button, ButtonLink } from '../../components/ui'
 import { refundMailHref } from '../../legal/business'
 import { clearApiCache } from '../../lib/apiCache'
 import { formatDateTime, formatMoney, passPlanName } from '../../lib/passPlans'
@@ -12,6 +12,53 @@ import type { CurrentPass, PassConfirmation } from '../../types/api'
 
 function checkoutPath(groupId: string | null): string {
   return groupId ? `/pass/checkout?groupId=${encodeURIComponent(groupId)}` : '/pass/checkout'
+}
+
+/**
+ * 결과 아이콘 원 — 앱 `organization_pending_screen.dart`의 72×72 옐로 틴트 원(`AppColors.
+ * unpublishedBanner`, `app.iconBg`와 같은 값) + 잉크 아이콘 패턴. 그 화면은 대기·완료·오류
+ * 변형 **전부**에 같은 옐로 원을 쓴다 — 색으로 긍정·부정을 가르지 않고 "지금 이 화면이 말할
+ * 결과가 있다"는 신호로만 쓴다. 여기도 같은 태도를 따른다(성공·실패·취소 공통).
+ */
+function IconBadge({ children }: { children: ReactNode }) {
+  return (
+    <div
+      aria-hidden
+      className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full bg-app-iconBg"
+    >
+      {children}
+    </div>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 13l4.5 4.5L19 7"
+        stroke="#1B1B1B"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function AlertIcon() {
+  return (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 8v5"
+        stroke="#1B1B1B"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="16.3" r="1.35" fill="#1B1B1B" />
+      <circle cx="12" cy="12" r="9.2" stroke="#1B1B1B" strokeWidth={1.6} />
+    </svg>
+  )
 }
 
 /**
@@ -83,6 +130,8 @@ const RETRYABLE: ReadonlySet<FailureKind> = new Set(['uncertain', 'unavailable']
  * paymentKey는 이 화면의 메모리와 URL에만 있다(저장소·분석·로그 미기록 — AC-9). 결과가 확정되면
  * URL에서도 지운다(replace) — 새로고침·뒤로가기로 남은 주소가 다시 쓰이지 않게. 불명확한 실패면
  * 남겨 둔다: 새로고침이 곧 "같은 주문 다시 확인"이 되도록(승인은 멱등이다).
+ *
+ * 팔레트는 앱 리디자인 토큰(`app.*` — CHMO-727).
  */
 export function PassSuccessPage() {
   const navigate = useNavigate()
@@ -146,11 +195,16 @@ export function PassSuccessPage() {
   if (result) {
     return (
       <PublicPageShell title="결제 완료">
-        <h1 className="text-[22px] font-bold text-heading">결제가 완료됐어요</h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-text">
+        <IconBadge>
+          <CheckIcon />
+        </IconBadge>
+        <h1 className="mt-5 text-center text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+          결제가 완료됐어요
+        </h1>
+        <p className="mt-2 text-center text-[14px] leading-relaxed text-app-inkSub">
           이용권이 모임에 적용됐어요. 자동으로 갱신되거나 다시 결제되지 않아요.
         </p>
-        <dl className="mt-5 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card-stack">
+        <dl className="mt-6 divide-y divide-app-border overflow-hidden rounded-app border border-app-border bg-app-bg">
           <Row label="상품">{passPlanName(result.planCode)}</Row>
           <Row label="결제금액">{formatMoney(result.amount, result.currency)}</Row>
           <Row label="결제 승인">{formatDateTime(result.approvedAt)}</Row>
@@ -160,24 +214,27 @@ export function PassSuccessPage() {
             <span className="break-all font-mono text-[13px]">{result.orderId}</span>
           </Row>
         </dl>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted">
+        <p className="mt-3 text-[12px] leading-relaxed text-app-muted">
           환불이 필요하면 주문번호와 함께{' '}
-          <a href={refundMailHref(result.orderId)} className="text-accent underline underline-offset-2">
+          <a
+            href={refundMailHref(result.orderId)}
+            className="font-bold text-app-ink underline underline-offset-2"
+          >
             환불을 신청
           </a>
           해 주세요. 기준은{' '}
-          <Link to="/legal/refund" className="text-accent underline underline-offset-2">
+          <Link to="/legal/refund" className="font-bold text-app-ink underline underline-offset-2">
             환불정책
           </Link>
           에 있어요.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <ButtonLink to={checkoutPath(groupId)} variant="secondary" className="sm:w-60">
+          <AppPillLink to={checkoutPath(groupId)} variant="secondary" className="sm:w-60">
             이용권 더 구매하기
-          </ButtonLink>
-          <ButtonLink to="/pricing" variant="accent" className="sm:w-60">
+          </AppPillLink>
+          <AppPillLink to="/pricing" className="sm:w-60">
             완료
-          </ButtonLink>
+          </AppPillLink>
         </div>
       </PublicPageShell>
     )
@@ -187,14 +244,16 @@ export function PassSuccessPage() {
     // 결제 키가 걷힌 주소로 다시 들어왔거나(새로고침) 잘못된 진입 — 승인할 재료가 없다
     return (
       <PublicPageShell title="결제 확인">
-        <h1 className="text-[22px] font-bold text-heading">결제 결과를 보여 줄 수 없어요</h1>
-        <p className="mt-3 text-[14px] leading-relaxed text-text">
+        <h1 className="text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+          결제 결과를 보여 줄 수 없어요
+        </h1>
+        <p className="mt-3 text-[14px] leading-relaxed text-app-inkSub">
           이 화면은 결제 직후에만 결과를 보여 줘요. 이용권 상태는 구매 화면에서 다시 확인할 수
           있어요.
         </p>
-        <ButtonLink to={checkoutPath(groupId)} variant="accent" className="mt-6 w-full sm:w-60">
+        <AppPillLink to={checkoutPath(groupId)} className="mt-6 w-full sm:w-60">
           구매 화면으로
-        </ButtonLink>
+        </AppPillLink>
       </PublicPageShell>
     )
   }
@@ -202,9 +261,10 @@ export function PassSuccessPage() {
   if (!failure) {
     return (
       <PublicPageShell title="결제 확인">
-        <p className="py-16 text-center text-[15px] text-muted" role="status">
-          결제를 확인하고 있어요…
-        </p>
+        <div className="flex flex-col items-center py-16" role="status">
+          <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-app-border border-t-app-ink" />
+          <p className="mt-4 text-[14px] text-app-inkSub">결제를 확인하고 있어요…</p>
+        </div>
       </PublicPageShell>
     )
   }
@@ -212,13 +272,18 @@ export function PassSuccessPage() {
   const copy = FAILURE_COPY[failure.kind]
   return (
     <PublicPageShell title="결제 확인">
-      <h1 className="text-[22px] font-bold text-heading">{copy.title}</h1>
-      <p className="mt-3 text-[14px] leading-relaxed text-text">{copy.body}</p>
+      <IconBadge>
+        <AlertIcon />
+      </IconBadge>
+      <h1 className="mt-5 text-center text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+        {copy.title}
+      </h1>
+      <p className="mt-3 text-center text-[14px] leading-relaxed text-app-inkSub">{copy.body}</p>
       {failure.kind === 'other' || failure.kind === 'rejected' ? (
-        <p className="mt-2 text-[13px] text-muted">{failure.message}</p>
+        <p className="mt-2 text-center text-[13px] text-app-muted">{failure.message}</p>
       ) : null}
       {failure.kind === 'conflict' && current !== undefined ? (
-        <p className="mt-4 rounded-xl bg-surface px-4 py-3 text-[13px] leading-relaxed text-text">
+        <p className="mt-4 rounded-app bg-app-chip px-4 py-3 text-[13px] leading-relaxed text-app-ink">
           {current?.active
             ? `이 모임의 이용권은 ${formatDateTime(current.accessUntil)}까지예요.`
             : '이 모임에 이용 중인 이용권이 없어요.'}
@@ -226,17 +291,17 @@ export function PassSuccessPage() {
       ) : null}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         {RETRYABLE.has(failure.kind) && paymentKey ? (
-          <Button variant="accent" disabled={busy} onClick={confirm} className="sm:w-60">
+          <AppPillButton disabled={busy} onClick={confirm} className="sm:w-60">
             {busy ? '확인 중…' : '같은 주문으로 다시 확인'}
-          </Button>
+          </AppPillButton>
         ) : (
-          <ButtonLink to={checkoutPath(groupId)} variant="accent" className="sm:w-60">
+          <AppPillLink to={checkoutPath(groupId)} className="sm:w-60">
             다시 구매하기
-          </ButtonLink>
+          </AppPillLink>
         )}
-        <ButtonLink to="/pricing" variant="secondary" className="sm:w-60">
+        <AppPillLink to="/pricing" variant="secondary" className="sm:w-60">
           요금 안내
-        </ButtonLink>
+        </AppPillLink>
       </div>
     </PublicPageShell>
   )
@@ -256,26 +321,29 @@ export function PassFailPage() {
 
   return (
     <PublicPageShell title={canceled ? '결제 취소' : '결제 실패'}>
-      <h1 className="text-[22px] font-bold text-heading">
+      <IconBadge>
+        <AlertIcon />
+      </IconBadge>
+      <h1 className="mt-5 text-center text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
         {canceled ? '결제를 취소했어요' : '결제에 실패했어요'}
       </h1>
-      <p className="mt-3 text-[14px] leading-relaxed text-text">
+      <p className="mt-3 text-center text-[14px] leading-relaxed text-app-inkSub">
         결제가 진행되지 않았고 요금은 청구되지 않았어요.
         {canceled ? '' : ' 다른 카드나 결제 방식으로 다시 시도해 주세요.'}
       </p>
       {!canceled && message ? (
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+        <p className="mt-2 text-center text-[13px] leading-relaxed text-app-muted">
           {message}
           {code ? ` (${code})` : ''}
         </p>
       ) : null}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <ButtonLink to={checkoutPath(groupId)} variant="accent" className="sm:w-60">
+        <AppPillLink to={checkoutPath(groupId)} className="sm:w-60">
           다시 구매하기
-        </ButtonLink>
-        <ButtonLink to="/pricing" variant="secondary" className="sm:w-60">
+        </AppPillLink>
+        <AppPillLink to="/pricing" variant="secondary" className="sm:w-60">
           요금 안내
-        </ButtonLink>
+        </AppPillLink>
       </div>
     </PublicPageShell>
   )
@@ -284,8 +352,8 @@ export function PassFailPage() {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-4 px-4 py-3.5">
-      <dt className="w-20 shrink-0 text-[13px] text-muted">{label}</dt>
-      <dd className="min-w-0 flex-1 text-[14px] leading-relaxed text-text">{children}</dd>
+      <dt className="w-20 shrink-0 text-[13px] text-app-muted">{label}</dt>
+      <dd className="min-w-0 flex-1 text-[14px] leading-relaxed text-app-ink">{children}</dd>
     </div>
   )
 }

@@ -11,12 +11,19 @@ import { cx } from '../lib/cx'
  *
  * 개인정보 처리방침은 법이 "다른 고지와 구분되게"(굵게 등) 표시하라고 한다(시행령 제31조③ —
  * 실무 관행) — 링크 중 그것만 굵게 둔다.
+ *
+ * 팔레트는 PublicPageShell과 같은 앱 리디자인 토큰(`app.*` — CHMO-727).
  */
 export function SiteFooter({ className }: { className?: string }) {
   const rows = businessInfoRows()
-  const linkCls = 'text-[12px] text-muted underline-offset-2 hover:underline'
+  const linkCls = 'text-[12px] text-app-muted underline-offset-2 hover:underline'
   return (
-    <footer className={cx('border-t border-border pt-5 text-[12px] leading-relaxed text-muted', className)}>
+    <footer
+      className={cx(
+        'border-t border-app-border pt-5 text-[12px] leading-relaxed text-app-muted',
+        className,
+      )}
+    >
       <nav aria-label="약관 및 정책" className="flex flex-wrap gap-x-4 gap-y-1.5">
         <Link to="/pricing" className={linkCls}>
           요금 안내
@@ -24,7 +31,7 @@ export function SiteFooter({ className }: { className?: string }) {
         <Link to="/legal/terms" className={linkCls}>
           이용약관
         </Link>
-        <Link to="/legal/privacy" className={cx(linkCls, 'font-bold text-text')}>
+        <Link to="/legal/privacy" className={cx(linkCls, 'font-bold text-app-ink')}>
           개인정보처리방침
         </Link>
         <Link to="/legal/refund" className={linkCls}>
@@ -36,7 +43,7 @@ export function SiteFooter({ className }: { className?: string }) {
           {rows.map((row) => (
             <div key={row.key} className="flex gap-1">
               <dt>{row.label}</dt>
-              <dd className="text-text/80">
+              <dd className="text-app-inkSub">
                 {row.key === 'phone' ? (
                   <a href={telHref(row.value)} className="underline-offset-2 hover:underline">
                     {row.value}

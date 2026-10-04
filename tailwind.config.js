@@ -65,6 +65,29 @@ export default {
             published: '#3FA34D',
           },
         },
+        // Flutter 앱(CheeseMoa-App) 리디자인 팔레트 그대로(CHMO-727 `lib/app/tokens.dart`
+        // `AppColors`) — CHMO-899가 공개 페이지(/pricing·/pass/*·/legal/*)를 이 토큰으로
+        // 맞췄다(2026-10-04, "웹은 이제 안 쓸 거라서 앱 레포 보고 디자인 통일" 사용자 지시).
+        // admin.*과 같은 네임스페이스 격리 — 기존 cream/text/heading/accent 등 구 웹 토큰은
+        // 그대로 두고(다른 화면 영향 없음), 신규 공개 페이지만 이 팔레트를 쓴다.
+        // 값 출처: tokens.dart 그대로(bg #FFFFFF·ink #1B1B1B·inkSub ink62%·muted #8E8E93·
+        // border #EBEBEB) + 실제 화면 실측값(danger는 billing_screen.dart 해지 확인 다이얼로그
+        // `_red` #E5484D · iconBg는 organization_pending_screen.dart 아이콘 원 배경
+        // `AppColors.unpublishedBanner` #FFF1C2 · yellowTint는 legal_sheet.dart 인트로 박스
+        // `AppColors.yellow.withValues(alpha: 0.14)` · chip은 segment_control.dart 트랙
+        // `#F5F4F1`). `primary`(#FFC93C)가 이미 `AppColors.yellow`와 같은 값이라 포인트
+        // 옐로는 새로 추가하지 않고 기존 `primary`를 그대로 쓴다.
+        app: {
+          bg: '#FFFFFF',
+          ink: '#1B1B1B',
+          inkSub: 'rgba(27, 27, 27, 0.62)',
+          muted: '#8E8E93',
+          border: '#EBEBEB',
+          chip: '#F5F4F1',
+          yellowTint: 'rgba(255, 201, 60, 0.14)',
+          iconBg: '#FFF1C2',
+          danger: '#E5484D',
+        },
       },
       fontFamily: {
         // 서체는 Pretendard Variable 한 벌(CHMO-702) — Jua 단일화(CHMO-513)를 B2C 리디자인
@@ -167,6 +190,8 @@ export default {
       transitionTimingFunction: MOTION_EASE,
       borderRadius: {
         '4xl': '2rem',
+        // 앱 리디자인 카드 라운드(CHMO-727 다이얼로그·빌링 카드 실측 20px — `app.*` 팔레트와 짝)
+        app: '20px',
       },
       maxWidth: {
         phone: '390px',

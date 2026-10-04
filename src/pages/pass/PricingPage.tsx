@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import albumImage from '../../assets/brand/album.png'
+import { AppPillLink } from '../../components/AppPillButton'
 import { PublicPageShell } from '../../components/PublicPageShell'
-import { ButtonLink } from '../../components/ui'
 import { PASS_CATALOG, formatUsd } from '../../lib/passPlans'
 
 /**
- * 서비스·요금 안내 (CHMO-899 — 토스페이먼츠 심사 공개 URL `/pricing`, 가드 밖).
+ * 서비스·요금 안내 (CHMO-899 — 공개 URL `/pricing`, 가드 밖).
  *
  * 심사 담당자가 설명 없이 확인해야 하는 다섯 가지를 위에서 아래로 놓는다:
  * 무슨 서비스인가 → 무엇을 파는가(3종·가격·기간) → 어떤 거래 구조인가(단건·자동 갱신 없음·
@@ -13,6 +13,10 @@ import { PASS_CATALOG, formatUsd } from '../../lib/passPlans'
  *
  * 가격은 lib/passPlans 카탈로그(BE PassPlan 사본) — 로그인 전이라 서버 상품 API를 부를 수 없다.
  * 결제 화면은 서버 응답만 쓰므로 실제 결제금액의 원천은 서버다(카탈로그는 표시용).
+ *
+ * 팔레트는 Flutter 앱 리디자인 토큰(`app.*` — CHMO-727): 흰 바탕·잉크 텍스트·옐로(#FFC93C,
+ * `primary`와 같은 값) 포인트·완전 라운드 필 버튼. "1단계" 류 스텝 표시는 앱이 쥐는 "옐로=포인트
+ * 전용" 규칙(링·FAB·날짜 칩·탭 도트)을 그대로 따른 작은 옐로 필이다.
  */
 export function PricingPage() {
   return (
@@ -27,12 +31,12 @@ export function PricingPage() {
           className="h-32 w-32 shrink-0 sm:h-40 sm:w-40"
         />
         <div className="text-center sm:text-left">
-          <h1 className="text-[26px] font-bold leading-snug text-heading sm:text-[32px]">
+          <h1 className="text-[28px] font-extrabold leading-tight tracking-[-0.4px] text-app-ink sm:text-[34px]">
             모임 사진을 올리면,
             <br />
             사람별로 자동 정리
           </h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-text">
+          <p className="mt-3 text-[15px] leading-relaxed text-app-inkSub">
             치즈모아는 유치원·학원·여행사 같은 단체가 행사 사진을 한곳에 올리면, 얼굴 인식으로
             사진 속 인물별 앨범을 만들어 주는 사진 관리·공유 서비스입니다. 관리자가 사진을 확인하고
             공개하면, 승인된 멤버(보호자 등)는 자기 앨범의 사진을 보고 내려받을 수 있습니다.
@@ -41,7 +45,7 @@ export function PricingPage() {
       </section>
 
       <section aria-labelledby="how" className="mt-10">
-        <h2 id="how" className="text-[13px] tracking-[0.06em] text-muted">
+        <h2 id="how" className="text-[13px] font-extrabold tracking-[0.02em] text-app-muted">
           이렇게 쓰여요
         </h2>
         <ol className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -50,10 +54,12 @@ export function PricingPage() {
             ['인물별 자동 분류', 'AI가 사진 속 얼굴을 찾아 인물별 앨범으로 나눕니다.'],
             ['확인하고 공유', '관리자가 앨범을 확인해 공개하면 멤버가 사진을 보고 저장합니다.'],
           ].map(([title, body], i) => (
-            <li key={title} className="rounded-2xl border border-border bg-white p-4 shadow-card-stack">
-              <p className="text-[12px] text-accent">{i + 1}단계</p>
-              <p className="mt-1 text-[16px] font-bold text-text">{title}</p>
-              <p className="mt-1 text-[14px] leading-relaxed text-muted">{body}</p>
+            <li key={title} className="rounded-app border border-app-border bg-app-bg p-4">
+              <span className="inline-flex h-6 items-center rounded-full bg-primary px-2.5 text-[12px] font-bold text-app-ink">
+                {i + 1}단계
+              </span>
+              <p className="mt-2.5 text-[16px] font-bold text-app-ink">{title}</p>
+              <p className="mt-1 text-[14px] leading-relaxed text-app-inkSub">{body}</p>
             </li>
           ))}
         </ol>
@@ -61,25 +67,22 @@ export function PricingPage() {
 
       {/* ── 판매 상품 ── */}
       <section aria-labelledby="plans" className="mt-12">
-        <h2 id="plans" className="text-[22px] font-bold text-heading">
+        <h2 id="plans" className="text-[22px] font-extrabold tracking-[-0.3px] text-app-ink">
           기간 이용권
         </h2>
-        <p className="mt-2 text-[14px] leading-relaxed text-text">
+        <p className="mt-2 text-[14px] leading-relaxed text-app-inkSub">
           비즈니스 모임 1곳의 서비스 이용 권한(사진 업로드·인물별 자동 분류·멤버 공유)을 정해진
           시간 동안 제공하는 상품입니다. 모임의 관리자가 구매하며, 구매한 이용권은 그 모임에
           귀속됩니다.
         </p>
         <ul className="mt-5 grid gap-3 sm:grid-cols-3">
           {PASS_CATALOG.map((plan) => (
-            <li
-              key={plan.code}
-              className="flex flex-col rounded-2xl border-[1.5px] border-[#D8CFBB] bg-white p-5 shadow-card-stack"
-            >
-              <p className="text-[17px] font-bold text-text">{plan.name}</p>
-              <p className="mt-3 text-[30px] font-bold leading-none text-heading">
+            <li key={plan.code} className="flex flex-col rounded-app border border-app-border bg-app-bg p-5">
+              <p className="text-[17px] font-bold text-app-ink">{plan.name}</p>
+              <p className="mt-3 text-[30px] font-extrabold leading-none tracking-[-0.3px] text-app-ink">
                 {formatUsd(plan.usdAmount)}
               </p>
-              <ul className="mt-4 flex flex-col gap-1.5 text-[13px] leading-relaxed text-text">
+              <ul className="mt-4 flex flex-col gap-1.5 text-[13px] leading-relaxed text-app-inkSub">
                 <li>· 이용 기간 {plan.hours}시간</li>
                 <li>· 결제 승인 즉시 시작</li>
                 <li>· 자동 갱신·자동결제 없음</li>
@@ -88,7 +91,7 @@ export function PricingPage() {
           ))}
         </ul>
 
-        <div className="mt-5 rounded-2xl bg-surface p-4 text-[13px] leading-relaxed text-text">
+        <div className="mt-5 rounded-app bg-app-chip p-4 text-[13px] leading-relaxed text-app-ink">
           <p className="font-bold">결제 통화</p>
           <ul className="mt-1.5 flex flex-col gap-1">
             <li>
@@ -109,7 +112,7 @@ export function PricingPage() {
           <p className="mt-1.5">
             사용하지 않은 이용권은 결제 후 7일 이내 전액, 이용을 시작한 이용권은 남은 시간만큼
             환불합니다. 자세한 기준과 신청 방법은{' '}
-            <Link to="/legal/refund" className="text-accent underline underline-offset-2">
+            <Link to="/legal/refund" className="font-bold text-app-ink underline underline-offset-2">
               환불정책
             </Link>
             에서 확인할 수 있습니다.
@@ -117,10 +120,10 @@ export function PricingPage() {
         </div>
 
         <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <ButtonLink to="/pass/checkout" variant="accent" className="w-full sm:w-72">
+          <AppPillLink to="/pass/checkout" className="sm:w-72">
             이용권 구매하기
-          </ButtonLink>
-          <p className="text-[12px] text-muted">구매는 로그인 후 비즈니스 모임 관리자만 할 수 있어요</p>
+          </AppPillLink>
+          <p className="text-[12px] text-app-muted">구매는 로그인 후 비즈니스 모임 관리자만 할 수 있어요</p>
         </div>
       </section>
     </PublicPageShell>
