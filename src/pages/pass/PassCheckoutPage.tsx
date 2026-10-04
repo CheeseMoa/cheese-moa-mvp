@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { listGroups } from '../../api/groups'
 import { getCurrentPass, listPassPlans, preparePassOrder } from '../../api/billing'
+import { AppPillButton, AppPillLink } from '../../components/AppPillButton'
 import { PublicPageShell } from '../../components/PublicPageShell'
-import { Button, ButtonLink, LoadState } from '../../components/ui'
+import { LoadState } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { useMutation } from '../../hooks/useMutation'
 import { cx } from '../../lib/cx'
@@ -60,6 +61,10 @@ function prepareErrorMessage(code: string | undefined, fallback: string): string
  * 충돌(BILLING409)을 알리면 키를 버리고 새로 받는다.
  *
  * 시장은 기본값 없이 사용자가 고른다(카드 발급국을 결제 전에 알 수 없어 추정하지 않는다 — BE 정책).
+ *
+ * 팔레트는 앱 리디자인 토큰(`app.*` — CHMO-727). 선택 카드는 앱의 "옐로=포인트 전용" 규칙을
+ * 그대로 써서 **선택=옐로 채움**(세그먼트 컨트롤의 활성 탭과 같은 언어), 확인 화면 값 목록은
+ * `_InfoRow`/`_BillingCard`(billing_screen.dart) 결의 흰 카드 + 테두리.
  */
 export function PassCheckoutPage() {
   const navigate = useNavigate()
@@ -184,18 +189,20 @@ export function PassCheckoutPage() {
   if (purchasable.length === 0) {
     return (
       <PublicPageShell title="이용권 구매">
-        <h1 className="text-[22px] font-bold text-heading">이용권을 구매할 모임이 없어요</h1>
-        <p className="mt-3 text-[14px] leading-relaxed text-text">
+        <h1 className="text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+          이용권을 구매할 모임이 없어요
+        </h1>
+        <p className="mt-3 text-[14px] leading-relaxed text-app-inkSub">
           기간 이용권은 비즈니스 모임의 관리자가 그 모임을 위해 구매해요. 비즈니스 모임을 새로
           만들거나, 모임 관리자에게 구매를 요청해 주세요.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <ButtonLink to="/groups/new" variant="accent" className="sm:w-60">
+          <AppPillLink to="/groups/new" className="sm:w-60">
             비즈니스 모임 만들기
-          </ButtonLink>
-          <ButtonLink to="/pricing" variant="secondary" className="sm:w-60">
+          </AppPillLink>
+          <AppPillLink to="/pricing" variant="secondary" className="sm:w-60">
             요금 안내 보기
-          </ButtonLink>
+          </AppPillLink>
         </div>
       </PublicPageShell>
     )
@@ -207,8 +214,10 @@ export function PassCheckoutPage() {
     const plan = plans.data?.find((p) => p.code === order.planCode)
     return (
       <PublicPageShell title="이용권 구매">
-        <h1 className="text-[22px] font-bold text-heading">결제 전에 확인해 주세요</h1>
-        <dl className="mt-5 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card-stack">
+        <h1 className="text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+          결제 전에 확인해 주세요
+        </h1>
+        <dl className="mt-5 divide-y divide-app-border overflow-hidden rounded-app border border-app-border bg-app-bg">
           <Row label="모임">{group.name}</Row>
           <Row label="상품">{order.orderName}</Row>
           <Row label="이용 기간">
@@ -222,56 +231,67 @@ export function PassCheckoutPage() {
           <Row label="결제 방식">{PASS_MARKET_LABEL[order.market]}</Row>
           <Row label="자동 갱신">없음 · 한 번만 결제되는 단건 상품이에요</Row>
           <Row label="총 결제금액" strong>
-            <span className="text-[20px] font-bold text-heading">
+            <span className="text-[20px] font-extrabold text-app-ink">
               {formatMoney(order.amount, order.currency)}
             </span>
             {order.currency === 'KRW' && order.usdKrwRate !== null ? (
-              <span className="mt-1 block text-[12px] font-normal text-muted">
+              <span className="mt-1 block text-[12px] font-normal text-app-inkSub">
                 {formatUsd(order.usdAmount)} × 기준환율 {formatRate(order.usdKrwRate)}
                 {order.rateDate ? ` (${order.rateDate} 기준)` : ''}
               </span>
             ) : null}
           </Row>
         </dl>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted">
+        <p className="mt-3 text-[12px] leading-relaxed text-app-muted">
           이 주문은 {formatDateTime(order.expiresAt)}까지 유효해요. 결제창에는 위 금액이 그대로
           표시돼요.
         </p>
 
-        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl bg-surface p-4">
+        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-app bg-app-chip p-4">
           <input
             type="checkbox"
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
-            className="mt-0.5 h-5 w-5 shrink-0 accent-[#9C6835]"
+            className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
           />
-          <span className="text-[14px] leading-relaxed text-text">
+          <span className="text-[14px] leading-relaxed text-app-ink">
             주문 내용과{' '}
-            <Link to="/legal/refund" target="_blank" className="text-accent underline underline-offset-2">
+            <Link
+              to="/legal/refund"
+              target="_blank"
+              className="font-bold text-app-ink underline underline-offset-2"
+            >
               환불정책
             </Link>
             ,{' '}
-            <Link to="/legal/terms" target="_blank" className="text-accent underline underline-offset-2">
+            <Link
+              to="/legal/terms"
+              target="_blank"
+              className="font-bold text-app-ink underline underline-offset-2"
+            >
               이용약관
             </Link>
             ,{' '}
-            <Link to="/legal/privacy" target="_blank" className="text-accent underline underline-offset-2">
+            <Link
+              to="/legal/privacy"
+              target="_blank"
+              className="font-bold text-app-ink underline underline-offset-2"
+            >
               개인정보처리방침
             </Link>
             을 확인했으며 결제에 동의합니다.
           </span>
         </label>
 
-        {notice ? <p className="mt-4 text-[13px] text-text">{notice}</p> : null}
-        {error ? <p className="mt-4 text-[13px] text-warn">{error}</p> : null}
+        {notice ? <p className="mt-4 text-[13px] text-app-inkSub">{notice}</p> : null}
+        {error ? <p className="mt-4 text-[13px] text-app-danger">{error}</p> : null}
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row-reverse">
-          <Button variant="accent" fullWidth disabled={!agreed || busy} onClick={() => void pay()}>
+          <AppPillButton disabled={!agreed || busy} onClick={() => void pay()}>
             {busy ? '결제창 여는 중…' : `${formatMoney(order.amount, order.currency)} 결제하기`}
-          </Button>
-          <Button
+          </AppPillButton>
+          <AppPillButton
             variant="secondary"
-            fullWidth
             disabled={busy}
             onClick={() => {
               setOrder(null)
@@ -280,7 +300,7 @@ export function PassCheckoutPage() {
             }}
           >
             다시 고르기
-          </Button>
+          </AppPillButton>
         </div>
       </PublicPageShell>
     )
@@ -289,8 +309,10 @@ export function PassCheckoutPage() {
   // ① 고르기
   return (
     <PublicPageShell title="이용권 구매">
-      <h1 className="text-[22px] font-bold text-heading">기간 이용권 구매</h1>
-      <p className="mt-2 text-[14px] leading-relaxed text-text">
+      <h1 className="text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+        기간 이용권 구매
+      </h1>
+      <p className="mt-2 text-[14px] leading-relaxed text-app-inkSub">
         자동 갱신 없는 단건 결제예요. 결제가 승인되면 바로 이용 기간이 시작돼요.
       </p>
 
@@ -309,15 +331,15 @@ export function PassCheckoutPage() {
           </div>
         </Step>
       ) : (
-        <p className="mt-6 text-[14px] text-text">
-          <span className="text-muted">모임</span> · {group?.name}
+        <p className="mt-6 text-[14px] text-app-ink">
+          <span className="text-app-muted">모임</span> · {group?.name}
         </p>
       )}
 
       {groupId ? (
         <>
           {current.data?.active ? (
-            <p className="mt-4 rounded-xl bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-text">
+            <p className="mt-4 rounded-app bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-app-ink">
               이 모임은 {formatDateTime(current.data.accessUntil)}까지 이용권이 남아 있어요. 새로
               구매하면 그 뒤에 이어 붙어요.
             </p>
@@ -363,7 +385,7 @@ export function PassCheckoutPage() {
               />
             </div>
             {market === 'domestic' && selectedPlan ? (
-              <p className="mt-2 text-[12px] leading-relaxed text-muted">
+              <p className="mt-2 text-[12px] leading-relaxed text-app-muted">
                 기준가 {formatUsd(selectedPlan.usdAmount)} · 원화 결제금액은 다음 화면에서 확정돼요.
               </p>
             ) : null}
@@ -371,14 +393,14 @@ export function PassCheckoutPage() {
         </>
       ) : null}
 
-      {notice ? <p className="mt-5 text-[13px] text-text">{notice}</p> : null}
-      {error ? <p className="mt-5 text-[13px] text-warn">{error}</p> : null}
+      {notice ? <p className="mt-5 text-[13px] text-app-inkSub">{notice}</p> : null}
+      {error ? <p className="mt-5 text-[13px] text-app-danger">{error}</p> : null}
 
       <div className="mt-8">
-        <Button variant="accent" fullWidth disabled={!canPrepare} onClick={() => prepare()}>
+        <AppPillButton disabled={!canPrepare} onClick={() => prepare()}>
           {busy ? '주문 준비 중…' : '결제 금액 확인하기'}
-        </Button>
-        <p className="mt-3 text-center text-[12px] text-muted">
+        </AppPillButton>
+        <p className="mt-3 text-center text-[12px] text-app-muted">
           <Link to="/legal/refund" className="underline underline-offset-2">
             환불정책
           </Link>
@@ -395,12 +417,17 @@ export function PassCheckoutPage() {
 function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-7">
-      <h2 className="mb-2 text-[12px] tracking-[0.06em] text-muted">{title}</h2>
+      <h2 className="mb-2 text-[12px] font-extrabold tracking-[0.02em] text-app-muted">{title}</h2>
       {children}
     </section>
   )
 }
 
+/**
+ * 선택 카드 — 앱의 "옐로=포인트 전용" 규칙(링·FAB·날짜 칩·탭 도트)을 그대로 쓴다: 선택되면
+ * 옐로로 채운다(세그먼트 컨트롤의 활성 탭과 같은 언어). 라디오 점은 그 안에서 잉크/흰색으로
+ * 대비만 준다 — 색 자체가 선택을 말하므로 점은 보조 신호다.
+ */
 function Choice({
   selected,
   onSelect,
@@ -419,24 +446,24 @@ function Choice({
       aria-checked={selected}
       onClick={onSelect}
       className={cx(
-        'press-card flex w-full items-start gap-3 rounded-2xl border-[1.5px] px-4 py-3.5 text-left',
-        // 선택 표시는 테두리 색 + 면 + 라디오 점 세 겹 — 테두리 색만으론 카드가 셋 나란히 설 때
-        // 어느 것이 골라졌는지 한눈에 안 읽힌다(면 색은 bg-white와 같은 줄에 두면 순서 싸움에 진다)
-        selected ? 'border-accent bg-primary/15' : 'border-[#D8CFBB] bg-white',
+        'press-card flex w-full items-start gap-3 rounded-app border-[1.5px] px-4 py-3.5 text-left transition-colors',
+        selected ? 'border-primary bg-primary' : 'border-app-border bg-app-bg',
       )}
     >
       <span
         aria-hidden
         className={cx(
           'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px]',
-          selected ? 'border-accent' : 'border-[#C9C2B4]',
+          selected ? 'border-app-ink' : 'border-app-muted',
         )}
       >
-        {selected ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
+        {selected ? <span className="h-2 w-2 rounded-full bg-app-ink" /> : null}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="text-[15px] font-bold text-text">{title}</span>
-        <span className="mt-0.5 text-[13px] leading-relaxed text-muted">{description}</span>
+        <span className="text-[15px] font-bold text-app-ink">{title}</span>
+        <span className={cx('mt-0.5 text-[13px] leading-relaxed', selected ? 'text-app-ink/70' : 'text-app-inkSub')}>
+          {description}
+        </span>
       </span>
     </button>
   )
@@ -452,9 +479,9 @@ function Row({
   children: ReactNode
 }) {
   return (
-    <div className={cx('flex gap-4 px-4 py-3.5', strong && 'bg-primary/10')}>
-      <dt className="w-24 shrink-0 text-[13px] text-muted">{label}</dt>
-      <dd className="min-w-0 flex-1 text-[14px] leading-relaxed text-text">{children}</dd>
+    <div className={cx('flex gap-4 px-4 py-3.5', strong && 'bg-app-yellowTint')}>
+      <dt className="w-24 shrink-0 text-[13px] text-app-muted">{label}</dt>
+      <dd className="min-w-0 flex-1 text-[14px] leading-relaxed text-app-ink">{children}</dd>
     </div>
   )
 }

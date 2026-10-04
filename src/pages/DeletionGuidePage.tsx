@@ -10,7 +10,9 @@ import { accountDeletionGuide, dataDeletionGuide } from '../legal/deletionGuides
  * (/legal/* 관습). 본문은 LegalDocBody 재사용, 아래 바로가기 행이 안내를 행동으로 잇는다 —
  * [설정]은 CreatorGuard라 로그아웃 상태면 로그인을 거쳐 홈에 떨어지는데, 그 동선 그대로를
  * 본문 단계 문구가 안내한다(returnTo 없음 — CHMO-588 범위 밖).
- * 틀은 PublicPageShell — /legal/* 와 같은 공개 페이지 틀·하단 사업자 정보(CHMO-899).
+ * 틀은 PublicPageShell — /legal/* 와 같은 공개 페이지 틀·하단 사업자 정보(CHMO-899,
+ * `app.*` 팔레트). 바로가기 행은 앱 `_BillingCard` 흰 카드(흰 바탕+1px #EBEBEB 테두리,
+ * 그림자 대신 테두리로 경계를 만드는 쪽 — CHMO-727 실측) 결을 그대로 가져왔다.
  */
 
 interface GuideAction {
@@ -23,19 +25,19 @@ interface GuideAction {
 
 function DeletionGuidePage({ doc, actions }: { doc: LegalDoc; actions: GuideAction[] }) {
   const rowCls =
-    'flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface'
+    'flex items-center justify-between px-4 py-3.5 text-[15px] text-app-ink active:bg-app-chip'
   const chevron = (
-    <span aria-hidden className="text-muted">
+    <span aria-hidden className="text-app-muted">
       ›
     </span>
   )
   return (
     <PublicPageShell title={doc.title}>
-      <h1 className="mb-4 text-[22px] font-bold text-heading">{doc.title}</h1>
+      <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">{doc.title}</h1>
       <LegalDocBody doc={doc} />
       <nav
         aria-label="바로가기"
-        className="mt-8 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card"
+        className="mt-8 divide-y divide-app-border overflow-hidden rounded-app border border-app-border bg-app-bg"
       >
         {actions.map((action) =>
           action.to ? (

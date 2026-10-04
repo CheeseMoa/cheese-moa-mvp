@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { AppPillLink } from '../../components/AppPillButton'
 import { PublicPageShell } from '../../components/PublicPageShell'
-import { ButtonLink } from '../../components/ui'
 
 /**
- * 결제 이용 안내 (CHMO-899 — 토스페이먼츠 심사 담당자가 따라 할 공개 URL `/pass/guide`, 가드 밖).
+ * 결제 이용 안내 (CHMO-899 — 결제대행사 심사 담당자가 따라 할 공개 URL `/pass/guide`, 가드 밖).
  *
  * **자격 증명은 여기에 적지 않는다**(티켓 — Jira·소스코드에 기록 금지, 별도 보안 채널로 전달).
  * 그래서 이 페이지는 "전달받은 계정으로 로그인" 이후의 경로만 말한다. 로그인 화면은 구매 화면에서
@@ -12,6 +12,9 @@ import { ButtonLink } from '../../components/ui'
  *
  * 문구는 일반 사용자가 읽어도 사실인 문장으로만 쓴다 — 심사 전용 페이지처럼 보이는 표현
  * ("테스트 결제", 테스트 카드 번호)은 넣지 않는다. 테스트 환경 안내는 계정과 함께 별도로 전달한다.
+ *
+ * 팔레트는 앱 리디자인 토큰(`app.*` — CHMO-727). 단계 번호는 PricingPage "이렇게 쓰여요"와
+ * 같은 옐로 필(앱의 "옐로=포인트 전용" 규칙).
  */
 export function PassGuidePage() {
   const steps: Array<{ title: string; body: ReactNode }> = [
@@ -19,7 +22,7 @@ export function PassGuidePage() {
       title: '요금 확인',
       body: (
         <>
-          <Link to="/pricing" className="text-accent underline underline-offset-2">
+          <Link to="/pricing" className="font-bold text-app-ink underline underline-offset-2">
             요금 안내
           </Link>
           에서 판매 중인 1일·3일·7일 이용권의 가격, 이용 기간, 자동 갱신이 없다는 점을 확인합니다.
@@ -50,26 +53,30 @@ export function PassGuidePage() {
 
   return (
     <PublicPageShell title="결제 이용 안내">
-      <h1 className="text-[22px] font-bold text-heading">이용권 결제 이용 안내</h1>
-      <p className="mt-2 text-[14px] leading-relaxed text-text">
+      <h1 className="text-[24px] font-extrabold tracking-[-0.4px] text-app-ink">
+        이용권 결제 이용 안내
+      </h1>
+      <p className="mt-2 text-[14px] leading-relaxed text-app-inkSub">
         치즈모아 기간 이용권을 구매하는 순서입니다.
       </p>
       <ol className="mt-6 flex flex-col gap-3">
         {steps.map((step, i) => (
-          <li key={step.title} className="rounded-2xl border border-border bg-white p-4 shadow-card-stack">
-            <p className="text-[12px] text-accent">{i + 1}단계</p>
-            <p className="mt-1 text-[16px] font-bold text-text">{step.title}</p>
-            <p className="mt-1 text-[14px] leading-relaxed text-muted">{step.body}</p>
+          <li key={step.title} className="rounded-app border border-app-border bg-app-bg p-4">
+            <span className="inline-flex h-6 items-center rounded-full bg-primary px-2.5 text-[12px] font-bold text-app-ink">
+              {i + 1}단계
+            </span>
+            <p className="mt-2.5 text-[16px] font-bold text-app-ink">{step.title}</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-app-inkSub">{step.body}</p>
           </li>
         ))}
       </ol>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <ButtonLink to="/pricing" variant="accent" className="sm:w-60">
+        <AppPillLink to="/pricing" className="sm:w-60">
           요금 안내 보기
-        </ButtonLink>
-        <ButtonLink to="/legal/refund" variant="secondary" className="sm:w-60">
+        </AppPillLink>
+        <AppPillLink to="/legal/refund" variant="secondary" className="sm:w-60">
           환불정책 보기
-        </ButtonLink>
+        </AppPillLink>
       </div>
     </PublicPageShell>
   )
