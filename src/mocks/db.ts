@@ -1224,3 +1224,102 @@ export function completeAnalysis(eventId: number): void {
   // 공개를 유지한다 — BE completeAnalysis의 무전이와 같은 결과(CHMO-216·606)
   transitionEvent(eventId, 'review')
 }
+
+// ── 기간 이용권 결제 (BE CHMO-847 — CHMO-899) ─────────────────
+// 결제 상태는 Db 시드 밖의 모듈 상태다 — 시드할 결제 이력이 없고(구매는 화면이 만든다),
+// 새로고침이면 사라져도 되는 값이라 fixtures(Db 전체 교체 계약)를 넓히지 않는다.
+
+export type DbPassPlanCode = 'DAY_1' | 'DAY_3' | 'DAY_7'
+export type DbPassMarket = 'DOMESTIC' | 'INTERNATIONAL'
+
+/** BE PassPlan — 1일 100 cent · 3일 150 · 7일 250(코드 고정) */
+export const PASS_PLANS: ReadonlyArray<{
+  code: DbPassPlanCode
+  durationDays: number
+  usdCents: number
+}> = [
+  { code: 'DAY_1', durationDays: 1, usdCents: 100 },
+  { code: 'DAY_3', durationDays: 3, usdCents: 150 },
+  { code: 'DAY_7', durationDays: 7, usdCents: 250 },
+]
+
+/** 목 기준환율 — 실 BE는 Frankfurter 최신값(응답일 3일 초과면 주문 거부) */
+export const MOCK_USD_KRW_RATE = 1425.31
+
+/** BE PassOrder 대응 — 주문 준비 때 금액·통화·환율·만료를 고정한다 */
+export interface DbPassOrder {
+  orderId: string
+  groupId: number
+  requestedBy: number
+  idempotencyKey: string
+  planCode: DbPassPlanCode
+  market: DbPassMarket
+  amount: number
+  currency: 'KRW' | 'USD'
+  usdAmount: number
+  usdKrwRate: number | null
+  rateDate: string | null
+  expiresAt: ISODateTime
+  status: 'PENDING' | 'SUCCEEDED'
+  paymentKey: string | null
+  approvedAt: ISODateTime | null
+  accessFrom: ISODateTime | null
+  accessUntil: ISODateTime | null
+}
+
+export const passOrders: DbPassOrder[] = []
+/** BE SpacePass — 모임별 누적 만료 시각 */
+export const spacePasses = new Map<number, ISODateTime>()
+
+/**
+ * 주문 준비 — BE PreparePassOrderUseCase 대응. 국내는 USD × 기준환율을 원 단위 HALF_UP 반올림
+ * (2137.965 → 2138), 해외는 USD 고정가. 30분 뒤 만료.
+ */
+export function createPassOrder(input: {
+  groupId: number
+  userId: number
+  idempotencyKey: string
+  planCode: DbPassPlanCode
+  market: DbPassMarket
+}): DbPassOrder {
+  const plan = PASS_PLANS.find((p) => p.code === input.planCode)!
+  const usdAmount = plan.usdCents / 100
+  const domestic = input.market === 'DOMESTIC'
+  const order: DbPassOrder = {
+    orderId: `pass_${crypto.randomUUID().replace(/-/g, '')}`,
+    groupId: input.groupId,
+    requestedBy: input.userId,
+    idempotencyKey: input.idempotencyKey,
+    planCode: input.planCode,
+    market: input.market,
+    amount: domestic ? Math.round(usdAmount * MOCK_USD_KRW_RATE) : usdAmount,
+    currency: domestic ? 'KRW' : 'USD',
+    usdAmount,
+    usdKrwRate: domestic ? MOCK_USD_KRW_RATE : null,
+    rateDate: domestic ? nowIso().slice(0, 10) : null,
+    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    status: 'PENDING',
+    paymentKey: null,
+    approvedAt: null,
+    accessFrom: null,
+    accessUntil: null,
+  }
+  passOrders.push(order)
+  return order
+}
+
+/** 승인 — 활성 이용권이 있으면 그 만료 시각부터 이어 붙인다(BE AC-15) */
+export function approvePassOrder(order: DbPassOrder, paymentKey: string): DbPassOrder {
+  const now = Date.now()
+  const plan = PASS_PLANS.find((p) => p.code === order.planCode)!
+  const currentUntil = spacePasses.get(order.groupId)
+  const start = currentUntil && Date.parse(currentUntil) > now ? Date.parse(currentUntil) : now
+  const until = new Date(start + plan.durationDays * 24 * 3_600_000).toISOString()
+  order.status = 'SUCCEEDED'
+  order.paymentKey = paymentKey
+  order.approvedAt = new Date(now).toISOString()
+  order.accessFrom = new Date(start).toISOString()
+  order.accessUntil = until
+  spacePasses.set(order.groupId, until)
+  return order
+}

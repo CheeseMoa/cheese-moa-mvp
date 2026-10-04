@@ -37,6 +37,8 @@ import {
   teacherCountOf,
   unreviewedCountOfAlbum,
   viewerPhotosOfAlbum,
+  PASS_PLANS,
+  type DbPassOrder,
   type DbAlbum,
   type DbEvent,
   type DbGroup,
@@ -769,4 +771,45 @@ export function toAdminReportDetailResponse(report: DbReport) {
             answeredBy: report.answeredBy,
           },
   }
+}
+
+// ── 기간 이용권 결제 (BE CHMO-847 PassPlanResponse·PassOrderResponse·…) — CHMO-899 ──
+
+export function toPassPlanResponse(plan: (typeof PASS_PLANS)[number]) {
+  return { code: plan.code, durationDays: plan.durationDays, usdAmount: plan.usdCents / 100 }
+}
+
+/** 해외 주문은 환율 필드를 생략한다(BE @JsonInclude NON_NULL) */
+export function toPassOrderResponse(order: DbPassOrder) {
+  const plan = PASS_PLANS.find((p) => p.code === order.planCode)
+  return {
+    orderId: order.orderId,
+    orderName: `CheeseMoa ${plan?.durationDays ?? ''}일 이용권`,
+    clientKey: order.market === 'DOMESTIC' ? 'test_ck_mock_krw' : 'test_ck_mock_usd',
+    planCode: order.planCode,
+    market: order.market,
+    amount: order.amount,
+    currency: order.currency,
+    usdAmount: order.usdAmount,
+    ...(order.usdKrwRate !== null ? { usdKrwRate: order.usdKrwRate, rateDate: order.rateDate } : {}),
+    expiresAt: order.expiresAt,
+  }
+}
+
+/** 승인된 주문 전용(호출부가 SUCCEEDED만 넘긴다) — 승인 시각·이용 기간은 승인 때 함께 채워진다 */
+export function toPassConfirmResponse(order: DbPassOrder) {
+  return {
+    orderId: order.orderId,
+    status: order.status,
+    planCode: order.planCode,
+    amount: order.amount,
+    currency: order.currency,
+    approvedAt: order.approvedAt!,
+    accessFrom: order.accessFrom!,
+    accessUntil: order.accessUntil!,
+  }
+}
+
+export function toCurrentPassResponse(accessUntil: string) {
+  return { active: Date.parse(accessUntil) > Date.now(), accessUntil }
 }
