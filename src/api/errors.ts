@@ -31,8 +31,6 @@
  *   머지분. 어드민 신고·문의 화면(CHMO-862)이 쓴다. 실서버 채집은 BE 배포 후).
  * + 2026-08-19 BE 소스 대조(PERSON404·PERSON409 — 앨범 인물 병합 CHMO-688 ErrorStatus.
  *   PERSON_NOT_FOUND·PERSON_PARENT_CONFLICT. 실서버 채집은 BE 배포 후).
- * + 2026-10-04 BE 스펙 대조(BILLING400·402·404·409·502·503 — 기간 이용권 결제 CHMO-847.
- *   웹 결제 흐름(CHMO-899)이 쓴다. 실서버 채집은 운영 BE에 결제 설정이 켜진 뒤).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -129,28 +127,6 @@ const BE_CODE_MAP: Record<string, string> = {
    * 확인은 선생님별·모임별 1회라 같은 모임의 다음 업로드엔 오지 않는다(CHMO-516).
    */
   AGREEMENT428: 'GUARDIAN_CONSENT_REQUIRED',
-  // ── 결제(BE CHMO-847 — 기간 이용권 웹 결제가 쓴다, CHMO-899) ──
-  // 코드표는 BE 스펙 `docs/spec/CHMO-847-*.md` §3 에러 표 대조(2026-10-04). 실서버 채집은
-  // 운영 BE에 BILLING_ENABLED가 켜진 뒤.
-  /** 일반(GENERAL) 모임에서 결제 API 호출(400) — 이용권은 비즈니스 모임 전용 */
-  BILLING400: 'BILLING_NOT_SUPPORTED',
-  /** 결제사(카드사) 거절(402) — 다른 결제수단으로 다시 시도할 일 */
-  BILLING402: 'PAYMENT_REJECTED',
-  /** 구독·결제수단 없음(404) — 이용권 흐름에선 오지 않는다 */
-  BILLING404: 'NOT_FOUND',
-  /**
-   * 주문 만료(30분)·다른 모임 주문·다른 paymentKey 재사용·멱등키 충돌(409). 같은 주문으로는
-   * 다시 승인할 수 없다는 뜻이라 화면은 현재 이용권을 다시 읽고 새 주문으로 안내한다.
-   */
-  BILLING409: 'PAYMENT_CONFLICT',
-  /**
-   * 결제사 통신 실패·응답 계약 위반(502) — **승인 결과가 불명확하다**. 새 주문을 만들면 이중
-   * 결제 위험이 있어, 화면은 같은 orderId·paymentKey로 승인을 다시 요청한다(BE가 orderId 조회로
-   * 성공 여부를 조정한다 — CHMO-847 AC-17).
-   */
-  BILLING502: 'PAYMENT_GATEWAY_ERROR',
-  /** 결제 설정 비활성·환율 조회 실패·오래된 환율·시장 키 미설정(503) — 잠시 후 다시 */
-  BILLING503: 'BILLING_UNAVAILABLE',
   /** 지원하지 않는 소셜 프로바이더(400) — 경로 변수가 BE 미구현 값 (CHMO-359) */
   OAUTH400: 'UNSUPPORTED_SOCIAL_PROVIDER',
   /** 소셜 인가 실패(401) — 사용자 동의 취소·일회용 코드 무효/만료/재사용 */

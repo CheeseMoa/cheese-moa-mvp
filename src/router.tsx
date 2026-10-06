@@ -38,13 +38,6 @@ import { biometricNotice } from './legal/biometric'
 // 계정 삭제·데이터 삭제 안내 (CHMO-588)
 import { AccountDeletionPage, DataDeletionPage } from './pages/DeletionGuidePage'
 
-// 기간 이용권 요금·결제·환불정책 (CHMO-899 — 토스페이먼츠 심사)
-import { refundPolicy } from './legal/refund'
-import { PricingPage } from './pages/pass/PricingPage'
-import { PassGuidePage } from './pages/pass/PassGuidePage'
-import { PassCheckoutPage } from './pages/pass/PassCheckoutPage'
-import { PassFailPage, PassSuccessPage } from './pages/pass/PassResultPages'
-
 /**
  * 전체 라우트 정의 (docs/screen-spec.md 화면 매핑).
  * 제작자 경로는 CreatorGuard, 뷰어 경로는 ViewerGuard로 감싼다.
@@ -73,13 +66,6 @@ export const router = createBrowserRouter([
   { path: '/account-deletion', element: <AccountDeletionPage /> },
   { path: '/data-deletion', element: <DataDeletionPage /> },
 
-  // ── 서비스·요금 안내와 결제 이용 안내·환불정책 — 결제대행사 심사가 로그인 없이 확인하는
-  //    공개 URL이라 가드 밖 (CHMO-899). 결제 실패·취소 복귀도 서버를 부르지 않아 가드 밖이다 ──
-  { path: '/pricing', element: <PricingPage /> },
-  { path: '/pass/guide', element: <PassGuidePage /> },
-  { path: '/legal/refund', element: <LegalDocPage doc={refundPolicy} /> },
-  { path: '/pass/fail', element: <PassFailPage /> },
-
   // ── 제작자(로그인) ──────────────────────────────────
   {
     element: <CreatorGuard />,
@@ -94,9 +80,6 @@ export const router = createBrowserRouter([
       // 화면·라우트는 되살릴 수 있게 남겨 둔다(직접 URL로만 열린다).
       { path: '/onboarding', element: <OnboardingPage /> },
       { path: '/settings', element: <SettingsPage /> }, // 설정/프로필 편집
-      // 기간 이용권 구매·결제 성공 복귀(CHMO-899) — 모임 권한이 필요한 결제 API를 부른다
-      { path: '/pass/checkout', element: <PassCheckoutPage /> },
-      { path: '/pass/success', element: <PassSuccessPage /> },
       { path: '/groups/new', element: <GroupCreatePage /> }, // 03 모임 만들기
       { path: '/groups/:groupId', element: <GroupDetailPage /> }, // 05 모임 상세(이벤트 목록) — 초대·학부모 공유 시트 포함
       { path: '/groups/:groupId/invites', element: <InviteManagePage /> }, // 20 초대 관리(CHMO-447) — 20-1 아이 연결 시트 포함

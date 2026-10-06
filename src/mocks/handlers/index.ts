@@ -2,7 +2,6 @@ import type { RequestHandler } from 'msw'
 import { authHandlers } from './auth'
 import { adminHandlers, adminInquiryHandlers, adminReportHandlers } from './admin'
 import { agreementHandlers } from './agreements'
-import { billingHandlers } from './billing'
 import { groupHandlers } from './groups'
 import { eventHandlers } from './events'
 import { albumHandlers } from './albums'
@@ -18,7 +17,6 @@ import { shareHandlers } from './share'
  * CHMO-379: admin(관리자 조회 — BE CHMO-377·378 계약, ADMIN403 가드).
  * CHMO-811: admin 기관 도입 문의 목록·상태 전이(BE CHMO-810 — 어드민의 첫 쓰기 경로).
  * CHMO-862: admin 신고·문의 목록·상세·답변·상태 전이(BE CHMO-861).
- * CHMO-899: billing(기간 이용권 상품·주문 준비·승인·현재 이용권 — BE CHMO-847).
  * parents가 events보다 먼저 — /events/:id/parent-photos가 /events/:id 계열 뒤에 서면 안 되는 건
  * 아니지만(MSW는 경로 전체 일치), 신설 경로를 한 곳에서 먼저 보이게 둔다.
  */
@@ -28,7 +26,6 @@ export const handlers: RequestHandler[] = [
   ...adminInquiryHandlers,
   ...adminReportHandlers,
   ...agreementHandlers,
-  ...billingHandlers,
   ...groupHandlers,
   ...parentHandlers,
   ...eventHandlers,
