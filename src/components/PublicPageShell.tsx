@@ -5,13 +5,13 @@ import { SiteFooter } from './SiteFooter'
 import { cx } from '../lib/cx'
 
 /**
- * 공개 웹 페이지 셸 (CHMO-899) — 요금 안내·약관·환불정책·결제 화면처럼 **데스크톱에서도 열리는**
+ * 공개 웹 페이지 셸 (CHMO-899) — 약관·삭제 안내처럼 **데스크톱에서도 열리는**
  * 페이지용. PhoneShell(390 폰 프레임)은 앱 화면을 흉내 낸 틀이라 PC로 연 심사 담당자에게
  * 가운데 작은 폰이 떠 있는 꼴이 된다 — 여기는 문서 스크롤 그대로의 반응형 페이지다
  * (모바일은 전폭, 넓은 화면은 본문 폭만 제한).
  *
  * **팔레트는 Flutter 앱(CheeseMoa-App)의 리디자인 토큰**(`app.*` — CHMO-727)을 쓴다. 이 셸이
- * 품는 페이지(요금·결제·약관·삭제 안내)가 CHMO-722 전면 이관 뒤에도 웹에 남는 몇 안 되는 화면이라
+ * 품는 페이지(약관·삭제 안내)가 CHMO-722 전면 이관 뒤에도 웹에 남는 몇 안 되는 화면이라
  * (`[[flutter-migration-epic]]` — 초대 착지·가입·legal·deletion·어드민만 잔존), 더 이상 쓰이지
  * 않을 구 웹 cream/브라운 톤 대신 **지금 실제로 쓰이는 앱 화면**과 맞춘다. 흰 바탕·잉크
  * 텍스트·옐로(#FFC93C, 기존 `primary`와 같은 값) 포인트·완전 라운드 필 버튼.
@@ -36,7 +36,7 @@ export function PublicPageShell({
     <div className="flex min-h-dvh flex-col bg-app-bg">
       <header className="border-b border-app-border bg-app-bg/95 backdrop-blur">
         <div className={cx('mx-auto flex h-14 items-center justify-between px-4 sm:px-6', widthCls)}>
-          <Link to="/pricing" className="flex items-center gap-2" aria-label="치즈모아 요금 안내">
+          <Link to="/" className="flex items-center gap-2" aria-label="치즈모아 홈">
             <Cheddar size={28} />
             {/* 워드마크는 Jua 전용(앱 brandStyle과 동일 규칙 — 본문에 번지지 않는다) */}
             <span className="translate-y-[2px] font-logo text-[20px] text-app-ink">치즈모아</span>

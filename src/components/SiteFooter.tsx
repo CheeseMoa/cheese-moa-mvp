@@ -3,11 +3,12 @@ import { BUSINESS_INFO, businessInfoRows, telHref } from '../legal/business'
 import { cx } from '../lib/cx'
 
 /**
- * 공개 페이지 하단 사업자·고객센터 정보 + 법적 고지 링크 (CHMO-899 AC-5·6).
+ * 공개 페이지 하단 사업자·고객센터 정보 + 법적 고지 링크 (CHMO-899에서 신설 — 전자상거래법
+ * 사업자 정보 표시 의무).
  *
- * 값은 `legal/business.ts` 하나에서만 읽는다 — 페이지마다 따로 적으면 한 곳만 달라도 "신청서와
- * 불일치"다. 비어 있는 항목은 행째 빠진다(placeholder 노출 금지). 이용약관·개인정보처리방침·
- * 환불정책 링크는 결제 화면에도 따로 있지만, 사이트 어디서든 닿도록 여기에도 둔다(AC-5).
+ * 값은 `legal/business.ts` 하나에서만 읽는다 — 페이지마다 따로 적으면 한 곳만 달라도 표기가
+ * 어긋난다. 비어 있는 항목은 행째 빠진다(placeholder 노출 금지). 요금 안내·환불정책 링크는
+ * 토스 결제 철회(CHMO-907 — 앱 인앱결제로 전환)로 걷었다. 환불정책은 인앱결제 기준으로 다시 쓴다.
  *
  * 개인정보 처리방침은 법이 "다른 고지와 구분되게"(굵게 등) 표시하라고 한다(시행령 제31조③ —
  * 실무 관행) — 링크 중 그것만 굵게 둔다.
@@ -25,17 +26,11 @@ export function SiteFooter({ className }: { className?: string }) {
       )}
     >
       <nav aria-label="약관 및 정책" className="flex flex-wrap gap-x-4 gap-y-1.5">
-        <Link to="/pricing" className={linkCls}>
-          요금 안내
-        </Link>
         <Link to="/legal/terms" className={linkCls}>
           이용약관
         </Link>
         <Link to="/legal/privacy" className={cx(linkCls, 'font-bold text-app-ink')}>
           개인정보처리방침
-        </Link>
-        <Link to="/legal/refund" className={linkCls}>
-          환불정책
         </Link>
       </nav>
       {rows.length > 0 ? (
