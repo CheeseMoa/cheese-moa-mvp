@@ -6,11 +6,21 @@
  * client.ts(normalizeTimestamps)가 이미 끝냈다.
  */
 import type {
+  AdminCampaign,
+  AdminCampaignRecipients,
+  AdminCampaignStatus,
   AdminGroupDetail,
   AdminGroupEvent,
   AdminGroupMember,
   AdminGroupRow,
   AdminInquiry,
+  AdminPopup,
+  AdminPopupAudience,
+  AdminPopupHideOption,
+  AdminPopupImageUpload,
+  AdminPopupLinkTarget,
+  AdminPopupLocale,
+  AdminPopupStatus,
   AdminProfile,
   AdminReportDetail,
   AdminReportRow,
@@ -277,4 +287,122 @@ export function toAdminReportDetail(raw: RawAdminReportDetail): AdminReportDetai
         }
       : null,
   }
+}
+
+// ── 이벤트 팝업 (CHMO-928 — BE CHMO-926) ────────────────────────────
+
+/**
+ * BE AdminPopupResponse(`@JsonInclude(NON_NULL)` + `@JsonUnwrapped content`) — 선택 필드
+ * (ctaLabel·minAppVersion)는 비면 **키째 생략**된다. enum은 대문자 그대로 받는다(types.ts 원칙).
+ */
+export interface RawAdminPopup {
+  popupId: number
+  imageUrl: string
+  title: string
+  imageKey: string
+  imageAlt: string
+  ctaLabel?: string | null
+  linkUrl: string
+  linkTarget: string
+  audience: string
+  locale: string
+  startsAt: string
+  endsAt: string
+  priority: number
+  hideOption: string
+  active: boolean
+  minAppVersion?: string | null
+  status: string
+  createdBy: number
+  updatedBy?: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export function toAdminPopup(raw: RawAdminPopup): AdminPopup {
+  return {
+    popupId: raw.popupId,
+    imageUrl: raw.imageUrl,
+    title: raw.title,
+    imageKey: raw.imageKey,
+    imageAlt: raw.imageAlt,
+    // 빈 문자열도 '없음'으로 접는다 — 앱이 빈 옐로 필을 세우지 않는 것과 같은 판정
+    ctaLabel: raw.ctaLabel ? raw.ctaLabel : null,
+    linkUrl: raw.linkUrl,
+    linkTarget: raw.linkTarget as AdminPopupLinkTarget,
+    audience: raw.audience as AdminPopupAudience,
+    locale: raw.locale as AdminPopupLocale,
+    startsAt: raw.startsAt,
+    endsAt: raw.endsAt,
+    priority: raw.priority,
+    hideOption: raw.hideOption as AdminPopupHideOption,
+    active: raw.active,
+    minAppVersion: raw.minAppVersion ? raw.minAppVersion : null,
+    status: raw.status as AdminPopupStatus,
+    createdBy: raw.createdBy,
+    // 생성 직후엔 생성자가 곧 마지막 수정자다(BE가 updatedBy를 함께 채운다 — 방어적 폴백)
+    updatedBy: raw.updatedBy ?? raw.createdBy,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+  }
+}
+
+export interface RawAdminPopupImageUpload {
+  key: string
+  uploadUrl: string
+  expiresAt: string
+}
+
+export function toAdminPopupImageUpload(raw: RawAdminPopupImageUpload): AdminPopupImageUpload {
+  return { key: raw.key, uploadUrl: raw.uploadUrl, expiresAt: raw.expiresAt }
+}
+
+// ── 혜택 푸시 (CHMO-928 — BE CHMO-926) ──────────────────────────────
+
+/** BE CampaignResponse(`@JsonInclude(NON_NULL)`) — 빈 필드는 키째 생략된다 */
+export interface RawAdminCampaign {
+  campaignId: number
+  status: string
+  title: string
+  body: string
+  link?: string | null
+  testUserId?: number | null
+  scheduledAt?: string | null
+  createdBy: number
+  createdAt: string
+  sentAt?: string | null
+  cancelledBy?: number | null
+  cancelledAt?: string | null
+  fcmMessageIds?: string[] | null
+  failureCode?: string | null
+}
+
+export function toAdminCampaign(raw: RawAdminCampaign): AdminCampaign {
+  return {
+    campaignId: raw.campaignId,
+    status: raw.status as AdminCampaignStatus,
+    title: raw.title,
+    body: raw.body,
+    link: raw.link ?? null,
+    testUserId: raw.testUserId ?? null,
+    scheduledAt: raw.scheduledAt ?? null,
+    createdBy: raw.createdBy,
+    createdAt: raw.createdAt,
+    sentAt: raw.sentAt ?? null,
+    cancelledBy: raw.cancelledBy ?? null,
+    cancelledAt: raw.cancelledAt ?? null,
+    fcmMessageIds: raw.fcmMessageIds ?? [],
+    failureCode: raw.failureCode ?? null,
+  }
+}
+
+export interface RawAdminCampaignRecipients {
+  userCount?: number
+  deviceCount?: number
+}
+
+export function toAdminCampaignRecipients(
+  raw: RawAdminCampaignRecipients,
+): AdminCampaignRecipients {
+  return { userCount: raw.userCount ?? 0, deviceCount: raw.deviceCount ?? 0 }
 }

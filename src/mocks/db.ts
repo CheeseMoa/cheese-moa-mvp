@@ -114,6 +114,62 @@ export interface DbReport {
   updatedAt: ISODateTime
 }
 
+/**
+ * 이벤트 팝업 (CHMO-928 — BE CHMO-926). 어드민이 만들고 앱이 `GET /popups/active`로 읽는다.
+ * 상태(LIVE 등)는 저장하지 않고 조회 시각으로 파생한다(BE `Popup.statusAt`). 삭제는 deletedAt
+ * 기록이라 행은 남는다(감사 이력 보존 — BE와 같다).
+ */
+export interface DbPopup {
+  id: number
+  title: string
+  imageKey: string
+  imageAlt: string
+  ctaLabel: string | null
+  linkUrl: string
+  linkTarget: 'IN_APP' | 'EXTERNAL'
+  audience: 'ALL' | 'ORGANIZATION' | 'PERSONAL'
+  locale: 'ko' | 'en' | 'ja'
+  startsAt: ISODateTime
+  endsAt: ISODateTime
+  priority: number
+  hideOption: 'TODAY' | 'NONE'
+  active: boolean
+  minAppVersion: string | null
+  createdBy: number
+  updatedBy: number
+  deletedAt: ISODateTime | null
+  createdAt: ISODateTime
+  updatedAt: ISODateTime
+}
+
+/**
+ * 혜택 푸시 발송 (CHMO-928 — BE CHMO-926 B절). title·body는 **자동 문구를 붙인 최종본**을 저장한다
+ * (BE도 같다). 실 BE는 5초 주기 디스패처가 QUEUED·만기 SCHEDULED를 집는데, 목은 조회할 때마다
+ * 정산한다(settleCampaigns — 분석 정산 settleAnalysis와 같은 결).
+ */
+export interface DbPushCampaign {
+  id: number
+  status: 'SCHEDULED' | 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED' | 'PARTIAL' | 'UNKNOWN' | 'CANCELLED'
+  title: string
+  body: string
+  link: string | null
+  /** Idempotency-Key — 같은 관리자·같은 키·같은 본문이면 기존 행을 돌려준다 */
+  requestKey: string
+  /** 본문 지문 — 같은 키에 다른 본문이면 CAMPAIGN409 */
+  requestHash: string
+  createdBy: number
+  testUserId: number | null
+  scheduledAt: ISODateTime | null
+  /** 디스패처가 집을 시각 — 야간에 걸리면 다음 08:00으로 밀린다 */
+  dueAt: ISODateTime
+  sentAt: ISODateTime | null
+  cancelledBy: number | null
+  cancelledAt: ISODateTime | null
+  fcmMessageIds: string[]
+  failureCode: string | null
+  createdAt: ISODateTime
+}
+
 export interface DbGroup {
   id: number
   name: string
@@ -263,6 +319,10 @@ export interface Db {
   organizationInquiries: DbOrganizationInquiry[]
   /** 신고·문의 (CHMO-862) — 접수는 앱이 하고 어드민은 읽기·답변·상태 전이만 한다 */
   reports: DbReport[]
+  /** 이벤트 팝업 (CHMO-928) */
+  popups: DbPopup[]
+  /** 혜택 푸시 발송 (CHMO-928) — 테스트 발송도 같은 테이블(testUserId로 갈린다) */
+  pushCampaigns: DbPushCampaign[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
 }
@@ -281,6 +341,8 @@ export const db: Db = {
   devices: [],
   organizationInquiries: [],
   reports: [],
+  popups: [],
+  pushCampaigns: [],
   uploadedKeys: [],
 }
 
@@ -299,6 +361,8 @@ export function seedDb(data: Db): void {
   db.devices = data.devices
   db.organizationInquiries = data.organizationInquiries
   db.reports = data.reports
+  db.popups = data.popups
+  db.pushCampaigns = data.pushCampaigns
   db.uploadedKeys = data.uploadedKeys
 }
 
@@ -322,6 +386,74 @@ export function registerDevice(userId: number, token: string, platform: string):
 /** 해제 — 없는 토큰도 조용히 통과(멱등). 남의 토큰은 지우지 않는다 */
 export function unregisterDevice(userId: number, token: string): void {
   db.devices = db.devices.filter((d) => !(d.token === token && d.userId === userId))
+}
+
+// ── 혜택 푸시 수신 대상 (CHMO-928 — BE CampaignRecipientsRepository) ─────
+
+/**
+ * 혜택 푸시를 받을 수 있는 사용자인가 — pushEnabled ∧ **가장 최근** MARKETING 기록이 현재 버전으로
+ * 동의(철회 기록이 뒤에 있으면 탈락 — BE `max(userAgreementId)` 조건과 같다).
+ */
+export function isCampaignEligible(user: DbUser): boolean {
+  if (!user.pushEnabled) return false
+  const latest = latestUserAgreementOf(user.id, 'marketing')
+  const version = agreementCatalogOf('marketing')?.currentVersion
+  return latest !== undefined && latest.agreed && latest.version === version
+}
+
+/** BE CampaignRecipientsResponse 값 — 사용자 수는 기기 없는 적격자도 센다 */
+export function campaignRecipientCounts(): { userCount: number; deviceCount: number } {
+  const ids = new Set(db.users.filter(isCampaignEligible).map((u) => u.id))
+  return { userCount: ids.size, deviceCount: db.devices.filter((d) => ids.has(d.userId)).length }
+}
+
+/** 적격 사용자의 등록 기기 — 테스트 발송은 이 기기로만 간다(토픽 미경유) */
+export function campaignDevicesOf(userId: number): DbDevice[] {
+  const user = db.users.find((u) => u.id === userId)
+  if (!user || !isCampaignEligible(user)) return []
+  return db.devices.filter((d) => d.userId === userId)
+}
+
+// ── 팝업 (CHMO-928 — BE CHMO-926) ────────────────────────────
+
+/** BE `Popup.statusAt` — OFF 우선, 그다음 기간으로 예정·노출 중·종료 */
+export function popupStatusAt(popup: DbPopup, nowMs: number): 'OFF' | 'SCHEDULED' | 'LIVE' | 'ENDED' {
+  if (!popup.active) return 'OFF'
+  if (nowMs < new Date(popup.startsAt).getTime()) return 'SCHEDULED'
+  return nowMs < new Date(popup.endsAt).getTime() ? 'LIVE' : 'ENDED'
+}
+
+/**
+ * 가짜 S3에 올라온 팝업 이미지 — 키 → 브라우저 object URL. 실 BE는 presigned GET(2시간)을
+ * 주는데, 목은 PUT 본문을 그대로 들고 있다가 그 URL을 준다(새로고침하면 db와 함께 사라진다).
+ */
+const popupImageUrls = new Map<string, string>()
+
+export function storePopupImage(key: string, url: string): void {
+  const previous = popupImageUrls.get(key)
+  if (previous) URL.revokeObjectURL(previous)
+  popupImageUrls.set(key, url)
+}
+
+/**
+ * 팝업 이미지 URL — 올린 이미지가 없으면(시드) 제목을 얹은 4:5 SVG 자리표시자.
+ * 시드는 presign을 거치지 않아 실제 바이트가 없다.
+ */
+export function popupImageUrlOf(popup: DbPopup): string {
+  const uploaded = popupImageUrls.get(popup.imageKey)
+  if (uploaded) return uploaded
+  const palette = ['#FFC93C', '#FFE08A', '#F5C6A5', '#CFE3C8', '#C9D8F0']
+  const fill = palette[popup.id % palette.length]
+  const title = popup.title.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">` +
+    `<rect width="1080" height="1350" fill="${fill}"/>` +
+    `<circle cx="540" cy="560" r="180" fill="#ffffff" fill-opacity="0.55"/>` +
+    `<text x="540" y="900" font-family="sans-serif" font-size="68" font-weight="700" ` +
+    `fill="#1B1B1B" text-anchor="middle">${title}</text>` +
+    `<text x="540" y="990" font-family="sans-serif" font-size="40" fill="#1B1B1B" ` +
+    `fill-opacity="0.6" text-anchor="middle">CheeseMoa</text></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
 // ── 업로드 오브젝트 (S3 시뮬 — CHMO-194) ─────────────────────
@@ -1223,4 +1355,103 @@ export function completeAnalysis(eventId: number): void {
   // analyzing → review로 검수 단계를 연다. published 증분 분석은 전이가 거부돼(published: [])
   // 공개를 유지한다 — BE completeAnalysis의 무전이와 같은 결과(CHMO-216·606)
   transitionEvent(eventId, 'review')
+}
+
+// ── 기간 이용권 결제 (BE CHMO-847 — CHMO-899) ─────────────────
+// 결제 상태는 Db 시드 밖의 모듈 상태다 — 시드할 결제 이력이 없고(구매는 화면이 만든다),
+// 새로고침이면 사라져도 되는 값이라 fixtures(Db 전체 교체 계약)를 넓히지 않는다.
+
+export type DbPassPlanCode = 'DAY_1' | 'DAY_3' | 'DAY_7'
+export type DbPassMarket = 'DOMESTIC' | 'INTERNATIONAL'
+
+/** BE PassPlan — 1일 100 cent · 3일 150 · 7일 250(코드 고정) */
+export const PASS_PLANS: ReadonlyArray<{
+  code: DbPassPlanCode
+  durationDays: number
+  usdCents: number
+}> = [
+  { code: 'DAY_1', durationDays: 1, usdCents: 100 },
+  { code: 'DAY_3', durationDays: 3, usdCents: 150 },
+  { code: 'DAY_7', durationDays: 7, usdCents: 250 },
+]
+
+/** 목 기준환율 — 실 BE는 Frankfurter 최신값(응답일 3일 초과면 주문 거부) */
+export const MOCK_USD_KRW_RATE = 1425.31
+
+/** BE PassOrder 대응 — 주문 준비 때 금액·통화·환율·만료를 고정한다 */
+export interface DbPassOrder {
+  orderId: string
+  groupId: number
+  requestedBy: number
+  idempotencyKey: string
+  planCode: DbPassPlanCode
+  market: DbPassMarket
+  amount: number
+  currency: 'KRW' | 'USD'
+  usdAmount: number
+  usdKrwRate: number | null
+  rateDate: string | null
+  expiresAt: ISODateTime
+  status: 'PENDING' | 'SUCCEEDED'
+  paymentKey: string | null
+  approvedAt: ISODateTime | null
+  accessFrom: ISODateTime | null
+  accessUntil: ISODateTime | null
+}
+
+export const passOrders: DbPassOrder[] = []
+/** BE SpacePass — 모임별 누적 만료 시각 */
+export const spacePasses = new Map<number, ISODateTime>()
+
+/**
+ * 주문 준비 — BE PreparePassOrderUseCase 대응. 국내는 USD × 기준환율을 원 단위 HALF_UP 반올림
+ * (2137.965 → 2138), 해외는 USD 고정가. 30분 뒤 만료.
+ */
+export function createPassOrder(input: {
+  groupId: number
+  userId: number
+  idempotencyKey: string
+  planCode: DbPassPlanCode
+  market: DbPassMarket
+}): DbPassOrder {
+  const plan = PASS_PLANS.find((p) => p.code === input.planCode)!
+  const usdAmount = plan.usdCents / 100
+  const domestic = input.market === 'DOMESTIC'
+  const order: DbPassOrder = {
+    orderId: `pass_${crypto.randomUUID().replace(/-/g, '')}`,
+    groupId: input.groupId,
+    requestedBy: input.userId,
+    idempotencyKey: input.idempotencyKey,
+    planCode: input.planCode,
+    market: input.market,
+    amount: domestic ? Math.round(usdAmount * MOCK_USD_KRW_RATE) : usdAmount,
+    currency: domestic ? 'KRW' : 'USD',
+    usdAmount,
+    usdKrwRate: domestic ? MOCK_USD_KRW_RATE : null,
+    rateDate: domestic ? nowIso().slice(0, 10) : null,
+    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    status: 'PENDING',
+    paymentKey: null,
+    approvedAt: null,
+    accessFrom: null,
+    accessUntil: null,
+  }
+  passOrders.push(order)
+  return order
+}
+
+/** 승인 — 활성 이용권이 있으면 그 만료 시각부터 이어 붙인다(BE AC-15) */
+export function approvePassOrder(order: DbPassOrder, paymentKey: string): DbPassOrder {
+  const now = Date.now()
+  const plan = PASS_PLANS.find((p) => p.code === order.planCode)!
+  const currentUntil = spacePasses.get(order.groupId)
+  const start = currentUntil && Date.parse(currentUntil) > now ? Date.parse(currentUntil) : now
+  const until = new Date(start + plan.durationDays * 24 * 3_600_000).toISOString()
+  order.status = 'SUCCEEDED'
+  order.paymentKey = paymentKey
+  order.approvedAt = new Date(now).toISOString()
+  order.accessFrom = new Date(start).toISOString()
+  order.accessUntil = until
+  spacePasses.set(order.groupId, until)
+  return order
 }

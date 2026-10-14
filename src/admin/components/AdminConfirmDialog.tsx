@@ -5,10 +5,20 @@ interface AdminConfirmDialogProps {
   /** 그렇게 하면 무슨 일이 일어나는지 — 문장 배열(한 줄씩 문단) */
   lines: string[]
   confirmLabel: string
+  /**
+   * 닫기 버튼 라벨(기본 '취소') — 확정 동작 자체가 '취소'인 다이얼로그(예약 취소 — CHMO-928)에서
+   * [취소] [예약 취소]가 나란히 서면 어느 쪽이 무엇을 취소하는지 읽히지 않는다
+   */
+  cancelLabel?: string
   onConfirm: () => void
   onCancel: () => void
   /** 전송 중 — 두 버튼을 잠그고 라벨을 바꾼다(같은 전이가 두 번 나가지 않게) */
   busy?: boolean
+  /**
+   * 확정만 잠근다(취소는 열어 둔다) — 다이얼로그 안 정보가 아직 도착하지 않았을 때(혜택 푸시의
+   * 대상 수 재확인 — CHMO-928). 낡은 수를 보고 누르지 않게 한다
+   */
+  confirmDisabled?: boolean
 }
 
 /**
@@ -23,9 +33,11 @@ export function AdminConfirmDialog({
   title,
   lines,
   confirmLabel,
+  cancelLabel = '취소',
   onConfirm,
   onCancel,
   busy,
+  confirmDisabled,
 }: AdminConfirmDialogProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -64,12 +76,12 @@ export function AdminConfirmDialog({
             disabled={busy}
             className="h-9 rounded-lg border border-admin-border bg-admin-surface px-4 text-[13px] text-admin-text hover:bg-admin-bg disabled:opacity-40"
           >
-            취소
+            {cancelLabel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             className="h-9 rounded-lg border border-primary bg-primary px-4 text-[13px] font-semibold text-admin-text hover:brightness-95 disabled:opacity-60"
           >
             {busy ? '처리 중…' : confirmLabel}

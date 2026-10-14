@@ -1,7 +1,6 @@
-import { Link, useNavigate } from 'react-router-dom'
-import { PhoneShell } from '../components/PhoneShell'
+import { Link } from 'react-router-dom'
+import { PublicPageShell } from '../components/PublicPageShell'
 import { LegalDocBody } from '../components/LegalDocBody'
-import { Header } from '../components/ui'
 import type { LegalDoc } from '../legal/types'
 import { accountDeletionGuide, dataDeletionGuide } from '../legal/deletionGuides'
 
@@ -11,6 +10,9 @@ import { accountDeletionGuide, dataDeletionGuide } from '../legal/deletionGuides
  * (/legal/* 관습). 본문은 LegalDocBody 재사용, 아래 바로가기 행이 안내를 행동으로 잇는다 —
  * [설정]은 CreatorGuard라 로그아웃 상태면 로그인을 거쳐 홈에 떨어지는데, 그 동선 그대로를
  * 본문 단계 문구가 안내한다(returnTo 없음 — CHMO-588 범위 밖).
+ * 틀은 PublicPageShell — /legal/* 와 같은 공개 페이지 틀·하단 사업자 정보(CHMO-899,
+ * `app.*` 팔레트). 바로가기 행은 앱 `_BillingCard` 흰 카드(흰 바탕+1px #EBEBEB 테두리,
+ * 그림자 대신 테두리로 경계를 만드는 쪽 — CHMO-727 실측) 결을 그대로 가져왔다.
  */
 
 interface GuideAction {
@@ -22,45 +24,36 @@ interface GuideAction {
 }
 
 function DeletionGuidePage({ doc, actions }: { doc: LegalDoc; actions: GuideAction[] }) {
-  const navigate = useNavigate()
-  // LegalDocPage와 같은 복귀 규칙 — 직접 URL 진입(첫 엔트리)이면 -1이 앱 밖이라 랜딩 폴백
-  const handleBack = () => {
-    if (window.history.state?.idx > 0) navigate(-1)
-    else navigate('/', { replace: true })
-  }
-
   const rowCls =
-    'flex items-center justify-between px-4 py-3.5 text-[15px] text-text active:bg-surface'
+    'flex items-center justify-between px-4 py-3.5 text-[15px] text-app-ink active:bg-app-chip'
   const chevron = (
-    <span aria-hidden className="text-muted">
+    <span aria-hidden className="text-app-muted">
       ›
     </span>
   )
   return (
-    <PhoneShell>
-      <Header onBack={handleBack} title={doc.title} />
-      <main className="flex-1 overflow-y-auto px-5 pb-safe-9 pt-5">
-        <LegalDocBody doc={doc} />
-        <nav
-          aria-label="바로가기"
-          className="mt-8 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white shadow-card"
-        >
-          {actions.map((action) =>
-            action.to ? (
-              <Link key={action.label} to={action.to} className={rowCls}>
-                {action.label}
-                {chevron}
-              </Link>
-            ) : (
-              <a key={action.label} href={action.href} className={rowCls}>
-                {action.label}
-                {chevron}
-              </a>
-            ),
-          )}
-        </nav>
-      </main>
-    </PhoneShell>
+    <PublicPageShell title={doc.title}>
+      <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">{doc.title}</h1>
+      <LegalDocBody doc={doc} />
+      <nav
+        aria-label="바로가기"
+        className="mt-8 divide-y divide-app-border overflow-hidden rounded-app border border-app-border bg-app-bg"
+      >
+        {actions.map((action) =>
+          action.to ? (
+            <Link key={action.label} to={action.to} className={rowCls}>
+              {action.label}
+              {chevron}
+            </Link>
+          ) : (
+            <a key={action.label} href={action.href} className={rowCls}>
+              {action.label}
+              {chevron}
+            </a>
+          ),
+        )}
+      </nav>
+    </PublicPageShell>
   )
 }
 

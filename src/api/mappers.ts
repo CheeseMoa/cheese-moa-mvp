@@ -23,6 +23,7 @@ import type {
   AnalysisJob,
   AnalysisProgress,
   AnalysisStatus,
+  CurrentPass,
   EventItem,
   EventStatus,
   FaceBbox,
@@ -41,6 +42,12 @@ import type {
   MoveSuggestion,
   MyMembership,
   ParentEventPhotos,
+  PassConfirmation,
+  PassMarket,
+  PassOrder,
+  PassPlan,
+  PassPlanCode,
+  PaymentCurrency,
   Photo,
   User,
   ViewerAlbum,
@@ -542,4 +549,87 @@ export function toAgreementStatus(raw: RawAgreementStatus): AgreementStatus {
     scope: raw.scope.toLowerCase() as AgreementScope,
     agreed: raw.agreed,
   }
+}
+
+// ── 기간 이용권 결제 (BE CHMO-847 — CHMO-899) ─────────────────
+// 필드명은 BE DTO 그대로라 개명이 없다. 변환은 둘뿐: market 대문자 enum의 소문자화,
+// 국내 주문에만 오는 환율 필드(해외 주문은 서버가 생략 — @JsonInclude NON_NULL)의 null 정규화.
+// 금액은 손대지 않는다 — 결제창에 넘기는 값이 주문 응답과 **완전히 같아야** 한다(CHMO-898 AC-7).
+
+/** BE PassPlanResponse */
+export interface RawPassPlan {
+  code: string
+  durationDays: number
+  usdAmount: number
+}
+
+export function toPassPlan(raw: RawPassPlan): PassPlan {
+  return { code: raw.code as PassPlanCode, durationDays: raw.durationDays, usdAmount: raw.usdAmount }
+}
+
+/** BE PassOrderResponse — 국내(KRW) 주문만 usdKrwRate·rateDate를 싣는다 */
+export interface RawPassOrder {
+  orderId: string
+  orderName: string
+  clientKey: string
+  planCode: string
+  /** 대문자 enum(DOMESTIC/INTERNATIONAL) */
+  market: string
+  amount: number
+  currency: string
+  usdAmount: number
+  usdKrwRate?: number | null
+  rateDate?: string | null
+  expiresAt: string
+}
+
+export function toPassOrder(raw: RawPassOrder): PassOrder {
+  return {
+    orderId: raw.orderId,
+    orderName: raw.orderName,
+    clientKey: raw.clientKey,
+    planCode: raw.planCode as PassPlanCode,
+    market: raw.market.toLowerCase() as PassMarket,
+    amount: raw.amount,
+    currency: raw.currency as PaymentCurrency,
+    usdAmount: raw.usdAmount,
+    usdKrwRate: raw.usdKrwRate ?? null,
+    rateDate: (raw.rateDate ?? null) as ISODate | null,
+    expiresAt: raw.expiresAt,
+  }
+}
+
+/** BE PassOrderConfirmResponse */
+export interface RawPassConfirmation {
+  orderId: string
+  status: string
+  planCode: string
+  amount: number
+  currency: string
+  approvedAt: string
+  accessFrom: string
+  accessUntil: string
+}
+
+export function toPassConfirmation(raw: RawPassConfirmation): PassConfirmation {
+  return {
+    orderId: raw.orderId,
+    status: raw.status,
+    planCode: raw.planCode as PassPlanCode,
+    amount: raw.amount,
+    currency: raw.currency as PaymentCurrency,
+    approvedAt: raw.approvedAt,
+    accessFrom: raw.accessFrom,
+    accessUntil: raw.accessUntil,
+  }
+}
+
+/** BE CurrentPassResponse */
+export interface RawCurrentPass {
+  active: boolean
+  accessUntil: string
+}
+
+export function toCurrentPass(raw: RawCurrentPass): CurrentPass {
+  return { active: raw.active, accessUntil: raw.accessUntil }
 }

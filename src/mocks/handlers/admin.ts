@@ -44,7 +44,7 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** `/admin/*` 공통 관문 — Response면 그대로 응답한다 */
-function adminGate(request: Request): DbUser | Response {
+export function adminGate(request: Request): DbUser | Response {
   const user = userFrom(request)
   if (!user) return unauthorized()
   if (user.role !== 'ADMIN') return adminForbidden()
@@ -57,7 +57,7 @@ function epochOf(iso: string): number {
 }
 
 /** 쿼리 파라미터 정수 해석 — 없으면 기본값, 숫자가 아니면 null(BE 바인딩 실패 = COMMON400) */
-function intParam(url: URL, name: string, fallback: number): number | null {
+export function intParam(url: URL, name: string, fallback: number): number | null {
   const raw = url.searchParams.get(name)
   if (raw === null || raw === '') return fallback
   const value = Number(raw)

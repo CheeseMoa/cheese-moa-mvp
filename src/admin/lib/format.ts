@@ -227,3 +227,107 @@ export function formatMonthDayTime(iso: string | null): string {
   const full = formatDateTime(iso)
   return full === '—' ? full : full.slice(5)
 }
+
+// ── 이벤트 팝업 (CHMO-928) ────────────────────────────────────────
+
+/**
+ * BE PopupStatus → 배지. 새 색을 만들지 않는 원칙(문의 배지와 같음): 노출 중=지금 나가는 중(초록) ·
+ * 예정=곧 나간다(갈색) · 종료=기간이 끝났다(옅은 회색) · 꺼짐=운영자가 껐다(진한 회색).
+ * 종료와 꺼짐을 같은 회색 계열로 두되 농도를 가른다 — 둘 다 "안 나간다"지만 꺼짐은 손으로
+ * 다시 켤 수 있는 상태라 조금 더 눈에 걸려야 한다.
+ */
+const POPUP_STATUS_BADGES: Record<string, { label: string; token: string }> = {
+  LIVE: { label: '노출 중', token: 'published' },
+  SCHEDULED: { label: '예정', token: 'ready' },
+  ENDED: { label: '종료', token: 'empty' },
+  OFF: { label: '꺼짐', token: 'review' },
+}
+
+export function popupStatusBadge(status: string): { label: string; token: string } {
+  return POPUP_STATUS_BADGES[status] ?? { label: status, token: 'empty' }
+}
+
+/** BE PopupAudience — 계정 유형(가입 때 고른 개인/선생님) 기준이다. 모임 역할과 무관 */
+export function popupAudienceLabel(audience: string): string {
+  if (audience === 'ALL') return '전체'
+  if (audience === 'ORGANIZATION') return '선생님 계정'
+  if (audience === 'PERSONAL') return '개인 계정'
+  return audience
+}
+
+export function popupLocaleLabel(locale: string): string {
+  if (locale === 'ko') return '한국어'
+  if (locale === 'en') return 'English'
+  if (locale === 'ja') return '日本語'
+  return locale
+}
+
+export function popupLinkTargetLabel(target: string): string {
+  if (target === 'IN_APP') return '앱 안 브라우저'
+  if (target === 'EXTERNAL') return '외부 브라우저'
+  return target
+}
+
+/** 기간 한 칸 — `10-15 08:00 ~ 10-31 23:59`(KST). 연도가 다르면 연도까지 쓴다 */
+export function formatPeriod(startsAt: string, endsAt: string): string {
+  const start = formatDateTime(startsAt)
+  const end = formatDateTime(endsAt)
+  if (start === '—' || end === '—' || start.slice(0, 4) !== end.slice(0, 4)) {
+    return `${start} ~ ${end}`
+  }
+  return `${start.slice(5)} ~ ${end.slice(5)}`
+}
+
+/** 링크의 호스트만 — 표 칸에 긴 URL을 다 늘어놓지 않는다(전체는 title 툴팁) */
+export function linkHost(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+// ── 혜택 푸시 (CHMO-928) ──────────────────────────────────────────
+
+/**
+ * BE CampaignStatus → 배지. 기다리는 일(예약·대기·보내는 중)은 갈색·주황, 끝난 일은 초록,
+ * **운영자가 확인해야 하는 일(실패·일부 실패·결과 불명)은 붉은색** — 자동 재발송이 없어서
+ * 사람이 보지 않으면 그대로 묻힌다(BE CHMO-926).
+ */
+const CAMPAIGN_STATUS_BADGES: Record<string, { label: string; token: string }> = {
+  SCHEDULED: { label: '예약됨', token: 'ready' },
+  QUEUED: { label: '대기 중', token: 'analyzing' },
+  SENDING: { label: '보내는 중', token: 'analyzing' },
+  SENT: { label: '보냄', token: 'published' },
+  PARTIAL: { label: '일부 실패', token: 'report' },
+  FAILED: { label: '실패', token: 'report' },
+  UNKNOWN: { label: '결과 확인 필요', token: 'report' },
+  CANCELLED: { label: '취소됨', token: 'empty' },
+}
+
+export function campaignStatusBadge(status: string): { label: string; token: string } {
+  return CAMPAIGN_STATUS_BADGES[status] ?? { label: status, token: 'empty' }
+}
+
+/** 아직 결과가 나지 않은 상태 — 이력 표가 몇 초마다 다시 읽는 조건 */
+export function isCampaignInFlight(status: string): boolean {
+  return status === 'QUEUED' || status === 'SENDING'
+}
+
+/**
+ * 실패 사유 코드(BE CampaignDispatcher·FcmPushSender) → 운영자가 읽을 한 줄.
+ * FCM 오류 코드 이름(UNREGISTERED 등)이 그대로 오기도 해 미지 코드는 원문으로 둔다.
+ */
+const CAMPAIGN_FAILURE_LABELS: Record<string, string> = {
+  FCM_NOT_CONFIGURED: '서버에 FCM 설정이 없어요',
+  NO_ELIGIBLE_DEVICES: '받을 기기가 없어요',
+  OUTSIDE_DELIVERY_HOURS: '야간이 돼 보내지 못했어요',
+  DELIVERY_FAILED: '전송에 실패했어요',
+  FCM_RESULT_UNKNOWN: 'FCM 응답을 확인하지 못했어요',
+  RESULT_UNKNOWN: '결과를 저장하지 못했어요',
+}
+
+export function campaignFailureLabel(code: string | null): string | null {
+  if (!code) return null
+  return CAMPAIGN_FAILURE_LABELS[code] ?? code
+}

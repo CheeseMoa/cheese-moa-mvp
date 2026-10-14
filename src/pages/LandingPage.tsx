@@ -4,6 +4,7 @@ import { PhoneShell } from '../components/PhoneShell'
 import { BrandHero } from '../components/BrandHero'
 import { SocialLoginButtons } from '../components/SocialLoginButtons'
 import { PinLoginForm } from '../components/PinLoginForm'
+import { SiteFooter } from '../components/SiteFooter'
 import { EMPTY_TAP_STREAK, advanceTapStreak, reachesReviewLogin } from '../lib/reviewLogin'
 
 /** 로그인에 가로막힌 화면(초대 링크 JoinPage 등)이 넘기는 복귀 목적지 */
@@ -21,11 +22,16 @@ interface AuthLocationState {
  * 스토어 심사관이 소셜 계정 없이 데모 계정으로 들어오는 상시 진입점(심사 노트에 절차 공개,
  * 애플 2.1 대응). 노출은 컴포넌트 상태뿐이라 새로고침·재방문이면 다시 숨는다(비영속 — 일반
  * 사용자 오발견 최소화). 판정 규칙은 lib/reviewLogin.ts 단일 원천.
+ *
+ * 이용권 구매(/pass/*)에서 넘어온 로그인은 그 폼을 **처음부터 펼친다**(CHMO-899) — 결제대행사
+ * 심사 담당자가 별도 채널로 받은 ID/PIN 계정으로 들어오는 동선이다(소셜 계정을 쓸 수 없다).
+ * 일반 관리자는 위의 소셜 버튼을 그대로 쓰면 된다. 하단엔 공개 페이지 공통 사업자 정보(SiteFooter).
  */
 export function LandingPage() {
   const location = useLocation()
   const returnTo = (location.state as AuthLocationState | null)?.returnTo
-  const [reviewLoginOpen, setReviewLoginOpen] = useState(false)
+  const fromPurchase = returnTo?.startsWith('/pass/') ?? false
+  const [reviewLoginOpen, setReviewLoginOpen] = useState(fromPurchase)
   const tapStreak = useRef(EMPTY_TAP_STREAK)
   const reviewFormRef = useRef<HTMLDivElement>(null)
 
@@ -34,12 +40,13 @@ export function LandingPage() {
     if (reachesReviewLogin(tapStreak.current)) setReviewLoginOpen(true)
   }
 
-  // 폼이 소셜 버튼 아래(첫 화면 밖)에 열리므로 열린 걸 심사관이 놓치지 않게 끌어내린다
+  // 폼이 소셜 버튼 아래(첫 화면 밖)에 열리므로 열린 걸 심사관이 놓치지 않게 끌어내린다.
+  // 구매에서 넘어와 처음부터 펼친 경우는 끌어내리지 않는다(배너·소셜 버튼이 먼저 보여야 한다)
   useEffect(() => {
-    if (reviewLoginOpen) {
+    if (reviewLoginOpen && !fromPurchase) {
       reviewFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
-  }, [reviewLoginOpen])
+  }, [reviewLoginOpen, fromPurchase])
 
   return (
     <PhoneShell>
@@ -52,6 +59,12 @@ export function LandingPage() {
           {returnTo?.startsWith('/join/') && (
             <p className="rounded-xl bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-text">
               🧀 초대받은 모임에 참여하려면 로그인이 필요해요. 완료하면 참여 화면으로 이어져요.
+            </p>
+          )}
+          {fromPurchase && (
+            <p className="rounded-xl bg-primary/15 px-4 py-3 text-[13px] leading-relaxed text-text">
+              🧀 이용권을 구매하려면 비즈니스 모임 관리자 계정으로 로그인해 주세요. 완료하면 구매
+              화면으로 이어져요.
             </p>
           )}
           <SocialLoginButtons returnTo={returnTo} />
@@ -84,6 +97,7 @@ export function LandingPage() {
               </Link>
             </div>
           ) : null}
+          <SiteFooter className="mt-4" />
         </div>
       </div>
     </PhoneShell>

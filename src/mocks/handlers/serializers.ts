@@ -33,10 +33,14 @@ import {
   photoCountOfEvent,
   photosOfAlbum,
   photosOfEvent,
+  popupImageUrlOf,
+  popupStatusAt,
   progressOf,
   teacherCountOf,
   unreviewedCountOfAlbum,
   viewerPhotosOfAlbum,
+  PASS_PLANS,
+  type DbPassOrder,
   type DbAlbum,
   type DbEvent,
   type DbGroup,
@@ -44,6 +48,8 @@ import {
   type DbOrganizationInquiry,
   type DbPerson,
   type DbPhoto,
+  type DbPopup,
+  type DbPushCampaign,
   type DbReport,
   type DbUser,
 } from '../db'
@@ -768,5 +774,102 @@ export function toAdminReportDetailResponse(report: DbReport) {
             answeredAt: report.answeredAt,
             answeredBy: report.answeredBy,
           },
+  }
+}
+
+// ── 기간 이용권 결제 (BE CHMO-847 PassPlanResponse·PassOrderResponse·…) — CHMO-899 ──
+
+export function toPassPlanResponse(plan: (typeof PASS_PLANS)[number]) {
+  return { code: plan.code, durationDays: plan.durationDays, usdAmount: plan.usdCents / 100 }
+}
+
+/** 해외 주문은 환율 필드를 생략한다(BE @JsonInclude NON_NULL) */
+export function toPassOrderResponse(order: DbPassOrder) {
+  const plan = PASS_PLANS.find((p) => p.code === order.planCode)
+  return {
+    orderId: order.orderId,
+    orderName: `CheeseMoa ${plan?.durationDays ?? ''}일 이용권`,
+    clientKey: order.market === 'DOMESTIC' ? 'test_ck_mock_krw' : 'test_ck_mock_usd',
+    planCode: order.planCode,
+    market: order.market,
+    amount: order.amount,
+    currency: order.currency,
+    usdAmount: order.usdAmount,
+    ...(order.usdKrwRate !== null ? { usdKrwRate: order.usdKrwRate, rateDate: order.rateDate } : {}),
+    expiresAt: order.expiresAt,
+  }
+}
+
+/** 승인된 주문 전용(호출부가 SUCCEEDED만 넘긴다) — 승인 시각·이용 기간은 승인 때 함께 채워진다 */
+export function toPassConfirmResponse(order: DbPassOrder) {
+  return {
+    orderId: order.orderId,
+    status: order.status,
+    planCode: order.planCode,
+    amount: order.amount,
+    currency: order.currency,
+    approvedAt: order.approvedAt!,
+    accessFrom: order.accessFrom!,
+    accessUntil: order.accessUntil!,
+  }
+}
+
+export function toCurrentPassResponse(accessUntil: string) {
+  return { active: Date.parse(accessUntil) > Date.now(), accessUntil }
+}
+
+// ── 이벤트 팝업·혜택 푸시 어드민 (CHMO-928 — BE CHMO-926 PR #312) ──
+// 두 DTO 모두 `@JsonInclude(NON_NULL)`이라 null 필드는 키째 뺀다(빈 리스트는 남는다).
+
+/**
+ * BE AdminPopupResponse — `@JsonUnwrapped content`라 요청 필드가 평면으로 펼쳐진다.
+ * 상태는 조회 시각으로 파생하고(저장값 아님) 이미지는 presigned GET 자리에 목 URL을 준다.
+ */
+export function toAdminPopupResponse(popup: DbPopup, nowMs = Date.now()) {
+  return {
+    popupId: popup.id,
+    imageUrl: popupImageUrlOf(popup),
+    title: popup.title,
+    imageKey: popup.imageKey,
+    imageAlt: popup.imageAlt,
+    ...(popup.ctaLabel !== null ? { ctaLabel: popup.ctaLabel } : {}),
+    linkUrl: popup.linkUrl,
+    linkTarget: popup.linkTarget,
+    audience: popup.audience,
+    locale: popup.locale,
+    startsAt: popup.startsAt,
+    endsAt: popup.endsAt,
+    priority: popup.priority,
+    hideOption: popup.hideOption,
+    active: popup.active,
+    ...(popup.minAppVersion !== null ? { minAppVersion: popup.minAppVersion } : {}),
+    status: popupStatusAt(popup, nowMs),
+    createdBy: popup.createdBy,
+    updatedBy: popup.updatedBy,
+    createdAt: popup.createdAt,
+    updatedAt: popup.updatedAt,
+  }
+}
+
+/**
+ * BE CampaignResponse — 생성·테스트·취소·상세·이력 공통. requestKey·requestHash·dueAt은
+ * 응답에 없다(서버 내부값). fcmMessageIds는 리스트라 비어도 키가 남는다.
+ */
+export function toAdminCampaignResponse(campaign: DbPushCampaign) {
+  return {
+    campaignId: campaign.id,
+    status: campaign.status,
+    title: campaign.title,
+    body: campaign.body,
+    ...(campaign.link !== null ? { link: campaign.link } : {}),
+    ...(campaign.testUserId !== null ? { testUserId: campaign.testUserId } : {}),
+    ...(campaign.scheduledAt !== null ? { scheduledAt: campaign.scheduledAt } : {}),
+    createdBy: campaign.createdBy,
+    createdAt: campaign.createdAt,
+    ...(campaign.sentAt !== null ? { sentAt: campaign.sentAt } : {}),
+    ...(campaign.cancelledBy !== null ? { cancelledBy: campaign.cancelledBy } : {}),
+    ...(campaign.cancelledAt !== null ? { cancelledAt: campaign.cancelledAt } : {}),
+    fcmMessageIds: campaign.fcmMessageIds,
+    ...(campaign.failureCode !== null ? { failureCode: campaign.failureCode } : {}),
   }
 }
