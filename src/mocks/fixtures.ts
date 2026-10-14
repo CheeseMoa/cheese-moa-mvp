@@ -364,10 +364,19 @@ export function createFixtures(): Db {
     ],
     albums,
     photos,
-    // 동의 기록은 비워 둔다(CHMO-516) — 시드 계정에 보호자 동의 확인이 없으므로 빈 이벤트
-    // (4번 '가을 발표회 준비')에서 업로드를 시작하면 실 BE처럼 AGREEMENT428 게이트를 만난다.
-    // 기록을 미리 넣으면 목에서 그 경로를 한 번도 못 보고 지나간다.
-    agreements: [],
+    // 보호자 동의 확인·가입 필수 동의는 비워 둔다(CHMO-516) — 시드 계정에 보호자 동의 확인이
+    // 없으므로 빈 이벤트(4번 '가을 발표회 준비')에서 업로드를 시작하면 실 BE처럼 AGREEMENT428
+    // 게이트를 만난다. 기록을 미리 넣으면 목에서 그 경로를 한 번도 못 보고 지나간다.
+    // 선택 항목 MARKETING만 깐다(CHMO-928 — 혜택 푸시 수신 대상 판정. 게이트는 선택 항목을 안 본다)
+    agreements: [1, 2, 3, 4, 7].map((userId) => ({
+      id: 400 + userId,
+      userId,
+      type: 'marketing' as const,
+      version: '1.0',
+      agreed: true,
+      groupId: null,
+      createdAt: '2026-09-01T09:00:00+09:00',
+    })),
     // 이벤트 1·2는 분석 완료 이력(done) — 상태가 review/published인 이벤트는 분석을 거쳤어야 함.
     // 이벤트 3은 시드 시점부터 분석 중 — 워커 기동 후 ANALYSIS_DURATION_MS 지나 조회하면 review로 전이
     analysisJobs: [
@@ -403,9 +412,19 @@ export function createFixtures(): Db {
         options: { excludeEyesClosed: true, excludeBlurry: false },
       },
     ],
-    // 푸시 기기는 앱에서 등록되는 값이라 시드가 없다(CHMO-667) — 목 모드에서도
-    // POST /me/devices를 실제로 타야 행이 생긴다(브라우저에선 브리지가 없어 영영 비어 있다)
-    devices: [],
+    // 푸시 기기는 앱에서 등록되는 값이라(CHMO-667) 브라우저 목 모드에선 영영 안 생긴다 —
+    // 혜택 푸시 어드민(CHMO-928)의 대상 수·테스트 발송을 볼 수 있게 시드를 깐다. 수신 조건은
+    // 기기 + MARKETING 동의(아래 agreements) 둘 다라, 일부러 엇갈리게 뒀다: 서연맘(5)은 기기만
+    // 있고 동의가 없어 세지 않고, 치즈냥이88(7)은 동의만 있고 기기가 없어 사용자 수에만 들어간다
+    // (BE와 같다 — userCount는 기기 없는 적격자도 센다). 이현정(1)은 기기 둘(테스트 발송 기본 대상).
+    devices: [
+      { userId: 1, token: 'seed-fcm-token-u1-ios', platform: 'ios', createdAt: '2026-09-01T09:00:00+09:00' },
+      { userId: 1, token: 'seed-fcm-token-u1-android', platform: 'android', createdAt: '2026-09-02T09:00:00+09:00' },
+      { userId: 2, token: 'seed-fcm-token-u2', platform: 'ios', createdAt: '2026-09-03T09:00:00+09:00' },
+      { userId: 3, token: 'seed-fcm-token-u3', platform: 'android', createdAt: '2026-09-03T10:00:00+09:00' },
+      { userId: 4, token: 'seed-fcm-token-u4', platform: 'ios', createdAt: '2026-09-04T09:00:00+09:00' },
+      { userId: 5, token: 'seed-fcm-token-u5', platform: 'android', createdAt: '2026-09-04T10:00:00+09:00' },
+    ],
     /**
      * 기관 도입 문의 (CHMO-811) — 접수는 앱(CHMO-802)이 하므로 웹에는 생성 경로가 없고
      * 시드가 곧 전부다. 탭 넷이 다 채워지도록 상태별로 깔고, 화면에서만 드러나는 경우 셋을
@@ -687,7 +706,178 @@ export function createFixtures(): Db {
         updatedAt: '2026-09-11T09:30:00+09:00',
       },
     ],
-    // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다
-    uploadedKeys: [],
+    ...promotionSeeds(),
+  }
+}
+
+/**
+ * 이벤트 팝업·혜택 푸시 시드 (CHMO-928). 팝업 상태는 저장값이 아니라 **조회 시각 파생**이라
+ * 고정 날짜로 깔면 시간이 지나며 전부 '종료'가 된다 — 지금 기준 상대 시각으로 깔아 탭 넷
+ * (노출 중·예정·종료·꺼짐)이 언제 열어도 채워지게 한다.
+ * 팝업 이미지 키는 업로드 기록에 넣는다 — 수정(PUT)도 BE처럼 이미지 존재를 다시 확인한다.
+ */
+function promotionSeeds(): Pick<Db, 'popups' | 'pushCampaigns' | 'uploadedKeys'> {
+  const now = Date.now()
+  const at = (hours: number) => new Date(now + hours * 60 * 60 * 1000).toISOString()
+  const key = (n: number) => `popups/1/00000000-0000-4000-8000-00000000000${n}.png`
+  const base = {
+    linkTarget: 'IN_APP' as const,
+    audience: 'ALL' as const,
+    locale: 'ko' as const,
+    priority: 0,
+    hideOption: 'TODAY' as const,
+    active: true,
+    minAppVersion: null,
+    createdBy: 1,
+    updatedBy: 1,
+    deletedAt: null,
+  }
+  const footer = '치즈모아 · 수신 거부: 내 정보 > 혜택·이벤트 알림'
+  return {
+    popups: [
+      {
+        ...base,
+        id: 4,
+        title: '10월 사용 설문',
+        imageKey: key(4),
+        imageAlt: '치즈모아 사용 설문 · 참여하면 커피 기프티콘',
+        ctaLabel: '설문 참여하기',
+        linkUrl: 'https://forms.gle/cheesemoa-october',
+        startsAt: at(-24),
+        endsAt: at(24 * 14),
+        priority: 10,
+        minAppVersion: '2.7.0',
+        createdAt: at(-30),
+        updatedAt: at(-30),
+      },
+      {
+        ...base,
+        id: 3,
+        title: '선생님 전용 · 신학기 안내',
+        imageKey: key(3),
+        imageAlt: '신학기 앨범 정리 안내',
+        ctaLabel: null,
+        linkUrl: 'https://cheese-moa.com/guide',
+        linkTarget: 'EXTERNAL',
+        audience: 'ORGANIZATION',
+        startsAt: at(24 * 3),
+        endsAt: at(24 * 10),
+        createdAt: at(-5),
+        updatedAt: at(-5),
+      },
+      {
+        ...base,
+        id: 2,
+        title: 'Summer survey (EN)',
+        imageKey: key(2),
+        imageAlt: 'CheeseMoa summer survey',
+        ctaLabel: 'Take the survey',
+        linkUrl: 'https://forms.gle/cheesemoa-summer',
+        locale: 'en',
+        hideOption: 'NONE',
+        startsAt: at(-24 * 30),
+        endsAt: at(-24 * 3),
+        createdAt: at(-24 * 31),
+        updatedAt: at(-24 * 31),
+      },
+      {
+        ...base,
+        id: 1,
+        title: '추석 이벤트(보류)',
+        imageKey: key(1),
+        imageAlt: '추석 맞이 사진 인화 이벤트',
+        ctaLabel: '자세히 보기',
+        linkUrl: 'https://cheese-moa.com/event',
+        audience: 'PERSONAL',
+        active: false,
+        startsAt: at(-24 * 2),
+        endsAt: at(24 * 5),
+        createdAt: at(-24 * 6),
+        updatedAt: at(-24),
+      },
+    ],
+    pushCampaigns: [
+      {
+        id: 4,
+        status: 'SCHEDULED',
+        title: '(광고) 설문 마감 하루 전',
+        body: `설문이 내일 마감돼요. 아직 참여하지 않았다면 지금 들려주세요.\n${footer}`,
+        link: 'https://forms.gle/cheesemoa-october',
+        requestKey: 'seed-4',
+        requestHash: 'seed-4',
+        createdBy: 1,
+        testUserId: null,
+        scheduledAt: at(24 * 2),
+        dueAt: at(24 * 2),
+        sentAt: null,
+        cancelledBy: null,
+        cancelledAt: null,
+        fcmMessageIds: [],
+        failureCode: null,
+        createdAt: at(-2),
+      },
+      {
+        id: 3,
+        status: 'SENT',
+        title: '(광고) 10월 사용 설문',
+        body: `치즈모아를 쓰며 느낀 점을 들려주세요. 참여하면 커피 기프티콘을 드려요.\n${footer}`,
+        link: 'https://forms.gle/cheesemoa-october',
+        requestKey: 'seed-3',
+        requestHash: 'seed-3',
+        createdBy: 1,
+        testUserId: null,
+        scheduledAt: null,
+        dueAt: at(-20),
+        sentAt: at(-20),
+        cancelledBy: null,
+        cancelledAt: null,
+        fcmMessageIds: ['projects/cheese-moa/messages/seed-topic-3'],
+        failureCode: null,
+        createdAt: at(-20),
+      },
+      {
+        id: 2,
+        status: 'SENT',
+        title: '(광고) 10월 사용 설문',
+        body: `치즈모아를 쓰며 느낀 점을 들려주세요. 참여하면 커피 기프티콘을 드려요.\n${footer}`,
+        link: 'https://forms.gle/cheesemoa-october',
+        requestKey: 'seed-2',
+        requestHash: 'seed-2',
+        createdBy: 1,
+        testUserId: 1,
+        scheduledAt: null,
+        dueAt: at(-21),
+        sentAt: at(-21),
+        cancelledBy: null,
+        cancelledAt: null,
+        fcmMessageIds: [
+          'projects/cheese-moa/messages/seed-test-2a',
+          'projects/cheese-moa/messages/seed-test-2b',
+        ],
+        failureCode: null,
+        createdAt: at(-21),
+      },
+      {
+        id: 1,
+        status: 'FAILED',
+        title: '(광고) 추석 맞이 인화 이벤트',
+        body: `추석 사진을 인화해 드려요.\n${footer}`,
+        link: null,
+        requestKey: 'seed-1',
+        requestHash: 'seed-1',
+        createdBy: 1,
+        testUserId: null,
+        scheduledAt: null,
+        dueAt: at(-24 * 6),
+        sentAt: null,
+        cancelledBy: null,
+        cancelledAt: null,
+        fcmMessageIds: [],
+        failureCode: 'FCM_NOT_CONFIGURED',
+        createdAt: at(-24 * 6),
+      },
+    ],
+    // 시드 사진은 presign을 거치지 않았다 — 업로드 키는 새 업로드에서만 쌓인다(팝업 이미지만 예외)
+    uploadedKeys: [1, 2, 3, 4].map(key),
   }
 }

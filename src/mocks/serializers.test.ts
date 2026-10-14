@@ -32,11 +32,15 @@ import {
   publishEventPhotos,
   unlinkPhotoFromAlbum,
   unreviewedGatePhotoCount,
+  campaignDevicesOf,
+  campaignRecipientCounts,
 } from './db'
 import { createFixtures } from './fixtures'
 import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
 import { SIGNUP_AGREEMENT_ITEMS } from '../legal/signupAgreements'
 import {
+  toAdminCampaignResponse,
+  toAdminPopupResponse,
   toAdminGroupDetailResponse,
   toAdminGroupSummary,
   toAdminInquiryResponse,
@@ -103,6 +107,9 @@ import {
   toViewerPhoto,
 } from '../api/mappers'
 import {
+  toAdminCampaign,
+  toAdminCampaignRecipients,
+  toAdminPopup,
   toAdminGroupDetail,
   toAdminGroupRow,
   toAdminInquiry,
@@ -1082,5 +1089,77 @@ describe('기간 이용권 결제 (CHMO-899 — BE CHMO-847)', () => {
       active: true,
       accessUntil: secondResult.accessUntil,
     })
+  })
+})
+
+describe('어드민 이벤트 팝업·혜택 푸시 (CHMO-928 — BE CHMO-926 계약)', () => {
+  const popup = (id: number) => db.popups.find((p) => p.id === id)!
+  const campaign = (id: number) => db.pushCampaigns.find((c) => c.id === id)!
+
+  it('팝업 — 시드 4종이 조회 시각 기준으로 상태 탭 넷을 채운다(OFF가 기간보다 우선)', () => {
+    const statuses = db.popups.map((p) => toAdminPopup(toAdminPopupResponse(p)).status)
+    expect(new Set(statuses)).toEqual(new Set(['LIVE', 'SCHEDULED', 'ENDED', 'OFF']))
+    // 1번은 기간 안이지만 꺼져 있다 — 기간으로 판정하면 LIVE가 돼 버린다
+    expect(toAdminPopup(toAdminPopupResponse(popup(1))).status).toBe('OFF')
+  })
+
+  it('팝업 — 선택 필드가 있으면 그대로, 비면 키째 빠졌다가(NON_NULL) 매퍼가 null로 접는다', () => {
+    const live = toAdminPopup(toAdminPopupResponse(popup(4)))
+    expect(live).toMatchObject({
+      popupId: 4,
+      ctaLabel: '설문 참여하기',
+      minAppVersion: '2.7.0',
+      linkTarget: 'IN_APP',
+      audience: 'ALL',
+      locale: 'ko',
+      hideOption: 'TODAY',
+      priority: 10,
+    })
+    const raw = toAdminPopupResponse(popup(3))
+    expect('ctaLabel' in raw).toBe(false)
+    expect('minAppVersion' in raw).toBe(false)
+    expect(toAdminPopup(raw)).toMatchObject({ ctaLabel: null, minAppVersion: null })
+  })
+
+  it('팝업 — 시드 이미지는 4:5 자리표시자 URL이고 키는 업로드 기록에 있다(수정 PUT의 이미지 재확인 통과)', () => {
+    const mapped = toAdminPopup(toAdminPopupResponse(popup(4)))
+    expect(mapped.imageUrl).toMatch(/^data:image\/svg\+xml/)
+    expect(db.uploadedKeys).toContain(mapped.imageKey)
+  })
+
+  it('혜택 푸시 — 예약·테스트·실패 행이 매퍼를 지나 같은 의미로 읽힌다', () => {
+    expect(toAdminCampaign(toAdminCampaignResponse(campaign(4)))).toMatchObject({
+      status: 'SCHEDULED',
+      testUserId: null,
+      sentAt: null,
+      fcmMessageIds: [],
+    })
+    expect(toAdminCampaign(toAdminCampaignResponse(campaign(4))).scheduledAt).not.toBeNull()
+    expect(toAdminCampaign(toAdminCampaignResponse(campaign(2)))).toMatchObject({
+      status: 'SENT',
+      testUserId: 1,
+    })
+    expect(toAdminCampaign(toAdminCampaignResponse(campaign(2))).fcmMessageIds).toHaveLength(2)
+    expect(toAdminCampaign(toAdminCampaignResponse(campaign(1)))).toMatchObject({
+      status: 'FAILED',
+      failureCode: 'FCM_NOT_CONFIGURED',
+      link: null,
+    })
+  })
+
+  it('혜택 푸시 수신 대상 — 기기만 있는(동의 없음) 사람은 빼고, 동의만 있는(기기 없음) 사람은 사용자 수에만 든다', () => {
+    // 동의: 1·2·3·4·7 · 기기: 1(2대)·2·3·4·5 → 사용자 5명(7 포함) · 기기 5대(5번 기기 제외)
+    expect(toAdminCampaignRecipients(campaignRecipientCounts())).toEqual({
+      userCount: 5,
+      deviceCount: 5,
+    })
+    expect(campaignDevicesOf(1)).toHaveLength(2)
+    expect(campaignDevicesOf(5)).toHaveLength(0)
+  })
+
+  it('혜택 푸시 수신 대상 — 수신 거부(pushEnabled false)·동의 철회 기록이 뒤에 있으면 빠진다', () => {
+    db.users.find((u) => u.id === 2)!.pushEnabled = false
+    recordAgreement({ userId: 3, type: 'marketing', version: '1.0', agreed: false })
+    expect(campaignRecipientCounts()).toEqual({ userCount: 3, deviceCount: 3 })
   })
 })

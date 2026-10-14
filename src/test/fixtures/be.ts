@@ -106,6 +106,20 @@ export const BE_ERRORS = {
   INQUIRY409: { status: 409, payload: errorEnvelope('INQUIRY409', '이미 진행 중인 문의가 있습니다.') },
   /** 없는 신고·문의 — GET /admin/reports/999999 (2026-09-27 스테이징 실채집) */
   REPORT404: { status: 404, payload: errorEnvelope('REPORT404', '신고·문의를 찾을 수 없습니다.') },
+  /**
+   * 이벤트 팝업·혜택 푸시 어드민 3종 — **BE 소스 기준(미채집)**: CHMO-926 PR #312
+   * `ErrorStatus.INVALID_POPUP`·`INVALID_CAMPAIGN`·`CAMPAIGN_CONFLICT`. 운영 미배포(2026-10-14
+   * 프로브 — `/popups/active` COMMON404)라 실서버 채집은 배포 후.
+   */
+  POPUP400: { status: 400, payload: errorEnvelope('POPUP400', '팝업 설정이 올바르지 않습니다.') },
+  CAMPAIGN400: {
+    status: 400,
+    payload: errorEnvelope('CAMPAIGN400', '발송 시각 또는 수신 조건이 올바르지 않습니다.'),
+  },
+  CAMPAIGN409: {
+    status: 409,
+    payload: errorEnvelope('CAMPAIGN409', '이미 처리된 요청이거나 취소할 수 없는 발송입니다.'),
+  },
 }
 
 // ── 인증 / 프로필 ────────────────────────────────────────────
@@ -773,6 +787,112 @@ export const BE_ADMIN_GROUP_DETAIL = {
     },
   ],
 }
+
+// ── 이벤트 팝업·혜택 푸시 어드민 (CHMO-928 — BE CHMO-926 PR #312 develop 머지분) ──
+// **BE 스펙(docs/spec/CHMO-926-*.md §3)·DTO 소스 대조**: 운영 미배포(2026-10-14 프로브)라 채집 전.
+// 직렬화 규칙 두 가지를 그대로 옮겼다 — Instant(startsAt·scheduledAt 등)는 UTC `Z`, BaseEntity
+// 감사 시각(createdAt·updatedAt)은 LocalDateTime이라 오프셋이 없다(client.ts가 'Z'를 붙인다).
+// 선택 필드는 `@JsonInclude(NON_NULL)`이라 비면 키째 없다.
+
+/** GET /admin/popups/:id — AdminPopupResponse(@JsonUnwrapped content — 요청 필드가 평면으로) */
+export const BE_ADMIN_POPUP = {
+  popupId: 12,
+  imageUrl: 'https://cheesemoa-original.s3.ap-northeast-2.amazonaws.com/popups/3/a.jpg?X-Amz-Signature=<sig>',
+  title: '10월 설문',
+  imageKey: 'popups/3/0b6b2c1e-5d7a-4c47-9d0f-2a1f3e4b5c6d.jpg',
+  imageAlt: '치즈모아 사용 설문 — 참여하면 기프티콘',
+  ctaLabel: '설문 참여하기',
+  linkUrl: 'https://forms.gle/survey',
+  linkTarget: 'IN_APP',
+  audience: 'ALL',
+  locale: 'ko',
+  startsAt: '2026-10-14T23:00:00Z',
+  endsAt: '2026-10-31T14:59:59Z',
+  priority: 0,
+  hideOption: 'TODAY',
+  active: true,
+  minAppVersion: '2.7.0',
+  status: 'SCHEDULED',
+  createdBy: 3,
+  updatedBy: 3,
+  createdAt: '2026-10-14T10:00:00',
+  updatedAt: '2026-10-14T10:00:00',
+}
+
+/** 선택 필드(ctaLabel·minAppVersion)가 빈 팝업 — NON_NULL이라 키째 없다 */
+export const BE_ADMIN_POPUP_SPARSE = {
+  popupId: 11,
+  imageUrl: BE_ADMIN_POPUP.imageUrl,
+  title: 'Summer survey',
+  imageKey: BE_ADMIN_POPUP.imageKey,
+  imageAlt: 'CheeseMoa survey',
+  linkUrl: 'https://forms.gle/survey',
+  linkTarget: 'EXTERNAL',
+  audience: 'ORGANIZATION',
+  locale: 'en',
+  startsAt: '2026-10-14T23:00:00Z',
+  endsAt: '2026-10-31T14:59:59Z',
+  priority: 0,
+  hideOption: 'NONE',
+  active: false,
+  status: 'OFF',
+  createdBy: 3,
+  updatedBy: 3,
+  createdAt: '2026-10-14T10:00:00',
+  updatedAt: '2026-10-14T10:00:00',
+}
+
+/** POST /admin/popups/images/presign — PopupImageResponse(15분 PUT) */
+export const BE_ADMIN_POPUP_IMAGE = {
+  key: 'popups/3/0b6b2c1e-5d7a-4c47-9d0f-2a1f3e4b5c6d.jpg',
+  uploadUrl: 'https://cheesemoa-original.s3.ap-northeast-2.amazonaws.com/popups/3/x.jpg?X-Amz-Signature=<sig>',
+  expiresAt: '2026-10-14T10:15:00Z',
+}
+
+/**
+ * POST /admin/push-campaigns — 예약 접수 응답(스펙 §3 예시 + 감사 시각). title·body는 **자동 문구가
+ * 붙은 최종본**이고, 아직 보내지 않아 sentAt·fcmMessageIds·failureCode 키가 없다(NON_NULL).
+ * fcmMessageIds는 빈 리스트로 온다(NON_NULL은 빈 컬렉션을 거르지 않는다).
+ */
+export const BE_ADMIN_CAMPAIGN_SCHEDULED = {
+  campaignId: 42,
+  status: 'SCHEDULED',
+  title: '(광고) 설문 참여 혜택',
+  body: '의견을 들려주세요.\n치즈모아 · 수신 거부: 내 정보 > 혜택·이벤트 알림',
+  link: 'https://forms.gle/survey',
+  scheduledAt: '2026-10-15T01:00:00Z',
+  createdBy: 3,
+  createdAt: '2026-10-14T10:20:00',
+  fcmMessageIds: [],
+}
+
+/** 테스트 발송이 끝난 이력 행 — testUserId·sentAt·기기별 message id가 있고 link·scheduledAt은 없다 */
+export const BE_ADMIN_CAMPAIGN_TEST_SENT = {
+  campaignId: 43,
+  status: 'SENT',
+  title: '(광고) 설문 참여 혜택',
+  body: '의견을 들려주세요.\n치즈모아 · 수신 거부: 내 정보 > 혜택·이벤트 알림',
+  testUserId: 3,
+  createdBy: 3,
+  createdAt: '2026-10-14T10:21:00',
+  sentAt: '2026-10-14T01:21:05Z',
+  fcmMessageIds: ['projects/cheese-moa/messages/0:1700000000000000%abc'],
+}
+
+/** 결과 불명 — 자동 재발송하지 않는 상태(운영자가 확인 후 새로 보낸다) */
+export const BE_ADMIN_CAMPAIGN_UNKNOWN = {
+  campaignId: 44,
+  status: 'UNKNOWN',
+  title: '(광고) 주말 혜택',
+  body: '혜택을 확인하세요.\n치즈모아 · 수신 거부: 내 정보 > 혜택·이벤트 알림',
+  createdBy: 3,
+  createdAt: '2026-10-14T11:00:00',
+  fcmMessageIds: [],
+  failureCode: 'FCM_RESULT_UNKNOWN',
+}
+
+/** GET /admin/push-campaigns/recipients — CampaignRecipientsResponse(원시 long) */
+export const BE_ADMIN_CAMPAIGN_RECIPIENTS = { userCount: 100, deviceCount: 140 }
 
 // ── 기간 이용권 결제 (BE CHMO-847 — 스펙 기준, 미채집) ──────────
 // 출처: BE 리포 `docs/spec/CHMO-847-BUSINESS-모임-월-구독-결제.md` §3 예시 원문(2026-10-04 대조).

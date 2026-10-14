@@ -54,9 +54,10 @@ export function AdminLayout() {
     refreshPendingReports()
   }, [pathname, refreshPendingReports])
 
+  const adminUserId = profile.data?.userId ?? 0
   const outletContext = useMemo<AdminOutletContext>(
-    () => ({ pendingReportCount, refreshPendingReports }),
-    [pendingReportCount, refreshPendingReports],
+    () => ({ pendingReportCount, refreshPendingReports, adminUserId }),
+    [pendingReportCount, refreshPendingReports, adminUserId],
   )
 
   if (!authed) {

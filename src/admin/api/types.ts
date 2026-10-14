@@ -272,3 +272,143 @@ export interface AdminReportListParams {
   /** 생략하면 BE 기본값(`ALL`) */
   type?: AdminReportTypeFilter
 }
+
+// ── 이벤트 팝업 (CHMO-928 — BE CHMO-926 PR #312) ────────────────────
+
+/** BE PopupLinkTarget — 앱 안 브라우저 / 외부 브라우저 */
+export type AdminPopupLinkTarget = 'IN_APP' | 'EXTERNAL'
+
+/** BE PopupAudience — 판정은 서버가 사용자 accountType으로 한다(모임 역할과 별개) */
+export type AdminPopupAudience = 'ALL' | 'ORGANIZATION' | 'PERSONAL'
+
+/** BE PopupHideOption — TODAY면 앱 하단에 [오늘 하루 보지 않기]가 선다 */
+export type AdminPopupHideOption = 'TODAY' | 'NONE'
+
+/** BE 팝업 locale(`ko|en|ja` 패턴) — 앱은 Accept-Language 첫 언어로 고른다 */
+export type AdminPopupLocale = 'ko' | 'en' | 'ja'
+
+/**
+ * BE PopupStatus — 저장값이 아니라 **조회 시각 기준 파생값**이다(OFF가 우선: active=false면
+ * 기간과 무관하게 꺼짐). 같은 팝업이 시간이 지나면 SCHEDULED → LIVE → ENDED로 저절로 바뀐다.
+ */
+export type AdminPopupStatus = 'OFF' | 'SCHEDULED' | 'LIVE' | 'ENDED'
+
+/**
+ * 팝업 생성·수정 요청 본문(BE PopupRequest) — **수정도 전체 교체(PUT)**라 같은 형태다.
+ * 시각은 오프셋을 실은 ISO-8601(`+09:00`)로 보낸다(BE Instant 바인딩 — 오프셋 없으면 400).
+ */
+export interface AdminPopupInput {
+  /** 관리용 이름 — 앱에 나가지 않는다(100자) */
+  title: string
+  /** presign으로 받은 서버 발급 키(`popups/{actor}/{uuid}.jpg|png`)만 통과한다 */
+  imageKey: string
+  /** 화면 읽기 프로그램용 대체 문구(필수 500자) */
+  imageAlt: string
+  /** 선택(50자) — 없으면 앱에 옐로 버튼이 서지 않는다 */
+  ctaLabel: string | null
+  /** https만(2048자) */
+  linkUrl: string
+  linkTarget: AdminPopupLinkTarget
+  audience: AdminPopupAudience
+  locale: AdminPopupLocale
+  startsAt: string
+  endsAt: string
+  /** 높을수록 먼저 — 앱은 한 번에 하나만 띄운다 */
+  priority: number
+  hideOption: AdminPopupHideOption
+  active: boolean
+  /** 선택 — `major.minor.patch` 숫자만 */
+  minAppVersion: string | null
+}
+
+/**
+ * BE AdminPopupResponse — 목록 한 행이자 상세·생성·수정·켜기/끄기 응답 공통 형태
+ * (`@JsonUnwrapped content` — 요청 필드가 평면으로 펼쳐져 온다).
+ *
+ * `imageUrl`은 **presigned GET(2시간)**이라 조회마다 쿼리가 바뀐다. `createdBy`·`updatedBy`는
+ * 관리자 userId(닉네임 없음).
+ */
+export interface AdminPopup extends AdminPopupInput {
+  popupId: number
+  imageUrl: string
+  status: AdminPopupStatus
+  createdBy: number
+  updatedBy: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminPopupListParams {
+  page: number
+  size?: number
+  /** 생략하면 전체(삭제분 제외) */
+  status?: AdminPopupStatus
+}
+
+/** BE PopupImageResponse — 15분 PUT URL. Content-Type·Content-Length가 서명에 들어 있다 */
+export interface AdminPopupImageUpload {
+  key: string
+  uploadUrl: string
+  expiresAt: string
+}
+
+// ── 혜택 푸시 (CHMO-928 — BE CHMO-926 B절) ──────────────────────────
+
+/**
+ * BE CampaignStatus — 즉시 발송은 QUEUED(5초 주기 디스패처가 집는다), 예약은 SCHEDULED로
+ * 접수돼 SENDING → SENT/FAILED/PARTIAL/UNKNOWN으로 끝난다. 취소는 SCHEDULED에서만(CANCELLED).
+ * **UNKNOWN·FAILED·PARTIAL은 자동 재발송하지 않는다** — 운영자가 확인하고 새로 보낸다.
+ */
+export type AdminCampaignStatus =
+  | 'SCHEDULED'
+  | 'QUEUED'
+  | 'SENDING'
+  | 'SENT'
+  | 'FAILED'
+  | 'PARTIAL'
+  | 'UNKNOWN'
+  | 'CANCELLED'
+
+/** 발송 요청(BE CampaignRequest) — scheduledAt 생략 = 즉시 발송. 모르는 필드는 BE가 400으로 거부 */
+export interface AdminCampaignInput {
+  /** 입력 그대로 — `(광고)` 접두사는 서버가 붙인다(이미 있으면 중복 안 함) */
+  title: string
+  /** 입력 그대로 — 전송자·수신 거부 문구는 서버가 끝에 붙인다 */
+  body: string
+  /** 선택 — https만 */
+  link: string | null
+}
+
+/**
+ * BE CampaignResponse — 생성·테스트·취소·상세·이력 공통 형태(`@JsonInclude(NON_NULL)` — 빈
+ * 필드는 키째 생략돼 매퍼가 null로 접는다). title·body는 **자동 문구가 붙은 최종본**이다.
+ */
+export interface AdminCampaign {
+  campaignId: number
+  status: AdminCampaignStatus
+  title: string
+  body: string
+  link: string | null
+  /** 테스트 발송이면 그 사용자 — 토픽(전체) 발송은 null */
+  testUserId: number | null
+  /** 예약 시각 — 즉시 발송은 null */
+  scheduledAt: string | null
+  /** 접수한 관리자 userId(닉네임 없음) */
+  createdBy: number
+  createdAt: string
+  /** SENT·PARTIAL만 값이 있다 */
+  sentAt: string | null
+  cancelledBy: number | null
+  cancelledAt: string | null
+  /** FCM이 수락한 메시지 id — 실제 기기 열람을 뜻하지 않는다 */
+  fcmMessageIds: string[]
+  /** 실패 사유 코드(FCM_NOT_CONFIGURED·OUTSIDE_DELIVERY_HOURS 등) */
+  failureCode: string | null
+}
+
+/** BE CampaignRecipientsResponse — 현재 버전 MARKETING 동의 ∧ pushEnabled 기준(DB 최신 상태) */
+export interface AdminCampaignRecipients {
+  /** 기기가 없는 적격 사용자도 센다 */
+  userCount: number
+  deviceCount: number
+}

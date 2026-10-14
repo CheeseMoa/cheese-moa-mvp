@@ -154,6 +154,31 @@ export const router = createBrowserRouter([
         }),
       }, // 기관 도입 문의 — 어드민의 첫 쓰기 화면(CHMO-811)
       {
+        path: 'popups',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminPopupsPage')).AdminPopupsPage,
+        }),
+      }, // 이벤트 팝업 목록(CHMO-928 · BE CHMO-926)
+      {
+        // 작성(`new` — 복제는 `?from=:id`)과 수정(`:popupId`)이 같은 화면이다
+        path: 'popups/new',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminPopupEditPage')).AdminPopupEditPage,
+        }),
+      },
+      {
+        path: 'popups/:popupId',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminPopupEditPage')).AdminPopupEditPage,
+        }),
+      },
+      {
+        path: 'push',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminPushPage')).AdminPushPage,
+        }),
+      }, // 혜택 푸시 발송 — Firebase 콘솔 수동 발송 대체(CHMO-928)
+      {
         path: 'groups',
         lazy: async () => ({
           Component: (await import('./admin/pages/AdminGroupsPage')).AdminGroupsPage,
