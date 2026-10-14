@@ -68,6 +68,17 @@ export function created<T>(result: T) {
   )
 }
 
+/**
+ * 접수 성공 봉투 (202 COMMON202 — BE SuccessStatus._ACCEPTED, CHMO-926 혜택 푸시).
+ * 처리 완료가 아니라 **접수**만 뜻한다 — 결과는 이후 조회로 본다.
+ */
+export function accepted<T>(result: T) {
+  return HttpResponse.json(
+    { isSuccess: true, code: 'COMMON202', message: '접수되었습니다.', result },
+    { status: 202, headers: requestIdHeaders() },
+  )
+}
+
 /** 본문 없는 성공 (로그아웃) — BE 응답 코드는 미확인 */
 export function noContent() {
   return new HttpResponse(null, { status: 204, headers: requestIdHeaders() })

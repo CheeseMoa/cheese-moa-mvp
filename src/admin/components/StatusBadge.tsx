@@ -1,6 +1,8 @@
 import {
+  campaignStatusBadge,
   eventStatusBadge,
   inquiryStatusBadge,
+  popupStatusBadge,
   reportStatusBadge,
   reportTypeBadge,
 } from '../lib/format'
@@ -51,4 +53,14 @@ export function ReportStatusBadge({ status }: { status: string }) {
 /** 신고·문의 유형(BE ReportType — CHMO-862). 신고 2종만 붉은색 */
 export function ReportTypeBadge({ type }: { type: string }) {
   return <Badge {...reportTypeBadge(type)} />
+}
+
+/** 이벤트 팝업 상태(BE PopupStatus — CHMO-928) */
+export function PopupStatusBadge({ status }: { status: string }) {
+  return <Badge {...popupStatusBadge(status)} />
+}
+
+/** 혜택 푸시 발송 상태(BE CampaignStatus — CHMO-928). 확인이 필요한 셋만 붉은색 */
+export function CampaignStatusBadge({ status }: { status: string }) {
+  return <Badge {...campaignStatusBadge(status)} />
 }

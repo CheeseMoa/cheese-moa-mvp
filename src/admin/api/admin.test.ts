@@ -10,7 +10,19 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   adminLogin,
   adminLogout,
+  cancelAdminCampaign,
+  createAdminCampaign,
+  createAdminPopup,
+  deleteAdminPopup,
+  getAdminCampaignRecipients,
   getAdminGroupDetail,
+  listAdminCampaigns,
+  listAdminPopups,
+  presignAdminPopupImage,
+  putAdminPopupImage,
+  setAdminPopupActive,
+  testAdminCampaign,
+  updateAdminPopup,
   getAdminProfile,
   getAdminStats,
   listAdminGroups,
@@ -23,11 +35,19 @@ import {
 } from './admin'
 import { ApiRequestError } from '../../api/client'
 import { getAccessToken, getRefreshToken, setAuthTokens } from '../../lib/auth'
+import type { AdminPopupInput } from './types'
 import {
+  BE_ADMIN_CAMPAIGN_RECIPIENTS,
+  BE_ADMIN_CAMPAIGN_SCHEDULED,
+  BE_ADMIN_CAMPAIGN_TEST_SENT,
+  BE_ADMIN_CAMPAIGN_UNKNOWN,
   BE_ADMIN_GROUP_DETAIL,
   BE_ADMIN_GROUP_ROWS,
   BE_ADMIN_INQUIRY_ROWS,
   BE_ADMIN_PAGE_INFO,
+  BE_ADMIN_POPUP,
+  BE_ADMIN_POPUP_IMAGE,
+  BE_ADMIN_POPUP_SPARSE,
   BE_ADMIN_PROFILE,
   BE_ADMIN_REPORT_DETAIL,
   BE_ADMIN_REPORT_DETAIL_SPARSE,
@@ -496,5 +516,226 @@ describe('신고·문의 상태 전이 (PATCH /admin/reports/:id — CHMO-862)',
     const err = await updateAdminReportStatus(999999, 'CLOSED').catch((e: unknown) => e)
     expect((err as ApiRequestError).status).toBe(404)
     expect((err as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+})
+
+// ── 이벤트 팝업 (CHMO-928 — BE CHMO-926) ─────────────────────────────
+
+const POPUP_INPUT: AdminPopupInput = {
+  title: '10월 설문',
+  imageKey: BE_ADMIN_POPUP.imageKey,
+  imageAlt: '치즈모아 사용 설문',
+  ctaLabel: '설문 참여하기',
+  linkUrl: 'https://forms.gle/survey',
+  linkTarget: 'IN_APP',
+  audience: 'ALL',
+  locale: 'ko',
+  startsAt: '2026-10-15T08:00:00+09:00',
+  endsAt: '2026-10-31T23:59:00+09:00',
+  priority: 0,
+  hideOption: 'TODAY',
+  active: true,
+  minAppVersion: '2.7.0',
+}
+
+describe('팝업 목록 (GET /admin/popups — CHMO-928)', () => {
+  it('status·page·size를 조립하고 봉투 pageInfo를 함께 꺼낸다', async () => {
+    const calls = serve({ ...envelope([BE_ADMIN_POPUP]), pageInfo: BE_ADMIN_PAGE_INFO })
+    const { items, pageInfo } = await listAdminPopups({ page: 0, size: 20, status: 'LIVE' })
+    expect(calls[0].url).toBe('/api/v1/admin/popups?page=0&size=20&status=LIVE')
+    expect(pageInfo).toEqual(BE_ADMIN_PAGE_INFO)
+    expect(items[0]).toMatchObject({
+      popupId: 12,
+      ctaLabel: '설문 참여하기',
+      minAppVersion: '2.7.0',
+      status: 'SCHEDULED',
+      // Instant는 이미 Z, BaseEntity 감사 시각(LocalDateTime)에만 Z가 붙는다
+      startsAt: '2026-10-14T23:00:00Z',
+      createdAt: '2026-10-14T10:00:00Z',
+    })
+  })
+
+  it('선택 필드가 키째 빠지면(NON_NULL) null로 접는다 — 앱이 빈 버튼을 안 세우는 것과 같은 판정', async () => {
+    serve({ ...envelope([BE_ADMIN_POPUP_SPARSE]), pageInfo: BE_ADMIN_PAGE_INFO })
+    const { items } = await listAdminPopups({ page: 0 })
+    expect(items[0].ctaLabel).toBeNull()
+    expect(items[0].minAppVersion).toBeNull()
+    expect(items[0].status).toBe('OFF')
+  })
+
+  it('status를 안 넘기면 page만 실린다 — 전체(삭제분 제외)가 BE 기본값', async () => {
+    const calls = serve({ ...envelope([]), pageInfo: BE_ADMIN_PAGE_INFO })
+    await listAdminPopups({ page: 1 })
+    expect(calls[0].url).toBe('/api/v1/admin/popups?page=1')
+  })
+})
+
+describe('팝업 쓰기 (POST·PUT·PATCH·DELETE /admin/popups — CHMO-928)', () => {
+  it('생성은 전체 필드를 평면으로 보내고 행 형태를 돌려받는다', async () => {
+    const calls = serve(envelope(BE_ADMIN_POPUP, 'COMMON201'), 201)
+    const created = await createAdminPopup(POPUP_INPUT)
+    expect(calls[0].url).toBe('/api/v1/admin/popups')
+    expect(calls[0].method).toBe('POST')
+    expect(bodyOf(calls[0])).toEqual(POPUP_INPUT)
+    expect(created.popupId).toBe(12)
+  })
+
+  it('빈 선택 필드는 빈 문자열이 아니라 null로 보낸다 — 빈 ctaLabel이 앱에 빈 옐로 필을 세운다', async () => {
+    const calls = serve(envelope(BE_ADMIN_POPUP))
+    await updateAdminPopup(12, { ...POPUP_INPUT, ctaLabel: '  ', minAppVersion: '' })
+    expect(calls[0].url).toBe('/api/v1/admin/popups/12')
+    expect(calls[0].method).toBe('PUT')
+    expect(bodyOf(calls[0])).toMatchObject({ ctaLabel: null, minAppVersion: null })
+  })
+
+  it('켜기/끄기는 active만 싣고 갱신된 행(새 상태 파생값)을 돌려받는다', async () => {
+    const calls = serve(envelope({ ...BE_ADMIN_POPUP, active: false, status: 'OFF' }))
+    const updated = await setAdminPopupActive(12, false)
+    expect(calls[0].url).toBe('/api/v1/admin/popups/12/active')
+    expect(calls[0].method).toBe('PATCH')
+    expect(bodyOf(calls[0])).toEqual({ active: false })
+    expect(updated.status).toBe('OFF')
+  })
+
+  it('삭제는 result 없는 성공 응답이다', async () => {
+    const calls = serve({ isSuccess: true, code: 'COMMON200', message: '성공입니다.' })
+    await expect(deleteAdminPopup(12)).resolves.toBeUndefined()
+    expect(calls[0].url).toBe('/api/v1/admin/popups/12')
+    expect(calls[0].method).toBe('DELETE')
+  })
+
+  it('정책 위반 POPUP400은 INVALID_POPUP으로 정규화된다', async () => {
+    serve(BE_ERRORS.POPUP400.payload, BE_ERRORS.POPUP400.status)
+    const err = await createAdminPopup(POPUP_INPUT).catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(400)
+    expect((err as ApiRequestError).code).toBe('INVALID_POPUP')
+  })
+})
+
+describe('팝업 이미지 업로드 (presign → S3 PUT — CHMO-928)', () => {
+  it('presign에 파일의 type·size를 그대로 싣는다 — 둘 다 PUT 서명에 들어간다', async () => {
+    const calls = serve(envelope(BE_ADMIN_POPUP_IMAGE))
+    const upload = await presignAdminPopupImage({ type: 'image/jpeg', size: 123456 })
+    expect(calls[0].url).toBe('/api/v1/admin/popups/images/presign')
+    expect(bodyOf(calls[0])).toEqual({ contentType: 'image/jpeg', size: 123456 })
+    expect(upload.key).toBe(BE_ADMIN_POPUP_IMAGE.key)
+  })
+
+  it('S3 PUT은 presign URL로 직접 — 인증 헤더 없이 파일의 Content-Type을 싣는다', async () => {
+    const calls = stubFetch(() => new Response(null, { status: 200 }))
+    const file = new Blob(['x'], { type: 'image/png' })
+    await putAdminPopupImage(BE_ADMIN_POPUP_IMAGE.uploadUrl, file)
+    expect(calls[0].url).toBe(BE_ADMIN_POPUP_IMAGE.uploadUrl)
+    expect(calls[0].method).toBe('PUT')
+    expect(calls[0].headers.get('Content-Type')).toBe('image/png')
+    expect(calls[0].headers.get('Authorization')).toBeNull()
+  })
+
+  it('S3가 거절하면(서명 불일치 403 등) 던진다', async () => {
+    stubFetch(() => new Response(null, { status: 403 }))
+    await expect(
+      putAdminPopupImage(BE_ADMIN_POPUP_IMAGE.uploadUrl, new Blob(['x'], { type: 'image/png' })),
+    ).rejects.toThrow()
+  })
+})
+
+// ── 혜택 푸시 (CHMO-928 — BE CHMO-926 B절) ──────────────────────────
+
+const CAMPAIGN_INPUT = { title: '설문 참여 혜택', body: '의견을 들려주세요.', link: null }
+
+describe('혜택 푸시 발송 (POST /admin/push-campaigns — CHMO-928)', () => {
+  it('Idempotency-Key 헤더와 함께 보내고, 빈 link·즉시 발송의 scheduledAt은 키째 뺀다', async () => {
+    const calls = serve(envelope({ ...BE_ADMIN_CAMPAIGN_SCHEDULED, status: 'QUEUED' }, 'COMMON202'), 202)
+    const created = await createAdminCampaign(CAMPAIGN_INPUT, null, 'key-1')
+    expect(calls[0].url).toBe('/api/v1/admin/push-campaigns')
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].headers.get('Idempotency-Key')).toBe('key-1')
+    // 모르는 필드는 BE가 400으로 거부한다 — null 키도 싣지 않는다
+    expect(bodyOf(calls[0])).toEqual({ title: '설문 참여 혜택', body: '의견을 들려주세요.' })
+    expect(created.status).toBe('QUEUED')
+  })
+
+  it('예약은 scheduledAt을 싣고, 응답 title·body는 서버가 붙인 최종본이다', async () => {
+    const calls = serve(envelope(BE_ADMIN_CAMPAIGN_SCHEDULED, 'COMMON202'), 202)
+    const created = await createAdminCampaign(
+      { ...CAMPAIGN_INPUT, link: ' https://forms.gle/survey ' },
+      '2026-10-15T10:00:00+09:00',
+      'key-2',
+    )
+    expect(bodyOf(calls[0])).toEqual({
+      title: '설문 참여 혜택',
+      body: '의견을 들려주세요.',
+      link: 'https://forms.gle/survey',
+      scheduledAt: '2026-10-15T10:00:00+09:00',
+    })
+    expect(created).toMatchObject({
+      status: 'SCHEDULED',
+      title: '(광고) 설문 참여 혜택',
+      scheduledAt: '2026-10-15T01:00:00Z',
+      createdAt: '2026-10-14T10:20:00Z',
+      // NON_NULL로 빠진 키는 null로 접힌다
+      sentAt: null,
+      testUserId: null,
+      failureCode: null,
+      fcmMessageIds: [],
+    })
+  })
+
+  it('테스트 발송은 userId를 싣고 scheduledAt은 절대 싣지 않는다(테스트 DTO에 없는 필드 = 400)', async () => {
+    const calls = serve(envelope(BE_ADMIN_CAMPAIGN_TEST_SENT, 'COMMON202'), 202)
+    const sent = await testAdminCampaign(CAMPAIGN_INPUT, 3, 'key-3')
+    expect(calls[0].url).toBe('/api/v1/admin/push-campaigns/test')
+    expect(calls[0].headers.get('Idempotency-Key')).toBe('key-3')
+    expect(bodyOf(calls[0])).toEqual({
+      title: '설문 참여 혜택',
+      body: '의견을 들려주세요.',
+      userId: 3,
+    })
+    expect(sent).toMatchObject({ testUserId: 3, link: null, scheduledAt: null })
+    expect(sent.fcmMessageIds).toHaveLength(1)
+  })
+
+  it('야간·수신 조건 위반 CAMPAIGN400은 INVALID_CAMPAIGN으로 정규화된다', async () => {
+    serve(BE_ERRORS.CAMPAIGN400.payload, BE_ERRORS.CAMPAIGN400.status)
+    const err = await createAdminCampaign(CAMPAIGN_INPUT, null, 'key-4').catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(400)
+    expect((err as ApiRequestError).code).toBe('INVALID_CAMPAIGN')
+  })
+})
+
+describe('혜택 푸시 이력·대상 수·취소 (CHMO-928)', () => {
+  it('이력은 page·size를 조립하고 결과 불명 행의 실패 코드를 건넨다', async () => {
+    const calls = serve({
+      ...envelope([BE_ADMIN_CAMPAIGN_UNKNOWN, BE_ADMIN_CAMPAIGN_TEST_SENT]),
+      pageInfo: BE_ADMIN_PAGE_INFO,
+    })
+    const { items, pageInfo } = await listAdminCampaigns({ page: 0, size: 20 })
+    expect(calls[0].url).toBe('/api/v1/admin/push-campaigns?page=0&size=20')
+    expect(pageInfo).toEqual(BE_ADMIN_PAGE_INFO)
+    expect(items[0]).toMatchObject({ status: 'UNKNOWN', failureCode: 'FCM_RESULT_UNKNOWN' })
+    expect(items[1].sentAt).toBe('2026-10-14T01:21:05Z')
+  })
+
+  it('대상 수는 사용자·기기 두 값이다', async () => {
+    const calls = serve(envelope(BE_ADMIN_CAMPAIGN_RECIPIENTS))
+    await expect(getAdminCampaignRecipients()).resolves.toEqual({
+      userCount: 100,
+      deviceCount: 140,
+    })
+    expect(calls[0].url).toBe('/api/v1/admin/push-campaigns/recipients')
+  })
+
+  it('예약 취소는 본문 없이 POST하고, 이미 집힌 예약 CAMPAIGN409는 CAMPAIGN_CONFLICT로 온다', async () => {
+    const calls = serve(envelope({ ...BE_ADMIN_CAMPAIGN_SCHEDULED, status: 'CANCELLED', cancelledBy: 3 }))
+    const cancelled = await cancelAdminCampaign(42)
+    expect(calls[0].url).toBe('/api/v1/admin/push-campaigns/42/cancel')
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].body).toBeNull()
+    expect(cancelled).toMatchObject({ status: 'CANCELLED', cancelledBy: 3 })
+
+    serve(BE_ERRORS.CAMPAIGN409.payload, BE_ERRORS.CAMPAIGN409.status)
+    const err = await cancelAdminCampaign(42).catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(409)
+    expect((err as ApiRequestError).code).toBe('CAMPAIGN_CONFLICT')
   })
 })

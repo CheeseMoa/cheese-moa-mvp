@@ -12,6 +12,12 @@ export interface AdminOutletContext {
   /** 모르면 null — 0으로 채우면 "없다"는 거짓말이 된다(어드민 '—' 규칙) */
   pendingReportCount: number | null
   refreshPendingReports: () => void
+  /**
+   * 로그인한 관리자 userId(CHMO-928) — 혜택 푸시 이력의 작성자 칸을 '나'로 읽고, 테스트 발송의
+   * 기본 대상(운영자 자기 계정)으로 쓴다. 셸 게이트(GET /admin/me)를 통과한 뒤에만 화면이 그려지므로
+   * 항상 값이 있다.
+   */
+  adminUserId: number
 }
 
 export function useAdminOutlet(): AdminOutletContext {

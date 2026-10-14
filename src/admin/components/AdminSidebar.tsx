@@ -45,6 +45,13 @@ export function AdminSidebar({
         <SidebarLink to="/admin/groups" label="모임" />
       </nav>
 
+      {/* 사용자에게 먼저 말을 거는 도구 — 처리·조회(위)와 성격이 달라 묶음을 가른다(CHMO-928) */}
+      <div className="mt-5 px-5 pb-1 text-[11px] font-medium text-admin-muted">알림·홍보</div>
+      <nav className="flex flex-col gap-1" aria-label="알림·홍보 메뉴">
+        <SidebarLink to="/admin/popups" label="이벤트 팝업" />
+        <SidebarLink to="/admin/push" label="혜택 푸시" />
+      </nav>
+
       <div className="mt-auto border-t border-admin-border px-5 py-4">
         <div className="flex items-center gap-2.5">
           <span className="h-8 w-8 shrink-0 rounded-full bg-admin-bg" aria-hidden="true" />
