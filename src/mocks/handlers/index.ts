@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'msw'
 import { authHandlers } from './auth'
 import { adminHandlers, adminInquiryHandlers, adminReportHandlers } from './admin'
+import { adminBillingHandlers } from './adminBilling'
 import { agreementHandlers } from './agreements'
 import { adminCampaignHandlers, adminPopupHandlers } from './promotions'
 import { billingHandlers } from './billing'
@@ -22,6 +23,7 @@ import { shareHandlers } from './share'
  * CHMO-928: admin 이벤트 팝업·혜택 푸시(BE CHMO-926) — 팝업 이미지 가짜 S3 PUT이 사진 업로드의
  *   일반 `/mock-s3/*`보다 먼저 서야 해서 events보다 앞에 둔다.
  * CHMO-899: billing(기간 이용권 상품·주문 준비·승인·현재 이용권 — BE CHMO-847).
+ * CHMO-931: adminBilling(사용자 검색·장수 조회·조정, 기관 구독 목록·기간 등록·무효화 — BE CHMO-912).
  * parents가 events보다 먼저 — /events/:id/parent-photos가 /events/:id 계열 뒤에 서면 안 되는 건
  * 아니지만(MSW는 경로 전체 일치), 신설 경로를 한 곳에서 먼저 보이게 둔다.
  */
@@ -30,6 +32,7 @@ export const handlers: RequestHandler[] = [
   ...adminHandlers,
   ...adminInquiryHandlers,
   ...adminReportHandlers,
+  ...adminBillingHandlers,
   ...adminPopupHandlers,
   ...adminCampaignHandlers,
   ...agreementHandlers,

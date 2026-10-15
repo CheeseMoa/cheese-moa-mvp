@@ -36,6 +36,8 @@ export interface AdminStats {
 /** BE AdminGroupSummaryResponse — GET /admin/groups 목록 한 행(이름 없음 — CHMO-668) */
 export interface AdminGroupRow {
   groupId: number
+  /** BE SpaceType(BUSINESS·GENERAL — CHMO-621) 대문자 그대로. 표시명은 format.groupTypeLabel */
+  groupType: string
   memberCount: number
   eventCount: number
   photoCount: number
@@ -411,4 +413,135 @@ export interface AdminCampaignRecipients {
   /** 기기가 없는 적격 사용자도 센다 */
   userCount: number
   deviceCount: number
+}
+
+// ── 사용자·장수·기관 구독 (CHMO-931 — BE CHMO-912) ─────────────────
+
+/** BE AccountType — 가입 때 고른 [개인 | 유치원·기관] 탭(CHMO-808). 기관 계정만 구독 기간을 가진다 */
+export type AdminAccountType = 'PERSONAL' | 'ORGANIZATION'
+
+/**
+ * 커서 목록 공통(BE `{items, nextCursor, hasNext}`) — 모임 목록의 페이지 봉투(`pageInfo`)와 달리
+ * 전체 수가 없다. `nextCursor`는 마지막 행의 id이고 다음 페이지는 그보다 작은 행이다(전부 id DESC).
+ */
+export interface AdminCursorPage<T> {
+  items: T[]
+  nextCursor: number | null
+  hasNext: boolean
+}
+
+export interface AdminCursorParams {
+  cursor?: number | null
+  /** BE가 1~50으로 접는다(400이 아니다) — 화면은 상수로만 보낸다 */
+  size?: number
+}
+
+/** BE AdminUserSearchResponse.Item — GET /admin/users */
+export interface AdminUserRow {
+  userId: number
+  nickname: string
+  accountType: AdminAccountType
+}
+
+export interface AdminUserSearchParams extends AdminCursorParams {
+  /** 닉네임 부분 일치(대소문자 무시) 또는 userId 정확 일치. 비면 전체(최근 가입 순) */
+  query: string
+}
+
+/** BE CreditReason — 미지 값은 원문 표기(format.creditReasonLabel) */
+export type AdminCreditReason = 'SIGNUP' | 'MIGRATION' | 'DAILY' | 'UPLOAD' | 'ADMIN_ADJUST'
+
+/**
+ * BE CreditLedgerResponse.Item — 장부 한 줄. 모임·이벤트는 **이름만 지금 값**이고(스냅샷을 저장하지
+ * 않는다) 지워졌으면 이름이 null이다. 운영자 조정(ADMIN_ADJUST)만 memo가 있다.
+ */
+export interface AdminCreditLedgerItem {
+  ledgerId: number
+  delta: number
+  balanceAfter: number
+  reason: AdminCreditReason | string
+  groupId: number | null
+  groupName: string | null
+  eventId: number | null
+  eventName: string | null
+  memo: string | null
+  createdAt: string
+}
+
+/** BE AdminUserCreditsResponse — GET /admin/users/{id}/credits. 장부는 커서 페이지 */
+export interface AdminUserCredits {
+  userId: number
+  balance: number
+  ledger: AdminCursorPage<AdminCreditLedgerItem>
+}
+
+/** BE AdminCreditAdjustmentRequest — 지급은 양수·회수는 음수(0은 VALID400), 메모 필수 500자 */
+export interface AdminCreditAdjustmentInput {
+  delta: number
+  memo: string
+}
+
+/** BE AdminCreditAdjustmentResponse — POST credit-adjustments(201). `balance`는 조정 뒤 잔액 */
+export interface AdminCreditAdjustment {
+  userId: number
+  delta: number
+  balance: number
+}
+
+/**
+ * BE SubscriptionAccessStatus — 기관 이용 상태. ACTIVE = 살아 있는 기간 안 · GRACE = 종료 후 7일
+ * 유예(업로드 가능) · BLOCKED = 유예도 끝났거나 기간이 한 번도 없음(새 업로드 BILLING403).
+ */
+export type AdminSubscriptionAccessStatus = 'ACTIVE' | 'GRACE' | 'BLOCKED'
+
+/** BE AdminOrganizationSubscriptionListResponse.Item — 구독 행이 있는 기관만 온다 */
+export interface AdminOrganizationSubscriptionRow {
+  subscriptionId: number
+  userId: number
+  /** 계정이 지워졌으면 null */
+  nickname: string | null
+  status: AdminSubscriptionAccessStatus
+  /** 기간이 한 번도 없으면 null */
+  accessUntil: string | null
+  graceEndsAt: string | null
+}
+
+/**
+ * BE AdminOrganizationSubscriptionPeriodRequest — 시각은 Instant(오프셋 ISO), `paidOn`은 날짜.
+ * 등록기가 `accessUntil > accessFrom`과 기관 계정 여부를 검사한다(둘 다 VALID400).
+ */
+export interface AdminSubscriptionPeriodInput {
+  accessFrom: string
+  accessUntil: string
+  amountKrw: number
+  paidOn: string
+  payerName: string
+  invoiceNo: string | null
+  memo: string | null
+}
+
+/** BE AdminOrganizationSubscriptionResponse.Period — 무효화된 기간은 `voidedAt`이 찬다 */
+export interface AdminSubscriptionPeriod {
+  periodId: number
+  accessFrom: string
+  accessUntil: string
+  amountKrw: number
+  paidOn: string
+  payerName: string
+  invoiceNo: string | null
+  memo: string | null
+  voidedAt: string | null
+}
+
+/**
+ * BE AdminOrganizationSubscriptionResponse — 기간 등록(201)·무효화(200)의 응답. 그 기간 한 건과
+ * **처리 직후의 접근 상태**를 함께 준다. 무효화 응답은 nickname이 null이다(BE가 유저를 다시 안 읽는다).
+ */
+export interface AdminOrganizationSubscription {
+  organizationUserId: number
+  nickname: string | null
+  accessStatus: AdminSubscriptionAccessStatus
+  accessUntil: string | null
+  graceEndsAt: string | null
+  period: AdminSubscriptionPeriod
 }

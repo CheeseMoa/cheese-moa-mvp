@@ -331,3 +331,57 @@ export function campaignFailureLabel(code: string | null): string | null {
   if (!code) return null
   return CAMPAIGN_FAILURE_LABELS[code] ?? code
 }
+
+// ── 사용자·장수·기관 구독 (CHMO-931 — BE CHMO-912) ─────────────────
+
+/** BE SpaceType — 어드민 모임 목록 `유형` 열. 미지 값은 원문 */
+export function groupTypeLabel(type: string): string {
+  if (type === 'BUSINESS') return '비즈니스'
+  if (type === 'GENERAL') return '일반'
+  return type
+}
+
+/** BE AccountType — 가입 때 고른 탭. 모임 역할(관리자/멤버)과는 다른 축이라 '선생님'이라 쓰지 않는다 */
+export function accountTypeLabel(type: string): string {
+  if (type === 'PERSONAL') return '개인'
+  if (type === 'ORGANIZATION') return '기관'
+  return type
+}
+
+/**
+ * BE CreditReason → 장부 사유. 운영자 조정만 메모를 갖는다. SIGNUP·MIGRATION은 둘 다 첫 지급인데
+ * 적용 시각 전 가입자(500장)와 뒤 가입자(50장)를 가른 것이라 이름을 다르게 둔다.
+ */
+export function creditReasonLabel(reason: string): string {
+  if (reason === 'SIGNUP') return '가입 지급'
+  if (reason === 'MIGRATION') return '전환 지급'
+  if (reason === 'DAILY') return '일일 적립'
+  if (reason === 'UPLOAD') return '업로드 차감'
+  if (reason === 'ADMIN_ADJUST') return '운영자 조정'
+  return reason
+}
+
+/** 증감 표기 — `+100` · `−32`. 0은 일일 적립 시도 기록(상한이라 적립 안 됨)이라 `0` 그대로 */
+export function formatSignedCount(delta: number): string {
+  if (delta > 0) return `+${formatCount(delta)}`
+  if (delta < 0) return `−${formatCount(-delta)}`
+  return '0'
+}
+
+/**
+ * BE SubscriptionAccessStatus → 배지. 새 색 없이 토큰 재사용(이벤트·문의 배지와 같은 규칙):
+ * 이용 중=초록 · 유예=주황(곧 막힌다 — 손댈 일) · 차단=붉은색(지금 업로드가 안 된다).
+ */
+const SUBSCRIPTION_ACCESS_BADGES: Record<string, { label: string; token: string }> = {
+  ACTIVE: { label: '이용 중', token: 'published' },
+  GRACE: { label: '유예 기간', token: 'analyzing' },
+  BLOCKED: { label: '차단', token: 'report' },
+}
+
+export function subscriptionAccessBadge(status: string): { label: string; token: string } {
+  return SUBSCRIPTION_ACCESS_BADGES[status] ?? { label: status, token: 'empty' }
+}
+
+export function subscriptionAccessLabel(status: string): string {
+  return subscriptionAccessBadge(status).label
+}

@@ -155,7 +155,16 @@ export const authHandlers = [
     if (nicknameTaken(nickname)) return nicknameConflict()
 
     // 신규 가입 기본 role = USER(BE와 동일 — 관리자 지정은 DB 직접 변경뿐, admin-spec §2-3)
-    const user = { id: nextId('usr'), nickname, pin, role: 'USER' as const, createdAt: nowIso(), pushEnabled: true }
+    // accountType은 가입 요청이 안 싣는다(웹 가입 폼 없음) — BE DDL 기본값 PERSONAL
+    const user = {
+      id: nextId('usr'),
+      nickname,
+      pin,
+      role: 'USER' as const,
+      accountType: 'PERSONAL' as const,
+      createdAt: nowIso(),
+      pushEnabled: true,
+    }
     db.users.push(user)
     persistUser(user) // 가입 계정은 localStorage 보존 — 새로고침(재시드) 후에도 유지
     // 동의 행도 가입과 함께 기록 — 로그인 직후 게이트(GET /agreements, CHMO-479)가 pass로 지난다
@@ -199,7 +208,15 @@ export const authHandlers = [
       const validated = validateAgreementItems(items)
       if (validated.error) return validated.error
       // 소셜 계정은 PIN이 없다 — 빈 문자열은 PIN_RE에 걸려 닉네임+PIN 로그인으로는 진입 불가
-      user = { id: nextId('usr'), nickname, pin: '', role: 'USER' as const, createdAt: nowIso(), pushEnabled: true }
+      user = {
+        id: nextId('usr'),
+        nickname,
+        pin: '',
+        role: 'USER' as const,
+        accountType: 'PERSONAL' as const,
+        createdAt: nowIso(),
+        pushEnabled: true,
+      }
       db.users.push(user)
       // 보존이 곧 "가입됨" 판정 원천(lib/mockSocial) — 다음 로그인부터 signup=true가 안 실린다
       persistUser(user)

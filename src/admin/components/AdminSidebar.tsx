@@ -42,6 +42,9 @@ export function AdminSidebar({
           countLabel="처리 대기"
         />
         <SidebarLink to="/admin/inquiries" label="기관 문의" />
+        {/* 기관 구독은 기관 문의(개통)의 다음 일이라 바로 아래 — CHMO-931 */}
+        <SidebarLink to="/admin/organizations" label="기관 구독" />
+        <SidebarLink to="/admin/users" label="사용자" />
         <SidebarLink to="/admin/groups" label="모임" />
       </nav>
 
