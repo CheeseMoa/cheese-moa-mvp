@@ -8,9 +8,15 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  adjustAdminUserCredits,
   adminLogin,
   adminLogout,
   cancelAdminCampaign,
+  getAdminUserCredits,
+  listAdminOrganizationSubscriptions,
+  registerAdminSubscriptionPeriod,
+  searchAdminUsers,
+  voidAdminSubscriptionPeriod,
   createAdminCampaign,
   createAdminPopup,
   deleteAdminPopup,
@@ -41,6 +47,11 @@ import {
   BE_ADMIN_CAMPAIGN_SCHEDULED,
   BE_ADMIN_CAMPAIGN_TEST_SENT,
   BE_ADMIN_CAMPAIGN_UNKNOWN,
+  BE_ADMIN_CREDIT_ADJUSTMENT,
+  BE_ADMIN_SUBSCRIPTION,
+  BE_ADMIN_SUBSCRIPTION_ROWS,
+  BE_ADMIN_USER_CREDITS,
+  BE_ADMIN_USER_SEARCH,
   BE_ADMIN_GROUP_DETAIL,
   BE_ADMIN_GROUP_ROWS,
   BE_ADMIN_INQUIRY_ROWS,
@@ -168,6 +179,7 @@ describe('어드민 모임 목록 (GET /admin/groups)', () => {
     expect(page.items).toEqual([
       {
         groupId: 45,
+        groupType: 'BUSINESS', // CHMO-621 이후 BE가 싣는다 — 목록 `유형` 열(CHMO-931)
         memberCount: 8,
         eventCount: 12,
         photoCount: 830,
@@ -737,5 +749,161 @@ describe('혜택 푸시 이력·대상 수·취소 (CHMO-928)', () => {
     const err = await cancelAdminCampaign(42).catch((e: unknown) => e)
     expect((err as ApiRequestError).status).toBe(409)
     expect((err as ApiRequestError).code).toBe('CAMPAIGN_CONFLICT')
+  })
+})
+
+// ── 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912) ─────────────────
+
+const PERIOD_INPUT = {
+  accessFrom: '2026-10-01T00:00:00+09:00',
+  accessUntil: '2026-11-01T00:00:00+09:00',
+  amountKrw: 100000,
+  paidOn: '2026-09-30',
+  payerName: '치즈유치원',
+  invoiceNo: 'INV-2026-001',
+  memo: '10월 이용료',
+}
+
+describe('사용자 검색·장수 (CHMO-931)', () => {
+  it('검색은 query·cursor·size를 조립하고 커서 페이지로 접는다', async () => {
+    const calls = serve(envelope(BE_ADMIN_USER_SEARCH))
+    const page = await searchAdminUsers({ query: '치즈', cursor: 10, size: 20 })
+    expect(calls[0].url).toBe('/api/v1/admin/users?query=%EC%B9%98%EC%A6%88&cursor=10&size=20')
+    expect(page.items[0]).toEqual({ userId: 7, nickname: '치즈', accountType: 'ORGANIZATION' })
+    expect(page.nextCursor).toBe(3)
+    expect(page.hasNext).toBe(true)
+  })
+
+  it('빈 검색어도 query=를 싣는다(BE 기본값 ""와 같다) · 커서 없으면 cursor를 안 싣는다', async () => {
+    const calls = serve(envelope({ items: [], nextCursor: null, hasNext: false }))
+    const page = await searchAdminUsers({ query: '' })
+    expect(calls[0].url).toBe('/api/v1/admin/users?query=')
+    expect(page).toEqual({ items: [], nextCursor: null, hasNext: false })
+  })
+
+  it('장수 조회는 잔액·장부를 주고 모임/이벤트 null·LocalDateTime 보정을 정규화한다', async () => {
+    const calls = serve(envelope(BE_ADMIN_USER_CREDITS))
+    const credits = await getAdminUserCredits(3, { cursor: 103, size: 20 })
+    expect(calls[0].url).toBe('/api/v1/admin/users/3/credits?cursor=103&size=20')
+    expect(credits.balance).toBe(88)
+    expect(credits.ledger.items[0]).toMatchObject({
+      reason: 'UPLOAD',
+      groupName: '가족 여행',
+      eventName: '제주 2일차',
+      memo: null,
+      createdAt: '2026-10-07T09:30:00Z', // 오프셋 없는 BE 시각 → 'Z' 보정
+    })
+    expect(credits.ledger.items[1]).toMatchObject({ groupId: null, groupName: null, memo: '고객 지원 보상' })
+    expect(credits.ledger.nextCursor).toBe(101)
+  })
+
+  it('장수 조회는 파라미터가 없으면 쿼리 문자열 자체를 안 붙인다', async () => {
+    const calls = serve(envelope(BE_ADMIN_USER_CREDITS))
+    await getAdminUserCredits(3)
+    expect(calls[0].url).toBe('/api/v1/admin/users/3/credits')
+  })
+
+  it('장수 기능 미설정 BILLING503은 BILLING_UNAVAILABLE로, 없는 사용자 USER404는 404로 온다', async () => {
+    serve(BE_ERRORS.BILLING503.payload, BE_ERRORS.BILLING503.status)
+    const disabled = await getAdminUserCredits(3).catch((e: unknown) => e)
+    expect((disabled as ApiRequestError).code).toBe('BILLING_UNAVAILABLE')
+
+    serve(BE_ERRORS.USER404.payload, BE_ERRORS.USER404.status)
+    const gone = await getAdminUserCredits(999).catch((e: unknown) => e)
+    expect((gone as ApiRequestError).status).toBe(404)
+    expect((gone as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+
+  it('장수 조정은 delta·memo를 POST하고 201 응답의 잔액을 돌려준다', async () => {
+    const calls = serve(envelope(BE_ADMIN_CREDIT_ADJUSTMENT, 'COMMON201'), 201)
+    const result = await adjustAdminUserCredits(3, { delta: 100, memo: '고객 지원 보상' })
+    expect(calls[0].url).toBe('/api/v1/admin/users/3/credit-adjustments')
+    expect(calls[0].method).toBe('POST')
+    expect(bodyOf(calls[0])).toEqual({ delta: 100, memo: '고객 지원 보상' })
+    expect(result).toEqual({ userId: 3, delta: 100, balance: 188 })
+  })
+
+  it('잔액을 넘는 회수 CREDIT409는 CREDIT_INSUFFICIENT로 정규화된다', async () => {
+    serve(BE_ERRORS.CREDIT409.payload, BE_ERRORS.CREDIT409.status)
+    const err = await adjustAdminUserCredits(3, { delta: -500, memo: '오지급' }).catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(409)
+    expect((err as ApiRequestError).code).toBe('CREDIT_INSUFFICIENT')
+    expect((err as ApiRequestError).message).toBe('무료 사진 장수가 부족합니다.')
+  })
+})
+
+describe('기관 구독 (CHMO-931)', () => {
+  it('구독 목록은 커서 페이지이고 지워진 계정의 nickname·기간 없는 accessUntil을 null로 둔다', async () => {
+    const calls = serve(envelope(BE_ADMIN_SUBSCRIPTION_ROWS))
+    const page = await listAdminOrganizationSubscriptions({ size: 20 })
+    expect(calls[0].url).toBe('/api/v1/admin/organizations/subscriptions?size=20')
+    expect(page.items[0]).toMatchObject({ userId: 7, nickname: '치즈', status: 'ACTIVE' })
+    expect(page.items[1]).toEqual({
+      subscriptionId: 1,
+      userId: 8,
+      nickname: null,
+      status: 'BLOCKED',
+      accessUntil: null,
+      graceEndsAt: null,
+    })
+    expect(page.hasNext).toBe(false)
+  })
+
+  it('기간 등록은 요청 필드를 그대로 POST하고 201 응답의 접근 상태·기간을 돌려준다', async () => {
+    const calls = serve(envelope(BE_ADMIN_SUBSCRIPTION, 'COMMON201'), 201)
+    const result = await registerAdminSubscriptionPeriod(7, PERIOD_INPUT)
+    expect(calls[0].url).toBe('/api/v1/admin/organizations/7/subscription-periods')
+    expect(calls[0].method).toBe('POST')
+    expect(bodyOf(calls[0])).toEqual(PERIOD_INPUT)
+    expect(result).toMatchObject({
+      organizationUserId: 7,
+      accessStatus: 'ACTIVE',
+      accessUntil: '2026-11-01T00:00:00Z',
+      period: { periodId: 5, amountKrw: 100000, invoiceNo: 'INV-2026-001', voidedAt: null },
+    })
+  })
+
+  it('선택 칸이 비면 null로 보낸다 · 기관 계정이 아니면 VALID400 메시지가 그대로 온다', async () => {
+    const calls = serve(envelope(BE_ADMIN_SUBSCRIPTION, 'COMMON201'), 201)
+    await registerAdminSubscriptionPeriod(7, { ...PERIOD_INPUT, invoiceNo: null, memo: null })
+    expect(bodyOf(calls[0])).toMatchObject({ invoiceNo: null, memo: null })
+
+    serve(
+      { isSuccess: false, code: 'VALID400', message: '기관 계정만 구독 기간을 등록할 수 있습니다.' },
+      400,
+    )
+    const err = await registerAdminSubscriptionPeriod(3, PERIOD_INPUT).catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(400)
+    expect((err as ApiRequestError).message).toBe('기관 계정만 구독 기간을 등록할 수 있습니다.')
+  })
+
+  it('무효화는 본문 없이 DELETE하고 voidedAt이 찬 기간과 바뀐 접근 상태를 돌려준다', async () => {
+    const calls = serve(
+      envelope({
+        ...BE_ADMIN_SUBSCRIPTION,
+        nickname: null,
+        accessStatus: 'BLOCKED',
+        accessUntil: null,
+        graceEndsAt: null,
+        period: { ...BE_ADMIN_SUBSCRIPTION.period, voidedAt: '2026-10-15T06:00:00Z' },
+      }),
+    )
+    const result = await voidAdminSubscriptionPeriod(5)
+    expect(calls[0].url).toBe('/api/v1/admin/organization-subscription-periods/5')
+    expect(calls[0].method).toBe('DELETE')
+    expect(calls[0].body).toBeNull()
+    expect(result.nickname).toBeNull()
+    expect(result.accessStatus).toBe('BLOCKED')
+    expect(result.period.voidedAt).toBe('2026-10-15T06:00:00Z')
+  })
+
+  it('기관 문의 개통은 subscriptionPeriod를 함께 싣고, 없으면 종전처럼 status만 보낸다', async () => {
+    const calls = serve(envelope({ ...BE_ADMIN_INQUIRY_ROWS[0], status: 'ONBOARDED' }))
+    await updateAdminInquiryStatus(12, 'ONBOARDED', PERIOD_INPUT)
+    expect(bodyOf(calls[0])).toEqual({ status: 'ONBOARDED', subscriptionPeriod: PERIOD_INPUT })
+
+    const plain = serve(envelope({ ...BE_ADMIN_INQUIRY_ROWS[0], status: 'ONBOARDED' }))
+    await updateAdminInquiryStatus(12, 'ONBOARDED', null)
+    expect(bodyOf(plain[0])).toEqual({ status: 'ONBOARDED' })
   })
 })

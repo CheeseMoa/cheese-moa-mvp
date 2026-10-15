@@ -27,12 +27,17 @@ import type {
  */
 export type DbUserRole = 'USER' | 'ADMIN'
 
+/** BE AccountType(CHMO-808) — 앱 랜딩 [개인 | 유치원·기관] 탭. 기관 계정만 구독 기간을 가진다 */
+export type DbAccountType = 'PERSONAL' | 'ORGANIZATION'
+
 export interface DbUser {
   id: number
   nickname: string
   /** 4자리 PIN — 응답에 절대 포함하지 않는다 */
   pin: string
   role: DbUserRole
+  /** 기본 PERSONAL(BE DDL 기본값과 같다 — 구보존분도 같은 정규화) */
+  accountType: DbAccountType
   createdAt: ISODateTime
   /**
    * 푸시 수신 허용 (CHMO-667 · BE CHMO-664) — 계정 단위 수신 거부.
@@ -325,6 +330,14 @@ export interface Db {
   pushCampaigns: DbPushCampaign[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
+  /** 사용자 무료 사진 장수 계정 (CHMO-931 — BE CHMO-912) — 처음 필요할 때 지연 생성 */
+  creditAccounts: DbCreditAccount[]
+  /** 장수 장부 — append-only */
+  creditLedgers: DbCreditLedger[]
+  /** 기관 구독(기관 사용자당 1행) — 첫 기간 등록 때 생긴다 */
+  organizationSubscriptions: DbOrganizationSubscription[]
+  /** 기관 구독 기간 — 무효화는 삭제가 아니라 voidedAt 기록 */
+  organizationSubscriptionPeriods: DbOrganizationSubscriptionPeriod[]
 }
 
 export const db: Db = {
@@ -344,6 +357,10 @@ export const db: Db = {
   popups: [],
   pushCampaigns: [],
   uploadedKeys: [],
+  creditAccounts: [],
+  creditLedgers: [],
+  organizationSubscriptions: [],
+  organizationSubscriptionPeriods: [],
 }
 
 /** fixtures 시드/테스트 리셋용 — 전체 교체 */
@@ -364,6 +381,10 @@ export function seedDb(data: Db): void {
   db.popups = data.popups
   db.pushCampaigns = data.pushCampaigns
   db.uploadedKeys = data.uploadedKeys
+  db.creditAccounts = data.creditAccounts
+  db.creditLedgers = data.creditLedgers
+  db.organizationSubscriptions = data.organizationSubscriptions
+  db.organizationSubscriptionPeriods = data.organizationSubscriptionPeriods
 }
 
 // ── 푸시 기기 (CHMO-667) ─────────────────────────────────────
@@ -1454,4 +1475,232 @@ export function approvePassOrder(order: DbPassOrder, paymentKey: string): DbPass
   order.accessUntil = until
   spacePasses.set(order.groupId, until)
   return order
+}
+
+// ── 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912) ─────────────────
+
+/**
+ * BE CreditSettings — 목은 **적용 중**으로 둔다(`requireConfigured` 통과). 실 BE는
+ * `CREDIT_ENFORCEMENT_STARTS_AT`이 비어 있으면 어드민 장수 조회·조정이 BILLING503이다.
+ * 적용 시각 전 가입자는 첫 장부 생성 때 500장(MIGRATION), 뒤 가입자는 50장(SIGNUP).
+ */
+export const CREDIT_SETTINGS = {
+  enforcementStartsAt: '2026-10-01T00:00:00+09:00',
+  signupGrant: 50,
+  dailyGrant: 10,
+  cap: 500,
+  migrationGrant: 500,
+} as const
+
+export type DbCreditReason = 'SIGNUP' | 'MIGRATION' | 'DAILY' | 'UPLOAD' | 'ADMIN_ADJUST'
+
+export interface DbCreditAccount {
+  userId: number
+  balance: number
+}
+
+export interface DbCreditLedger {
+  id: number
+  userId: number
+  delta: number
+  balanceAfter: number
+  reason: DbCreditReason
+  refKey: string | null
+  groupId: number | null
+  eventId: number | null
+  adminId: number | null
+  memo: string | null
+  createdAt: ISODateTime
+}
+
+export interface DbOrganizationSubscription {
+  id: number
+  userId: number
+  createdAt: ISODateTime
+}
+
+export interface DbOrganizationSubscriptionPeriod {
+  id: number
+  subscriptionId: number
+  accessFrom: ISODateTime
+  accessUntil: ISODateTime
+  amountKrw: number
+  /** `YYYY-MM-DD` */
+  paidOn: string
+  payerName: string
+  invoiceNo: string | null
+  memo: string | null
+  adminId: number
+  createdAt: ISODateTime
+  voidedAt: ISODateTime | null
+  voidedBy: number | null
+}
+
+/**
+ * BE `CreditAccountStore.lock` — 장부 계정을 **처음 필요할 때 지연 생성**하고 초기 지급 행을 남긴다.
+ * 조회만 해도 생긴다(실 BE도 같다 — 어드민 조회가 SIGNUP/MIGRATION 행을 만든다). 유저가 없으면 null.
+ */
+export function lockCreditAccount(userId: number): DbCreditAccount | null {
+  const user = db.users.find((u) => u.id === userId)
+  if (!user) return null
+  const existing = db.creditAccounts.find((a) => a.userId === userId)
+  if (existing) return existing
+  const migration =
+    new Date(user.createdAt).getTime() < new Date(CREDIT_SETTINGS.enforcementStartsAt).getTime()
+  const initial = migration ? CREDIT_SETTINGS.migrationGrant : CREDIT_SETTINGS.signupGrant
+  const account: DbCreditAccount = { userId, balance: initial }
+  db.creditAccounts.push(account)
+  db.creditLedgers.push({
+    id: nextId('ledger'),
+    userId,
+    delta: initial,
+    balanceAfter: initial,
+    reason: migration ? 'MIGRATION' : 'SIGNUP',
+    refKey: 'initial',
+    groupId: null,
+    eventId: null,
+    adminId: null,
+    memo: null,
+    createdAt: nowIso(),
+  })
+  return account
+}
+
+/** BE `CreditAccountStore.record` — 잔액은 호출부가 이미 바꿨고 그 뒤 잔액을 적는다 */
+export function recordCreditLedger(
+  account: DbCreditAccount,
+  delta: number,
+  reason: DbCreditReason,
+  extra: Partial<Pick<DbCreditLedger, 'refKey' | 'groupId' | 'eventId' | 'adminId' | 'memo'>> = {},
+): DbCreditLedger {
+  const row: DbCreditLedger = {
+    id: nextId('ledger'),
+    userId: account.userId,
+    delta,
+    balanceAfter: account.balance,
+    reason,
+    refKey: extra.refKey ?? null,
+    groupId: extra.groupId ?? null,
+    eventId: extra.eventId ?? null,
+    adminId: extra.adminId ?? null,
+    memo: extra.memo ?? null,
+    createdAt: nowIso(),
+  }
+  db.creditLedgers.push(row)
+  return row
+}
+
+/** 그 사용자의 장부 — id DESC(최신순). BE `findByUserIdOrderByCreditLedgerIdDesc` */
+export function creditLedgersOf(userId: number): DbCreditLedger[] {
+  return db.creditLedgers.filter((row) => row.userId === userId).sort((a, b) => b.id - a.id)
+}
+
+export type InstitutionAccessStatus = 'ACTIVE' | 'GRACE' | 'BLOCKED'
+
+export interface InstitutionAccess {
+  status: InstitutionAccessStatus
+  accessUntil: ISODateTime | null
+  graceEndsAt: ISODateTime | null
+}
+
+/** BE `institution.grace-period` 기본값 P7D */
+export const INSTITUTION_GRACE_MS = 7 * 24 * 60 * 60 * 1000
+
+/** 무효화되지 않은 기간(BE `findActiveByOrganizationUserId`) — 기관 사용자 기준 */
+export function activePeriodsOfOrganizationUser(userId: number): DbOrganizationSubscriptionPeriod[] {
+  const subscription = db.organizationSubscriptions.find((s) => s.userId === userId)
+  if (!subscription) return []
+  return db.organizationSubscriptionPeriods.filter(
+    (p) => p.subscriptionId === subscription.id && p.voidedAt === null,
+  )
+}
+
+/**
+ * BE `InstitutionAccessResolver.resolve` — 살아 있는 기간이 하나라도 있으면 ACTIVE(가장 늦은 종료),
+ * 없으면 가장 최근에 끝난 기간 기준 7일 안이면 GRACE, 그마저 지났거나 기간이 없으면 BLOCKED.
+ */
+export function resolveInstitutionAccess(userId: number, nowMs = Date.now()): InstitutionAccess {
+  const periods = activePeriodsOfOrganizationUser(userId)
+  const activeUntil = periods
+    .filter((p) => {
+      const from = new Date(p.accessFrom).getTime()
+      const until = new Date(p.accessUntil).getTime()
+      return nowMs >= from && nowMs < until
+    })
+    .map((p) => new Date(p.accessUntil).getTime())
+    .reduce<number | null>((max, until) => (max === null || until > max ? until : max), null)
+  if (activeUntil !== null) {
+    return {
+      status: 'ACTIVE',
+      accessUntil: new Date(activeUntil).toISOString(),
+      graceEndsAt: new Date(activeUntil + INSTITUTION_GRACE_MS).toISOString(),
+    }
+  }
+  const endedUntil = periods
+    .map((p) => new Date(p.accessUntil).getTime())
+    .filter((until) => until <= nowMs)
+    .reduce<number | null>((max, until) => (max === null || until > max ? until : max), null)
+  if (endedUntil === null) return { status: 'BLOCKED', accessUntil: null, graceEndsAt: null }
+  const graceEndsAt = endedUntil + INSTITUTION_GRACE_MS
+  return {
+    status: nowMs < graceEndsAt ? 'GRACE' : 'BLOCKED',
+    accessUntil: new Date(endedUntil).toISOString(),
+    graceEndsAt: new Date(graceEndsAt).toISOString(),
+  }
+}
+
+export interface OrganizationPeriodInput {
+  accessFrom: ISODateTime
+  accessUntil: ISODateTime
+  amountKrw: number
+  paidOn: string
+  payerName: string
+  invoiceNo: string | null
+  memo: string | null
+}
+
+export type RegisterOrganizationPeriodResult =
+  | { ok: true; user: DbUser; period: DbOrganizationSubscriptionPeriod }
+  | { ok: false; code: 'VALID400' | 'USER404'; message: string }
+
+/**
+ * BE `OrganizationSubscriptionPeriodRegistrar.register` — 판정 순서 그대로: 종료≤시작(VALID400) →
+ * 사용자 없음(USER404) → 기관 계정 아님(VALID400 "기관 계정만 …") → 구독 행 지연 생성 → 기간 추가.
+ * 기관 문의 개통(PATCH)과 기간 등록(POST)이 같은 함수를 탄다(BE도 같은 등록기).
+ */
+export function registerOrganizationPeriod(
+  adminId: number,
+  userId: number,
+  input: OrganizationPeriodInput,
+): RegisterOrganizationPeriodResult {
+  if (new Date(input.accessUntil).getTime() <= new Date(input.accessFrom).getTime()) {
+    return { ok: false, code: 'VALID400', message: '입력값이 올바르지 않습니다.' }
+  }
+  const user = db.users.find((u) => u.id === userId)
+  if (!user) return { ok: false, code: 'USER404', message: '사용자를 찾을 수 없습니다.' }
+  if (user.accountType !== 'ORGANIZATION') {
+    return { ok: false, code: 'VALID400', message: '기관 계정만 구독 기간을 등록할 수 있습니다.' }
+  }
+  let subscription = db.organizationSubscriptions.find((s) => s.userId === userId)
+  if (!subscription) {
+    subscription = { id: nextId('orgsub'), userId, createdAt: nowIso() }
+    db.organizationSubscriptions.push(subscription)
+  }
+  const period: DbOrganizationSubscriptionPeriod = {
+    id: nextId('orgperiod'),
+    subscriptionId: subscription.id,
+    accessFrom: input.accessFrom,
+    accessUntil: input.accessUntil,
+    amountKrw: input.amountKrw,
+    paidOn: input.paidOn,
+    payerName: input.payerName,
+    invoiceNo: input.invoiceNo,
+    memo: input.memo,
+    adminId,
+    createdAt: nowIso(),
+    voidedAt: null,
+    voidedBy: null,
+  }
+  db.organizationSubscriptionPeriods.push(period)
+  return { ok: true, user, period }
 }

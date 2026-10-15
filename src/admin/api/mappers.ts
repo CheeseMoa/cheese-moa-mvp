@@ -9,11 +9,16 @@ import type {
   AdminCampaign,
   AdminCampaignRecipients,
   AdminCampaignStatus,
+  AdminCreditAdjustment,
+  AdminCreditLedgerItem,
+  AdminCursorPage,
   AdminGroupDetail,
   AdminGroupEvent,
   AdminGroupMember,
   AdminGroupRow,
   AdminInquiry,
+  AdminOrganizationSubscription,
+  AdminOrganizationSubscriptionRow,
   AdminPopup,
   AdminPopupAudience,
   AdminPopupHideOption,
@@ -26,6 +31,9 @@ import type {
   AdminReportRow,
   AdminRecentGroup,
   AdminStats,
+  AdminSubscriptionPeriod,
+  AdminUserCredits,
+  AdminUserRow,
 } from './types'
 
 export interface RawAdminProfile {
@@ -77,6 +85,7 @@ function toAdminRecentGroup(raw: RawAdminRecentGroup): AdminRecentGroup {
 
 export interface RawAdminGroupRow {
   groupId: number
+  groupType?: string
   memberCount?: number
   eventCount?: number
   photoCount?: number
@@ -86,6 +95,8 @@ export interface RawAdminGroupRow {
 export function toAdminGroupRow(raw: RawAdminGroupRow): AdminGroupRow {
   return {
     groupId: raw.groupId,
+    // 구계약(CHMO-621 이전) 응답은 키가 없다 — 서비스 매퍼와 같은 해석(생략 = 비즈니스)
+    groupType: raw.groupType ?? 'BUSINESS',
     memberCount: raw.memberCount ?? 0,
     eventCount: raw.eventCount ?? 0,
     photoCount: raw.photoCount ?? 0,
@@ -405,4 +416,170 @@ export function toAdminCampaignRecipients(
   raw: RawAdminCampaignRecipients,
 ): AdminCampaignRecipients {
   return { userCount: raw.userCount ?? 0, deviceCount: raw.deviceCount ?? 0 }
+}
+
+// ── 사용자·장수·기관 구독 (CHMO-931 — BE CHMO-912) ─────────────────
+
+export interface RawAdminCursorPage<T> {
+  items?: T[]
+  nextCursor?: number | null
+  hasNext?: boolean
+}
+
+function toAdminCursorPage<R, T>(
+  raw: RawAdminCursorPage<R> | undefined,
+  item: (row: R) => T,
+): AdminCursorPage<T> {
+  return {
+    items: (raw?.items ?? []).map(item),
+    nextCursor: raw?.nextCursor ?? null,
+    hasNext: raw?.hasNext ?? false,
+  }
+}
+
+export interface RawAdminUserRow {
+  userId: number
+  nickname: string
+  accountType?: string
+}
+
+export function toAdminUserRow(raw: RawAdminUserRow): AdminUserRow {
+  return {
+    userId: raw.userId,
+    nickname: raw.nickname,
+    // 미지 값이 와도 화면은 원문 폴백(format.accountTypeLabel) — 계정 유형은 둘뿐이지만 열어 둔다
+    accountType: (raw.accountType ?? 'PERSONAL') as AdminUserRow['accountType'],
+  }
+}
+
+export function toAdminUserSearchPage(raw: RawAdminCursorPage<RawAdminUserRow>): AdminCursorPage<AdminUserRow> {
+  return toAdminCursorPage(raw, toAdminUserRow)
+}
+
+export interface RawAdminCreditLedgerItem {
+  ledgerId: number
+  delta: number
+  balanceAfter: number
+  reason: string
+  groupId?: number | null
+  groupName?: string | null
+  eventId?: number | null
+  eventName?: string | null
+  memo?: string | null
+  createdAt: string
+}
+
+export function toAdminCreditLedgerItem(raw: RawAdminCreditLedgerItem): AdminCreditLedgerItem {
+  return {
+    ledgerId: raw.ledgerId,
+    delta: raw.delta,
+    balanceAfter: raw.balanceAfter,
+    reason: raw.reason,
+    groupId: raw.groupId ?? null,
+    groupName: raw.groupName ?? null,
+    eventId: raw.eventId ?? null,
+    eventName: raw.eventName ?? null,
+    memo: raw.memo ?? null,
+    createdAt: raw.createdAt,
+  }
+}
+
+export interface RawAdminUserCredits {
+  userId: number
+  balance?: number
+  ledger?: RawAdminCursorPage<RawAdminCreditLedgerItem>
+}
+
+export function toAdminUserCredits(raw: RawAdminUserCredits): AdminUserCredits {
+  return {
+    userId: raw.userId,
+    balance: raw.balance ?? 0,
+    ledger: toAdminCursorPage(raw.ledger, toAdminCreditLedgerItem),
+  }
+}
+
+export interface RawAdminCreditAdjustment {
+  userId: number
+  delta: number
+  balance: number
+}
+
+export function toAdminCreditAdjustment(raw: RawAdminCreditAdjustment): AdminCreditAdjustment {
+  return { userId: raw.userId, delta: raw.delta, balance: raw.balance }
+}
+
+export interface RawAdminOrganizationSubscriptionRow {
+  subscriptionId: number
+  userId: number
+  nickname?: string | null
+  status: string
+  accessUntil?: string | null
+  graceEndsAt?: string | null
+}
+
+export function toAdminOrganizationSubscriptionRow(
+  raw: RawAdminOrganizationSubscriptionRow,
+): AdminOrganizationSubscriptionRow {
+  return {
+    subscriptionId: raw.subscriptionId,
+    userId: raw.userId,
+    nickname: raw.nickname ?? null,
+    status: raw.status as AdminOrganizationSubscriptionRow['status'],
+    accessUntil: raw.accessUntil ?? null,
+    graceEndsAt: raw.graceEndsAt ?? null,
+  }
+}
+
+export function toAdminOrganizationSubscriptionPage(
+  raw: RawAdminCursorPage<RawAdminOrganizationSubscriptionRow>,
+): AdminCursorPage<AdminOrganizationSubscriptionRow> {
+  return toAdminCursorPage(raw, toAdminOrganizationSubscriptionRow)
+}
+
+export interface RawAdminSubscriptionPeriod {
+  periodId: number
+  accessFrom: string
+  accessUntil: string
+  amountKrw?: number
+  paidOn: string
+  payerName: string
+  invoiceNo?: string | null
+  memo?: string | null
+  voidedAt?: string | null
+}
+
+export interface RawAdminOrganizationSubscription {
+  organizationUserId: number
+  nickname?: string | null
+  accessStatus: string
+  accessUntil?: string | null
+  graceEndsAt?: string | null
+  period: RawAdminSubscriptionPeriod
+}
+
+export function toAdminSubscriptionPeriod(raw: RawAdminSubscriptionPeriod): AdminSubscriptionPeriod {
+  return {
+    periodId: raw.periodId,
+    accessFrom: raw.accessFrom,
+    accessUntil: raw.accessUntil,
+    amountKrw: raw.amountKrw ?? 0,
+    paidOn: raw.paidOn,
+    payerName: raw.payerName,
+    invoiceNo: raw.invoiceNo ?? null,
+    memo: raw.memo ?? null,
+    voidedAt: raw.voidedAt ?? null,
+  }
+}
+
+export function toAdminOrganizationSubscription(
+  raw: RawAdminOrganizationSubscription,
+): AdminOrganizationSubscription {
+  return {
+    organizationUserId: raw.organizationUserId,
+    nickname: raw.nickname ?? null,
+    accessStatus: raw.accessStatus as AdminOrganizationSubscription['accessStatus'],
+    accessUntil: raw.accessUntil ?? null,
+    graceEndsAt: raw.graceEndsAt ?? null,
+    period: toAdminSubscriptionPeriod(raw.period),
+  }
 }

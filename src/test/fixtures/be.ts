@@ -98,6 +98,13 @@ export const BE_ERRORS = {
   },
   /** 관리자가 아님 — GET /admin/stats (비관리자 토큰 · 2026-08-04 실서버 채집, CHMO-379 프로브) */
   ADMIN403: { status: 403, payload: errorEnvelope('ADMIN403', '관리자 권한이 필요합니다.') },
+  // ── 업로드 과금·장수 (BE CHMO-912 — 어드민 CHMO-931). **BE ErrorStatus 소스 대조(미채집)** ──
+  /** 장수 부족 — 어드민 회수가 잔액을 넘을 때(`CreditAccount.adjust`) */
+  CREDIT409: { status: 409, payload: errorEnvelope('CREDIT409', '무료 사진 장수가 부족합니다.') },
+  /** 장수 기능 미설정 — `credit.enforcement-starts-at`이 비면 어드민 장수 조회·조정 전부 */
+  BILLING503: { status: 503, payload: errorEnvelope('BILLING503', '결제 기능을 사용할 수 없습니다.') },
+  /** 사용자 없음 — 어드민 장수·구독 대상 userId */
+  USER404: { status: 404, payload: errorEnvelope('USER404', '사용자를 찾을 수 없습니다.') },
   /**
    * 기관 도입 문의 전이 실패 2종 — BE CHMO-810 티켓 코멘트 대조(코드 확정·**메시지 미채집**이라
    * BE 어투로 둔다). 409는 종료분을 진행 중으로 되돌리는데 그 사용자가 이미 새 문의를 낸 경우.
@@ -560,6 +567,7 @@ export const BE_ADMIN_STATS = {
 export const BE_ADMIN_GROUP_ROWS = [
   {
     groupId: 45,
+    groupType: 'BUSINESS', // SpaceType — CHMO-621(B-6)부터 싣는다
     memberCount: 8,
     eventCount: 12,
     photoCount: 830,
@@ -947,3 +955,104 @@ export const BE_PASS_CONFIRM = {
 
 /** GET /groups/:id/passes/current (스펙 기준) */
 export const BE_PASS_CURRENT = { active: true, accessUntil: '2026-10-05T07:03:00Z' }
+
+// ── 어드민 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912 `AdminController` 어드민 절) ──
+// **BE 스펙(`docs/spec/CHMO-912-*.md` §3.5)·DTO 소스 대조(2026-10-15, 미채집)** — 운영 배포는
+// 2026-10-14 main 머지로 끝났지만 관리자 계정 실채집은 아직이다. Instant는 `Z`, 장부 createdAt은
+// LocalDateTime(오프셋 없음 → client.ts가 'Z' 보정), paidOn은 LocalDate.
+
+/** GET /admin/users — AdminUserSearchResponse(커서 목록). 닉네임에 숫자가 섞인 계정도 같이 걸린다 */
+export const BE_ADMIN_USER_SEARCH = {
+  items: [
+    { userId: 7, nickname: '치즈', accountType: 'ORGANIZATION' },
+    { userId: 3, nickname: '김선생', accountType: 'PERSONAL' },
+  ],
+  nextCursor: 3,
+  hasNext: true,
+}
+
+/**
+ * GET /admin/users/{id}/credits — AdminUserCreditsResponse. 둘째 행은 운영자 조정(메모 있음 ·
+ * 모임/이벤트 null), 첫 행은 업로드 차감(모임·이벤트 이름은 지금 값).
+ */
+export const BE_ADMIN_USER_CREDITS = {
+  userId: 3,
+  balance: 88,
+  ledger: {
+    items: [
+      {
+        ledgerId: 103,
+        delta: -32,
+        balanceAfter: 88,
+        reason: 'UPLOAD',
+        groupId: 10,
+        groupName: '가족 여행',
+        eventId: 31,
+        eventName: '제주 2일차',
+        memo: null,
+        createdAt: '2026-10-07T09:30:00',
+      },
+      {
+        ledgerId: 101,
+        delta: 120,
+        balanceAfter: 120,
+        reason: 'ADMIN_ADJUST',
+        groupId: null,
+        groupName: null,
+        eventId: null,
+        eventName: null,
+        memo: '고객 지원 보상',
+        createdAt: '2026-10-06T09:00:00',
+      },
+    ],
+    nextCursor: 101,
+    hasNext: true,
+  },
+}
+
+/** POST /admin/users/{id}/credit-adjustments(201) — AdminCreditAdjustmentResponse */
+export const BE_ADMIN_CREDIT_ADJUSTMENT = { userId: 3, delta: 100, balance: 188 }
+
+/** GET /admin/organizations/subscriptions — 둘째 행은 지워진 계정(nickname null)·기간 없음(BLOCKED) */
+export const BE_ADMIN_SUBSCRIPTION_ROWS = {
+  items: [
+    {
+      subscriptionId: 2,
+      userId: 7,
+      nickname: '치즈',
+      status: 'ACTIVE',
+      accessUntil: '2026-11-01T00:00:00Z',
+      graceEndsAt: '2026-11-08T00:00:00Z',
+    },
+    {
+      subscriptionId: 1,
+      userId: 8,
+      nickname: null,
+      status: 'BLOCKED',
+      accessUntil: null,
+      graceEndsAt: null,
+    },
+  ],
+  nextCursor: null,
+  hasNext: false,
+}
+
+/** POST /admin/organizations/{id}/subscription-periods(201) · DELETE …/{periodId}(200, nickname null) */
+export const BE_ADMIN_SUBSCRIPTION = {
+  organizationUserId: 7,
+  nickname: '치즈',
+  accessStatus: 'ACTIVE',
+  accessUntil: '2026-11-01T00:00:00Z',
+  graceEndsAt: '2026-11-08T00:00:00Z',
+  period: {
+    periodId: 5,
+    accessFrom: '2026-10-01T00:00:00Z',
+    accessUntil: '2026-11-01T00:00:00Z',
+    amountKrw: 100000,
+    paidOn: '2026-09-30',
+    payerName: '치즈유치원',
+    invoiceNo: 'INV-2026-001',
+    memo: '10월 이용료',
+    voidedAt: null,
+  },
+}

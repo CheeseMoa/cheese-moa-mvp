@@ -193,16 +193,18 @@ export function createFixtures(): Db {
     users: [
       // 이현정은 관리자 겸용(CHMO-379) — role은 /admin/*에만 쓰이고 서비스 화면은 그대로다
       // (관리자도 평범한 유저로 모임 생성·검수·공개를 한다 — admin-spec §2-3 테스트 계정 겸용).
-      { id: 1, nickname: '이현정', pin: '1234', role: 'ADMIN', createdAt: '2026-06-01T10:00:00+09:00', pushEnabled: true },
-      { id: 2, nickname: '김지은', pin: '2580', role: 'USER', createdAt: '2026-06-01T10:05:00+09:00', pushEnabled: true },
-      { id: 3, nickname: '박수민', pin: '4715', role: 'USER', createdAt: '2026-06-02T09:00:00+09:00', pushEnabled: true },
+      // accountType(CHMO-931): 기관 도입 문의를 낸 계정(2·3·5·6·7)은 기관(ORGANIZATION) — 문의는
+      // 기관 계정만 낼 수 있고(CHMO-802·808) 기관 구독 기간도 기관 계정에만 등록된다
+      { id: 1, nickname: '이현정', pin: '1234', role: 'ADMIN', accountType: 'PERSONAL', createdAt: '2026-06-01T10:00:00+09:00', pushEnabled: true },
+      { id: 2, nickname: '김지은', pin: '2580', role: 'USER', accountType: 'ORGANIZATION', createdAt: '2026-06-01T10:05:00+09:00', pushEnabled: true },
+      { id: 3, nickname: '박수민', pin: '4715', role: 'USER', accountType: 'ORGANIZATION', createdAt: '2026-06-02T09:00:00+09:00', pushEnabled: true },
       // 학부모 전환(CHMO-444) 시연 계정 — 4는 학부모 화면(연결됨+대기), 6은 미연결 기본 경로(§2)
-      { id: 4, nickname: '민준아빠', pin: '1111', role: 'USER', createdAt: '2026-07-01T10:00:00+09:00', pushEnabled: true },
-      { id: 5, nickname: '서연맘', pin: '2222', role: 'USER', createdAt: '2026-07-01T10:05:00+09:00', pushEnabled: true },
-      { id: 6, nickname: '지호네', pin: '3333', role: 'USER', createdAt: '2026-07-02T09:00:00+09:00', pushEnabled: true },
-      { id: 7, nickname: '치즈냥이88', pin: '4444', role: 'USER', createdAt: '2026-07-25T09:00:00+09:00', pushEnabled: true },
+      { id: 4, nickname: '민준아빠', pin: '1111', role: 'USER', accountType: 'PERSONAL', createdAt: '2026-07-01T10:00:00+09:00', pushEnabled: true },
+      { id: 5, nickname: '서연맘', pin: '2222', role: 'USER', accountType: 'ORGANIZATION', createdAt: '2026-07-01T10:05:00+09:00', pushEnabled: true },
+      { id: 6, nickname: '지호네', pin: '3333', role: 'USER', accountType: 'ORGANIZATION', createdAt: '2026-07-02T09:00:00+09:00', pushEnabled: true },
+      { id: 7, nickname: '치즈냥이88', pin: '4444', role: 'USER', accountType: 'ORGANIZATION', createdAt: '2026-07-25T09:00:00+09:00', pushEnabled: true },
       // 선생님 승인제(CHMO-475) 시연 — 선생님 키로 신청만 해 둔 대기 상태(20 선생님 탭)
-      { id: 8, nickname: '신입쌤', pin: '5555', role: 'USER', createdAt: '2026-07-27T09:00:00+09:00', pushEnabled: true },
+      { id: 8, nickname: '신입쌤', pin: '5555', role: 'USER', accountType: 'PERSONAL', createdAt: '2026-07-27T09:00:00+09:00', pushEnabled: true },
     ],
     groups: [
       {
@@ -707,6 +709,46 @@ export function createFixtures(): Db {
       },
     ],
     ...promotionSeeds(),
+    ...billingSeeds(),
+  }
+}
+
+/**
+ * 사용자 장수·기관 구독 시드 (CHMO-931 — BE CHMO-912). 장부는 이현정(1) 한 사람만 깔고 나머지는
+ * 조회 때 지연 생성된다(실 BE와 같다 — 전환 지급 500장). 기관 접근 상태는 조회 시각 파생이라
+ * 팝업처럼 **지금 기준 상대 시각**으로 깔아 이용 중(서연맘) · 유예(지호네) · 차단(박수민) 셋이
+ * 언제 열어도 보이게 한다. 김지은(2)은 기관 계정인데 기간이 없다 — 개통 때 기간 등록 흐름용.
+ */
+function billingSeeds(): Pick<
+  Db,
+  'creditAccounts' | 'creditLedgers' | 'organizationSubscriptions' | 'organizationSubscriptionPeriods'
+> {
+  const now = Date.now()
+  const at = (hours: number) => new Date(now + hours * 60 * 60 * 1000).toISOString()
+  const dateAt = (hours: number) => at(hours).slice(0, 10)
+  return {
+    creditAccounts: [{ userId: 1, balance: 588 }],
+    creditLedgers: [
+      { id: 1, userId: 1, delta: 500, balanceAfter: 500, reason: 'MIGRATION', refKey: 'initial', groupId: null, eventId: null, adminId: null, memo: null, createdAt: '2026-10-01T09:00:00+09:00' },
+      { id: 2, userId: 1, delta: -32, balanceAfter: 468, reason: 'UPLOAD', refKey: null, groupId: 1, eventId: 1, adminId: null, memo: null, createdAt: '2026-10-03T10:12:00+09:00' },
+      { id: 3, userId: 1, delta: 10, balanceAfter: 478, reason: 'DAILY', refKey: '2026-10-04', groupId: null, eventId: null, adminId: null, memo: null, createdAt: '2026-10-04T08:30:00+09:00' },
+      { id: 4, userId: 1, delta: 10, balanceAfter: 488, reason: 'DAILY', refKey: '2026-10-05', groupId: null, eventId: null, adminId: null, memo: null, createdAt: '2026-10-05T09:05:00+09:00' },
+      { id: 5, userId: 1, delta: 100, balanceAfter: 588, reason: 'ADMIN_ADJUST', refKey: null, groupId: null, eventId: null, adminId: 1, memo: '고객 지원 보상', createdAt: '2026-10-06T14:00:00+09:00' },
+    ],
+    organizationSubscriptions: [
+      { id: 1, userId: 5, createdAt: at(-24 * 45) },
+      { id: 2, userId: 6, createdAt: at(-24 * 40) },
+      { id: 3, userId: 3, createdAt: at(-24 * 60) },
+    ],
+    organizationSubscriptionPeriods: [
+      // 서연맘(별님유치원 · 개통됨) — 지난 기간 하나는 무효화돼 있고 지금 기간이 살아 있다 → 이용 중
+      { id: 1, subscriptionId: 1, accessFrom: at(-24 * 45), accessUntil: at(-24 * 15), amountKrw: 100000, paidOn: dateAt(-24 * 46), payerName: '별님유치원', invoiceNo: 'INV-2026-009', memo: '9월 이용료 · 중복 입금 취소', adminId: 1, createdAt: at(-24 * 45), voidedAt: at(-24 * 44), voidedBy: 1 },
+      { id: 2, subscriptionId: 1, accessFrom: at(-24 * 14), accessUntil: at(24 * 16), amountKrw: 100000, paidOn: dateAt(-24 * 15), payerName: '별님유치원', invoiceNo: 'INV-2026-010', memo: '10월 이용료', adminId: 1, createdAt: at(-24 * 14), voidedAt: null, voidedBy: null },
+      // 지호네(초록미술학원) — 3일 전 종료 → 유예 기간(7일) 안
+      { id: 3, subscriptionId: 2, accessFrom: at(-24 * 40), accessUntil: at(-24 * 3), amountKrw: 80000, paidOn: dateAt(-24 * 41), payerName: '초록미술학원', invoiceNo: null, memo: null, adminId: 1, createdAt: at(-24 * 40), voidedAt: null, voidedBy: null },
+      // 박수민(햇살어린이집) — 20일 전 종료 → 유예도 지나 차단
+      { id: 4, subscriptionId: 3, accessFrom: at(-24 * 60), accessUntil: at(-24 * 20), amountKrw: 0, paidOn: dateAt(-24 * 60), payerName: '햇살어린이집', invoiceNo: null, memo: '무상 체험', adminId: 1, createdAt: at(-24 * 60), voidedAt: null, voidedBy: null },
+    ],
   }
 }
 

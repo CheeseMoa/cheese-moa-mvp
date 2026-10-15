@@ -3,15 +3,22 @@ import { ApiRequestError } from '../../api/client'
 import { useApi } from '../../hooks/useApi'
 import { useMutation } from '../../hooks/useMutation'
 import { listAdminInquiries, updateAdminInquiryStatus } from '../api/admin'
-import type { AdminInquiry, AdminInquiryFilter, AdminInquiryStatus } from '../api/types'
+import type {
+  AdminInquiry,
+  AdminInquiryFilter,
+  AdminInquiryStatus,
+  AdminSubscriptionPeriodInput,
+} from '../api/types'
 import { AdminTopbar } from '../components/AdminTopbar'
 import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
 import { AdminConfirmDialog } from '../components/AdminConfirmDialog'
 import { AdminToast } from '../components/AdminToast'
 import { AdminRowMenu } from '../components/AdminRowMenu'
+import { AFTER_ONBOARD_NOTE, InquiryOnboardDialog } from '../components/InquiryOnboardDialog'
 import { InquiryStatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
+import { accessUntilToKstDate } from '../lib/billing'
 import {
   contactRoleLabel,
   formatCount,
@@ -79,10 +86,6 @@ function actionLabel(from: AdminInquiryStatus, to: AdminInquiryStatus): string {
   return '종료하기'
 }
 
-/** 개통 뒤 사용자 쪽 동작(앱 CHMO-809 승인 대기 화면 규칙) — 운영자가 전화로 알려 줄 말이다 */
-const AFTER_ONBOARD_NOTE =
-  '사용자는 앱의 [다시 확인]을 누르거나 앱을 다시 열면 시작할 수 있어요.'
-
 interface ConfirmCopy {
   title: string
   lines: string[]
@@ -92,7 +95,8 @@ interface ConfirmCopy {
 /**
  * 확인을 받을 전이와 그 문구. 확인 여부를 가르는 것은 **사용자 쪽에서 무엇이 달라지는가**다:
  *
- * - `개통` — 그 계정이 앱을 쓰기 시작한다.
+ * - `개통` — 그 계정이 앱을 쓰기 시작한다. 문구는 여기 두되 실제 창은 이용 기간 폼을 품은
+ *   `InquiryOnboardDialog`가 그린다(CHMO-931 — 기간 없이 개통하면 과금 적용 중엔 첫날부터 막힌다).
  * - **`개통` 상태에서 나가는 전이 전부** — 목적지가 `종료`든 `접수됨`이든 사용자는 똑같이
  *   승인 대기 화면으로 돌아간다. 그래서 '개통 취소' 문구는 목적지가 아니라 출발지로 정한다
  *   (되돌리기만 조용히 나가면, 가장 파괴적으로 보이는 동작에 확인이 없는 셈이 된다).
@@ -129,9 +133,14 @@ function confirmCopyFor(inquiry: AdminInquiry, to: AdminInquiryStatus): ConfirmC
   return null
 }
 
-/** 성공 토스트 — 개통만 사용자 쪽 다음 동작을 함께 알린다 */
-function successMessage(updated: AdminInquiry): string {
-  if (updated.status === 'ONBOARDED') return `개통했어요 · ${AFTER_ONBOARD_NOTE}`
+/** 성공 토스트 — 개통만 사용자 쪽 다음 동작을 함께 알린다(기간을 같이 넣었으면 종료일도) */
+function successMessage(updated: AdminInquiry, period: AdminSubscriptionPeriodInput | null): string {
+  if (updated.status === 'ONBOARDED') {
+    const until = period ? accessUntilToKstDate(period.accessUntil) : null
+    return until
+      ? `개통하고 ${until}까지 이용 기간을 등록했어요 · ${AFTER_ONBOARD_NOTE}`
+      : `개통했어요 · ${AFTER_ONBOARD_NOTE}`
+  }
   return `'${inquiryStatusLabel(updated.status)}' 상태로 바꿨어요.`
 }
 
@@ -179,9 +188,14 @@ export function AdminInquiriesPage() {
 
   const mutate = useMutation()
 
-  const commit = async (inquiry: AdminInquiry, to: AdminInquiryStatus) => {
+  const commit = async (
+    inquiry: AdminInquiry,
+    to: AdminInquiryStatus,
+    // 개통에만 뜻이 있다 — BE가 같은 트랜잭션으로 첫 이용 기간을 등록한다(CHMO-931)
+    period: AdminSubscriptionPeriodInput | null = null,
+  ) => {
     setBusyId(inquiry.id)
-    await mutate(() => updateAdminInquiryStatus(inquiry.id, to), {
+    await mutate(() => updateAdminInquiryStatus(inquiry.id, to, period), {
       // 401을 서비스 로그인(/login)으로 보내지 않는다 — 어드민의 재로그인 표면은 어드민 셸
       // 안의 로그인 카드다(CHMO-594). 여기서는 메시지만 알리고 화면을 지킨다.
       noAuthRedirect: true,
@@ -189,7 +203,7 @@ export function AdminInquiriesPage() {
         setPatched((prev) => ({ ...prev, [updated.id]: updated }))
         setPending(null)
         setBusyId(null)
-        showToast(successMessage(updated))
+        showToast(successMessage(updated, period))
       },
       onError: (message, err) => {
         setPending(null)
@@ -394,7 +408,14 @@ export function AdminInquiriesPage() {
         )}
       </div>
 
-      {pending
+      {pending?.to === 'ONBOARDED' ? (
+        <InquiryOnboardDialog
+          inquiry={pending.inquiry}
+          busy={busyId !== null}
+          onCancel={() => setPending(null)}
+          onConfirm={(period) => void commit(pending.inquiry, 'ONBOARDED', period)}
+        />
+      ) : pending
         ? (() => {
             const copy = confirmCopyFor(pending.inquiry, pending.to)
             if (!copy) return null

@@ -11,6 +11,7 @@ import {
   db,
   eventsOfGroup,
   findGroup,
+  registerOrganizationPeriod,
   settleAnalysis,
   type DbOrganizationInquiry,
   type DbReport,
@@ -26,6 +27,7 @@ import {
   invalidRequest,
   ok,
   okPaged,
+  parseSubscriptionPeriodInput,
   readJson,
   toId,
   unauthorized,
@@ -256,10 +258,17 @@ export const adminInquiryHandlers = [
     const gate = adminGate(request)
     if (gate instanceof Response) return gate
 
-    const body = await readJson<{ status?: unknown }>(request)
+    const body = await readJson<{ status?: unknown; subscriptionPeriod?: unknown }>(request)
     if (!body) return invalidBody()
     const next = INQUIRY_STATUSES.find((status) => status === body.status)
     if (!next) return commonBadRequest()
+    // 개통에 동봉한 첫 이용 기간(CHMO-931 — BE CHMO-912 `AdminInquiryStatusRequest.subscriptionPeriod`).
+    // BE DTO에 @Valid가 없어 형식 오류는 등록기까지 가서 터진다 — 목은 같은 파서로 VALID400으로 접는다
+    const period =
+      body.subscriptionPeriod === undefined || body.subscriptionPeriod === null
+        ? null
+        : parseSubscriptionPeriodInput(body.subscriptionPeriod)
+    if (body.subscriptionPeriod != null && !period) return invalidRequest('입력값이 올바르지 않습니다.')
 
     const id = toId(params.id)
     const inquiry = db.organizationInquiries.find((row) => row.id === id)
@@ -270,6 +279,15 @@ export const adminInquiryHandlers = [
       return errorResponse(409, 'INQUIRY409', '이미 진행 중인 문의가 있습니다.')
     }
 
+    // BE 순서: 상태 저장(flush) → ONBOARDED면 기간 등록(실패하면 트랜잭션 롤백 = 상태도 안 바뀐다)
+    if (next === 'ONBOARDED' && period) {
+      const registered = registerOrganizationPeriod(gate.id, inquiry.userId, period)
+      if (!registered.ok) {
+        return registered.code === 'USER404'
+          ? errorResponse(404, 'USER404', registered.message)
+          : invalidRequest(registered.message)
+      }
+    }
     inquiry.status = next
     inquiry.updatedAt = new Date().toISOString()
     return ok(toAdminInquiryResponse(inquiry))

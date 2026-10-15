@@ -5,6 +5,7 @@ import {
   popupStatusBadge,
   reportStatusBadge,
   reportTypeBadge,
+  subscriptionAccessBadge,
 } from '../lib/format'
 
 /**
@@ -63,4 +64,9 @@ export function PopupStatusBadge({ status }: { status: string }) {
 /** 혜택 푸시 발송 상태(BE CampaignStatus — CHMO-928). 확인이 필요한 셋만 붉은색 */
 export function CampaignStatusBadge({ status }: { status: string }) {
   return <Badge {...campaignStatusBadge(status)} />
+}
+
+/** 기관 이용 상태(BE SubscriptionAccessStatus — CHMO-931). 차단만 붉은색(지금 업로드가 안 된다) */
+export function SubscriptionAccessBadge({ status }: { status: string }) {
+  return <Badge {...subscriptionAccessBadge(status)} />
 }

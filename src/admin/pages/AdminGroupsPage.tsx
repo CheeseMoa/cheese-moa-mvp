@@ -7,7 +7,7 @@ import { AdminTopbar } from '../components/AdminTopbar'
 import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
 import { Pagination } from '../components/Pagination'
-import { formatCount, formatDate, groupLabel } from '../lib/format'
+import { formatCount, formatDate, groupLabel, groupTypeLabel } from '../lib/format'
 
 /** BE 기본값과 동일(1~100 제약) — 페이지 크기 UI는 1차에 두지 않는다 */
 const PAGE_SIZE = 20
@@ -37,6 +37,18 @@ export function AdminGroupsPage() {
       key: 'group',
       header: '모임',
       render: (g) => <span className="font-medium">{groupLabel(g.groupId)}</span>,
+    },
+    {
+      // 응답에 있던 groupType(CHMO-621)을 화면이 안 읽고 있었다 — 비즈니스(승인제·검수)와 일반이
+      // 운영에서 다른 모임이라 목록에서 갈라 보인다(CHMO-931)
+      key: 'type',
+      header: '유형',
+      widthClassName: 'w-24',
+      render: (g) => (
+        <span className="rounded border border-admin-border px-1 py-px text-[11px] text-admin-muted">
+          {groupTypeLabel(g.groupType)}
+        </span>
+      ),
     },
     {
       key: 'members',

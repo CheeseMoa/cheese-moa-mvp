@@ -8,37 +8,54 @@ import { clearAuthTokens, getRefreshToken, setAuthTokens, setCurrentUserId } fro
 import {
   toAdminCampaign,
   toAdminCampaignRecipients,
+  toAdminCreditAdjustment,
   toAdminGroupDetail,
   toAdminGroupRow,
   toAdminInquiry,
+  toAdminOrganizationSubscription,
+  toAdminOrganizationSubscriptionPage,
   toAdminPopup,
   toAdminPopupImageUpload,
   toAdminProfile,
   toAdminReportDetail,
   toAdminReportRow,
   toAdminStats,
+  toAdminUserCredits,
+  toAdminUserSearchPage,
   type RawAdminCampaign,
   type RawAdminCampaignRecipients,
+  type RawAdminCreditAdjustment,
+  type RawAdminCursorPage,
   type RawAdminGroupDetail,
   type RawAdminGroupRow,
   type RawAdminInquiry,
+  type RawAdminOrganizationSubscription,
+  type RawAdminOrganizationSubscriptionRow,
   type RawAdminPopup,
   type RawAdminPopupImageUpload,
   type RawAdminProfile,
   type RawAdminReportDetail,
   type RawAdminReportRow,
   type RawAdminStats,
+  type RawAdminUserCredits,
+  type RawAdminUserRow,
 } from './mappers'
 import type {
   AdminCampaign,
   AdminCampaignInput,
   AdminCampaignRecipients,
+  AdminCreditAdjustment,
+  AdminCreditAdjustmentInput,
+  AdminCursorPage,
+  AdminCursorParams,
   AdminGroupDetail,
   AdminGroupListParams,
   AdminGroupRow,
   AdminInquiry,
   AdminInquiryListParams,
   AdminInquiryStatus,
+  AdminOrganizationSubscription,
+  AdminOrganizationSubscriptionRow,
   AdminPopup,
   AdminPopupImageUpload,
   AdminPopupInput,
@@ -49,6 +66,10 @@ import type {
   AdminReportRow,
   AdminReportStatus,
   AdminStats,
+  AdminSubscriptionPeriodInput,
+  AdminUserCredits,
+  AdminUserRow,
+  AdminUserSearchParams,
 } from './types'
 
 export interface AdminCredentials {
@@ -187,15 +208,19 @@ export async function listAdminInquiries(
  * 전이 규칙이 없어 4개 값 전부 보낼 수 있고, 응답은 **갱신된 행**이라 호출부가 재조회 없이
  * 그 행만 바꿔 끼운다. 실패는 INQUIRY404(없는 id)·INQUIRY409(되돌리기 충돌 — 그 사용자에게
  * 이미 진행 중 문의가 있음) 둘뿐이고, 둘 다 화면이 안내 후 목록을 다시 읽는다.
+ *
+ * `subscriptionPeriod`(CHMO-931 — BE CHMO-912)는 **개통(ONBOARDED)으로 바꿀 때만** 뜻이 있고
+ * BE가 같은 트랜잭션으로 첫 이용 기간을 등록한다. 없으면 키 자체를 싣지 않는다(종전 계약 그대로).
  */
 export function updateAdminInquiryStatus(
   id: number,
   status: AdminInquiryStatus,
+  subscriptionPeriod?: AdminSubscriptionPeriodInput | null,
   signal?: AbortSignal,
 ): Promise<AdminInquiry> {
   return apiFetch<RawAdminInquiry>(`/admin/organization-inquiries/${id}`, {
     method: 'PATCH',
-    body: { status },
+    body: subscriptionPeriod ? { status, subscriptionPeriod } : { status },
     signal,
   }).then(toAdminInquiry)
 }
@@ -454,4 +479,108 @@ export function cancelAdminCampaign(id: number): Promise<AdminCampaign> {
   return apiFetch<RawAdminCampaign>(`/admin/push-campaigns/${id}/cancel`, {
     method: 'POST',
   }).then(toAdminCampaign)
+}
+
+// ── 사용자·장수·기관 구독 (CHMO-931 — BE CHMO-912 어드민 7종 중 6종) ───────
+// 과금 범위 변경(PUT /admin/groups/:id/billing-scope)은 상세 응답에 현재 값이 없어 BE 확장
+// (CHMO-932) 뒤에 붙인다. 전부 커서 목록·단건 응답이라 pageInfo 봉투를 안 쓴다.
+
+/**
+ * GET /admin/users — 닉네임 부분 일치(대소문자 무시) 또는 userId 정확 일치. `query`가 비면
+ * 전체를 최근 가입 순으로. `size`는 BE가 1~50으로 접는다(화면은 상수만 보낸다).
+ */
+export async function searchAdminUsers(
+  params: AdminUserSearchParams,
+  signal?: AbortSignal,
+): Promise<AdminCursorPage<AdminUserRow>> {
+  const search = new URLSearchParams({ query: params.query })
+  if (params.cursor != null) search.set('cursor', String(params.cursor))
+  if (params.size !== undefined) search.set('size', String(params.size))
+  const raw = await apiFetch<RawAdminCursorPage<RawAdminUserRow>>(
+    `/admin/users?${search.toString()}`,
+    { signal },
+  )
+  return toAdminUserSearchPage(raw)
+}
+
+/**
+ * GET /admin/users/:userId/credits — 잔액 + 장부(최신순 커서). 장수 기능이 서버에 안 켜졌으면
+ * `BILLING503`(→ BILLING_UNAVAILABLE)이고, 없는 사용자는 `USER404`. 조회가 장부 계정을 지연 생성
+ * 하므로(BE `CreditAccountStore.lock`) 한 번도 안 쓴 사용자도 초기 지급 행 하나를 갖고 온다.
+ */
+export function getAdminUserCredits(
+  userId: number | string,
+  params: AdminCursorParams = {},
+  signal?: AbortSignal,
+): Promise<AdminUserCredits> {
+  const search = new URLSearchParams()
+  if (params.cursor != null) search.set('cursor', String(params.cursor))
+  if (params.size !== undefined) search.set('size', String(params.size))
+  const query = search.toString()
+  return apiFetch<RawAdminUserCredits>(
+    `/admin/users/${userId}/credits${query ? `?${query}` : ''}`,
+    { signal },
+  ).then(toAdminUserCredits)
+}
+
+/**
+ * POST /admin/users/:userId/credit-adjustments — 장수 지급(+)·회수(−). 응답 201에 조정 뒤 잔액.
+ * 회수가 잔액을 넘으면 `CREDIT409`(→ CREDIT_INSUFFICIENT), `delta` 0·메모 누락은 VALID400.
+ * 멱등키가 없어(BE CHMO-932 후속) 호출부가 전송 중 버튼을 잠근다.
+ */
+export function adjustAdminUserCredits(
+  userId: number | string,
+  input: AdminCreditAdjustmentInput,
+): Promise<AdminCreditAdjustment> {
+  return apiFetch<RawAdminCreditAdjustment>(`/admin/users/${userId}/credit-adjustments`, {
+    method: 'POST',
+    body: input,
+  }).then(toAdminCreditAdjustment)
+}
+
+/**
+ * GET /admin/organizations/subscriptions — 구독 행이 있는 기관(= 기간을 한 번이라도 등록한 기관)만,
+ * subscriptionId DESC 커서. 접근 상태는 요청 시각 기준으로 서버가 계산한다.
+ */
+export async function listAdminOrganizationSubscriptions(
+  params: AdminCursorParams = {},
+  signal?: AbortSignal,
+): Promise<AdminCursorPage<AdminOrganizationSubscriptionRow>> {
+  const search = new URLSearchParams()
+  if (params.cursor != null) search.set('cursor', String(params.cursor))
+  if (params.size !== undefined) search.set('size', String(params.size))
+  const query = search.toString()
+  const raw = await apiFetch<RawAdminCursorPage<RawAdminOrganizationSubscriptionRow>>(
+    `/admin/organizations/subscriptions${query ? `?${query}` : ''}`,
+    { signal },
+  )
+  return toAdminOrganizationSubscriptionPage(raw)
+}
+
+/**
+ * POST /admin/organizations/:userId/subscription-periods — 입금 기간 등록(201). 기간은 겹쳐도 되고
+ * 접근 상태는 무효화되지 않은 기간 중 가장 늦은 종료로 계산된다(연장 = 새 기간 추가).
+ * 기관 계정이 아니면·종료가 시작보다 앞이면 VALID400, 없는 사용자는 USER404.
+ */
+export function registerAdminSubscriptionPeriod(
+  userId: number | string,
+  input: AdminSubscriptionPeriodInput,
+): Promise<AdminOrganizationSubscription> {
+  return apiFetch<RawAdminOrganizationSubscription>(
+    `/admin/organizations/${userId}/subscription-periods`,
+    { method: 'POST', body: input },
+  ).then(toAdminOrganizationSubscription)
+}
+
+/**
+ * DELETE /admin/organization-subscription-periods/:periodId — 하드 삭제가 아니라 `voidedAt` 기록
+ * (멱등 — 이미 무효화된 기간을 또 불러도 200). 없는 id는 BILLING404. 응답의 nickname은 null이다.
+ */
+export function voidAdminSubscriptionPeriod(
+  periodId: number | string,
+): Promise<AdminOrganizationSubscription> {
+  return apiFetch<RawAdminOrganizationSubscription>(
+    `/admin/organization-subscription-periods/${periodId}`,
+    { method: 'DELETE' },
+  ).then(toAdminOrganizationSubscription)
 }

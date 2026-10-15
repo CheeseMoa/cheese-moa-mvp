@@ -34,6 +34,10 @@ import {
   unreviewedGatePhotoCount,
   campaignDevicesOf,
   campaignRecipientCounts,
+  lockCreditAccount,
+  recordCreditLedger,
+  registerOrganizationPeriod,
+  resolveInstitutionAccess,
 } from './db'
 import { createFixtures } from './fixtures'
 import { GUARDIAN_CONSENT_COPY } from '../legal/consents'
@@ -48,6 +52,10 @@ import {
   toAdminRecentGroup,
   toAdminReportDetailResponse,
   toAdminReportSummary,
+  toAdminOrganizationSubscriptionItem,
+  toAdminOrganizationSubscriptionResponse,
+  toAdminUserCreditsResponse,
+  toAdminUserSearchItem,
   toAgreementStatusResponse,
   toAlbumDetail,
   toAlbumSummary,
@@ -117,6 +125,10 @@ import {
   toAdminReportDetail,
   toAdminReportRow,
   toAdminStats,
+  toAdminOrganizationSubscription,
+  toAdminOrganizationSubscriptionRow,
+  toAdminUserCredits,
+  toAdminUserRow,
 } from '../admin/api/mappers'
 
 beforeEach(() => seedDb(createFixtures()))
@@ -833,6 +845,7 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
     const row = toAdminGroupRow(toAdminGroupSummary(findGroup(1)!))
     expect(row).toEqual({
       groupId: 1,
+      groupType: 'BUSINESS', // 어드민 모임 목록 `유형` 열(CHMO-931) — 목은 소문자 저장값을 대문자로
       memberCount: 6, // ACTIVE만 — 대기 신청 2건(치즈냥이88·신입쌤)은 세지 않는다
       eventCount: 4,
       // 운동회 28 + 봄 소풍 16 — 분석 중인 물놀이 20장은 앨범 매핑 전이라 제외(BE AlbumPhoto 기준)
@@ -1161,5 +1174,125 @@ describe('어드민 이벤트 팝업·혜택 푸시 (CHMO-928 — BE CHMO-926 �
     db.users.find((u) => u.id === 2)!.pushEnabled = false
     recordAgreement({ userId: 3, type: 'marketing', version: '1.0', agreed: false })
     expect(campaignRecipientCounts()).toEqual({ userCount: 3, deviceCount: 3 })
+  })
+})
+
+describe('어드민 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912 계약)', () => {
+  it('사용자 검색 행 — 계정 유형이 그대로 전달된다(시드 김지은 = 기관)', () => {
+    expect(toAdminUserRow(toAdminUserSearchItem(db.users[1]))).toEqual({
+      userId: 2,
+      nickname: '김지은',
+      accountType: 'ORGANIZATION',
+    })
+  })
+
+  it('장수 — 시드 장부(이현정 588장)와 모임·이벤트 이름이 지금 값으로 붙는다', () => {
+    const account = lockCreditAccount(1)!
+    expect(account.balance).toBe(588)
+    const rows = db.creditLedgers.filter((row) => row.userId === 1).sort((a, b) => b.id - a.id)
+    const credits = toAdminUserCredits(toAdminUserCreditsResponse(account, rows, null, false))
+    expect(credits.balance).toBe(588)
+    expect(credits.ledger.items[0]).toMatchObject({ reason: 'ADMIN_ADJUST', delta: 100, memo: '고객 지원 보상' })
+    const upload = credits.ledger.items.find((row) => row.reason === 'UPLOAD')!
+    expect(upload).toMatchObject({ groupId: 1, groupName: '햇살반', eventId: 1, eventName: '6.15 운동회 오전' })
+    // 전환 지급(500)부터 시작해 잔액이 이어진다
+    expect(credits.ledger.items[credits.ledger.items.length - 1]).toMatchObject({ reason: 'MIGRATION', balanceAfter: 500 })
+  })
+
+  it('장부 계정은 지연 생성 — 적용 시각 전 가입자는 500장(MIGRATION), 뒤 가입자는 50장(SIGNUP)', () => {
+    const before = lockCreditAccount(4)! // 2026-07-01 가입
+    expect(before.balance).toBe(500)
+    expect(db.creditLedgers.find((row) => row.userId === 4)).toMatchObject({ reason: 'MIGRATION', delta: 500 })
+
+    db.users.push({
+      id: 900,
+      nickname: '신규',
+      pin: '0000',
+      role: 'USER',
+      accountType: 'PERSONAL',
+      createdAt: '2026-10-10T09:00:00+09:00',
+      pushEnabled: true,
+    })
+    const after = lockCreditAccount(900)!
+    expect(after.balance).toBe(50)
+    expect(db.creditLedgers.find((row) => row.userId === 900)).toMatchObject({ reason: 'SIGNUP', delta: 50 })
+    // 다시 잠가도 새로 만들지 않는다
+    expect(lockCreditAccount(900)).toBe(after)
+    expect(lockCreditAccount(999)).toBeNull()
+  })
+
+  it('운영자 조정 장부에 adminId·memo가 남고 잔액은 조정 뒤 값이다', () => {
+    const account = lockCreditAccount(4)!
+    account.balance += 30
+    const row = recordCreditLedger(account, 30, 'ADMIN_ADJUST', { adminId: 1, memo: '보상' })
+    expect(row).toMatchObject({ userId: 4, delta: 30, balanceAfter: 530, adminId: 1, memo: '보상', reason: 'ADMIN_ADJUST' })
+  })
+
+  it('기관 접근 상태 — 시드: 서연맘 이용 중 · 지호네 유예 · 박수민 차단 · 김지은은 기간 없음(차단)', () => {
+    expect(resolveInstitutionAccess(5).status).toBe('ACTIVE')
+    expect(resolveInstitutionAccess(6).status).toBe('GRACE')
+    expect(resolveInstitutionAccess(3).status).toBe('BLOCKED')
+    expect(resolveInstitutionAccess(2)).toEqual({ status: 'BLOCKED', accessUntil: null, graceEndsAt: null })
+    // 유예 종료 = 이용 종료 + 7일
+    const grace = resolveInstitutionAccess(6)
+    expect(new Date(grace.graceEndsAt!).getTime() - new Date(grace.accessUntil!).getTime()).toBe(7 * 24 * 60 * 60 * 1000)
+  })
+
+  it('구독 목록 행 → 매퍼: 닉네임·상태·종료일이 살아 있고 지워진 계정은 nickname null', () => {
+    const subscription = db.organizationSubscriptions.find((s) => s.userId === 5)!
+    const row = toAdminOrganizationSubscriptionRow(
+      toAdminOrganizationSubscriptionItem(subscription, resolveInstitutionAccess(5)),
+    )
+    expect(row).toMatchObject({ userId: 5, nickname: '서연맘', status: 'ACTIVE' })
+    expect(row.accessUntil).not.toBeNull()
+
+    db.users = db.users.filter((u) => u.id !== 5)
+    expect(
+      toAdminOrganizationSubscriptionRow(
+        toAdminOrganizationSubscriptionItem(subscription, resolveInstitutionAccess(5)),
+      ).nickname,
+    ).toBeNull()
+  })
+
+  it('기간 등록기 — 종료≤시작·기관 아님은 VALID400, 없는 사용자는 USER404, 성공은 구독을 지연 생성한다', () => {
+    const input = {
+      accessFrom: '2026-10-01T00:00:00+09:00',
+      accessUntil: '2026-11-01T00:00:00+09:00',
+      amountKrw: 100000,
+      paidOn: '2026-09-30',
+      payerName: '치즈유치원',
+      invoiceNo: null,
+      memo: null,
+    }
+    expect(registerOrganizationPeriod(1, 2, { ...input, accessUntil: input.accessFrom })).toMatchObject({
+      ok: false,
+      code: 'VALID400',
+    })
+    expect(registerOrganizationPeriod(1, 999, input)).toMatchObject({ ok: false, code: 'USER404' })
+    expect(registerOrganizationPeriod(1, 4, input)).toMatchObject({
+      ok: false,
+      code: 'VALID400',
+      message: '기관 계정만 구독 기간을 등록할 수 있습니다.',
+    })
+
+    // 김지은(2)은 기관 계정인데 구독 행이 없었다 — 첫 등록이 행을 만든다
+    expect(db.organizationSubscriptions.some((s) => s.userId === 2)).toBe(false)
+    const result = registerOrganizationPeriod(1, 2, input)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(db.organizationSubscriptions.some((s) => s.userId === 2)).toBe(true)
+    expect(result.period).toMatchObject({ adminId: 1, voidedAt: null, payerName: '치즈유치원' })
+
+    const response = toAdminOrganizationSubscription(
+      toAdminOrganizationSubscriptionResponse(2, '김지은', resolveInstitutionAccess(2, new Date('2026-10-15T00:00:00Z').getTime()), result.period),
+    )
+    expect(response).toMatchObject({
+      organizationUserId: 2,
+      nickname: '김지은',
+      accessStatus: 'ACTIVE',
+      period: { amountKrw: 100000, invoiceNo: null, memo: null, voidedAt: null },
+    })
+    // 무효화 응답은 nickname null — 매퍼가 그대로 null을 지킨다
+    expect(toAdminOrganizationSubscription(toAdminOrganizationSubscriptionResponse(2, null, resolveInstitutionAccess(2), result.period)).nickname).toBeNull()
   })
 })

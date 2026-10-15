@@ -42,10 +42,15 @@ import {
   PASS_PLANS,
   type DbPassOrder,
   type DbAlbum,
+  type DbCreditAccount,
+  type DbCreditLedger,
   type DbEvent,
   type DbGroup,
   type DbMembership,
   type DbOrganizationInquiry,
+  type DbOrganizationSubscription,
+  type DbOrganizationSubscriptionPeriod,
+  type InstitutionAccess,
   type DbPerson,
   type DbPhoto,
   type DbPopup,
@@ -620,10 +625,11 @@ export function toAdminRecentGroup(group: DbGroup) {
   }
 }
 
-/** BE AdminGroupSummaryResponse — 목록 한 행(카운트 전부 파생값) */
+/** BE AdminGroupSummaryResponse — 목록 한 행(카운트 전부 파생값). groupType은 대문자 SpaceType(CHMO-621) */
 export function toAdminGroupSummary(group: DbGroup) {
   return {
     groupId: group.id,
+    groupType: group.groupType.toUpperCase(),
     memberCount: memberCountOf(group.id),
     eventCount: eventCountOf(group.id),
     photoCount: adminGroupPhotoCount(group.id),
@@ -871,5 +877,97 @@ export function toAdminCampaignResponse(campaign: DbPushCampaign) {
     ...(campaign.cancelledAt !== null ? { cancelledAt: campaign.cancelledAt } : {}),
     fcmMessageIds: campaign.fcmMessageIds,
     ...(campaign.failureCode !== null ? { failureCode: campaign.failureCode } : {}),
+  }
+}
+
+// ── 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912 admin/dto·billing/dto 소스 대조) ──
+
+/** BE AdminUserSearchResponse.Item */
+export function toAdminUserSearchItem(user: DbUser) {
+  return { userId: user.id, nickname: user.nickname, accountType: user.accountType }
+}
+
+/**
+ * BE CreditLedgerResponse.Item — 모임·이벤트 이름은 **지금 값**(스냅샷 없음)이라 지워졌으면 null이고
+ * id는 그대로 남는다(BE `spaces.get(row.getSpaceId())`). 메모는 운영자 조정에만 있다.
+ */
+export function toAdminCreditLedgerItem(row: DbCreditLedger) {
+  const group = row.groupId === null ? undefined : db.groups.find((g) => g.id === row.groupId)
+  const event = row.eventId === null ? undefined : db.events.find((e) => e.id === row.eventId)
+  return {
+    ledgerId: row.id,
+    delta: row.delta,
+    balanceAfter: row.balanceAfter,
+    reason: row.reason,
+    groupId: row.groupId,
+    groupName: group?.name ?? null,
+    eventId: row.eventId,
+    eventName: event?.name ?? null,
+    memo: row.memo,
+    createdAt: row.createdAt,
+  }
+}
+
+/** BE AdminUserCreditsResponse — 잔액 + 장부 커서 페이지 */
+export function toAdminUserCreditsResponse(
+  account: DbCreditAccount,
+  rows: DbCreditLedger[],
+  nextCursor: number | null,
+  hasNext: boolean,
+) {
+  return {
+    userId: account.userId,
+    balance: account.balance,
+    ledger: { items: rows.map(toAdminCreditLedgerItem), nextCursor, hasNext },
+  }
+}
+
+/** BE AdminOrganizationSubscriptionListResponse.Item — 닉네임은 유저가 지워졌으면 null */
+export function toAdminOrganizationSubscriptionItem(
+  subscription: DbOrganizationSubscription,
+  access: InstitutionAccess,
+) {
+  return {
+    subscriptionId: subscription.id,
+    userId: subscription.userId,
+    nickname: db.users.find((u) => u.id === subscription.userId)?.nickname ?? null,
+    status: access.status,
+    accessUntil: access.accessUntil,
+    graceEndsAt: access.graceEndsAt,
+  }
+}
+
+/** BE AdminOrganizationSubscriptionResponse.Period */
+export function toAdminSubscriptionPeriodResponse(period: DbOrganizationSubscriptionPeriod) {
+  return {
+    periodId: period.id,
+    accessFrom: period.accessFrom,
+    accessUntil: period.accessUntil,
+    amountKrw: period.amountKrw,
+    paidOn: period.paidOn,
+    payerName: period.payerName,
+    invoiceNo: period.invoiceNo,
+    memo: period.memo,
+    voidedAt: period.voidedAt,
+  }
+}
+
+/**
+ * BE AdminOrganizationSubscriptionResponse — 등록·무효화 응답. 무효화는 유저를 다시 읽지 않아
+ * nickname이 null이다(BE `VoidOrganizationSubscriptionPeriodUseCase`).
+ */
+export function toAdminOrganizationSubscriptionResponse(
+  userId: number,
+  nickname: string | null,
+  access: InstitutionAccess,
+  period: DbOrganizationSubscriptionPeriod,
+) {
+  return {
+    organizationUserId: userId,
+    nickname,
+    accessStatus: access.status,
+    accessUntil: access.accessUntil,
+    graceEndsAt: access.graceEndsAt,
+    period: toAdminSubscriptionPeriodResponse(period),
   }
 }
