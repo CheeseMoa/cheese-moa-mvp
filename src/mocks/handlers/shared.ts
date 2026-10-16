@@ -13,6 +13,7 @@ import {
   type DbEvent,
   type DbMemberRole,
   type DbUser,
+  type OrganizationPeriodInput,
 } from '../db'
 
 /** docs/api-spec.md §1 Base URL */
@@ -249,4 +250,42 @@ export function requiredIdArray(value: unknown): number[] | null {
     if (!items.includes(id)) items.push(id)
   }
   return items
+}
+
+/**
+ * 기관 구독 기간 요청 본문 정규화 (CHMO-931 — BE `AdminOrganizationSubscriptionPeriodRequest`
+ * Bean Validation과 같은 판정) — 틀리면 null(호출부가 VALID400). Instant는 ISO 오프셋 시각이면
+ * 받고, `paidOn`은 `YYYY-MM-DD`, 금액은 0 이상 정수, 입금자명 1~100·번호 ≤100·메모 ≤500.
+ * 기간 등록(POST)과 기관 문의 개통(PATCH)이 같은 함수를 탄다.
+ */
+export function parseSubscriptionPeriodInput(raw: unknown): OrganizationPeriodInput | null {
+  if (!raw || typeof raw !== 'object') return null
+  const body = raw as Record<string, unknown>
+  const accessFrom = isoInstant(body.accessFrom)
+  const accessUntil = isoInstant(body.accessUntil)
+  const amountKrw = body.amountKrw
+  const paidOn = typeof body.paidOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.paidOn) ? body.paidOn : null
+  const payerName = requiredString(body.payerName)
+  const invoiceNo = optionalString(body.invoiceNo)
+  const memo = optionalString(body.memo)
+  if (!accessFrom || !accessUntil || !paidOn || !payerName) return null
+  if (typeof amountKrw !== 'number' || !Number.isInteger(amountKrw) || amountKrw < 0) return null
+  if (payerName.length > 100) return null
+  if (invoiceNo && invoiceNo.length > 100) return null
+  if (memo && memo.length > 500) return null
+  return {
+    accessFrom,
+    accessUntil,
+    amountKrw,
+    paidOn,
+    payerName,
+    invoiceNo: invoiceNo ?? null,
+    memo: memo ?? null,
+  }
+}
+
+/** Jackson Instant 파싱에 준하는 판정 — 파싱되는 ISO 시각 문자열만 */
+function isoInstant(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  return Number.isNaN(new Date(value).getTime()) ? null : value
 }

@@ -12,8 +12,8 @@
 | 항목 | 확정 |
 |---|---|
 | 대상 | 내부 운영자(우리 팀). 기관 관리자(원장·주임교사)용은 범위 밖 |
-| 1차 화면 | 대시보드 · 모임 목록 · 모임 상세 · **기관 문의**(CHMO-811) · **신고·문의**(CHMO-862) |
-| 1차 액션 | 기관 도입 문의 상태 전이(연락 완료/개통/종료) · 신고·문의 **답변**과 상태 전이 — 그 외는 조회 전용 |
+| 1차 화면 | 대시보드(+최근 업로드 — CHMO-932) · 모임 목록 · 모임 상세(+과금·패스 — CHMO-932) · **기관 문의**(CHMO-811) · **신고·문의**(CHMO-862) · **사용자·장수**(CHMO-931·932) · **기관 구독**(CHMO-931·932) |
+| 1차 액션 | 기관 도입 문의 상태 전이(연락 완료/개통/종료 — 개통은 첫 이용 기간 동봉) · 신고·문의 **답변**과 상태 전이 · 사용자 **장수 지급·회수** · 기관 **이용 기간 등록·무효화**(이력 전체 — CHMO-932) · 모임 **패스 지급·회수**·**과금 범위 변경**(CHMO-932) — 그 외는 조회 전용 |
 | 배포 위치 | 같은 리포 `/admin` 라우트 (+ lazy 분리). 규모가 커지면 별도 리포로 격리 |
 | 인증 | 유저에 관리자 역할(role) 부여. `/admin/*` 경로에서만 검사 |
 | 인프라 지표 | **넣지 않음** — Grafana가 담당(CHMO-186·257·364) |
@@ -149,8 +149,12 @@
 | 최근 7일 신규 모임 수 | `createdAt` 기준 |
 | 최근 7일 신규 이벤트 수 | `createdAt` 기준 |
 | 최근 7일 업로드 사진 수 | ✅ 사진 업로드 시각이 DB에 있음(2026-07-21 BE 확인) |
+| 최근 7일 활동 모임 수 | CHMO-932 — 반영된 사진이 있는 모임 수. **운영·테스트 계정 제외**(서버 설정 `ADMIN_STATS_EXCLUDED_USER_IDS`, 응답 `excludedUserIds`) — 캡션이 제외 여부를 말한다 |
+| 최근 7일 업로드 사용자 수 | CHMO-932 — 그 사진들의 고유 업로더 수(업로더 없는 옛 사진은 안 센다). 같은 제외 규칙 |
 
-**최근 생성된 모임 5개** — 모임 상세로 바로가기.
+**최근 업로드 10행**(CHMO-932) — 처리할 일 바로 아래. 최근 사진이 **앨범에 반영된** 이벤트 10개(이벤트명 · `모임 #id`+유형 칩 · 올린 사람(닉네임 `#id` — 옛 사진·탈퇴는 '—') · 사진 수 · 올린 시각), 행 클릭 → 모임 상세. "업로드 시각"은 분류가 끝나 앨범에 들어간 때라(BE 정책 — 업로드 기록은 7일 뒤 지워진다) 분류 중인 업로드는 몇 분 늦게 보인다 — 머리글 한 줄이 그렇게 말한다. 운영자가 첫 화면에서 찾는 건 "지금 실제로 쓰이는 모임·이벤트"라 누적·7일 카드보다 **위**에 둔다(종전엔 "최근 생성된 모임"뿐이라 만든 뒤 한 번도 안 쓴 모임이 맨 위였다).
+
+**최근 생성된 모임 5개** — 모임 상세로 바로가기(최근 업로드 아래).
 
 **넣지 않는 것**
 
@@ -162,20 +166,30 @@
 | 컬럼 | 비고 |
 |---|---|
 | 모임 | `모임 #45` — 상세로 링크. **이름이 아니라 groupId**(CHMO-668·670) |
+| 유형 | 비즈니스 / 일반 칩(CHMO-931) |
 | 멤버 수 | |
 | 이벤트 수 | |
 | 사진 수 | |
+| 최근 7일 사진 | CHMO-932 — 반영된 사진 수. 0은 '—'가 아니라 0(안 쓰인 것도 사실) |
+| 마지막 업로드 | CHMO-932 — 사진이 앨범에 반영된 시각의 최댓값. 사진이 없으면 '—' |
 | 생성일 | |
 
 - 검색: **없음**(CHMO-670) — BE는 `q`(모임명 부분 일치)를 계속 받지만, 이름을 화면에 안 보여주는 이상 검색 결과가 맞는지 확인할 방법이 없다. 같은 이유로 `이름순` 정렬도 뺐다.
-- 정렬: 최신순(기본) / 오래된순 — 사진 많은 순은 BE 화이트리스트 밖(§4)
+- 정렬(CHMO-932): **최근 업로드순(기본)** / 사진 많은 순 / 최신 생성순 / 오래된순 — 사진 없는 모임은 방향과 무관하게 맨 뒤(BE nulls last). 집계 정렬은 CHMO-378의 "1차 제외"가 해제된 것(모임 수백 규모에서 요청마다 집계).
+- 유형 필터(CHMO-932): 전체 / 비즈니스 / 일반 — 생략은 파라미터 자체를 안 보낸다.
 - **페이지네이션 필수** — 전체 조회는 데이터가 늘면 그대로 장애가 된다
 
 ### 3-3. 모임 상세
 
-- **헤더**: `모임 #45`(이름 없음 — CHMO-668), 생성일, 멤버 수, 이벤트·사진 수, 생성자 닉네임
-- **멤버 목록**: 닉네임, 합류일
-- **이벤트 목록**: 이름, 날짜, 상태(빈/분석중/검수중/공개), 사진 수, 앨범 수, 공개일
+- **헤더**: `모임 #45`(이름 없음 — CHMO-668) + **유형 칩**(비즈니스/일반 — CHMO-932), 생성일, 멤버 수, 이벤트·사진 수, 생성자 닉네임, **마지막 업로드**
+- **과금 줄**(CHMO-932 — BE A-3): 과금 범위(개인/기관) · 과금 소유자(닉네임 `#id` → 사용자 상세). **개인 범위**면 패스 상태(`이용 중 · ~까지` / `없음` — 패스가 없으면 올리는 사람의 장수가 줄어요) + \[패스 지급\], **기관 범위**면 과금 소유 기관의 접근 상태 배지(이용 중/유예/차단)·종료일·유예 종료(패스가 아니라 기관 기간이 업로드를 결정한다 — ADR 039). \[과금 범위 변경\]은 둘 다(구계약 응답이라 범위를 모르면 잠근다 — 모르는 값을 '개인'으로 단정하면 기관 모임에도 지급 버튼이 선다).
+- **멤버 목록**: 닉네임 + **역할 칩**(비즈니스 `관리자`/`멤버` · **일반은 전원 `멤버`** — 일반 모임은 역할이 없다(ADR 020). 종전 '선생님/학부모'는 유치원 어휘인 데다 유형을 안 봐서 **일반 모임 멤버가 전부 선생님으로 보였다** — CHMO-932, `memberRoleLabel(role, groupType)`) + **기관 계정 칩**(계정 유형은 역할과 다른 축 — BE A-7 `members[].accountType`) + 승인 대기 칩, 합류일
+- **이벤트 목록**: 이름, 날짜, 상태(빈/분석중/검수중/공개), 사진 수, 앨범 수, **마지막 업로드**(CHMO-932), 공개일
+- **패스 지급 이력**(개인 범위만 — CHMO-932 BE A-8): 기간(1·3·7·30일) · 적용 구간 · 메모(+등록 시각·관리자 `#id`, 나면 `(나)`) · \[회수\]/`회수됨`(취소선). **운영자가 준 패스만** 보인다 — 스토어 구매는 별도 원장이고 만료 시각에만 함께 반영된다(ADR 045).
+
+**패스 지급 다이얼로그**(`PassGrantDialog`) — 플랜 세그먼트(1·3·7·30일) + 메모(필수 500자 — 지급 이력에 그대로) → `POST /admin/groups/{id}/pass-grants`(201). "반영 뒤 ~까지"를 미리 보여 주는 건 **누적 규칙** 때문이다: 살아 있는 패스가 있으면 지금부터가 아니라 그 만료 뒤에 이어 붙는다(스토어 구매와 같은 규칙 — `lib/billing.passAccessUntilAfterGrant`). 기관 범위 모임은 서버가 VALID400으로 거절하고(버튼 자체가 안 선다) 메시지를 그대로 보여 준다. **회수**는 확인 다이얼로그 뒤 `DELETE /admin/pass-grants/{id}` — 지급분만큼 만료를 당기되 지금 이전으로는 줄이지 않고(스토어 환불 규칙) 이력은 남는다. 없는 지급(BILLING404)은 "다른 관리자가 처리했을 수 있어요" + 재조회.
+
+**과금 범위 변경 다이얼로그**(`BillingScopeDialog` — CHMO-932, BE CHMO-912 `PUT …/billing-scope`를 처음 소비) — 범위 세그먼트(개인/기관) + 소유자 userId(사용자 화면의 `#번호` — 닉네임은 소셜 가입이라 여럿이 같을 수 있어 식별자가 못 된다) + 메모(필수 — 감사 이력). **기관 범위의 소유자는 기관 계정이어야 한다**는 규칙은 서버만 알아(VALID400) 소유자 칸 아래에서 받고, USER404도 같은 칸. 지금 값과 같으면 저장을 잠근다. 모임 소유권 이전(생성자 변경)은 이 값을 바꾸지 않는다(ADR 039 스냅샷).
 
 **학부모 공유 비밀번호는 1차에서 노출하지 않는다** — 조회 전용 화면에 평문 비밀번호가 떠 있으면 화면 캡처 하나가 사고가 된다. 운영 문의는 선생님 본인 화면(05 학부모 공유 시트)으로 안내한다.
 
@@ -213,11 +227,13 @@
 
 | 확인 모달 | 언제 | 요지 |
 |---|---|---|
-| 개통 | `→ ONBOARDED` | "개통하면 이 사용자가 앱에서 모임을 만들고 사진을 올릴 수 있어요" + 사용자 쪽 다음 동작 |
+| 개통 | `→ ONBOARDED` | "개통하면 이 사용자가 앱에서 모임을 만들고 사진을 올릴 수 있어요" + 사용자 쪽 다음 동작. **첫 이용 기간 폼을 품는다**(CHMO-931 — 아래) |
 | 개통 취소 | **`ONBOARDED`에서 나가는 전이 전부** | "승인 대기 화면으로 돌아가요. **모임과 사진은 그대로 남고**, 다시 개통하면 이어서 쓸 수 있어요" |
 | 종료 | `→ CLOSED` | "다시 진행하려면 사용자가 문의를 새로 내야 해요" |
 
 개통 취소를 목적지(`CLOSED`)가 아니라 **출발지**(`ONBOARDED`)로 판정하는 이유: 사용자 화면에서는 `CLOSED`로 보내든 `RECEIVED`로 되돌리든 똑같이 승인 대기로 돌아간다. 목적지로 가르면 가장 파괴적으로 보이는 되돌리기만 확인 없이 나간다. 나머지(연락 완료 표시, 종료분 되돌리기)는 사용자 화면을 바꾸지 않는 운영 메모라 바로 나간다.
+
+**개통은 첫 이용 기간 등록과 한 흐름이다(CHMO-931 — BE CHMO-912).** ⚠ 종전 "기관은 체험 기간이 없어 기간 없이 개통하면 첫날부터 막힌다"는 **BE CHMO-940(2026-10-16 운영 반영)으로 사실이 아니게 됐다** — 기관 계정은 가입할 때 서버가 체험 14일을 자동으로 넣는다(기존 기관 계정도 백필). 그래서 기간 없이 개통해도 체험이 남아 있는 동안은 올릴 수 있고, 체험이 끝나면 7일 유예 뒤 차단된다(BE `InstitutionAccessResolver`). 체험 기간은 사용자 상세 이력에 '가입 체험'으로 보인다(CHMO-932). 그래서 개통 확인 창(`InquiryOnboardDialog`)이 §3-9의 기간 폼(이용 시작·종료일 · 입금액 · 입금일 · 입금자명(기관명 미리 채움) · 세금계산서 번호 · 메모)을 품고 `PATCH …/{id}` 본문에 `subscriptionPeriod`로 동봉한다 — BE가 상태 전이와 기간 등록을 한 트랜잭션으로 처리한다(기간 등록이 거절되면 상태도 안 바뀐다). "첫 이용 기간을 함께 등록해요" 체크를 풀면 기간 없이 개통하는 길도 남긴다(과금 적용 전이거나 입금이 아직일 때) — 다만 그 결과("과금 중이면 첫날부터 막힌다 · 입금 확인되면 기관 구독에서 등록")를 안내 상자로 말한다. 확정 버튼 라벨이 `기간 등록하고 개통` / `기간 없이 개통`으로 갈려 어느 쪽인지 누르기 전에 읽힌다. 성공 토스트는 등록한 종료일까지 말한다.
 
 **전이 후** — 성공 토스트 + **그 행만 제자리 갱신**(PATCH 응답이 목록 행과 같은 형태라 재조회가 없다). 필터와 어긋나게 된 행도 그 자리에 남긴다: 방금 누른 행이 사라지면 잘못 누른 값을 되돌릴 대상이 화면에서 없어진다. 다음 조회(탭·페이지 이동·\[새로고침\])에서 빠진다.
 
@@ -304,6 +320,40 @@
 
 **목** — 실 BE의 5초 디스패처 대신 조회할 때 정산한다(즉시 발송은 3초 뒤 만기로 접수 — '대기 중'이 잠깐 보이고 폴링이 '보냄'으로 바꾸는 것까지 탄다). 시드: 팝업 4종(조회 시각 기준 상대 기간 — 탭 넷이 언제나 찬다)·발송 이력 4건(예약·보냄·테스트·실패) · 수신 대상(동의만 있고 기기 없는 사람 · 기기만 있고 동의 없는 사람을 섞어 두 수의 차이가 보이게).
 
+### 3-8. 사용자 · 무료 사진 장수 (CHMO-931 — BE CHMO-912)
+
+`/admin/users`(검색) · `/admin/users/:userId`(상세). 사이드바 `사용자`(기관 구독 아래·모임 위). 업로드 과금(CHMO-912)이 운영에 들어가면서 운영자가 "이 사용자에게 분석(업로드)할 수 있는 장수를 더 준다"를 할 자리가 필요했다 — 그 전엔 BE 개발자의 curl뿐이었다.
+
+**검색** — 닉네임 부분 일치(대소문자 무시) 또는 userId 정확 일치(`GET /admin/users?query=`). 검색어가 비면 **최근 가입 순 전체**라 "방금 가입한 사람"도 여기서 본다. 열: 사용자(닉네임 · `#userId`) · 계정 유형(개인/기관 — 가입 때 고른 탭이지 모임 역할이 아니다). BE가 커서 목록이라 페이지 버튼 대신 \[더 보기\](`AdminLoadMore` · 커서 훅 `useCursorList`). 닉네임은 소셜 가입이라 여럿이 같을 수 있어 "신고·문의 화면의 `#userId`를 넣으면 그 계정만 나온다"를 한 줄로 말한다.
+
+**상세 — 요약 머리**(CHMO-932 — BE A-5 `GET /admin/users/{id}`): 닉네임 `#id` + 계정 유형 칩(개인/기관) + 어드민 권한 칩(role ADMIN일 때만) · 가입일 · 로그인 수단(소셜 종류 — PIN 계정은 'PIN') · 속한 모임 수 + **모임 칩 목록**(`모임 #45 · 비즈니스 · 관리자` (승인 대기) → 모임 상세. 역할 라벨은 모임 유형을 본다 — 일반은 '멤버'). 종전(CHMO-931)엔 요약 API가 없어 검색 API를 `query=<id>`로 다시 불러 id가 같은 행을 집었다(닉네임에 그 숫자가 섞인 남까지 걸렸다).
+
+**상세 — 장수 카드** — 잔액(큰 수) + \[장수 지급\] \[회수\] + 장부 표(시각 · 사유 · 증감 · 잔액). 사유는 가입 지급 / 전환 지급(적용 시각 전 가입자 500장) / 일일 적립 / 업로드 차감(`모임 #N · 모임명 › 이벤트명` — 이름은 **지금 값**이라 지워졌으면 `(지워진 모임)`) / 운영자 조정(메모가 그대로 붙는다). 증감은 +초록 · −붉은색.
+
+**장수 조정 다이얼로그**(`CreditAdjustDialog`) — 지급/회수 세그먼트 · 장수 · 메모(필수 500자 — 장부에 그대로 남는다) → `POST …/credit-adjustments {delta, memo}`(회수는 음수). 규칙은 `admin/lib/billing.ts`가 BE와 같게 먼저 돌린다: delta ≠ 0 · 메모 필수 · **회수는 잔액을 넘길 수 없다**(`CreditAccount.adjust`가 음수를 `CREDIT409`로 거절 — 화면이 먼저 막고, 다른 관리자와 겹쳐 서버가 거절하면 장수 칸 아래에서 다시 말한다) · 지급은 500 상한을 넘겨도 된다(스펙 3.5). "반영 뒤 잔액 N장"을 칸 아래에 미리 보여 준다. 성공 → 잔액·장부 재조회 + 토스트. **`Idempotency-Key`**(CHMO-932 — ADR 045): 다이얼로그를 열 때 UUID를 한 번 만들어 재시도에만 재사용한다 — 응답을 못 받고 다시 눌러도 서버가 두 번 지급하지 않는다(장수 조정·기간 등록·패스 지급 셋 공통, 선택 헤더라 없으면 종전처럼 매번 실행). 같은 키 다른 내용은 ADMIN409(`ADMIN_REQUEST_CONFLICT`) — 실제로 오면 키 재사용 결함이라 "창을 닫고 다시 열어 주세요". 전송 중 버튼 잠금은 그대로 둔다(키는 재시도 안전망이지 UI 잠금의 대체가 아니다).
+
+**장수 기능이 서버에 안 켜졌으면**(`credit.enforcement-starts-at` 비어 있음 → 조회·조정 전부 `BILLING503`) 오류가 아니라 **안내 상자**다 — "앱 2.6.0 공개 뒤 설정을 켜면 이 카드가 살아난다". 조회 자체가 장부 계정을 지연 생성한다(BE `CreditAccountStore.lock` — 한 번도 안 쓴 사용자도 초기 지급 행 하나를 갖고 온다).
+
+**상세 — 기관 이용 기간 구획(기관 계정만)** — 지금 상태(배지 + 종료일 · 유예 종료) + \[이용 기간 등록\](§3-9 다이얼로그) + **이력 표**(CHMO-932 — BE A-4 `GET /admin/organizations/{id}/subscription`, **무효화분 포함** 최신순): 이용 기간 · 출처 배지(**가입 체험** — BE CHMO-940이 넣은 기간, `adminId` null / 운영자 등록) · 입금(금액 · 입금일 · 입금자 · 세금계산서)+메모 · 등록(시각 · 관리자 `#id` 또는 `서버(체험)`) · \[무효화\]/`무효화됨`(취소선). 어느 기간이든 무효화할 수 있다(확인 다이얼로그 뒤 `DELETE …/organization-subscription-periods/{periodId}` → 이력 재조회) — 종전(CHMO-931)엔 이력 API가 없어 이번 세션에 등록한 기간만 되돌렸다. 구독 행이 없는 기관은 404가 아니라 빈 이력 + 차단(BE 정책). 기관 계정도 개인 범위 모임에 들어가 업로드하면 장수를 쓰므로 장수 카드는 누구에게나 있다. 이력은 기관 계정일 때만 부른다(개인 계정에 부르면 VALID400 — useApi 키를 null로 둬 요청 자체가 안 나간다).
+
+### 3-9. 기관 구독 (CHMO-931 — BE CHMO-912)
+
+`/admin/organizations`. 사이드바 `기관 구독`(기관 문의 바로 아래 — 개통의 다음 일). 기관은 계좌이체 월 정액이라 결제가 서버에 자동으로 들어오지 않는다 — 입금을 확인한 운영자가 여기서 기간을 더한다.
+
+| 컬럼 | 비고 |
+|---|---|
+| 기관 계정 | 닉네임 · `#userId`(지워진 계정은 `(지워진 계정)`). 행 클릭 → 사용자 상세 |
+| 이용 상태 | **이용 중**(초록) / **유예 기간**(주황 — 종료 뒤 7일, 업로드는 된다) / **차단**(붉은색 — 새 업로드 `BILLING403`). 요청 시각 기준으로 서버가 계산(`InstitutionAccessResolver`) |
+| 이용 종료일 | `accessUntil`(배타적 끝 시각)을 **1ms 전의 KST 날짜**로 보여 "그 날까지"로 읽는다(`accessUntilToKstDate`) |
+| 유예 종료 | `graceEndsAt` |
+| \[이용 기간 등록\] | 셀 여백까지 행 클릭을 막는다(팝업 스위치 칸과 같은 규칙) |
+
+**기간 등록 다이얼로그**(`SubscriptionPeriodDialog` — 폼 상태 `hooks/useSubscriptionPeriodForm` · 칸 `SubscriptionPeriodFields`, 개통 창과 공용) — 이용 시작일·종료일(`type="date"` · **KST** · 종료일 **포함**: 서버엔 다음 날 0시 `+09:00`를 보낸다, 기본값 오늘~30일 뒤) · 입금액(원, 0 허용 = 무상) · 입금일(기본 오늘) · 입금자명(필수 100자) · 세금계산서 번호(선택) · 메모(선택 500자) → `POST /admin/organizations/{userId}/subscription-periods`(201). **등록은 더하기만**이다 — 기간이 겹쳐도 되고 접근 상태는 무효화되지 않은 기간 중 가장 늦은 종료로 계산되므로 "연장"도 새 기간 등록이다. 검증은 BE DTO·등록기와 같은 규칙을 화면이 먼저 돌린다(`billing.ts validateSubscriptionPeriod` — 종료<시작·음수 금액·빈 입금자명), 서버가 거절하는 건 실질 "기관 계정이 아닙니다"(VALID400)뿐이라 폼 아래 한 줄로 받는다. 성공 → 목록 재조회(차단 → 이용 중으로 바뀐다) + 토스트("~까지").
+
+**이 목록에 없는 기관** — 구독 행은 첫 기간이 생길 때 만들어진다. BE CHMO-940(가입 체험 14일 자동)이 기관 계정 생성 때 구독 행을 만들므로 이제 거의 모든 기관이 여기 보이고, 체험 전 가입자(백필로 대부분 해소)만 기관 문의 개통 때 함께 등록하거나(§3-4) 사용자 검색에서 찾아 등록한다 — 목록 위 한 줄이 그렇게 안내한다. 기간 **이력**·아무 기간이나 무효화는 행 클릭 → 사용자 상세(§3-8, CHMO-932).
+
+**목** — `handlers/adminBilling.ts`. 검증 순서는 BE 유스케이스 그대로(가드 → Bean Validation(VALID400) → 설정 → 대상(USER404) → 도메인(CREDIT409 · 기관 계정 VALID400)), 커서 `size`는 BE처럼 1~50으로 **접는다**(400이 아니다 — 모임 목록과 다르다). `DbUser.accountType` 신설(기관 문의를 낸 시드 계정 2·3·5·6·7 = 기관), 장부 시드는 이현정(1) 한 사람(전환 지급 500 → 업로드 −32 → 일일 적립 ×2 → 운영자 조정 +100 = 588장)이고 나머지는 조회 때 지연 생성. 구독 시드는 **지금 기준 상대 시각**(팝업과 같은 이유)으로 서연맘 이용 중 · 지호네 유예 · 박수민 차단 · 김지은은 기간 없음(개통 때 등록 흐름용).
+
 ---
 
 ## 4. API (확정 — BE CHMO-378, 2026-08-04 develop 머지 · 소스 대조)
@@ -314,11 +364,22 @@
 | 용도 | 확정 | 응답 |
 |---|---|---|
 | 진입 게이트 | `GET /admin/me` | `{userId, nickname, role}` — 관리자 아니면 ADMIN403이라 FE 가드가 이걸로 판정 (CHMO-377) |
-| 대시보드 요약 | `GET /admin/stats` | `totals`(users·groups·events·photos) + `last7Days`(newGroups·newEvents·newPhotos) + `recentGroups` 5개 고정(행: groupId·memberCount·createdAt) |
-| 모임 목록 | `GET /admin/groups?page&size&q&sort` | 행: groupId·memberCount·eventCount·photoCount·createdAt — **페이지 정보는 봉투의 `pageInfo`**(page·size·hasNext·totalElements·totalPages) |
-| 모임 상세 | `GET /admin/groups/{groupId}` | 기본정보(groupId·createdAt·카운트)+생성자 + 멤버 목록(**PENDING 포함**, spaceUserId 오름차순) + 이벤트 목록(eventId 내림차순, publishedAt은 미공개 null) |
+| 대시보드 요약 | `GET /admin/stats` | `totals`(users·groups·events·photos) + `last7Days`(newGroups·newEvents·newPhotos + **activeGroups·uploaders** — CHMO-932) + `recentGroups` 5개 고정(행: groupId·memberCount·createdAt) + **`recentUploads`** 10개(eventId·eventName·groupId·groupType·lastUploadedAt·photoCount·uploaderUserId?·uploaderNickname?) + **`excludedUserIds`**(활동·최근 업로드에서 뺀 운영·테스트 계정 — 서버 설정 `ADMIN_STATS_EXCLUDED_USER_IDS`). "업로드 시각"은 사진이 앨범에 반영된 시각(분류 완료) |
+| 모임 목록 | `GET /admin/groups?page&size&q&sort&groupType` | 행: groupId·groupType·memberCount·eventCount·photoCount·createdAt·**lastUploadedAt?·last7DaysPhotoCount**(CHMO-932) — **페이지 정보는 봉투의 `pageInfo`**(page·size·hasNext·totalElements·totalPages). `groupType`(BUSINESS\|GENERAL, 생략 = 전체) |
+| 모임 상세 | `GET /admin/groups/{groupId}` | 기본정보(groupId·groupType·createdAt·카운트)+생성자 + **과금**(billingScope·billingOwnerUserId·billingOwnerNickname?) + **lastUploadedAt** + **`pass`**{active, accessUntil?(활성일 때만), grants[]{grantId, plan, accessFrom, accessUntil, adminId, memo, createdAt, revokedAt?, revokedBy?}} (항상 객체, 운영자 지급분만) + **`institution`**{accessStatus, accessUntil?, graceEndsAt?}(기관 범위일 때만, 아니면 null) + 멤버 목록(**PENDING 포함**, spaceUserId 오름차순, **accountType** 포함) + 이벤트 목록(eventId 내림차순, publishedAt은 미공개 null, **lastUploadedAt?**) — CHMO-932 |
 | 기관 문의 목록 | `GET /admin/organization-inquiries?page&size&status` | 행: id·status·organizationType/Name·region·contact{Name,Phone,Role}·privacyConsentVersion·userId·userNickname·socialProviders·createdAt·updatedAt. 정렬 `createdAt,desc` 고정 · `status` 기본값 `RECEIVED,CONTACTED`(`ALL` 지원) — BE CHMO-810 |
-| 기관 문의 전이 | `PATCH /admin/organization-inquiries/{id}` | 요청 `{status}` · 응답은 **갱신된 행**(목록과 같은 형태). 전이 규칙 없음 — BE CHMO-810 |
+| 기관 문의 전이 | `PATCH /admin/organization-inquiries/{id}` | 요청 `{status, subscriptionPeriod?}` · 응답은 **갱신된 행**(목록과 같은 형태). 전이 규칙 없음 — BE CHMO-810. `subscriptionPeriod`(CHMO-912)는 `ONBOARDED`일 때만 뜻이 있고 아래 기간 등록 요청과 같은 모양, 한 트랜잭션 |
+| 사용자 검색 | `GET /admin/users?query&cursor&size` | 커서 목록 `{items[{userId, nickname, accountType}], nextCursor, hasNext}` — 닉네임 부분 일치(대소문자 무시) OR userId 정확 일치, 비면 전체 · userId DESC · size 1~50으로 **접음** — BE CHMO-912 |
+| 사용자 요약 | `GET /admin/users/{userId}` | `{userId, nickname, accountType, role(USER\|ADMIN), createdAt, socialProviders[], groups[{groupId, groupType, role, status}]}` — 속한 모임은 승인 대기 포함·멤버십 id 순·모임 이름 없음. 없으면 USER404 — CHMO-932 |
+| 기관 구독 이력 | `GET /admin/organizations/{userId}/subscription` | `{userId, nickname, accountType, accessStatus, accessUntil?, graceEndsAt?, periods[{periodId, kind(TRIAL\|ADMIN), accessFrom, accessUntil, amountKrw, paidOn, payerName, invoiceNo?, memo?, adminId?, createdAt, voidedAt?, voidedBy?}]}` — **무효화분 포함** 등록 최신순. `kind`는 `adminId` 유무로 파생(TRIAL = 가입 체험 CHMO-940). 구독 행 없으면 404가 아니라 `periods: []`+BLOCKED · USER404 · 기관 계정 아님 VALID400 — CHMO-932 |
+| 패스 지급 | `POST /admin/groups/{groupId}/pass-grants`(201) | 요청 `{plan(DAY_1\|DAY_3\|DAY_7\|DAY_30), memo(1~500)}` → `{grantId, groupId, plan, accessFrom, accessUntil}`. 살아 있는 패스 만료 뒤에 누적(ADR 038 규칙). 기관 범위 VALID400 · SPACE404 · `Idempotency-Key`(선택) — CHMO-932·ADR 045 |
+| 패스 회수 | `DELETE /admin/pass-grants/{grantId}` | `{grantId, groupId, revokedAt, passAccessUntil?}` — 지급분만큼 만료를 당기되 지금 이전으로 안 줄임, 원장 행 유지(멱등 — 이미 회수면 같은 결과). 없으면 BILLING404 |
+| 사용자 장수 | `GET /admin/users/{id}/credits?cursor&size` | `{userId, balance, ledger{items[{ledgerId, delta, balanceAfter, reason, groupId, groupName, eventId, eventName, memo, createdAt}], nextCursor, hasNext}}` — 조회가 장부 계정을 지연 생성. 설정 없으면 BILLING503 |
+| 장수 조정 | `POST /admin/users/{id}/credit-adjustments`(201) | 요청 `{delta(≠0), memo(1~500)}` → `{userId, delta, balance}`. 음수 잔액 CREDIT409 · 지급은 상한 500 무관 · `Idempotency-Key`(선택, UUID — CHMO-932): 같은 키·같은 내용 = 처음 결과, 다른 내용 = ADMIN409, 형식 오류 COMMON400 |
+| 기관 구독 목록 | `GET /admin/organizations/subscriptions?cursor&size` | `{items[{subscriptionId, userId, nickname?, status(ACTIVE/GRACE/BLOCKED), accessUntil?, graceEndsAt?}], nextCursor, hasNext}` — 구독 행이 있는 기관만 · subscriptionId DESC |
+| 기관 기간 등록 | `POST /admin/organizations/{userId}/subscription-periods`(201) | 요청 `{accessFrom, accessUntil(Instant), amountKrw(≥0), paidOn(날짜), payerName(1~100), invoiceNo?(≤100), memo?(≤500)}` → `{organizationUserId, nickname, accessStatus, accessUntil, graceEndsAt, period{periodId, …, voidedAt}}`. 종료≤시작·기관 계정 아님 VALID400 · USER404 · `Idempotency-Key`(선택 — CHMO-932) |
+| 기관 기간 무효화 | `DELETE /admin/organization-subscription-periods/{periodId}` | 같은 응답 형태(nickname **null** — 유저를 다시 안 읽는다) · `voidedAt` 기록(멱등) · 없는 id BILLING404 |
+| 모임 과금 범위 | `PUT /admin/groups/{groupId}/billing-scope` | 요청 `{billingScope(PERSONAL\|INSTITUTION), billingOwnerUserId, memo(1~500)}` → `{groupId, billingScope, billingOwnerUserId}`. 기관 범위인데 소유자가 기관 계정 아님 VALID400 · USER404 · SPACE404. 감사 이력은 서버(`space_billing_scope_history`). **FE 소비는 CHMO-932부터**(상세가 현재 값을 주게 된 뒤) |
 | 신고·문의 목록 | `GET /admin/reports?page&size&status&type` | 행: id·type·status·preview(앞 60자·없으면 null)·userId·userNickname·socialProviders·groupId·groupName·photoId·hasAttachments·createdAt·answeredAt·updatedAt. 정렬 `createdAt,desc`(동률 id DESC) 고정 · `status` 기본 `RECEIVED,IN_PROGRESS` · `type` 기본 `ALL`(둘 다 콤마 복수·`ALL`) — BE CHMO-861 |
 | 신고·문의 상세 | `GET /admin/reports/{id}` | 행 + content·attachments[{url}](presigned)·photo{id,url(원본 presigned),eventId,eventName}·photoDeleted·reporterRole(EDITOR/VIEWER·멤버십 상태 무관)·client{appVersion,platform,osVersion,deviceModel}·followUpOf{id,preview}·reply{content,answeredAt,answeredBy} |
 | 신고·문의 답변 | `POST /admin/reports/{id}/reply` | 요청 `{content}`(trim 후 1~2,000자) · 응답은 **상세 형태**. 최초 답변만 푸시, 재답변은 내용·시각만 갱신 |
@@ -335,11 +396,12 @@
 - 경로는 `/admin/groups` — 티켓 초안의 `spaces`는 내부 명칭이 샌 표기라 폐기(직렬화 경계 밖은 group/event).
 - 멤버 수 = ACTIVE만(서비스 화면과 같은 규칙 — 상세 멤버 행 수와 다를 수 있고 `status`가 설명한다). 사진 수 = 앨범 매핑(AlbumPhoto) distinct — 분류를 거친 사진만. 총 사진(stats)은 photo 행 count.
 - **모임 이름은 어드민 응답 3곳(stats.recentGroups·목록·상세) 어디에도 없다**(BE CHMO-668 / PR #203, 2026-08-11) — 어드민은 모임을 groupId로만 식별한다. 이벤트 이름·멤버 닉네임·생성자 닉네임은 모임 이름이 아니라 존치. 화면은 전부 `모임 #{groupId}` 표기(FE `admin/lib/format.ts` `groupLabel` 단일 원천, CHMO-670).
-- 정렬 화이트리스트 `createdAt`·`name` × `asc`·`desc`(기본 `createdAt,desc`) — **집계 컬럼 정렬(§3-2 '사진 많은 순')은 1차 제외**. `size`는 1~100. 검색 `q`·정렬 `name`은 BE가 계속 받지만(값만 걷고 동작은 유지) **FE는 보내지 않는다**(§3-2).
+- 정렬 화이트리스트 `lastUploadedAt`·`photoCount`·`createdAt`·`name` × `asc`·`desc`(기본 **`lastUploadedAt,desc`** — CHMO-932에서 바뀜, 사진 없는 모임은 방향과 무관하게 맨 뒤·동률 `createdAt desc, groupId desc`). 집계 컬럼 정렬은 CHMO-378의 "1차 제외"가 해제된 것(저장 컬럼 없이 요청마다 집계 — 느려지면 `last_uploaded_at` 컬럼 후속). `size`는 1~100. 검색 `q`·정렬 `name`은 BE가 계속 받지만(값만 걷고 동작은 유지) **FE는 보내지 않는다**(§3-2).
+- **활동 지표 제외 계정**(CHMO-932): `activeGroups`·`uploaders`·`recentUploads`만 서버 설정 `ADMIN_STATS_EXCLUDED_USER_IDS`(Grafana CHMO-846과 같은 목록) 계정이 올린 사진을 뺀다. 기존 필드(totals·new*)의 뜻은 바꾸지 않았다. 업로더 없는 옛 사진(CHMO-805 이전)은 제외 대상이 아니고 `uploaders`엔 안 센다.
 - 집계 캐시는 안 넣는다(현 규모 count는 ms 단위 — 느려지면 그때 측정).
 - 응답에 시크릿 4종(joinKey·모임 비밀번호·공유 토큰·학부모 공유 비밀번호) 없음(§3-3, AC-6).
 
-**에러**: 무토큰 `COMMON401` → 비관리자 `ADMIN403`(403 — 2026-08-04 실서버 채집) · 상세 없는 모임 `SPACE404` · 목록 파라미터 검증 실패 `COMMON400` · 기관 문의 `INQUIRY404`(없는 id)·`INQUIRY409`(되돌리기 충돌 — BE CHMO-810, 실서버 채집은 배포 후) · 신고·문의 `REPORT404`(없는 id — 2026-09-27 스테이징 채집)·`VALID400`(답변 길이·답 없는 ANSWERED)·`COMMON400`(모르는 status·type — 스테이징 채집) · 팝업 `POPUP400`(링크·기간·버전·이미지 정책 — FE `INVALID_POPUP`)·`POPUP404` · 혜택 푸시 `CAMPAIGN400`(야간·과거 예약·테스트 수신 조건·링크·페이로드 크기 — `INVALID_CAMPAIGN`)·`CAMPAIGN404`·`CAMPAIGN409`(취소 불가 상태·같은 키 다른 본문 — `CAMPAIGN_CONFLICT`). 팝업·푸시 5종은 BE 소스 대조(CHMO-926 PR #312) — **운영 미배포**(2026-10-14 프로브: `/popups/active` COMMON404)라 실채집은 배포 후.
+**에러**: 무토큰 `COMMON401` → 비관리자 `ADMIN403`(403 — 2026-08-04 실서버 채집) · 상세 없는 모임 `SPACE404` · 목록 파라미터 검증 실패 `COMMON400` · 기관 문의 `INQUIRY404`(없는 id)·`INQUIRY409`(되돌리기 충돌 — BE CHMO-810, 실서버 채집은 배포 후) · 신고·문의 `REPORT404`(없는 id — 2026-09-27 스테이징 채집)·`VALID400`(답변 길이·답 없는 ANSWERED)·`COMMON400`(모르는 status·type — 스테이징 채집) · 팝업 `POPUP400`(링크·기간·버전·이미지 정책 — FE `INVALID_POPUP`)·`POPUP404` · 혜택 푸시 `CAMPAIGN400`(야간·과거 예약·테스트 수신 조건·링크·페이로드 크기 — `INVALID_CAMPAIGN`)·`CAMPAIGN404`·`CAMPAIGN409`(취소 불가 상태·같은 키 다른 본문 — `CAMPAIGN_CONFLICT`). 팝업·푸시 5종은 BE 소스 대조(CHMO-926 PR #312) — **운영 미배포**(2026-10-14 프로브: `/popups/active` COMMON404)라 실채집은 배포 후. 장수·구독(CHMO-931) `CREDIT409`(회수가 잔액 초과 — `CREDIT_INSUFFICIENT`)·`BILLING503`(장수 기능 미설정 — `BILLING_UNAVAILABLE`)·`USER404`·`BILLING404`(없는 기간·**없는 패스 지급**)·`VALID400`(종료≤시작·기관 계정 아님·delta 0·**기관 범위 패스 지급**·**기관 범위 소유자가 기관 계정 아님**)은 BE ErrorStatus 소스 대조(2026-10-15) — 운영 배포(10-14 main)는 됐지만 관리자 계정 실채집은 아직. 조회 확장·패스(CHMO-932) `ADMIN409`(같은 `Idempotency-Key` 다른 내용 — `ADMIN_REQUEST_CONFLICT`)는 BE PR #317 소스 대조(2026-10-16, develop 머지 · 운영 미배포).
 
 **시각 형식 주의(2026-09-27 스테이징 실측)** — 신고·문의 응답의 시각은 BE 스펙 예시(오프셋 없는 UTC)와 달리 **`+09:00` 오프셋·마이크로초**(`2026-09-27T17:20:19.758082+09:00`)로 온다. `client.ts`는 오프셋이 있으면 손대지 않고 `Date`가 그대로 파싱해 화면엔 영향이 없다 — 계약 픽스처는 실측 형식으로 고정했다.
 
@@ -361,7 +423,7 @@
 ## 6. 2차 이후 (지금 만들지 않음)
 
 - **운영 액션(쓰기)** — 모임·이벤트 강제 삭제, 분석 재시도, 공개 해제, 유저 비활성화, **신고 사진 숨김·삭제**(지금은 모임 관리자에게 요청하는 것이 1차 절차 — §3-5). (기관 문의 상태 전이는 CHMO-811로, 신고·문의 답변은 CHMO-862로, 이벤트 팝업·혜택 푸시 발송은 CHMO-928로 앞당겨 들어왔다 — §3-4~3-7. 감사 로그는 테이블이 아니라 액세스 로그가 맡는다: BE ADR 017.)
-- **유저 목록·상세** — 소셜 로그인 전환으로 유저 스키마가 바뀌는 중이라 미룬다.
+- **유저 요약·구독 이력·모임 과금 정보·최근 업로드 정렬** — 전부 들어왔다: 사용자 검색·장수·기관 구독은 CHMO-931(§3-8·3-9), 사용자 요약·기간 이력·모임 과금 범위 읽기+변경·패스 지급·최근 업로드 정렬·활동 지표는 CHMO-932(§3-1~3-3·3-8). 남은 2차 후보: 패스 **스토어 구매** 이력 조회(지금은 운영자 지급분만 — 별도 원장)·과금 범위 변경 **감사 이력** 조회(서버엔 남지만 읽기 API 없음)·`last_uploaded_at` 비정규화(집계가 느려질 때).
 - **시계열 그래프**, **분석 job 모니터**.
 
 ---
@@ -381,3 +443,7 @@
 | CHMO-926 | [BE] 이벤트 팝업 + 혜택 푸시 어드민 발송 API — **완료**(PR #312 develop 머지 2026-10-14 · 운영 미배포), 계약은 §4 |
 | CHMO-927 | [APP] 서버가 내려주는 홈 진입 팝업 — 진행 중(2.7.0 예정). 어드민 미리보기가 그 카드 수치를 따른다(§3-6) |
 | CHMO-928 | [FE] 이벤트 팝업 관리 + 혜택 푸시 발송 화면 — **목 검증 완료**(`/admin/popups`·`/admin/push`), 화면은 §3-6·3-7. 실 BE 실측은 운영(또는 스테이징) 배포 + FCM 자격 증명 설정 후 |
+| CHMO-912 | [BE] 업로드 과금(장수·모임 패스·기관 구독) + 어드민 7종 — **완료**(PR #302 develop · 2026-10-14 main 배포), 계약은 §4 |
+| CHMO-931 | [FE] 사용자 장수·기관 구독 화면 + 기관 개통 시 기간 동봉 + 모임 목록 `유형` 열 — **목 검증 완료**(`/admin/users`·`/admin/users/:id`·`/admin/organizations`), 화면은 §3-8·3-9·§3-4. 실 BE 실측은 관리자 계정으로 운영에서(장수 카드는 `CREDIT_ENFORCEMENT_STARTS_AT` 설정 전엔 안내 상자) |
+| CHMO-940 | [BE] 선생님(기관) 가입 시 체험 14일 자동 부여 + 기존 기관 계정 백필 — **완료**(PR #316 main, 2026-10-16 운영 반영). §3-4 개통 창 문구·§3-9 안내가 이 사실을 따른다 |
+| CHMO-932 | [BE/FE] 어드민 조회 확장 — 최근 업로드 정렬·활동 지표·모임 과금 정보+과금 범위 변경·패스 지급·기관 구독 이력·사용자 요약·멤버 계정 유형·쓰기 멱등키 — BE **완료**(PR #317 develop 2026-10-16 · 운영 미배포), FE **목 검증 완료**(대시보드·모임 목록·모임 상세·사용자 상세·기관 구독·개통 창). 실 BE 실측은 BE 운영 배포 + 관리자 계정으로 |

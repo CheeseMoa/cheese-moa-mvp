@@ -154,6 +154,24 @@ export const router = createBrowserRouter([
         }),
       }, // 기관 도입 문의 — 어드민의 첫 쓰기 화면(CHMO-811)
       {
+        path: 'organizations',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminOrganizationsPage')).AdminOrganizationsPage,
+        }),
+      }, // 기관 구독 — 접근 상태·이용 기간 등록(CHMO-931 · BE CHMO-912)
+      {
+        path: 'users',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminUsersPage')).AdminUsersPage,
+        }),
+      }, // 사용자 검색(CHMO-931)
+      {
+        path: 'users/:userId',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminUserDetailPage')).AdminUserDetailPage,
+        }),
+      }, // 사용자 상세 — 무료 사진 장수·장부·기관 이용 기간(CHMO-931)
+      {
         path: 'popups',
         lazy: async () => ({
           Component: (await import('./admin/pages/AdminPopupsPage')).AdminPopupsPage,

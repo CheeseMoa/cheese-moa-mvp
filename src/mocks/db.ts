@@ -18,6 +18,8 @@ import type {
   ISODateTime,
   PhotoFlags,
 } from '../types/api'
+// 패스 플랜 일수는 어드민 규칙 파일이 단일 원천(화면 라벨·예상 만료·목 누적이 같은 표) — CHMO-932
+import { PASS_PLAN_DAYS } from '../admin/lib/billing'
 
 // ── 내부 레코드 타입 (BE 내부 모델 포함 — API 응답에 그대로 노출 금지) ──
 
@@ -27,12 +29,17 @@ import type {
  */
 export type DbUserRole = 'USER' | 'ADMIN'
 
+/** BE AccountType(CHMO-808) — 앱 랜딩 [개인 | 유치원·기관] 탭. 기관 계정만 구독 기간을 가진다 */
+export type DbAccountType = 'PERSONAL' | 'ORGANIZATION'
+
 export interface DbUser {
   id: number
   nickname: string
   /** 4자리 PIN — 응답에 절대 포함하지 않는다 */
   pin: string
   role: DbUserRole
+  /** 기본 PERSONAL(BE DDL 기본값과 같다 — 구보존분도 같은 정규화) */
+  accountType: DbAccountType
   createdAt: ISODateTime
   /**
    * 푸시 수신 허용 (CHMO-667 · BE CHMO-664) — 계정 단위 수신 거부.
@@ -192,7 +199,17 @@ export interface DbGroup {
     password: string
   }
   createdAt: ISODateTime
+  /**
+   * 과금 범위·소유자 스냅샷(BE CHMO-912 · ADR 039 — 생성 때 생성자 계정 유형으로 정해지고 그 뒤엔
+   * 어드민만 바꾼다). 시드엔 생략 가능 — 없으면 `billingOf`가 생성자(최초 ACTIVE 관리자)의 계정 유형으로
+   * 파생한다(BE `CreateSpaceUseCase`와 같은 규칙). 어드민이 바꾸면(CHMO-932) 여기 적힌다.
+   */
+  billingScope?: DbBillingScope
+  billingOwnerUserId?: number
 }
+
+/** BE BillingScope — PERSONAL = 모임 패스 → 업로더 장수 · INSTITUTION = 과금 소유 기관의 이용 기간 */
+export type DbBillingScope = 'PERSONAL' | 'INSTITUTION'
 
 /** 저장 값도 BE와 같이 중립어(CHMO-605 — 구 teacher/parent). 직렬화는 대문자 EDITOR/VIEWER */
 export type DbMemberRole = 'editor' | 'viewer'
@@ -271,6 +288,11 @@ export interface DbPhoto {
    */
   faceBboxes?: FaceBbox[]
   causes?: string[]
+  /**
+   * 올린 사람(BE `photo.uploaded_by` — CHMO-805). 어드민 최근 업로드의 업로더·7일 업로드 사용자 수가
+   * 읽는다(CHMO-932). 옛 사진(CHMO-805 이전)은 null — 그런 사진은 "업로더 없음"이고 제외 대상도 아니다.
+   */
+  uploadedBy?: number | null
   createdAt: ISODateTime
 }
 
@@ -325,6 +347,14 @@ export interface Db {
   pushCampaigns: DbPushCampaign[]
   /** S3에 실제로 PUT된 업로드 키 — BE `StoredObjectChecker`의 목 대응물(CHMO-194) */
   uploadedKeys: string[]
+  /** 사용자 무료 사진 장수 계정 (CHMO-931 — BE CHMO-912) — 처음 필요할 때 지연 생성 */
+  creditAccounts: DbCreditAccount[]
+  /** 장수 장부 — append-only */
+  creditLedgers: DbCreditLedger[]
+  /** 기관 구독(기관 사용자당 1행) — 첫 기간 등록 때 생긴다 */
+  organizationSubscriptions: DbOrganizationSubscription[]
+  /** 기관 구독 기간 — 무효화는 삭제가 아니라 voidedAt 기록 */
+  organizationSubscriptionPeriods: DbOrganizationSubscriptionPeriod[]
 }
 
 export const db: Db = {
@@ -344,6 +374,10 @@ export const db: Db = {
   popups: [],
   pushCampaigns: [],
   uploadedKeys: [],
+  creditAccounts: [],
+  creditLedgers: [],
+  organizationSubscriptions: [],
+  organizationSubscriptionPeriods: [],
 }
 
 /** fixtures 시드/테스트 리셋용 — 전체 교체 */
@@ -364,6 +398,10 @@ export function seedDb(data: Db): void {
   db.popups = data.popups
   db.pushCampaigns = data.pushCampaigns
   db.uploadedKeys = data.uploadedKeys
+  db.creditAccounts = data.creditAccounts
+  db.creditLedgers = data.creditLedgers
+  db.organizationSubscriptions = data.organizationSubscriptions
+  db.organizationSubscriptionPeriods = data.organizationSubscriptionPeriods
 }
 
 // ── 푸시 기기 (CHMO-667) ─────────────────────────────────────
@@ -1454,4 +1492,422 @@ export function approvePassOrder(order: DbPassOrder, paymentKey: string): DbPass
   order.accessUntil = until
   spacePasses.set(order.groupId, until)
   return order
+}
+
+// ── 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912) ─────────────────
+
+/**
+ * BE CreditSettings — 목은 **적용 중**으로 둔다(`requireConfigured` 통과). 실 BE는
+ * `CREDIT_ENFORCEMENT_STARTS_AT`이 비어 있으면 어드민 장수 조회·조정이 BILLING503이다.
+ * 적용 시각 전 가입자는 첫 장부 생성 때 500장(MIGRATION), 뒤 가입자는 50장(SIGNUP).
+ */
+export const CREDIT_SETTINGS = {
+  enforcementStartsAt: '2026-10-01T00:00:00+09:00',
+  signupGrant: 50,
+  dailyGrant: 10,
+  cap: 500,
+  migrationGrant: 500,
+} as const
+
+export type DbCreditReason = 'SIGNUP' | 'MIGRATION' | 'DAILY' | 'UPLOAD' | 'ADMIN_ADJUST'
+
+export interface DbCreditAccount {
+  userId: number
+  balance: number
+}
+
+export interface DbCreditLedger {
+  id: number
+  userId: number
+  delta: number
+  balanceAfter: number
+  reason: DbCreditReason
+  refKey: string | null
+  groupId: number | null
+  eventId: number | null
+  adminId: number | null
+  memo: string | null
+  createdAt: ISODateTime
+}
+
+export interface DbOrganizationSubscription {
+  id: number
+  userId: number
+  createdAt: ISODateTime
+}
+
+export interface DbOrganizationSubscriptionPeriod {
+  id: number
+  subscriptionId: number
+  accessFrom: ISODateTime
+  accessUntil: ISODateTime
+  amountKrw: number
+  /** `YYYY-MM-DD` */
+  paidOn: string
+  payerName: string
+  invoiceNo: string | null
+  memo: string | null
+  /** 등록한 관리자 — **가입 체험(BE CHMO-940)은 서버가 넣어 null**이고 그 유무가 곧 `kind`다(CHMO-932) */
+  adminId: number | null
+  createdAt: ISODateTime
+  voidedAt: ISODateTime | null
+  voidedBy: number | null
+}
+
+/**
+ * BE `CreditAccountStore.lock` — 장부 계정을 **처음 필요할 때 지연 생성**하고 초기 지급 행을 남긴다.
+ * 조회만 해도 생긴다(실 BE도 같다 — 어드민 조회가 SIGNUP/MIGRATION 행을 만든다). 유저가 없으면 null.
+ */
+export function lockCreditAccount(userId: number): DbCreditAccount | null {
+  const user = db.users.find((u) => u.id === userId)
+  if (!user) return null
+  const existing = db.creditAccounts.find((a) => a.userId === userId)
+  if (existing) return existing
+  const migration =
+    new Date(user.createdAt).getTime() < new Date(CREDIT_SETTINGS.enforcementStartsAt).getTime()
+  const initial = migration ? CREDIT_SETTINGS.migrationGrant : CREDIT_SETTINGS.signupGrant
+  const account: DbCreditAccount = { userId, balance: initial }
+  db.creditAccounts.push(account)
+  db.creditLedgers.push({
+    id: nextId('ledger'),
+    userId,
+    delta: initial,
+    balanceAfter: initial,
+    reason: migration ? 'MIGRATION' : 'SIGNUP',
+    refKey: 'initial',
+    groupId: null,
+    eventId: null,
+    adminId: null,
+    memo: null,
+    createdAt: nowIso(),
+  })
+  return account
+}
+
+/** BE `CreditAccountStore.record` — 잔액은 호출부가 이미 바꿨고 그 뒤 잔액을 적는다 */
+export function recordCreditLedger(
+  account: DbCreditAccount,
+  delta: number,
+  reason: DbCreditReason,
+  extra: Partial<Pick<DbCreditLedger, 'refKey' | 'groupId' | 'eventId' | 'adminId' | 'memo'>> = {},
+): DbCreditLedger {
+  const row: DbCreditLedger = {
+    id: nextId('ledger'),
+    userId: account.userId,
+    delta,
+    balanceAfter: account.balance,
+    reason,
+    refKey: extra.refKey ?? null,
+    groupId: extra.groupId ?? null,
+    eventId: extra.eventId ?? null,
+    adminId: extra.adminId ?? null,
+    memo: extra.memo ?? null,
+    createdAt: nowIso(),
+  }
+  db.creditLedgers.push(row)
+  return row
+}
+
+/** 그 사용자의 장부 — id DESC(최신순). BE `findByUserIdOrderByCreditLedgerIdDesc` */
+export function creditLedgersOf(userId: number): DbCreditLedger[] {
+  return db.creditLedgers.filter((row) => row.userId === userId).sort((a, b) => b.id - a.id)
+}
+
+export type InstitutionAccessStatus = 'ACTIVE' | 'GRACE' | 'BLOCKED'
+
+export interface InstitutionAccess {
+  status: InstitutionAccessStatus
+  accessUntil: ISODateTime | null
+  graceEndsAt: ISODateTime | null
+}
+
+/** BE `institution.grace-period` 기본값 P7D */
+export const INSTITUTION_GRACE_MS = 7 * 24 * 60 * 60 * 1000
+
+/** 무효화되지 않은 기간(BE `findActiveByOrganizationUserId`) — 기관 사용자 기준 */
+export function activePeriodsOfOrganizationUser(userId: number): DbOrganizationSubscriptionPeriod[] {
+  const subscription = db.organizationSubscriptions.find((s) => s.userId === userId)
+  if (!subscription) return []
+  return db.organizationSubscriptionPeriods.filter(
+    (p) => p.subscriptionId === subscription.id && p.voidedAt === null,
+  )
+}
+
+/**
+ * BE `InstitutionAccessResolver.resolve` — 살아 있는 기간이 하나라도 있으면 ACTIVE(가장 늦은 종료),
+ * 없으면 가장 최근에 끝난 기간 기준 7일 안이면 GRACE, 그마저 지났거나 기간이 없으면 BLOCKED.
+ */
+export function resolveInstitutionAccess(userId: number, nowMs = Date.now()): InstitutionAccess {
+  const periods = activePeriodsOfOrganizationUser(userId)
+  const activeUntil = periods
+    .filter((p) => {
+      const from = new Date(p.accessFrom).getTime()
+      const until = new Date(p.accessUntil).getTime()
+      return nowMs >= from && nowMs < until
+    })
+    .map((p) => new Date(p.accessUntil).getTime())
+    .reduce<number | null>((max, until) => (max === null || until > max ? until : max), null)
+  if (activeUntil !== null) {
+    return {
+      status: 'ACTIVE',
+      accessUntil: new Date(activeUntil).toISOString(),
+      graceEndsAt: new Date(activeUntil + INSTITUTION_GRACE_MS).toISOString(),
+    }
+  }
+  const endedUntil = periods
+    .map((p) => new Date(p.accessUntil).getTime())
+    .filter((until) => until <= nowMs)
+    .reduce<number | null>((max, until) => (max === null || until > max ? until : max), null)
+  if (endedUntil === null) return { status: 'BLOCKED', accessUntil: null, graceEndsAt: null }
+  const graceEndsAt = endedUntil + INSTITUTION_GRACE_MS
+  return {
+    status: nowMs < graceEndsAt ? 'GRACE' : 'BLOCKED',
+    accessUntil: new Date(endedUntil).toISOString(),
+    graceEndsAt: new Date(graceEndsAt).toISOString(),
+  }
+}
+
+export interface OrganizationPeriodInput {
+  accessFrom: ISODateTime
+  accessUntil: ISODateTime
+  amountKrw: number
+  paidOn: string
+  payerName: string
+  invoiceNo: string | null
+  memo: string | null
+}
+
+export type RegisterOrganizationPeriodResult =
+  | { ok: true; user: DbUser; period: DbOrganizationSubscriptionPeriod }
+  | { ok: false; code: 'VALID400' | 'USER404'; message: string }
+
+/**
+ * BE `OrganizationSubscriptionPeriodRegistrar.register` — 판정 순서 그대로: 종료≤시작(VALID400) →
+ * 사용자 없음(USER404) → 기관 계정 아님(VALID400 "기관 계정만 …") → 구독 행 지연 생성 → 기간 추가.
+ * 기관 문의 개통(PATCH)과 기간 등록(POST)이 같은 함수를 탄다(BE도 같은 등록기).
+ */
+export function registerOrganizationPeriod(
+  adminId: number,
+  userId: number,
+  input: OrganizationPeriodInput,
+): RegisterOrganizationPeriodResult {
+  if (new Date(input.accessUntil).getTime() <= new Date(input.accessFrom).getTime()) {
+    return { ok: false, code: 'VALID400', message: '입력값이 올바르지 않습니다.' }
+  }
+  const user = db.users.find((u) => u.id === userId)
+  if (!user) return { ok: false, code: 'USER404', message: '사용자를 찾을 수 없습니다.' }
+  if (user.accountType !== 'ORGANIZATION') {
+    return { ok: false, code: 'VALID400', message: '기관 계정만 구독 기간을 등록할 수 있습니다.' }
+  }
+  let subscription = db.organizationSubscriptions.find((s) => s.userId === userId)
+  if (!subscription) {
+    subscription = { id: nextId('orgsub'), userId, createdAt: nowIso() }
+    db.organizationSubscriptions.push(subscription)
+  }
+  const period: DbOrganizationSubscriptionPeriod = {
+    id: nextId('orgperiod'),
+    subscriptionId: subscription.id,
+    accessFrom: input.accessFrom,
+    accessUntil: input.accessUntil,
+    amountKrw: input.amountKrw,
+    paidOn: input.paidOn,
+    payerName: input.payerName,
+    invoiceNo: input.invoiceNo,
+    memo: input.memo,
+    adminId,
+    createdAt: nowIso(),
+    voidedAt: null,
+    voidedBy: null,
+  }
+  db.organizationSubscriptionPeriods.push(period)
+  return { ok: true, user, period }
+}
+
+/** BE SubscriptionPeriodKind — 저장 컬럼 없이 등록 관리자 유무로 파생(CHMO-932): 없으면 가입 체험(CHMO-940) */
+export function periodKindOf(period: DbOrganizationSubscriptionPeriod): 'TRIAL' | 'ADMIN' {
+  return period.adminId === null ? 'TRIAL' : 'ADMIN'
+}
+
+/** 그 기관의 전체 기간 — **무효화분 포함** id DESC(BE `findHistoryByOrganizationUserId`). 구독 행이 없으면 빈 배열 */
+export function periodHistoryOfOrganizationUser(userId: number): DbOrganizationSubscriptionPeriod[] {
+  const subscription = db.organizationSubscriptions.find((s) => s.userId === userId)
+  if (!subscription) return []
+  return db.organizationSubscriptionPeriods
+    .filter((p) => p.subscriptionId === subscription.id)
+    .sort((a, b) => b.id - a.id)
+}
+
+// ── 어드민 조회 확장·패스 지급 (CHMO-932 — BE PR #317) ─────────────────
+
+/** 어드민 활동 지표에서 뺄 운영·테스트 계정 — BE 설정 `ADMIN_STATS_EXCLUDED_USER_IDS`(목은 비워 둔다 = 전체 집계) */
+export const ADMIN_STATS_EXCLUDED_USER_IDS: number[] = []
+
+/** 모임 생성자 = 최초 ACTIVE 관리자 멤버십(목엔 생성자 필드가 없다 — 어드민 상세 직렬화와 같은 파생) */
+export function groupOwnerUserId(groupId: number): number | null {
+  const owner = db.memberships
+    .filter((m) => m.groupId === groupId && m.role === 'editor' && m.status === 'active')
+    .sort((a, b) => a.id - b.id)[0]
+  return owner ? owner.userId : null
+}
+
+/**
+ * 모임 과금 범위·소유자 — 저장값이 있으면 그대로, 없으면 생성자 계정 유형으로 파생한다
+ * (BE `CreateSpaceUseCase` — 기관 계정이 만든 모임은 INSTITUTION, 그 외 PERSONAL).
+ */
+export function billingOf(group: DbGroup): { scope: DbBillingScope; ownerUserId: number | null } {
+  const ownerUserId = group.billingOwnerUserId ?? groupOwnerUserId(group.id)
+  if (group.billingScope) return { scope: group.billingScope, ownerUserId }
+  const owner = ownerUserId === null ? undefined : db.users.find((u) => u.id === ownerUserId)
+  return { scope: owner?.accountType === 'ORGANIZATION' ? 'INSTITUTION' : 'PERSONAL', ownerUserId }
+}
+
+/** 모임의 앨범 매핑 사진 수 — 이벤트별 distinct의 합(사진은 이벤트 하나에만 속한다). 어드민 목록·상세 공통 */
+export function albumMappedPhotoCountOfGroup(groupId: number): number {
+  return eventsOfGroup(groupId).reduce((sum, e) => sum + albumMappedPhotosOfEvent(e.id).length, 0)
+}
+
+function latestOf(photos: DbPhoto[]): DbPhoto | null {
+  let latest: DbPhoto | null = null
+  for (const photo of photos) {
+    if (!latest || new Date(photo.createdAt).getTime() > new Date(latest.createdAt).getTime()) latest = photo
+  }
+  return latest
+}
+
+/**
+ * "업로드 시각" = 사진이 **앨범에 반영된 시각**(BE 정책 — `photo.created_at`, 업로드 기록은 7일 뒤
+ * 지워져 이력의 원천이 못 된다). 분류 전 사진은 안 보이므로 분류 중인 업로드는 반영된 뒤에야 잡힌다.
+ */
+export function lastUploadedAtOfEvent(eventId: number): ISODateTime | null {
+  return latestOf(albumMappedPhotosOfEvent(eventId))?.createdAt ?? null
+}
+
+export function lastUploadedAtOfGroup(groupId: number): ISODateTime | null {
+  return latestOf(eventsOfGroup(groupId).flatMap((e) => albumMappedPhotosOfEvent(e.id)))?.createdAt ?? null
+}
+
+/** 최근 N일 반영된 사진 수(모임) — 목록 행 `last7DaysPhotoCount` */
+export function recentPhotoCountOfGroup(groupId: number, sinceMs: number): number {
+  return eventsOfGroup(groupId)
+    .flatMap((e) => albumMappedPhotosOfEvent(e.id))
+    .filter((p) => new Date(p.createdAt).getTime() >= sinceMs).length
+}
+
+/** 제외 계정이 올린 사진을 뺀 이벤트 사진(업로더 없는 옛 사진은 제외 대상이 아니다 — BE 정책) */
+export function uploadsOfEventExcluding(eventId: number, excludedUserIds: number[]): DbPhoto[] {
+  return albumMappedPhotosOfEvent(eventId).filter(
+    (p) => p.uploadedBy == null || !excludedUserIds.includes(p.uploadedBy),
+  )
+}
+
+/** 이벤트의 가장 최근 반영 사진(제외 계정 제외) — 최근 업로드 표의 시각·업로더 원천 */
+export function latestUploadOfEvent(eventId: number, excludedUserIds: number[]): DbPhoto | null {
+  return latestOf(uploadsOfEventExcluding(eventId, excludedUserIds))
+}
+
+// 운영자 패스 지급 원장(BE `space_pass_grant` — ADR 045). 결제 상태(passOrders·spacePasses)와 같은
+// 모듈 상태다 — 시드할 지급 이력이 없고(지급은 화면이 만든다) 새로고침이면 사라져도 되는 값이라
+// fixtures(Db 전체 교체 계약)를 넓히지 않는다. 모임 ID는 FK 없는 평문 — 모임이 지워져도 행이 남는다.
+
+export type DbAdminPassPlan = keyof typeof PASS_PLAN_DAYS
+
+export interface DbSpacePassGrant {
+  id: number
+  groupId: number
+  plan: DbAdminPassPlan
+  accessFrom: ISODateTime
+  accessUntil: ISODateTime
+  adminId: number
+  memo: string
+  requestKey: string | null
+  requestHash: string | null
+  createdAt: ISODateTime
+  revokedAt: ISODateTime | null
+  revokedBy: number | null
+  /** 실제로 줄어든 기간(ms) — BE `revokedDurationNanos` */
+  revokedMs: number | null
+}
+
+export const spacePassGrants: DbSpacePassGrant[] = []
+
+/** BE `SpacePass.isActive` — `accessUntil`은 활성일 때만 값(업로드 권한 조회와 같은 규칙) */
+export function spacePassStateOf(
+  groupId: number,
+  nowMs = Date.now(),
+): { active: boolean; accessUntil: ISODateTime | null } {
+  const until = spacePasses.get(groupId)
+  const active = until !== undefined && Date.parse(until) > nowMs
+  return { active, accessUntil: active ? until! : null }
+}
+
+/**
+ * BE `GrantSpacePassUseCase` — `SpacePass.activate`: 살아 있는 패스의 만료 뒤에 이어 붙이고(스토어 구매와
+ * 같은 누적 규칙), 없으면 지금부터. 지급 원장에 1행을 남긴다. 범위 검사(SPACE404·INSTITUTION VALID400)는
+ * 핸들러가 먼저 한다.
+ */
+export function grantSpacePass(
+  input: {
+    adminId: number
+    groupId: number
+    plan: DbAdminPassPlan
+    memo: string
+    requestKey?: string | null
+    requestHash?: string | null
+  },
+  nowMs = Date.now(),
+): DbSpacePassGrant {
+  const current = spacePasses.get(input.groupId)
+  const start = current !== undefined && Date.parse(current) > nowMs ? Date.parse(current) : nowMs
+  const until = start + PASS_PLAN_DAYS[input.plan] * 24 * 60 * 60 * 1000
+  spacePasses.set(input.groupId, new Date(until).toISOString())
+  const grant: DbSpacePassGrant = {
+    id: nextId('passgrant'),
+    groupId: input.groupId,
+    plan: input.plan,
+    accessFrom: new Date(start).toISOString(),
+    accessUntil: new Date(until).toISOString(),
+    adminId: input.adminId,
+    memo: input.memo,
+    requestKey: input.requestKey ?? null,
+    requestHash: input.requestHash ?? null,
+    createdAt: new Date(nowMs).toISOString(),
+    revokedAt: null,
+    revokedBy: null,
+    revokedMs: null,
+  }
+  spacePassGrants.push(grant)
+  return grant
+}
+
+/** 그 모임의 지급 이력 — 최신순(BE `findBySpaceIdOrderBySpacePassGrantIdDesc`) */
+export function spacePassGrantsOf(groupId: number): DbSpacePassGrant[] {
+  return spacePassGrants.filter((g) => g.groupId === groupId).sort((a, b) => b.id - a.id)
+}
+
+/**
+ * BE `RevokeSpacePassGrantUseCase` — `SpacePass.revokeRemaining`: 지급분 기간만큼 만료에서 빼되 **지금
+ * 이전으로는 줄이지 않는다**(스토어 환불 규칙). 이미 회수된 지급은 다시 줄이지 않고 같은 결과(멱등).
+ * 없는 지급은 null(핸들러가 BILLING404). `passAccessUntil`은 회수 뒤 패스 만료 — 패스 행이 없으면 null.
+ */
+export function revokeSpacePassGrant(
+  adminId: number,
+  grantId: number,
+  nowMs = Date.now(),
+): { grant: DbSpacePassGrant; passAccessUntil: ISODateTime | null } | null {
+  const grant = spacePassGrants.find((g) => g.id === grantId)
+  if (!grant) return null
+  if (grant.revokedAt === null) {
+    const current = spacePasses.get(grant.groupId)
+    let reducedMs = 0
+    if (current !== undefined && Date.parse(current) > nowMs) {
+      const previous = Date.parse(current)
+      const reduced = Math.max(previous - PASS_PLAN_DAYS[grant.plan] * 24 * 60 * 60 * 1000, nowMs)
+      spacePasses.set(grant.groupId, new Date(reduced).toISOString())
+      reducedMs = previous - reduced
+    }
+    grant.revokedAt = new Date(nowMs).toISOString()
+    grant.revokedBy = adminId
+    grant.revokedMs = reducedMs
+  }
+  return { grant, passAccessUntil: spacePasses.get(grant.groupId) ?? null }
 }

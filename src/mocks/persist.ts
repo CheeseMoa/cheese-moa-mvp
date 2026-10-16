@@ -28,10 +28,12 @@ function readStore(): DbUser[] {
       )
       // role 도입(CHMO-379) 이전 보존분은 필드가 없다 — BE 마이그레이션과 같은 기본값 USER.
       // pushEnabled(CHMO-667)도 같은 결: 거부한 사람만 false라 없으면 수신 허용으로 읽는다
+      // accountType(CHMO-931 — BE CHMO-808 DDL 기본값)도 같은 결: 기관은 명시된 것만
       .map((u) => ({
         ...u,
         role: u.role === 'ADMIN' ? ('ADMIN' as const) : ('USER' as const),
         pushEnabled: u.pushEnabled !== false,
+        accountType: u.accountType === 'ORGANIZATION' ? ('ORGANIZATION' as const) : ('PERSONAL' as const),
       }))
   } catch {
     return []

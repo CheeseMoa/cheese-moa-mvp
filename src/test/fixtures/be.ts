@@ -98,6 +98,18 @@ export const BE_ERRORS = {
   },
   /** 관리자가 아님 — GET /admin/stats (비관리자 토큰 · 2026-08-04 실서버 채집, CHMO-379 프로브) */
   ADMIN403: { status: 403, payload: errorEnvelope('ADMIN403', '관리자 권한이 필요합니다.') },
+  /** 같은 Idempotency-Key에 다른 내용의 어드민 쓰기 — BE CHMO-932 ErrorStatus.ADMIN_REQUEST_CONFLICT 소스 대조(미채집) */
+  ADMIN409: {
+    status: 409,
+    payload: errorEnvelope('ADMIN409', '같은 Idempotency-Key로 다른 요청이 이미 처리되었습니다.'),
+  },
+  // ── 업로드 과금·장수 (BE CHMO-912 — 어드민 CHMO-931). **BE ErrorStatus 소스 대조(미채집)** ──
+  /** 장수 부족 — 어드민 회수가 잔액을 넘을 때(`CreditAccount.adjust`) */
+  CREDIT409: { status: 409, payload: errorEnvelope('CREDIT409', '무료 사진 장수가 부족합니다.') },
+  /** 장수 기능 미설정 — `credit.enforcement-starts-at`이 비면 어드민 장수 조회·조정 전부 */
+  BILLING503: { status: 503, payload: errorEnvelope('BILLING503', '결제 기능을 사용할 수 없습니다.') },
+  /** 사용자 없음 — 어드민 장수·구독 대상 userId */
+  USER404: { status: 404, payload: errorEnvelope('USER404', '사용자를 찾을 수 없습니다.') },
   /**
    * 기관 도입 문의 전이 실패 2종 — BE CHMO-810 티켓 코멘트 대조(코드 확정·**메시지 미채집**이라
    * BE 어투로 둔다). 409는 종료분을 진행 중으로 되돌리는데 그 사용자가 이미 새 문의를 낸 경우.
@@ -549,21 +561,51 @@ export const BE_AGREEMENTS = {
 /** GET /admin/me — AdminProfileResponse */
 export const BE_ADMIN_PROFILE = { userId: 3, nickname: '김선생', role: 'ADMIN' }
 
-/** GET /admin/stats — AdminStatsResponse(recentGroups는 생성일 내림차순 5개 고정) */
+/**
+ * GET /admin/stats — AdminStatsResponse(recentGroups는 생성일 내림차순 5개 고정). 활동 2종·최근 업로드
+ * 10개·excludedUserIds는 CHMO-932 스펙 §3.2 예시(BE PR #317 소스 대조 — 미채집). 둘째 업로드 행은
+ * 업로더 없는 옛 사진(CHMO-805 이전)이라 uploader 둘 다 null.
+ */
 export const BE_ADMIN_STATS = {
   totals: { users: 123, groups: 45, events: 210, photos: 8123 },
-  last7Days: { newGroups: 3, newEvents: 12, newPhotos: 950 },
+  last7Days: { newGroups: 3, newEvents: 12, newPhotos: 950, activeGroups: 7, uploaders: 9 },
   recentGroups: [{ groupId: 45, memberCount: 8, createdAt: '2026-08-01T10:00:00' }],
+  recentUploads: [
+    {
+      eventId: 101,
+      eventName: '가을 소풍',
+      groupId: 45,
+      groupType: 'BUSINESS',
+      lastUploadedAt: '2026-10-16T09:12:00',
+      photoCount: 120,
+      uploaderUserId: 3,
+      uploaderNickname: '김선생',
+    },
+    {
+      eventId: 97,
+      eventName: '옛 사진 정리',
+      groupId: 40,
+      groupType: 'GENERAL',
+      lastUploadedAt: '2026-10-15T08:00:00',
+      photoCount: 4,
+      uploaderUserId: null,
+      uploaderNickname: null,
+    },
+  ],
+  excludedUserIds: [17, 34],
 }
 
-/** GET /admin/groups — result(bare 배열). pageInfo는 봉투에 나란히 실린다(아래) */
+/** GET /admin/groups — result(bare 배열). pageInfo는 봉투에 나란히 실린다(아래). 뒤 둘은 CHMO-932 */
 export const BE_ADMIN_GROUP_ROWS = [
   {
     groupId: 45,
+    groupType: 'BUSINESS', // SpaceType — CHMO-621(B-6)부터 싣는다
     memberCount: 8,
     eventCount: 12,
     photoCount: 830,
     createdAt: '2026-08-01T10:00:00',
+    lastUploadedAt: '2026-10-16T09:12:00',
+    last7DaysPhotoCount: 120,
   },
 ]
 
@@ -740,14 +782,42 @@ export const BE_ADMIN_PAGE_INFO = {
   totalPages: 1,
 }
 
-/** GET /admin/groups/:groupId — AdminGroupDetailResponse(멤버 PENDING 포함·publishedAt null 가능).
- * 멤버 role은 CHMO-605 리네이밍 값(EDITOR/VIEWER — BE 스펙 대조, 실서버 채집 후 교체) */
+/**
+ * GET /admin/groups/:groupId — AdminGroupDetailResponse(멤버 PENDING 포함·publishedAt null 가능).
+ * 멤버 role은 CHMO-605 리네이밍 값(EDITOR/VIEWER — BE 스펙 대조, 실서버 채집 후 교체).
+ * 과금·패스·지급 이력·마지막 업로드·멤버 accountType·이벤트 lastUploadedAt은 CHMO-932 스펙 §3.3 예시 —
+ * 개인 범위라 `institution`은 null, 패스는 운영자 지급 1건으로 살아 있다. 지급 행의 createdAt은
+ * BaseEntity(LocalDateTime)라 오프셋이 없고 accessFrom·accessUntil은 Instant(`Z`)다.
+ */
 export const BE_ADMIN_GROUP_DETAIL = {
   groupId: 45,
+  groupType: 'BUSINESS',
   createdAt: '2026-08-01T10:00:00',
   ownerUserId: 3,
   ownerNickname: '김선생',
   memberCount: 8,
+  billingScope: 'PERSONAL',
+  billingOwnerUserId: 3,
+  billingOwnerNickname: '김선생',
+  lastUploadedAt: '2026-10-16T09:12:00',
+  pass: {
+    active: true,
+    accessUntil: '2026-10-23T03:00:00Z',
+    grants: [
+      {
+        grantId: 7,
+        plan: 'DAY_7',
+        accessFrom: '2026-10-16T03:00:00Z',
+        accessUntil: '2026-10-23T03:00:00Z',
+        adminId: 17,
+        memo: '설문 참여 보상',
+        createdAt: '2026-10-16T12:00:00',
+        revokedAt: null,
+        revokedBy: null,
+      },
+    ],
+  },
+  institution: null,
   members: [
     {
       userId: 3,
@@ -755,6 +825,7 @@ export const BE_ADMIN_GROUP_DETAIL = {
       role: 'EDITOR',
       status: 'ACTIVE',
       joinedAt: '2026-08-01T10:00:00',
+      accountType: 'PERSONAL',
     },
     {
       userId: 9,
@@ -762,6 +833,7 @@ export const BE_ADMIN_GROUP_DETAIL = {
       role: 'VIEWER',
       status: 'PENDING',
       joinedAt: '2026-08-02T09:30:00',
+      accountType: 'PERSONAL',
     },
   ],
   events: [
@@ -774,6 +846,7 @@ export const BE_ADMIN_GROUP_DETAIL = {
       albumCount: 9,
       createdAt: '2026-07-30T14:00:00',
       publishedAt: '2026-07-31T09:00:00',
+      lastUploadedAt: '2026-10-16T09:12:00',
     },
     {
       eventId: 98,
@@ -784,8 +857,24 @@ export const BE_ADMIN_GROUP_DETAIL = {
       albumCount: 0,
       createdAt: '2026-08-01T11:00:00',
       publishedAt: null,
+      lastUploadedAt: null,
     },
   ],
+}
+
+/** 같은 상세의 **기관 범위** 변주 — `institution`이 채워지고(과금 소유 기관 유예 중) 패스는 빈 객체 */
+export const BE_ADMIN_GROUP_DETAIL_INSTITUTION = {
+  ...BE_ADMIN_GROUP_DETAIL,
+  billingScope: 'INSTITUTION',
+  billingOwnerUserId: 52,
+  billingOwnerNickname: '햇살유치원',
+  pass: { active: false, accessUntil: null, grants: [] },
+  institution: {
+    accessStatus: 'GRACE',
+    accessUntil: '2026-10-10T00:00:00Z',
+    graceEndsAt: '2026-10-17T00:00:00Z',
+  },
+  members: [{ ...BE_ADMIN_GROUP_DETAIL.members[0], userId: 52, nickname: '햇살유치원', accountType: 'ORGANIZATION' }],
 }
 
 // ── 이벤트 팝업·혜택 푸시 어드민 (CHMO-928 — BE CHMO-926 PR #312 develop 머지분) ──
@@ -947,3 +1036,185 @@ export const BE_PASS_CONFIRM = {
 
 /** GET /groups/:id/passes/current (스펙 기준) */
 export const BE_PASS_CURRENT = { active: true, accessUntil: '2026-10-05T07:03:00Z' }
+
+// ── 어드민 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912 `AdminController` 어드민 절) ──
+// **BE 스펙(`docs/spec/CHMO-912-*.md` §3.5)·DTO 소스 대조(2026-10-15, 미채집)** — 운영 배포는
+// 2026-10-14 main 머지로 끝났지만 관리자 계정 실채집은 아직이다. Instant는 `Z`, 장부 createdAt은
+// LocalDateTime(오프셋 없음 → client.ts가 'Z' 보정), paidOn은 LocalDate.
+
+/** GET /admin/users — AdminUserSearchResponse(커서 목록). 닉네임에 숫자가 섞인 계정도 같이 걸린다 */
+export const BE_ADMIN_USER_SEARCH = {
+  items: [
+    { userId: 7, nickname: '치즈', accountType: 'ORGANIZATION' },
+    { userId: 3, nickname: '김선생', accountType: 'PERSONAL' },
+  ],
+  nextCursor: 3,
+  hasNext: true,
+}
+
+/**
+ * GET /admin/users/{id}/credits — AdminUserCreditsResponse. 둘째 행은 운영자 조정(메모 있음 ·
+ * 모임/이벤트 null), 첫 행은 업로드 차감(모임·이벤트 이름은 지금 값).
+ */
+export const BE_ADMIN_USER_CREDITS = {
+  userId: 3,
+  balance: 88,
+  ledger: {
+    items: [
+      {
+        ledgerId: 103,
+        delta: -32,
+        balanceAfter: 88,
+        reason: 'UPLOAD',
+        groupId: 10,
+        groupName: '가족 여행',
+        eventId: 31,
+        eventName: '제주 2일차',
+        memo: null,
+        createdAt: '2026-10-07T09:30:00',
+      },
+      {
+        ledgerId: 101,
+        delta: 120,
+        balanceAfter: 120,
+        reason: 'ADMIN_ADJUST',
+        groupId: null,
+        groupName: null,
+        eventId: null,
+        eventName: null,
+        memo: '고객 지원 보상',
+        createdAt: '2026-10-06T09:00:00',
+      },
+    ],
+    nextCursor: 101,
+    hasNext: true,
+  },
+}
+
+/** POST /admin/users/{id}/credit-adjustments(201) — AdminCreditAdjustmentResponse */
+export const BE_ADMIN_CREDIT_ADJUSTMENT = { userId: 3, delta: 100, balance: 188 }
+
+/** GET /admin/organizations/subscriptions — 둘째 행은 지워진 계정(nickname null)·기간 없음(BLOCKED) */
+export const BE_ADMIN_SUBSCRIPTION_ROWS = {
+  items: [
+    {
+      subscriptionId: 2,
+      userId: 7,
+      nickname: '치즈',
+      status: 'ACTIVE',
+      accessUntil: '2026-11-01T00:00:00Z',
+      graceEndsAt: '2026-11-08T00:00:00Z',
+    },
+    {
+      subscriptionId: 1,
+      userId: 8,
+      nickname: null,
+      status: 'BLOCKED',
+      accessUntil: null,
+      graceEndsAt: null,
+    },
+  ],
+  nextCursor: null,
+  hasNext: false,
+}
+
+/** POST /admin/organizations/{id}/subscription-periods(201) · DELETE …/{periodId}(200, nickname null) */
+export const BE_ADMIN_SUBSCRIPTION = {
+  organizationUserId: 7,
+  nickname: '치즈',
+  accessStatus: 'ACTIVE',
+  accessUntil: '2026-11-01T00:00:00Z',
+  graceEndsAt: '2026-11-08T00:00:00Z',
+  period: {
+    periodId: 5,
+    accessFrom: '2026-10-01T00:00:00Z',
+    accessUntil: '2026-11-01T00:00:00Z',
+    amountKrw: 100000,
+    paidOn: '2026-09-30',
+    payerName: '치즈유치원',
+    invoiceNo: 'INV-2026-001',
+    memo: '10월 이용료',
+    voidedAt: null,
+  },
+}
+
+// ── 어드민 조회 확장·패스 지급·과금 범위 (CHMO-932 — BE PR #317 스펙 §3.4~3.7·admin/dto 소스 대조, 미채집) ──
+
+/**
+ * GET /admin/organizations/{userId}/subscription — 무효화분 포함 최신순. 첫 행은 가입 체험(CHMO-940 —
+ * `adminId` null·`kind` TRIAL), 둘째는 운영자 등록이 무효화된 행.
+ */
+export const BE_ADMIN_SUBSCRIPTION_HISTORY = {
+  userId: 52,
+  nickname: '햇살유치원',
+  accountType: 'ORGANIZATION',
+  accessStatus: 'ACTIVE',
+  accessUntil: '2026-10-30T03:00:00Z',
+  graceEndsAt: '2026-11-06T03:00:00Z',
+  periods: [
+    {
+      periodId: 9,
+      kind: 'TRIAL',
+      accessFrom: '2026-10-16T03:00:00Z',
+      accessUntil: '2026-10-30T03:00:00Z',
+      amountKrw: 0,
+      paidOn: '2026-10-16',
+      payerName: '체험',
+      invoiceNo: null,
+      memo: '가입 체험',
+      adminId: null,
+      createdAt: '2026-10-16T12:00:00',
+      voidedAt: null,
+      voidedBy: null,
+    },
+    {
+      periodId: 4,
+      kind: 'ADMIN',
+      accessFrom: '2026-09-01T00:00:00Z',
+      accessUntil: '2026-10-01T00:00:00Z',
+      amountKrw: 100000,
+      paidOn: '2026-08-30',
+      payerName: '햇살유치원',
+      invoiceNo: 'INV-2026-004',
+      memo: '9월 이용료 · 중복 입금',
+      adminId: 17,
+      createdAt: '2026-08-30T09:00:00',
+      voidedAt: '2026-08-31T01:00:00Z',
+      voidedBy: 17,
+    },
+  ],
+}
+
+/** GET /admin/users/{userId} — AdminUserSummaryResponse(속한 모임은 승인 대기 포함, 모임 이름 없음) */
+export const BE_ADMIN_USER_SUMMARY = {
+  userId: 3,
+  nickname: '김선생',
+  accountType: 'PERSONAL',
+  role: 'USER',
+  createdAt: '2026-08-01T10:00:00',
+  socialProviders: ['KAKAO'],
+  groups: [
+    { groupId: 45, groupType: 'BUSINESS', role: 'EDITOR', status: 'ACTIVE' },
+    { groupId: 40, groupType: 'GENERAL', role: 'EDITOR', status: 'PENDING' },
+  ],
+}
+
+/** POST /admin/groups/{id}/pass-grants(201) — AdminPassGrantResponse */
+export const BE_ADMIN_PASS_GRANT = {
+  grantId: 7,
+  groupId: 45,
+  plan: 'DAY_7',
+  accessFrom: '2026-10-16T03:00:00Z',
+  accessUntil: '2026-10-23T03:00:00Z',
+}
+
+/** DELETE /admin/pass-grants/{id}(200) — passAccessUntil은 회수 뒤 패스 만료(지금으로 당겨진 값) */
+export const BE_ADMIN_PASS_GRANT_REVOKE = {
+  grantId: 7,
+  groupId: 45,
+  revokedAt: '2026-10-17T01:00:00Z',
+  passAccessUntil: '2026-10-17T01:00:00Z',
+}
+
+/** PUT /admin/groups/{id}/billing-scope(200) — AdminBillingScopeResponse */
+export const BE_ADMIN_BILLING_SCOPE = { groupId: 45, billingScope: 'INSTITUTION', billingOwnerUserId: 52 }

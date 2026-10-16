@@ -8,6 +8,7 @@
  * BE 규칙이 바뀌면 여기만 고친다(목 핸들러도 이 파일을 쓴다).
  */
 import type { AdminCampaignInput, AdminPopupLocale } from '../api/types'
+import { randomUuid } from './uuid'
 
 // ── 길이·크기 상한(BE DTO @Size·@Max 그대로) ────────────────────────
 
@@ -180,14 +181,4 @@ export function createIdempotencyKeeper(newKey: () => string = randomUuid) {
       last = null
     },
   }
-}
-
-/** UUID v4 — `crypto.randomUUID`는 보안 컨텍스트 전용이라(http 사설 IP 접속 등) 폴백을 둔다 */
-function randomUuid(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  bytes[6] = (bytes[6] & 0x0f) | 0x40
-  bytes[8] = (bytes[8] & 0x3f) | 0x80
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }

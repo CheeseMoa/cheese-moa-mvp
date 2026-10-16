@@ -35,6 +35,8 @@
  *   웹 결제 흐름(CHMO-899)이 쓴다. 실서버 채집은 운영 BE에 결제 설정이 켜진 뒤).
  * + 2026-10-14 BE 소스 대조(POPUP400·404·CAMPAIGN400·404·409 — 이벤트 팝업·혜택 푸시 어드민
  *   CHMO-926 PR #312 develop 머지분. 어드민 화면(CHMO-928)이 쓴다. 실서버 채집은 BE 배포 후).
+ * + 2026-10-16 BE 소스 대조(ADMIN409 — 어드민 쓰기 Idempotency-Key 충돌, CHMO-932 PR #317
+ *   ErrorStatus.ADMIN_REQUEST_CONFLICT. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -81,6 +83,13 @@ const BE_CODE_MAP: Record<string, string> = {
    * 권한 문제라 재시도 CTA를 주지 않는다(CHMO-379).
    */
   ADMIN403: 'NOT_ADMIN',
+  /**
+   * 같은 `Idempotency-Key`로 **다른 내용**의 어드민 쓰기(409 — BE ADMIN_REQUEST_CONFLICT, CHMO-932).
+   * 장수 조정·기관 기간 등록·패스 지급 공통(ADR 045 — 키는 선택 헤더라 없으면 매번 실행된다).
+   * 화면은 다이얼로그를 열 때 키를 만들고 **재시도에만** 재사용하므로 실제로 오면 키 재사용 결함이다 —
+   * 폼 아래 한 줄로 알리고 다시 열게 한다.
+   */
+  ADMIN409: 'ADMIN_REQUEST_CONFLICT',
   /** 모임(BE 도메인명 space) 없음(404) — "모임을 찾을 수 없습니다." */
   SPACE404: 'NOT_FOUND',
   /**
@@ -100,6 +109,15 @@ const BE_CODE_MAP: Record<string, string> = {
    * 계정을 지우면 신고·문의 행도 함께 사라진다) 어드민 목록이 안내 후 다시 읽는다(CHMO-862).
    */
   REPORT404: 'NOT_FOUND',
+  // ── 업로드 과금·장수(BE CHMO-912 — 어드민 장수·구독 화면 CHMO-931) ──
+  // BE ErrorStatus 소스 대조(2026-10-15). 실서버 채집은 관리자 계정으로 운영에서.
+  /**
+   * 무료 사진 장수 부족·예약 초과(409). 어드민에선 **회수가 잔액을 넘을 때**도 같은 코드다
+   * (`CreditAccount.adjust`가 음수를 거절) — 화면이 먼저 막고 겹치면 서버가 한 번 더 막는다.
+   */
+  CREDIT409: 'CREDIT_INSUFFICIENT',
+  /** 사용자 없음(404) — 어드민 장수·구독 대상 userId가 없을 때(탈퇴 등) */
+  USER404: 'NOT_FOUND',
   // ── 이벤트 팝업·혜택 푸시 어드민(BE CHMO-926 — 화면 CHMO-928) ──
   // BE 메시지가 뭉뚱그려져 있어("팝업 설정이 올바르지 않습니다.") 화면이 저장·발송 **전에** 같은
   // 규칙(https·기간·버전·야간·크기)을 먼저 막고, 이 코드는 그 판정이 어긋났을 때의 안전망이다.
@@ -155,7 +173,10 @@ const BE_CODE_MAP: Record<string, string> = {
   BILLING400: 'BILLING_NOT_SUPPORTED',
   /** 결제사(카드사) 거절(402) — 다른 결제수단으로 다시 시도할 일 */
   BILLING402: 'PAYMENT_REJECTED',
-  /** 구독·결제수단 없음(404) — 이용권 흐름에선 오지 않는다 */
+  /**
+   * 구독·결제수단 없음(404) — 이용권 흐름에선 오지 않는다. 어드민에선 **없는 기관 기간 무효화**와
+   * **없는 패스 지급 회수**(CHMO-932)가 이 코드다 — 다른 관리자가 먼저 처리했다는 뜻이라 안내 후 재조회.
+   */
   BILLING404: 'NOT_FOUND',
   /**
    * 주문 만료(30분)·다른 모임 주문·다른 paymentKey 재사용·멱등키 충돌(409). 같은 주문으로는

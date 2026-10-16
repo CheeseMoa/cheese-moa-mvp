@@ -115,6 +115,9 @@ export const groupHandlers = [
       parentJoinKey: randomShareToken(),
       share: { token: `shr_${nextId('tok')}`, password: randomSharePassword() },
       createdAt: nowIso(),
+      // 과금 범위 스냅샷(BE CreateSpaceUseCase — CHMO-912): 기관 계정이 만들면 기관 기간, 아니면 장수·패스
+      billingScope: user.accountType === 'ORGANIZATION' ? 'INSTITUTION' : 'PERSONAL',
+      billingOwnerUserId: user.id,
     }
     db.groups.push(group)
     const membership = createMembership({
