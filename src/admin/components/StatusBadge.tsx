@@ -6,6 +6,7 @@ import {
   reportStatusBadge,
   reportTypeBadge,
   subscriptionAccessBadge,
+  subscriptionPeriodKindBadge,
 } from '../lib/format'
 
 /**
@@ -69,4 +70,9 @@ export function CampaignStatusBadge({ status }: { status: string }) {
 /** 기관 이용 상태(BE SubscriptionAccessStatus — CHMO-931). 차단만 붉은색(지금 업로드가 안 된다) */
 export function SubscriptionAccessBadge({ status }: { status: string }) {
   return <Badge {...subscriptionAccessBadge(status)} />
+}
+
+/** 기관 기간 출처(BE SubscriptionPeriodKind — CHMO-932). 가입 체험은 운영자가 넣은 게 아니라 갈라 보인다 */
+export function SubscriptionPeriodKindBadge({ kind }: { kind: string }) {
+  return <Badge {...subscriptionPeriodKindBadge(kind)} />
 }

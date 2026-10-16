@@ -8,11 +8,16 @@
  */
 import { http } from 'msw'
 import {
+  ADMIN_STATS_EXCLUDED_USER_IDS,
+  albumMappedPhotoCountOfGroup,
   db,
   eventsOfGroup,
   findGroup,
+  lastUploadedAtOfGroup,
+  latestUploadOfEvent,
   registerOrganizationPeriod,
   settleAnalysis,
+  uploadsOfEventExcluding,
   type DbOrganizationInquiry,
   type DbReport,
   type DbUser,
@@ -39,11 +44,15 @@ import {
   toAdminInquiryResponse,
   toAdminProfileResponse,
   toAdminRecentGroup,
+  toAdminRecentUpload,
   toAdminReportDetailResponse,
   toAdminReportSummary,
 } from './serializers'
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** BE `GetAdminStatsUseCase.RECENT_UPLOAD_LIMIT` */
+const RECENT_UPLOAD_LIMIT = 10
 
 /** `/admin/*` 공통 관문 — Response면 그대로 응답한다 */
 export function adminGate(request: Request): DbUser | Response {
@@ -67,23 +76,42 @@ export function intParam(url: URL, name: string, fallback: number): number | nul
 }
 
 /**
- * BE 정렬 화이트리스트(createdAt·name × asc·desc) — 밖은 null(COMMON400).
- * 이름은 응답에서 빠졌어도(CHMO-668) 서버 내부 기준으로는 그대로 동작한다 — 목도 BE를 따라
- * 계속 받아 준다(FE 화면은 안 보낸다 — CHMO-670).
+ * BE 정렬 화이트리스트(lastUploadedAt·photoCount·createdAt·name × asc·desc — CHMO-932 확장) — 밖은
+ * null(COMMON400). 이름은 응답에서 빠졌어도(CHMO-668) 서버 내부 기준으로는 그대로 동작한다 — 목도 BE를
+ * 따라 계속 받아 준다(FE 화면은 안 보낸다 — CHMO-670).
+ * 마지막 업로드는 **사진 없는 모임이 방향과 무관하게 맨 뒤**(nulls last), 동률은 `createdAt desc ·
+ * groupId desc`로 고정해 페이지 경계가 흔들리지 않는다(BE `AdminUploadActivityRepository.pageSpaceIds`).
  */
 function groupComparator(sort: string): ((a: number, b: number) => number) | null {
   const parts = sort.split(',')
   if (parts.length !== 2) return null
   const property = parts[0].trim()
   const direction = parts[1].trim()
-  if ((property !== 'createdAt' && property !== 'name') || (direction !== 'asc' && direction !== 'desc')) {
+  const properties = ['lastUploadedAt', 'photoCount', 'createdAt', 'name']
+  if (!properties.includes(property) || (direction !== 'asc' && direction !== 'desc')) {
     return null
   }
   const sign = direction === 'asc' ? 1 : -1
+  const tieBreak = (a: { id: number; createdAt: string }, b: { id: number; createdAt: string }) =>
+    epochOf(b.createdAt) - epochOf(a.createdAt) || b.id - a.id
   return (aId, bId) => {
     const a = db.groups.find((g) => g.id === aId)
     const b = db.groups.find((g) => g.id === bId)
     if (!a || !b) return 0
+    if (property === 'lastUploadedAt') {
+      const aAt = lastUploadedAtOfGroup(a.id)
+      const bAt = lastUploadedAtOfGroup(b.id)
+      if (aAt === null || bAt === null) {
+        if (aAt === bAt) return tieBreak(a, b)
+        return aAt === null ? 1 : -1
+      }
+      return sign * (epochOf(aAt) - epochOf(bAt)) || tieBreak(a, b)
+    }
+    if (property === 'photoCount') {
+      return (
+        sign * (albumMappedPhotoCountOfGroup(a.id) - albumMappedPhotoCountOfGroup(b.id)) || tieBreak(a, b)
+      )
+    }
     const primary =
       property === 'createdAt'
         ? epochOf(a.createdAt) - epochOf(b.createdAt)
@@ -91,6 +119,15 @@ function groupComparator(sort: string): ((a: number, b: number) => number) | nul
     // createdAt 동률에서 페이지 경계가 흔들리지 않게 spaceId DESC 보조 정렬(BE와 동일)
     return sign * primary || b.id - a.id
   }
+}
+
+/** `groupType` 필터 — 생략은 전체(null), 목록 밖 값은 undefined(COMMON400). BE `SpaceType.valueOf` */
+function groupTypeParam(url: URL): 'business' | 'general' | null | undefined {
+  const raw = url.searchParams.get('groupType')?.trim()
+  if (!raw) return null
+  if (raw === 'BUSINESS') return 'business'
+  if (raw === 'GENERAL') return 'general'
+  return undefined
 }
 
 export const adminHandlers = [
@@ -112,6 +149,21 @@ export const adminHandlers = [
       .sort((a, b) => epochOf(b.createdAt) - epochOf(a.createdAt) || b.id - a.id)
       .slice(0, 5)
 
+    // 활동 지표·최근 업로드(CHMO-932)는 제외 계정이 올린 사진을 뺀다 — 기존 필드는 전체 기준 그대로
+    const excluded = ADMIN_STATS_EXCLUDED_USER_IDS
+    const recentUploads = db.events
+      .flatMap((event) => {
+        const latest = latestUploadOfEvent(event.id, excluded)
+        return latest ? [{ event, latest }] : []
+      })
+      .sort((a, b) => epochOf(b.latest.createdAt) - epochOf(a.latest.createdAt) || b.event.id - a.event.id)
+      .slice(0, RECENT_UPLOAD_LIMIT)
+    const recentPhotos = db.events.flatMap((event) =>
+      uploadsOfEventExcluding(event.id, excluded)
+        .filter((p) => epochOf(p.createdAt) >= since)
+        .map((p) => ({ groupId: event.groupId, uploadedBy: p.uploadedBy ?? null })),
+    )
+
     return ok({
       // 총 사진은 photo 행 count(BE 정책 결정 — 업로드 기록이 아니라 실제 존재하는 사진)
       totals: {
@@ -124,8 +176,13 @@ export const adminHandlers = [
         newGroups: db.groups.filter((g) => epochOf(g.createdAt) >= since).length,
         newEvents: db.events.filter((e) => epochOf(e.createdAt) >= since).length,
         newPhotos: db.photos.filter((p) => epochOf(p.createdAt) >= since).length,
+        activeGroups: new Set(recentPhotos.map((p) => p.groupId)).size,
+        // 업로더 없는 옛 사진은 세지 않는다(BE `uploadActivitySince`)
+        uploaders: new Set(recentPhotos.map((p) => p.uploadedBy).filter((id) => id !== null)).size,
       },
       recentGroups: recentGroups.map(toAdminRecentGroup),
+      recentUploads: recentUploads.map(({ event, latest }) => toAdminRecentUpload(event, latest)),
+      excludedUserIds: excluded,
     })
   }),
 
@@ -137,9 +194,19 @@ export const adminHandlers = [
     const url = new URL(request.url)
     const page = intParam(url, 'page', 0)
     const size = intParam(url, 'size', 20)
-    const compare = groupComparator(url.searchParams.get('sort') ?? 'createdAt,desc')
-    // BE 검증(AdminController.groupPageRequestOf)과 같은 조건·같은 코드 — 전부 COMMON400
-    if (page === null || page < 0 || size === null || size < 1 || size > 100 || !compare) {
+    // 기본 정렬은 최근 업로드순(CHMO-932 — BE `@RequestParam(defaultValue = "lastUploadedAt,desc")`)
+    const compare = groupComparator(url.searchParams.get('sort') ?? 'lastUploadedAt,desc')
+    const groupType = groupTypeParam(url)
+    // BE 검증(AdminController.groupListConditionOf)과 같은 조건·같은 코드 — 전부 COMMON400
+    if (
+      page === null ||
+      page < 0 ||
+      size === null ||
+      size < 1 ||
+      size > 100 ||
+      !compare ||
+      groupType === undefined
+    ) {
       return commonBadRequest()
     }
 
@@ -149,16 +216,19 @@ export const adminHandlers = [
     const q = url.searchParams.get('q')?.trim().toLowerCase()
     const matched = db.groups
       .filter((g) => !q || g.name.toLowerCase().includes(q))
+      .filter((g) => groupType === null || g.groupType === groupType)
       .map((g) => g.id)
       .sort(compare)
 
     const totalElements = matched.length
     const totalPages = Math.ceil(totalElements / size)
     const pageIds = matched.slice(page * size, page * size + size)
+    // `.map(toAdminGroupSummary)`로 넘기면 index가 nowMs 자리에 들어가 7일 집계가 전부 "최근"이 된다
+    const now = Date.now()
     const items = pageIds
       .map((id) => findGroup(id))
       .filter((g): g is NonNullable<typeof g> => g !== undefined)
-      .map(toAdminGroupSummary)
+      .map((g) => toAdminGroupSummary(g, now))
 
     return okPaged(items, {
       page,

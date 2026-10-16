@@ -6,6 +6,7 @@ import type { AdminCreditAdjustment } from '../api/types'
 import { CREDIT_LIMITS, validateCreditAdjust, type CreditAdjustMode } from '../lib/billing'
 import { formatCount } from '../lib/format'
 import { inputClassName, textareaClassName } from '../lib/formStyles'
+import { randomUuid } from '../lib/uuid'
 import { AdminDialog, AdminDialogActions } from './AdminDialog'
 import { ChoiceGroup, Field } from './AdminForm'
 
@@ -17,6 +18,10 @@ import { ChoiceGroup, Field } from './AdminForm'
  *
  * 회수가 잔액을 넘는 건 화면 검증이 먼저 막지만, 다른 관리자와 겹치면 서버 CREDIT409가 올 수 있어
  * 그때는 장수 칸 아래에서 다시 말하고 호출부가 잔액을 다시 읽는다.
+ *
+ * `Idempotency-Key`(CHMO-932)는 다이얼로그를 열 때 한 번 만들어 **재시도에만** 재사용한다 — 네트워크가
+ * 끊겨 응답을 못 받고 다시 눌러도 서버가 두 번 지급하지 않는다(ADR 045). 지급·회수를 오가며 내용을
+ * 바꾸는 건 첫 전송 전이라 같은 키라도 충돌이 없다(서버는 처리된 키만 기억한다).
  */
 export function CreditAdjustDialog({
   userId,
@@ -39,6 +44,7 @@ export function CreditAdjustDialog({
   const [touched, setTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const [serverError, setServerError] = useState<{ field: 'amount' | 'form'; message: string } | null>(null)
+  const [idempotencyKey] = useState(randomUuid)
   const mutate = useMutation()
 
   const { errors, input } = useMemo(
@@ -53,7 +59,7 @@ export function CreditAdjustDialog({
     if (!input) return
     setBusy(true)
     setServerError(null)
-    await mutate(() => adjustAdminUserCredits(userId, input), {
+    await mutate(() => adjustAdminUserCredits(userId, input, idempotencyKey), {
       noAuthRedirect: true,
       onSuccess: (result) => {
         setBusy(false)
@@ -68,6 +74,10 @@ export function CreditAdjustDialog({
         }
         if (code === 'BILLING_UNAVAILABLE') {
           setServerError({ field: 'form', message: '장수 기능이 서버에서 아직 켜지지 않았어요.' })
+          return
+        }
+        if (code === 'ADMIN_REQUEST_CONFLICT') {
+          setServerError({ field: 'form', message: '같은 요청 키로 다른 내용이 이미 처리됐어요 · 창을 닫고 다시 열어 주세요.' })
           return
         }
         setServerError({ field: 'form', message })

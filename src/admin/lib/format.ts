@@ -3,6 +3,7 @@
  * 값이 비면 전부 '—'로 수렴한다 — 표에서 빈 칸은 "안 불렀나"로 읽히고 대시는 "없다"로 읽힌다.
  */
 import type { AdminMemberStatus } from '../api/types'
+import { PASS_PLAN_DAYS } from './billing'
 
 /**
  * 모임 표시명 — 어드민 응답엔 모임 이름이 없다(BE CHMO-668). 표 첫 칸·상세 제목·브레드크럼이
@@ -56,11 +57,17 @@ export function eventStatusBadge(status: string): { label: string; token: string
   return EVENT_STATUS_BADGES[status] ?? { label: status, token: 'empty' }
 }
 
-// 신·구 직렬화 값을 함께 받는다(CHMO-605 리네이밍 — 운영 BE는 main 머지 전까지 구 값) ·
-// 미지 값은 원문 중립 표기(eventStatusBadge와 같은 결)라 파라미터를 string으로 연다
-export function memberRoleLabel(role: string): string {
-  if (role === 'EDITOR' || role === 'TEACHER') return '선생님'
-  if (role === 'VIEWER' || role === 'PARENT') return '학부모'
+/**
+ * 모임 역할 → 앱 워딩(**관리자/멤버** — CHMO-608~610 이후 서비스 화면의 말). 종전 '선생님/학부모'는
+ * 유치원 어휘라 일반 모임에서 거짓이었고, 무엇보다 **일반 모임은 역할이 없다**(전원 EDITOR — ADR 020):
+ * 유형을 모르고 EDITOR를 적으면 일반 모임 멤버 전원이 '선생님'(이제는 '관리자')으로 보인다(CHMO-932 —
+ * "다 선생님으로 보인다"의 원인). 그래서 모임 유형이 두 번째 인자다 — 일반이면 역할과 무관하게 '멤버'.
+ * 신·구 직렬화 값을 함께 받는다(CHMO-605 리네이밍) · 미지 값은 원문 중립 표기라 string으로 연다.
+ */
+export function memberRoleLabel(role: string, groupType = 'BUSINESS'): string {
+  if (groupType === 'GENERAL') return '멤버'
+  if (role === 'EDITOR' || role === 'TEACHER') return '관리자'
+  if (role === 'VIEWER' || role === 'PARENT') return '멤버'
   return role
 }
 
@@ -384,4 +391,40 @@ export function subscriptionAccessBadge(status: string): { label: string; token:
 
 export function subscriptionAccessLabel(status: string): string {
   return subscriptionAccessBadge(status).label
+}
+
+// ── 모임 과금·패스·사용자 요약 (CHMO-932) ─────────────────────────
+
+/**
+ * BE BillingScope — 모임 업로드 판정 축. 개인 = 모임 패스 → 업로더 장수 · 기관 = 과금 소유 기관의
+ * 이용 기간(ADR 039). 구계약 응답(값 없음)은 '—'(빈 칸은 "안 불렀나"로 읽히고 대시는 "없다"로 읽힌다).
+ */
+export function billingScopeLabel(scope: string | null): string {
+  if (!scope) return '—'
+  if (scope === 'PERSONAL') return '개인'
+  if (scope === 'INSTITUTION') return '기관'
+  return scope
+}
+
+/** BE PassPlan → `7일` — 일수 표는 lib/billing(목 누적 계산과 같은 원천). 미지 플랜은 원문 */
+export function passPlanLabel(plan: string): string {
+  const days = (PASS_PLAN_DAYS as Record<string, number | undefined>)[plan]
+  return days ? `${days}일` : plan
+}
+
+/** BE UserRole — `/admin/**` 인가에만 쓰이는 값이라 '관리자'는 어드민 권한이지 모임 역할이 아니다 */
+export function userRoleLabel(role: string): string {
+  if (role === 'USER') return '일반'
+  if (role === 'ADMIN') return '어드민'
+  return role
+}
+
+/**
+ * BE SubscriptionPeriodKind → 기간 출처. 가입 체험(CHMO-940)은 운영자가 등록한 게 아니라서 이력 표에서
+ * 갈라 보여야 "누가 넣었나"를 묻지 않는다. 배지 색은 이벤트 토큰 재사용(새 색 없음): 체험=갈색 · 운영자=회색.
+ */
+export function subscriptionPeriodKindBadge(kind: string): { label: string; token: string } {
+  if (kind === 'TRIAL') return { label: '가입 체험', token: 'ready' }
+  if (kind === 'ADMIN') return { label: '운영자 등록', token: 'empty' }
+  return { label: kind, token: 'empty' }
 }

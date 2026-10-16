@@ -7,7 +7,14 @@
  * `AdminCreditAdjustmentRequest`·`AdminOrganizationSubscriptionPeriodRequest`·
  * `OrganizationSubscriptionPeriodRegistrar`·`CreditAccount.adjust`다. 목 핸들러도 이 파일을 쓴다.
  */
-import type { AdminCreditAdjustmentInput, AdminSubscriptionPeriodInput } from '../api/types'
+import type {
+  AdminBillingScope,
+  AdminBillingScopeInput,
+  AdminCreditAdjustmentInput,
+  AdminPassGrantInput,
+  AdminPassPlan,
+  AdminSubscriptionPeriodInput,
+} from '../api/types'
 
 // ── 길이·크기 상한(BE DTO 그대로) ────────────────────────────────────
 
@@ -240,4 +247,93 @@ export function validateSubscriptionPeriod(draft: SubscriptionPeriodDraft): {
 /** 원화 표기 — `100,000원`. 0은 `0원`(무상 등록을 빈 칸으로 보이지 않게) */
 export function formatKrw(amount: number): string {
   return `${amount.toLocaleString('ko-KR')}원`
+}
+
+// ── 모임 패스 지급 (CHMO-932 — BE `AdminPassGrantRequest`·`GrantSpacePassUseCase`) ─────────
+
+/** BE PassPlan → 일수(ADR 038 `PassPlan.durationDays`). 화면 라벨·예상 만료·목 누적 계산이 같은 표를 쓴다 */
+export const PASS_PLAN_DAYS: Record<AdminPassPlan, number> = {
+  DAY_1: 1,
+  DAY_3: 3,
+  DAY_7: 7,
+  DAY_30: 30,
+}
+
+export const PASS_PLAN_OPTIONS: { value: AdminPassPlan; label: string }[] = (
+  Object.keys(PASS_PLAN_DAYS) as AdminPassPlan[]
+).map((plan) => ({ value: plan, label: `${PASS_PLAN_DAYS[plan]}일` }))
+
+export interface PassGrantDraft {
+  plan: AdminPassPlan
+  memo: string
+}
+
+/** 패스 지급 검증 — 플랜은 세그먼트라 틀릴 수 없고, 메모만 장수 조정과 같은 규칙(필수 500자) */
+export function validatePassGrant(draft: PassGrantDraft): {
+  errors: { memo: string | null }
+  input: AdminPassGrantInput | null
+} {
+  const memo = draft.memo.trim()
+  const errors = {
+    memo: !memo
+      ? '무슨 일인지 메모를 남겨 주세요 · 지급 이력에 그대로 남아요.'
+      : memo.length > CREDIT_LIMITS.memo
+        ? `${CREDIT_LIMITS.memo}자 이하로 줄여 주세요.`
+        : null,
+  }
+  return { errors, input: errors.memo ? null : { plan: draft.plan, memo } }
+}
+
+/**
+ * 지급 뒤 예상 만료 — 살아 있는 패스가 있으면 **그 만료 뒤에** 이어 붙는다(BE `SpacePass.activate` ·
+ * 스토어 구매와 같은 누적 규칙). 다이얼로그가 "반영 뒤 ~까지"를 미리 보여 주는 데 쓴다.
+ */
+export function passAccessUntilAfterGrant(
+  currentAccessUntil: string | null,
+  plan: AdminPassPlan,
+  now = new Date(),
+): string {
+  const current = currentAccessUntil ? new Date(currentAccessUntil).getTime() : Number.NaN
+  const start = !Number.isNaN(current) && current > now.getTime() ? current : now.getTime()
+  return new Date(start + PASS_PLAN_DAYS[plan] * DAY_MS).toISOString()
+}
+
+// ── 과금 범위 변경 (CHMO-932 — BE `AdminBillingScopeRequest`·`ChangeSpaceBillingScopeUseCase`) ──
+
+export interface BillingScopeDraft {
+  billingScope: AdminBillingScope
+  /** 입력칸 원문 — 양의 정수 userId */
+  billingOwnerUserId: string
+  memo: string
+}
+
+export type BillingScopeErrors = Record<'billingOwnerUserId' | 'memo', string | null>
+
+/**
+ * 과금 범위 변경 검증 — DTO(@NotNull·@NotBlank·@Size 500)만 화면이 먼저 돌린다. "기관 범위 소유자는
+ * 기관 계정"(VALID400)과 없는 사용자(USER404)는 서버만 아는 사실이라 응답을 소유자 칸 아래에서 받는다.
+ */
+export function validateBillingScope(draft: BillingScopeDraft): {
+  errors: BillingScopeErrors
+  input: AdminBillingScopeInput | null
+} {
+  const owner = Number(draft.billingOwnerUserId.trim())
+  const memo = draft.memo.trim()
+  const errors: BillingScopeErrors = {
+    billingOwnerUserId: !draft.billingOwnerUserId.trim()
+      ? '과금 소유자 사용자 ID를 적어 주세요.'
+      : !Number.isInteger(owner) || owner <= 0
+        ? '사용자 ID는 양의 정수예요 · 사용자 화면의 #번호.'
+        : null,
+    memo: !memo
+      ? '왜 바꾸는지 메모를 남겨 주세요 · 감사 이력에 그대로 남아요.'
+      : memo.length > CREDIT_LIMITS.memo
+        ? `${CREDIT_LIMITS.memo}자 이하로 줄여 주세요.`
+        : null,
+  }
+  const valid = !errors.billingOwnerUserId && !errors.memo
+  return {
+    errors,
+    input: valid ? { billingScope: draft.billingScope, billingOwnerUserId: owner, memo } : null,
+  }
 }

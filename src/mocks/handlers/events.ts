@@ -264,6 +264,8 @@ export const eventHandlers = [
         flags: { eyesClosed: idx % 9 === 8, blurry: idx % 13 === 12 },
         reviewed: false,
         published: false,
+        // BE `photo.uploaded_by`(CHMO-805) — 어드민 최근 업로드의 '올린 사람'(CHMO-932)
+        uploadedBy: user.id,
         createdAt: nowIso(),
       }
       db.photos.push(photo)

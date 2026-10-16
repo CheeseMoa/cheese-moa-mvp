@@ -2,15 +2,26 @@ import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi'
 import { getAdminStats, listAdminInquiries } from '../api/admin'
-import type { AdminRecentGroup } from '../api/types'
+import type { AdminRecentGroup, AdminRecentUpload } from '../api/types'
 import { AdminTopbar } from '../components/AdminTopbar'
 import { StatCard } from '../components/StatCard'
 import { AdminTable, type AdminColumn } from '../components/AdminTable'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
-import { formatCount, formatDate, formatDateTime, groupLabel } from '../lib/format'
+import {
+  formatCount,
+  formatDate,
+  formatDateTime,
+  formatMonthDayTime,
+  groupLabel,
+  groupTypeLabel,
+} from '../lib/format'
 import { useAdminOutlet } from '../outletContext'
 
-/** A1 대시보드(289:3) — 전체 누적 4칸 + 최근 7일 3칸 + 최근 생성 모임 5개 */
+/**
+ * A1 대시보드(289:3) — 처리할 일 2칸 + **최근 업로드 10행**(CHMO-932) + 전체 누적 4칸 + 최근 7일 5칸 +
+ * 최근 생성 모임 5개. 최근 업로드가 누적·7일보다 위인 건 운영자가 첫 화면에서 찾는 게 "지금 실제로
+ * 쓰이는 모임·이벤트"라서다 — 종전엔 "최근 생성된 모임"뿐이라 만든 뒤 한 번도 안 쓴 모임이 맨 위였다.
+ */
 export function AdminDashboardPage() {
   const navigate = useNavigate()
   const stats = useApi('admin-stats', (signal) => getAdminStats(signal))
@@ -40,6 +51,66 @@ export function AdminDashboardPage() {
     const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     return `createdAt 기준 · ${formatDate(from.toISOString())} ~ ${formatDate(now.toISOString()).slice(5)}`
   }, [])
+
+  // 활동 2칸·최근 업로드는 운영·테스트 계정을 뺀 값(서버 설정) — 뺐는지 안 뺐는지를 캡션이 말해야
+  // "왜 Grafana와 다른가"를 안 묻는다. 신규 3칸은 전체 기준 그대로(BE가 뜻을 안 바꿨다)
+  const excluded = stats.data?.excludedUserIds ?? []
+  const exclusionCaption =
+    excluded.length > 0
+      ? `활동 모임·업로드 사용자·최근 업로드는 운영·테스트 계정 ${excluded.length}개 제외`
+      : '활동 모임·업로드 사용자·최근 업로드는 전체 계정 기준(제외 계정 없음)'
+
+  const uploadColumns: AdminColumn<AdminRecentUpload>[] = [
+    {
+      key: 'event',
+      header: '이벤트',
+      render: (u) => <span className="font-medium">{u.eventName}</span>,
+    },
+    {
+      key: 'group',
+      header: '모임',
+      widthClassName: 'w-40',
+      render: (u) => (
+        <span className="flex items-center gap-1.5">
+          <span>{groupLabel(u.groupId)}</span>
+          <span className="rounded border border-admin-border px-1 py-px text-[11px] text-admin-muted">
+            {groupTypeLabel(u.groupType)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      // 업로더가 null(CHMO-805 이전 사진)이거나 탈퇴했으면 '—' — 빈 칸은 "안 불렀나"로 읽힌다
+      key: 'uploader',
+      header: '올린 사람',
+      widthClassName: 'w-36',
+      render: (u) =>
+        u.uploaderUserId === null ? (
+          '—'
+        ) : (
+          <span className="flex items-center gap-1.5">
+            <span>{u.uploaderNickname ?? '(지워진 계정)'}</span>
+            <span className="text-xs text-admin-muted">#{u.uploaderUserId}</span>
+          </span>
+        ),
+    },
+    {
+      key: 'photos',
+      header: '사진 수',
+      align: 'right',
+      widthClassName: 'w-20',
+      render: (u) => formatCount(u.photoCount),
+    },
+    {
+      key: 'at',
+      header: '올린 시각',
+      align: 'right',
+      widthClassName: 'w-32',
+      render: (u) => (
+        <span className="whitespace-nowrap tabular-nums">{formatMonthDayTime(u.lastUploadedAt)}</span>
+      ),
+    },
+  ]
 
   const recentColumns: AdminColumn<AdminRecentGroup>[] = [
     {
@@ -92,6 +163,27 @@ export function AdminDashboardPage() {
 
         {stats.data ? (
           <>
+            <section className="rounded-xl border border-admin-border bg-admin-surface">
+              <div className="flex items-center justify-between border-b border-admin-border px-5 py-3">
+                <div>
+                  <h2 className="text-[14px] font-semibold">최근 업로드</h2>
+                  <p className="mt-0.5 text-xs text-admin-muted">
+                    최근 사진이 반영된 이벤트 10개 · 시각은 분류가 끝나 앨범에 들어간 때예요
+                  </p>
+                </div>
+                <Link to="/admin/groups" className="text-[13px] text-accent hover:underline">
+                  모임 목록(최근 업로드순) →
+                </Link>
+              </div>
+              <AdminTable
+                columns={uploadColumns}
+                rows={stats.data.recentUploads}
+                rowKey={(u) => u.eventId}
+                onRowClick={(u) => navigate(`/admin/groups/${u.groupId}`)}
+                emptyText="아직 반영된 사진이 없어요."
+              />
+            </section>
+
             <Section title="전체 누적" caption="서비스 시작 이후 총계">
               <div className="grid grid-cols-4 gap-4">
                 <StatCard label="총 가입자" value={stats.data.totals.users} unit="명" />
@@ -101,11 +193,13 @@ export function AdminDashboardPage() {
               </div>
             </Section>
 
-            <Section title="최근 7일" caption={rangeCaption}>
-              <div className="grid grid-cols-4 gap-4">
+            <Section title="최근 7일" caption={`${rangeCaption} · ${exclusionCaption}`}>
+              <div className="grid grid-cols-5 gap-4">
                 <StatCard label="신규 모임" value={stats.data.last7Days.newGroups} unit="개" />
                 <StatCard label="신규 이벤트" value={stats.data.last7Days.newEvents} unit="개" />
                 <StatCard label="업로드 사진" value={stats.data.last7Days.newPhotos} unit="장" />
+                <StatCard label="활동 모임" value={stats.data.last7Days.activeGroups} unit="개" />
+                <StatCard label="업로드 사용자" value={stats.data.last7Days.uploaders} unit="명" />
               </div>
             </Section>
 

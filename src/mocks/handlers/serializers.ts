@@ -14,12 +14,16 @@ import { SPECIAL_ALBUM_LABELS } from '../../lib/albumLabels'
 import {
   AGREEMENT_CATALOG,
   albumCountOf,
+  albumMappedPhotoCountOfGroup,
   albumMappedPhotosOfEvent,
+  billingOf,
   db,
   albumsOfEvent,
   eventCountOf,
   eventsOfGroup,
   findPhoto,
+  lastUploadedAtOfEvent,
+  lastUploadedAtOfGroup,
   latestUserAgreementOf,
   mappedPersonsOf,
   memberCountOf,
@@ -28,6 +32,7 @@ import {
   parentVisibleAlbumsOfEvent,
   parentVisiblePhotosOfEvent,
   pendingPublishCountOf,
+  periodKindOf,
   personNameOf,
   photoCountOfAlbum,
   photoCountOfEvent,
@@ -36,6 +41,10 @@ import {
   popupImageUrlOf,
   popupStatusAt,
   progressOf,
+  recentPhotoCountOfGroup,
+  resolveInstitutionAccess,
+  spacePassGrantsOf,
+  spacePassStateOf,
   teacherCountOf,
   unreviewedCountOfAlbum,
   viewerPhotosOfAlbum,
@@ -50,6 +59,7 @@ import {
   type DbOrganizationInquiry,
   type DbOrganizationSubscription,
   type DbOrganizationSubscriptionPeriod,
+  type DbSpacePassGrant,
   type InstitutionAccess,
   type DbPerson,
   type DbPhoto,
@@ -608,13 +618,7 @@ export function toAdminProfileResponse(user: DbUser) {
   return { userId: user.id, nickname: user.nickname, role: user.role }
 }
 
-/**
- * 모임 단위 앨범 매핑 사진 수 — BE AlbumPhotoRepository.countDistinctPhotosBySpaceIds.
- * 사진은 이벤트 하나에만 속하므로 이벤트별 distinct의 합이 곧 모임 distinct다.
- */
-function adminGroupPhotoCount(groupId: number): number {
-  return eventsOfGroup(groupId).reduce((sum, e) => sum + albumMappedPhotosOfEvent(e.id).length, 0)
-}
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** BE AdminStatsResponse.RecentGroup — memberCount는 서비스와 같은 ACTIVE 기준 */
 export function toAdminRecentGroup(group: DbGroup) {
@@ -625,15 +629,55 @@ export function toAdminRecentGroup(group: DbGroup) {
   }
 }
 
-/** BE AdminGroupSummaryResponse — 목록 한 행(카운트 전부 파생값). groupType은 대문자 SpaceType(CHMO-621) */
-export function toAdminGroupSummary(group: DbGroup) {
+/**
+ * BE AdminStatsResponse.RecentUpload(CHMO-932) — 호출부가 제외 계정을 뺀 "가장 최근 반영 사진"을
+ * 고른다(`latestUploadOfEvent`). 사진 수는 이벤트 카드와 같은 전체 집계, 업로더가 null(옛 사진)이거나
+ * 탈퇴했으면 닉네임 null.
+ */
+export function toAdminRecentUpload(event: DbEvent, latest: DbPhoto) {
+  const group = db.groups.find((g) => g.id === event.groupId)
+  const uploader = latest.uploadedBy == null ? undefined : db.users.find((u) => u.id === latest.uploadedBy)
+  return {
+    eventId: event.id,
+    eventName: event.name,
+    groupId: event.groupId,
+    groupType: (group?.groupType ?? 'business').toUpperCase(),
+    lastUploadedAt: latest.createdAt,
+    photoCount: albumMappedPhotosOfEvent(event.id).length,
+    uploaderUserId: latest.uploadedBy ?? null,
+    uploaderNickname: uploader?.nickname ?? null,
+  }
+}
+
+/**
+ * BE AdminGroupSummaryResponse — 목록 한 행(카운트 전부 파생값). groupType은 대문자 SpaceType(CHMO-621).
+ * `lastUploadedAt`·`last7DaysPhotoCount`(CHMO-932)는 앨범 매핑 사진의 반영 시각 기준 — 사진 수와 같은 집합.
+ */
+export function toAdminGroupSummary(group: DbGroup, nowMs = Date.now()) {
   return {
     groupId: group.id,
     groupType: group.groupType.toUpperCase(),
     memberCount: memberCountOf(group.id),
     eventCount: eventCountOf(group.id),
-    photoCount: adminGroupPhotoCount(group.id),
+    photoCount: albumMappedPhotoCountOfGroup(group.id),
     createdAt: group.createdAt,
+    lastUploadedAt: lastUploadedAtOfGroup(group.id),
+    last7DaysPhotoCount: recentPhotoCountOfGroup(group.id, nowMs - 7 * DAY_MS),
+  }
+}
+
+/** BE AdminGroupDetailResponse.Grant — 운영자 지급 원장 행(요청 키·해시는 서버 내부값이라 안 싣는다) */
+export function toAdminPassGrantRow(grant: DbSpacePassGrant) {
+  return {
+    grantId: grant.id,
+    plan: grant.plan,
+    accessFrom: grant.accessFrom,
+    accessUntil: grant.accessUntil,
+    adminId: grant.adminId,
+    memo: grant.memo,
+    createdAt: grant.createdAt,
+    revokedAt: grant.revokedAt,
+    revokedBy: grant.revokedBy,
   }
 }
 
@@ -641,26 +685,57 @@ export function toAdminGroupSummary(group: DbGroup) {
  * BE AdminGroupDetailResponse — 멤버는 PENDING 포함 spaceUserId 오름차순, 이벤트는 eventId
  * 내림차순(스펙 §3.3). 생성자는 목에 필드가 없어 최초 선생님 멤버십으로 파생한다
  * (모임 생성자만 즉시 ACTIVE — 확정 모델과 같은 근거).
+ * 과금·패스·지급 이력·기관 접근·마지막 업로드·멤버 계정 유형은 CHMO-932 — `pass`는 항상 객체,
+ * `institution`은 기관 범위일 때만(과금 소유 기관의 접근 상태), 아니면 null.
  */
-export function toAdminGroupDetailResponse(group: DbGroup) {
+export function toAdminGroupDetailResponse(group: DbGroup, nowMs = Date.now()) {
   const memberships = db.memberships
     .filter((m) => m.groupId === group.id)
     .sort((a, b) => a.id - b.id)
   const owner = memberships.find((m) => m.role === 'editor' && m.status === 'active')
   const ownerUser = owner ? db.users.find((u) => u.id === owner.userId) : undefined
+  const billing = billingOf(group)
+  const billingOwner =
+    billing.ownerUserId === null ? undefined : db.users.find((u) => u.id === billing.ownerUserId)
+  const pass = spacePassStateOf(group.id, nowMs)
+  const institution =
+    billing.scope === 'INSTITUTION' && billing.ownerUserId !== null
+      ? resolveInstitutionAccess(billing.ownerUserId, nowMs)
+      : null
   return {
     groupId: group.id,
+    groupType: group.groupType.toUpperCase(),
     createdAt: group.createdAt,
     ownerUserId: ownerUser?.id ?? null,
     ownerNickname: ownerUser?.nickname ?? null,
     memberCount: memberCountOf(group.id),
-    members: memberships.map((m) => ({
-      userId: m.userId,
-      nickname: db.users.find((u) => u.id === m.userId)?.nickname ?? '(알 수 없음)',
-      role: m.role.toUpperCase(),
-      status: m.status.toUpperCase(),
-      joinedAt: m.createdAt,
-    })),
+    billingScope: billing.scope,
+    billingOwnerUserId: billing.ownerUserId,
+    billingOwnerNickname: billingOwner?.nickname ?? null,
+    lastUploadedAt: lastUploadedAtOfGroup(group.id),
+    pass: {
+      active: pass.active,
+      accessUntil: pass.accessUntil,
+      grants: spacePassGrantsOf(group.id).map(toAdminPassGrantRow),
+    },
+    institution: institution
+      ? {
+          accessStatus: institution.status,
+          accessUntil: institution.accessUntil,
+          graceEndsAt: institution.graceEndsAt,
+        }
+      : null,
+    members: memberships.map((m) => {
+      const user = db.users.find((u) => u.id === m.userId)
+      return {
+        userId: m.userId,
+        nickname: user?.nickname ?? '(알 수 없음)',
+        role: m.role.toUpperCase(),
+        status: m.status.toUpperCase(),
+        joinedAt: m.createdAt,
+        accountType: user?.accountType ?? 'PERSONAL',
+      }
+    }),
     events: eventsOfGroup(group.id)
       .slice()
       .sort((a, b) => b.id - a.id)
@@ -673,6 +748,7 @@ export function toAdminGroupDetailResponse(group: DbGroup) {
         albumCount: albumCountOf(e.id),
         createdAt: e.createdAt,
         publishedAt: e.publishedAt,
+        lastUploadedAt: lastUploadedAtOfEvent(e.id),
       })),
   }
 }
@@ -970,4 +1046,100 @@ export function toAdminOrganizationSubscriptionResponse(
     graceEndsAt: access.graceEndsAt,
     period: toAdminSubscriptionPeriodResponse(period),
   }
+}
+
+// ── 어드민 조회 확장·패스 지급 (CHMO-932 — BE PR #317 admin/dto 소스 대조) ─────────
+
+/** BE AdminOrganizationSubscriptionHistoryResponse.Period — 등록 응답 기간 + 출처(`kind`)·감사 필드 */
+export function toAdminSubscriptionHistoryPeriodResponse(period: DbOrganizationSubscriptionPeriod) {
+  return {
+    periodId: period.id,
+    kind: periodKindOf(period),
+    accessFrom: period.accessFrom,
+    accessUntil: period.accessUntil,
+    amountKrw: period.amountKrw,
+    paidOn: period.paidOn,
+    payerName: period.payerName,
+    invoiceNo: period.invoiceNo,
+    memo: period.memo,
+    adminId: period.adminId,
+    createdAt: period.createdAt,
+    voidedAt: period.voidedAt,
+    voidedBy: period.voidedBy,
+  }
+}
+
+/**
+ * BE AdminOrganizationSubscriptionHistoryResponse — 접근 상태 + 무효화분 포함 이력(최신순). 호출부가
+ * 기관 계정 확인(VALID400)을 마친 유저를 넘긴다. 구독 행이 없으면 빈 이력 + BLOCKED.
+ */
+export function toAdminOrganizationSubscriptionHistoryResponse(
+  user: DbUser,
+  access: InstitutionAccess,
+  periods: DbOrganizationSubscriptionPeriod[],
+) {
+  return {
+    userId: user.id,
+    nickname: user.nickname,
+    accountType: user.accountType,
+    accessStatus: access.status,
+    accessUntil: access.accessUntil,
+    graceEndsAt: access.graceEndsAt,
+    periods: periods.map(toAdminSubscriptionHistoryPeriodResponse),
+  }
+}
+
+/**
+ * BE AdminUserSummaryResponse — 속한 모임은 승인 대기 포함 멤버십 id 순, 모임 이름 없음(CHMO-668).
+ * 소셜 종류는 목에 소셜 계정 테이블이 없어(가입 보존소만 — lib/mockSocial) **빈 배열(PIN)**로 둔다 —
+ * 기관 문의·신고 행이 값을 직접 들고 있는 것과 달리 유저 행엔 그 칸이 없다.
+ */
+export function toAdminUserSummaryResponse(user: DbUser) {
+  return {
+    userId: user.id,
+    nickname: user.nickname,
+    accountType: user.accountType,
+    role: user.role,
+    createdAt: user.createdAt,
+    socialProviders: [] as string[],
+    groups: db.memberships
+      .filter((m) => m.userId === user.id)
+      .sort((a, b) => a.id - b.id)
+      .map((m) => ({
+        groupId: m.groupId,
+        groupType: (db.groups.find((g) => g.id === m.groupId)?.groupType ?? 'business').toUpperCase(),
+        role: m.role.toUpperCase(),
+        status: m.status.toUpperCase(),
+      })),
+  }
+}
+
+/** BE AdminPassGrantResponse(201) */
+export function toAdminPassGrantResponse(grant: DbSpacePassGrant) {
+  return {
+    grantId: grant.id,
+    groupId: grant.groupId,
+    plan: grant.plan,
+    accessFrom: grant.accessFrom,
+    accessUntil: grant.accessUntil,
+  }
+}
+
+/**
+ * BE AdminPassGrantRevokeResponse — `passAccessUntil`은 회수 뒤 모임 패스 만료(패스 행 없으면 null).
+ * 호출부가 `revokeSpacePassGrant`를 마친 행을 넘기므로 `revokedAt`은 항상 찬 값이다(이미 회수된 행도 그대로).
+ */
+export function toAdminPassGrantRevokeResponse(grant: DbSpacePassGrant, passAccessUntil: string | null) {
+  return {
+    grantId: grant.id,
+    groupId: grant.groupId,
+    revokedAt: grant.revokedAt!,
+    passAccessUntil,
+  }
+}
+
+/** BE AdminBillingScopeResponse — 바뀐 뒤 값. 호출부가 소유자를 저장한 모임을 넘기므로 소유자는 항상 있다 */
+export function toAdminBillingScopeResponse(group: DbGroup) {
+  const billing = billingOf(group)
+  return { groupId: group.id, billingScope: billing.scope, billingOwnerUserId: billing.ownerUserId! }
 }
