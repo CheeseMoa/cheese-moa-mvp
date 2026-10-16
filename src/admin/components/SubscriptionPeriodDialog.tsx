@@ -4,6 +4,7 @@ import { useMutation } from '../../hooks/useMutation'
 import { registerAdminSubscriptionPeriod } from '../api/admin'
 import type { AdminOrganizationSubscription } from '../api/types'
 import { useSubscriptionPeriodForm } from '../hooks/useSubscriptionPeriodForm'
+import { randomUuid } from '../lib/uuid'
 import { AdminDialog, AdminDialogActions } from './AdminDialog'
 import { SubscriptionPeriodFields } from './SubscriptionPeriodFields'
 
@@ -14,6 +15,8 @@ import { SubscriptionPeriodFields } from './SubscriptionPeriodFields'
  *
  * 서버가 거절하는 VALID400(기관 계정 아님·종료≤시작)은 폼 아래 한 줄로 받는다 — 두 번째는
  * 화면 검증이 먼저 막으므로 실제로 오는 건 "기관 계정이 아닙니다"뿐이다.
+ * `Idempotency-Key`(CHMO-932)는 열 때 한 번 만들어 재시도에만 재사용한다 — 응답을 못 받고 다시 눌러도
+ * 같은 기간이 두 줄 등록되지 않는다(ADR 045).
  */
 export function SubscriptionPeriodDialog({
   userId,
@@ -33,13 +36,14 @@ export function SubscriptionPeriodDialog({
   const mutate = useMutation()
   const [busy, setBusy] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+  const [idempotencyKey] = useState(randomUuid)
 
   const submit = async () => {
     form.markTouched()
     if (!form.input) return
     setBusy(true)
     setServerError(null)
-    await mutate(() => registerAdminSubscriptionPeriod(userId, form.input!), {
+    await mutate(() => registerAdminSubscriptionPeriod(userId, form.input!, idempotencyKey), {
       noAuthRedirect: true,
       onSuccess: (result) => {
         setBusy(false)
@@ -49,6 +53,10 @@ export function SubscriptionPeriodDialog({
         setBusy(false)
         if (err instanceof ApiRequestError && err.status === 404) {
           setServerError('사용자를 찾을 수 없어요 · 계정이 지워졌을 수 있어요.')
+          return
+        }
+        if (err instanceof ApiRequestError && err.code === 'ADMIN_REQUEST_CONFLICT') {
+          setServerError('같은 요청 키로 다른 내용이 이미 처리됐어요 · 창을 닫고 다시 열어 주세요.')
           return
         }
         setServerError(message)

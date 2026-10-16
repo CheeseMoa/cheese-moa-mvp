@@ -12,9 +12,14 @@ import {
   adminLogin,
   adminLogout,
   cancelAdminCampaign,
+  changeAdminGroupBillingScope,
+  getAdminOrganizationSubscriptionHistory,
   getAdminUserCredits,
+  getAdminUserSummary,
+  grantAdminGroupPass,
   listAdminOrganizationSubscriptions,
   registerAdminSubscriptionPeriod,
+  revokeAdminPassGrant,
   searchAdminUsers,
   voidAdminSubscriptionPeriod,
   createAdminCampaign,
@@ -43,16 +48,22 @@ import { ApiRequestError } from '../../api/client'
 import { getAccessToken, getRefreshToken, setAuthTokens } from '../../lib/auth'
 import type { AdminPopupInput } from './types'
 import {
+  BE_ADMIN_BILLING_SCOPE,
   BE_ADMIN_CAMPAIGN_RECIPIENTS,
   BE_ADMIN_CAMPAIGN_SCHEDULED,
   BE_ADMIN_CAMPAIGN_TEST_SENT,
   BE_ADMIN_CAMPAIGN_UNKNOWN,
   BE_ADMIN_CREDIT_ADJUSTMENT,
+  BE_ADMIN_PASS_GRANT,
+  BE_ADMIN_PASS_GRANT_REVOKE,
   BE_ADMIN_SUBSCRIPTION,
+  BE_ADMIN_SUBSCRIPTION_HISTORY,
   BE_ADMIN_SUBSCRIPTION_ROWS,
   BE_ADMIN_USER_CREDITS,
   BE_ADMIN_USER_SEARCH,
+  BE_ADMIN_USER_SUMMARY,
   BE_ADMIN_GROUP_DETAIL,
+  BE_ADMIN_GROUP_DETAIL_INSTITUTION,
   BE_ADMIN_GROUP_ROWS,
   BE_ADMIN_INQUIRY_ROWS,
   BE_ADMIN_PAGE_INFO,
@@ -149,16 +160,43 @@ describe('어드민 대시보드 (GET /admin/stats)', () => {
     serve(envelope(BE_ADMIN_STATS))
     const stats = await getAdminStats()
     expect(stats.totals).toEqual({ users: 123, groups: 45, events: 210, photos: 8123 })
-    expect(stats.last7Days).toEqual({ newGroups: 3, newEvents: 12, newPhotos: 950 })
+    expect(stats.last7Days).toEqual({
+      newGroups: 3,
+      newEvents: 12,
+      newPhotos: 950,
+      activeGroups: 7,
+      uploaders: 9,
+    })
     expect(stats.recentGroups).toEqual([
       { groupId: 45, memberCount: 8, createdAt: '2026-08-01T10:00:00Z' },
     ])
+    // 최근 업로드(CHMO-932) — 반영 시각은 LocalDateTime이라 Z 보정, 업로더 없는 옛 사진은 둘 다 null
+    expect(stats.recentUploads[0]).toEqual({
+      eventId: 101,
+      eventName: '가을 소풍',
+      groupId: 45,
+      groupType: 'BUSINESS',
+      lastUploadedAt: '2026-10-16T09:12:00Z',
+      photoCount: 120,
+      uploaderUserId: 3,
+      uploaderNickname: '김선생',
+    })
+    expect(stats.recentUploads[1]).toMatchObject({ uploaderUserId: null, uploaderNickname: null })
+    expect(stats.excludedUserIds).toEqual([17, 34])
   })
 
-  it('recentGroups 키가 생략돼도 빈 배열로 정규화된다', async () => {
-    serve(envelope({ totals: BE_ADMIN_STATS.totals, last7Days: BE_ADMIN_STATS.last7Days }))
+  it('구계약(CHMO-932 전) 응답 — recentGroups·recentUploads·활동 키가 없어도 빈 값으로 정규화된다', async () => {
+    serve(
+      envelope({
+        totals: BE_ADMIN_STATS.totals,
+        last7Days: { newGroups: 3, newEvents: 12, newPhotos: 950 },
+      }),
+    )
     const stats = await getAdminStats()
     expect(stats.recentGroups).toEqual([])
+    expect(stats.recentUploads).toEqual([])
+    expect(stats.excludedUserIds).toEqual([])
+    expect(stats.last7Days).toMatchObject({ activeGroups: 0, uploaders: 0 })
   })
 })
 
@@ -184,6 +222,8 @@ describe('어드민 모임 목록 (GET /admin/groups)', () => {
         eventCount: 12,
         photoCount: 830,
         createdAt: '2026-08-01T10:00:00Z',
+        lastUploadedAt: '2026-10-16T09:12:00Z', // CHMO-932 — LocalDateTime이라 Z 보정
+        last7DaysPhotoCount: 120,
       },
     ])
     expect(page.pageInfo).toEqual(BE_ADMIN_PAGE_INFO)
@@ -193,6 +233,19 @@ describe('어드민 모임 목록 (GET /admin/groups)', () => {
     const calls = serve(envelope([]))
     await listAdminGroups({ page: 1 })
     expect(calls[0].url).toBe('/api/v1/admin/groups?page=1')
+  })
+
+  it('유형 필터·최근 업로드 정렬(CHMO-932)을 싣고, 사진 없는 모임의 lastUploadedAt은 null로 접는다', async () => {
+    const calls = serve(
+      envelope([{ ...BE_ADMIN_GROUP_ROWS[0], groupType: 'GENERAL', lastUploadedAt: null, last7DaysPhotoCount: 0 }]),
+    )
+    const page = await listAdminGroups({ page: 0, sort: 'lastUploadedAt,desc', groupType: 'GENERAL' })
+    expect(calls[0].url).toBe('/api/v1/admin/groups?page=0&sort=lastUploadedAt%2Cdesc&groupType=GENERAL')
+    expect(page.items[0]).toMatchObject({ groupType: 'GENERAL', lastUploadedAt: null, last7DaysPhotoCount: 0 })
+    // 구계약 행(키 없음)도 같은 값
+    serve(envelope([{ groupId: 45, createdAt: '2026-08-01T10:00:00' }]))
+    const legacy = await listAdminGroups({ page: 0 })
+    expect(legacy.items[0]).toMatchObject({ lastUploadedAt: null, last7DaysPhotoCount: 0 })
   })
 
   // FE 선배포 구간(BE PR #203 배포 전)에는 아직 name이 실려 온다 — 매퍼가 통째로 흘려보내야
@@ -226,20 +279,69 @@ describe('어드민 모임 상세 (GET /admin/groups/:groupId)', () => {
       role: 'VIEWER',
       status: 'PENDING',
       joinedAt: '2026-08-02T09:30:00Z',
+      accountType: 'PERSONAL', // CHMO-932 A-7 — 모임 역할과 다른 축(계정 유형)
     })
     expect(detail.events[0].publishedAt).toBe('2026-07-31T09:00:00Z')
     expect(detail.events[1].publishedAt).toBeNull()
     // eventDate는 날짜 문자열이라 Z 보정 대상이 아니다
     expect(detail.events[0].eventDate).toBe('2026-07-30')
+    expect(detail.events[0].lastUploadedAt).toBe('2026-10-16T09:12:00Z')
+    expect(detail.events[1].lastUploadedAt).toBeNull()
   })
 
-  it('members·events 키가 생략돼도 빈 배열로 정규화된다', async () => {
+  it('과금·패스(CHMO-932) — 개인 범위는 institution null·지급 이력 정규화, 기관 범위는 institution이 찬다', async () => {
+    serve(envelope(BE_ADMIN_GROUP_DETAIL))
+    const personal = await getAdminGroupDetail(45)
+    expect(personal).toMatchObject({
+      groupType: 'BUSINESS',
+      billingScope: 'PERSONAL',
+      billingOwnerUserId: 3,
+      billingOwnerNickname: '김선생',
+      lastUploadedAt: '2026-10-16T09:12:00Z',
+      institution: null,
+    })
+    expect(personal.pass.active).toBe(true)
+    expect(personal.pass.accessUntil).toBe('2026-10-23T03:00:00Z')
+    expect(personal.pass.grants[0]).toEqual({
+      grantId: 7,
+      plan: 'DAY_7',
+      accessFrom: '2026-10-16T03:00:00Z',
+      accessUntil: '2026-10-23T03:00:00Z',
+      adminId: 17,
+      memo: '설문 참여 보상',
+      createdAt: '2026-10-16T12:00:00Z', // BaseEntity 시각 — Z 보정
+      revokedAt: null,
+      revokedBy: null,
+    })
+
+    serve(envelope(BE_ADMIN_GROUP_DETAIL_INSTITUTION))
+    const institution = await getAdminGroupDetail(45)
+    expect(institution.billingScope).toBe('INSTITUTION')
+    expect(institution.institution).toEqual({
+      accessStatus: 'GRACE',
+      accessUntil: '2026-10-10T00:00:00Z',
+      graceEndsAt: '2026-10-17T00:00:00Z',
+    })
+    expect(institution.pass).toEqual({ active: false, accessUntil: null, grants: [] })
+    expect(institution.members[0].accountType).toBe('ORGANIZATION')
+  })
+
+  it('members·events 키가 생략돼도 빈 배열로 정규화된다 · 구계약(과금 키 없음)은 범위 null·패스 빈 객체·계정 개인', async () => {
     serve(envelope({ groupId: 45, createdAt: '2026-08-01T10:00:00', memberCount: 0 }))
     const detail = await getAdminGroupDetail(45)
     expect(detail.members).toEqual([])
     expect(detail.events).toEqual([])
     expect(detail.ownerUserId).toBeNull()
     expect(detail.ownerNickname).toBeNull()
+    // 모르는 과금 범위를 '개인'으로 단정하면 기관 모임에도 [패스 지급]이 선다 — null로 둬 버튼을 잠근다
+    expect(detail.billingScope).toBeNull()
+    expect(detail.groupType).toBe('BUSINESS')
+    expect(detail.pass).toEqual({ active: false, accessUntil: null, grants: [] })
+    expect(detail.institution).toBeNull()
+
+    serve(envelope({ ...BE_ADMIN_GROUP_DETAIL, members: [{ userId: 3, nickname: '김선생', role: 'EDITOR', status: 'ACTIVE', joinedAt: '2026-08-01T10:00:00' }] }))
+    const legacyMember = await getAdminGroupDetail(45)
+    expect(legacyMember.members[0].accountType).toBe('PERSONAL')
   })
 
   it('없는 모임은 SPACE404 → NOT_FOUND(status 404)로 온다', async () => {
@@ -905,5 +1007,143 @@ describe('기관 구독 (CHMO-931)', () => {
     const plain = serve(envelope({ ...BE_ADMIN_INQUIRY_ROWS[0], status: 'ONBOARDED' }))
     await updateAdminInquiryStatus(12, 'ONBOARDED', null)
     expect(bodyOf(plain[0])).toEqual({ status: 'ONBOARDED' })
+  })
+})
+
+describe('어드민 조회 확장·패스 지급·과금 범위 (CHMO-932 — BE PR #317)', () => {
+  it('사용자 요약은 소셜·속한 모임(승인 대기 포함)을 그대로 건네고 없는 사용자는 USER404', async () => {
+    const calls = serve(envelope(BE_ADMIN_USER_SUMMARY))
+    const summary = await getAdminUserSummary(3)
+    expect(calls[0].url).toBe('/api/v1/admin/users/3')
+    expect(summary).toEqual({
+      userId: 3,
+      nickname: '김선생',
+      accountType: 'PERSONAL',
+      role: 'USER',
+      createdAt: '2026-08-01T10:00:00Z',
+      socialProviders: ['KAKAO'],
+      groups: [
+        { groupId: 45, groupType: 'BUSINESS', role: 'EDITOR', status: 'ACTIVE' },
+        { groupId: 40, groupType: 'GENERAL', role: 'EDITOR', status: 'PENDING' },
+      ],
+    })
+    // 모임 이름은 어디에도 없다(CHMO-668) — `nickname`은 모임 이름이 아니다
+    expect(JSON.stringify(summary)).not.toContain('"name"')
+
+    serve(BE_ERRORS.USER404.payload, BE_ERRORS.USER404.status)
+    const gone = await getAdminUserSummary(999).catch((e: unknown) => e)
+    expect((gone as ApiRequestError).status).toBe(404)
+    expect((gone as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+
+  it('기관 구독 이력 — kind·adminId null(가입 체험)·무효화분이 최신순 그대로 오고, kind가 빠지면 adminId로 파생한다', async () => {
+    const calls = serve(envelope(BE_ADMIN_SUBSCRIPTION_HISTORY))
+    const history = await getAdminOrganizationSubscriptionHistory(52)
+    expect(calls[0].url).toBe('/api/v1/admin/organizations/52/subscription')
+    expect(history).toMatchObject({ userId: 52, accountType: 'ORGANIZATION', accessStatus: 'ACTIVE' })
+    expect(history.periods[0]).toMatchObject({ periodId: 9, kind: 'TRIAL', adminId: null, amountKrw: 0, voidedAt: null })
+    expect(history.periods[1]).toMatchObject({
+      periodId: 4,
+      kind: 'ADMIN',
+      adminId: 17,
+      voidedAt: '2026-08-31T01:00:00Z',
+      voidedBy: 17,
+      createdAt: '2026-08-30T09:00:00Z', // BaseEntity — Z 보정
+    })
+
+    // kind 키가 빠져도 BE와 같은 규칙으로 파생(등록 관리자 없음 = 체험) · 구독 행 없는 기관은 빈 이력 + BLOCKED
+    const [trial, admin] = BE_ADMIN_SUBSCRIPTION_HISTORY.periods.map(({ kind: _kind, ...rest }) => rest)
+    serve(envelope({ ...BE_ADMIN_SUBSCRIPTION_HISTORY, accessStatus: 'BLOCKED', accessUntil: null, graceEndsAt: null, periods: [trial, admin] }))
+    const derived = await getAdminOrganizationSubscriptionHistory(52)
+    expect(derived.periods.map((p) => p.kind)).toEqual(['TRIAL', 'ADMIN'])
+    serve(envelope({ ...BE_ADMIN_SUBSCRIPTION_HISTORY, accessStatus: 'BLOCKED', accessUntil: null, graceEndsAt: null, periods: [] }))
+    const blocked = await getAdminOrganizationSubscriptionHistory(52)
+    expect(blocked).toMatchObject({ accessStatus: 'BLOCKED', accessUntil: null, periods: [] })
+  })
+
+  it('패스 지급은 plan·memo와 Idempotency-Key를 싣고 201 응답을 돌려준다 · 기관 범위 VALID400 메시지는 그대로', async () => {
+    const calls = serve(envelope(BE_ADMIN_PASS_GRANT, 'COMMON201'), 201)
+    const result = await grantAdminGroupPass(45, { plan: 'DAY_7', memo: '설문 참여 보상' }, 'b3f1e2c4-0000-4000-8000-000000000001')
+    expect(calls[0].url).toBe('/api/v1/admin/groups/45/pass-grants')
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].headers.get('Idempotency-Key')).toBe('b3f1e2c4-0000-4000-8000-000000000001')
+    expect(bodyOf(calls[0])).toEqual({ plan: 'DAY_7', memo: '설문 참여 보상' })
+    expect(result).toEqual({
+      grantId: 7,
+      groupId: 45,
+      plan: 'DAY_7',
+      accessFrom: '2026-10-16T03:00:00Z',
+      accessUntil: '2026-10-23T03:00:00Z',
+    })
+
+    serve({ isSuccess: false, code: 'VALID400', message: '기관 범위 모임은 이용 기간으로 등록합니다.' }, 400)
+    const err = await grantAdminGroupPass(46, { plan: 'DAY_1', memo: '체험' }).catch((e: unknown) => e)
+    expect((err as ApiRequestError).status).toBe(400)
+    expect((err as ApiRequestError).message).toBe('기관 범위 모임은 이용 기간으로 등록합니다.')
+
+    serve(BE_ERRORS.SPACE404.payload, BE_ERRORS.SPACE404.status)
+    const gone = await grantAdminGroupPass(999, { plan: 'DAY_1', memo: '체험' }).catch((e: unknown) => e)
+    expect((gone as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+
+  it('패스 회수는 본문 없이 DELETE하고 회수 뒤 만료를 돌려준다 · 없는 지급 BILLING404는 404', async () => {
+    const calls = serve(envelope(BE_ADMIN_PASS_GRANT_REVOKE))
+    const result = await revokeAdminPassGrant(7)
+    expect(calls[0].url).toBe('/api/v1/admin/pass-grants/7')
+    expect(calls[0].method).toBe('DELETE')
+    expect(calls[0].body).toBeNull()
+    expect(result).toEqual({
+      grantId: 7,
+      groupId: 45,
+      revokedAt: '2026-10-17T01:00:00Z',
+      passAccessUntil: '2026-10-17T01:00:00Z',
+    })
+    // 패스 행이 없으면 passAccessUntil null(키 생략도 같은 값)
+    serve(envelope({ grantId: 8, groupId: 45, revokedAt: '2026-10-17T01:00:00Z' }))
+    expect((await revokeAdminPassGrant(8)).passAccessUntil).toBeNull()
+
+    serve({ isSuccess: false, code: 'BILLING404', message: '결제수단 또는 구독을 찾을 수 없습니다.' }, 404)
+    const gone = await revokeAdminPassGrant(999).catch((e: unknown) => e)
+    expect((gone as ApiRequestError).status).toBe(404)
+    expect((gone as ApiRequestError).code).toBe('NOT_FOUND')
+  })
+
+  it('과금 범위 변경은 PUT으로 범위·소유자·메모를 싣고 바뀐 값을 돌려준다 · 기관 계정 아님 VALID400·없는 소유자 USER404', async () => {
+    const calls = serve(envelope(BE_ADMIN_BILLING_SCOPE))
+    const input = { billingScope: 'INSTITUTION' as const, billingOwnerUserId: 52, memo: '유치원 계약 전환' }
+    const result = await changeAdminGroupBillingScope(45, input)
+    expect(calls[0].url).toBe('/api/v1/admin/groups/45/billing-scope')
+    expect(calls[0].method).toBe('PUT')
+    expect(bodyOf(calls[0])).toEqual(input)
+    expect(result).toEqual({ groupId: 45, billingScope: 'INSTITUTION', billingOwnerUserId: 52 })
+
+    serve({ isSuccess: false, code: 'VALID400', message: '기관 과금 범위의 소유자는 기관 계정이어야 합니다.' }, 400)
+    const invalid = await changeAdminGroupBillingScope(45, { ...input, billingOwnerUserId: 3 }).catch((e: unknown) => e)
+    expect((invalid as ApiRequestError).message).toBe('기관 과금 범위의 소유자는 기관 계정이어야 합니다.')
+
+    serve(BE_ERRORS.USER404.payload, BE_ERRORS.USER404.status)
+    const gone = await changeAdminGroupBillingScope(45, { ...input, billingOwnerUserId: 999 }).catch((e: unknown) => e)
+    expect((gone as ApiRequestError).status).toBe(404)
+  })
+
+  it('장수 조정·기간 등록도 Idempotency-Key를 싣고(없으면 헤더 자체가 없다) 같은 키 다른 내용 ADMIN409는 ADMIN_REQUEST_CONFLICT', async () => {
+    const key = 'b3f1e2c4-0000-4000-8000-000000000002'
+    const credit = serve(envelope(BE_ADMIN_CREDIT_ADJUSTMENT, 'COMMON201'), 201)
+    await adjustAdminUserCredits(3, { delta: 100, memo: '보상' }, key)
+    expect(credit[0].headers.get('Idempotency-Key')).toBe(key)
+
+    const period = serve(envelope(BE_ADMIN_SUBSCRIPTION, 'COMMON201'), 201)
+    await registerAdminSubscriptionPeriod(7, PERIOD_INPUT, key)
+    expect(period[0].headers.get('Idempotency-Key')).toBe(key)
+
+    // 키를 안 주면 종전 계약 그대로(서버가 매번 실행) — 헤더를 빈 값으로도 싣지 않는다
+    const plain = serve(envelope(BE_ADMIN_CREDIT_ADJUSTMENT, 'COMMON201'), 201)
+    await adjustAdminUserCredits(3, { delta: 100, memo: '보상' })
+    expect(plain[0].headers.has('Idempotency-Key')).toBe(false)
+
+    serve(BE_ERRORS.ADMIN409.payload, BE_ERRORS.ADMIN409.status)
+    const conflict = await adjustAdminUserCredits(3, { delta: 200, memo: '보상' }, key).catch((e: unknown) => e)
+    expect((conflict as ApiRequestError).status).toBe(409)
+    expect((conflict as ApiRequestError).code).toBe('ADMIN_REQUEST_CONFLICT')
   })
 })

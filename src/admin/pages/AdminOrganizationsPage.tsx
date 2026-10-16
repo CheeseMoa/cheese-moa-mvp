@@ -23,9 +23,10 @@ const PAGE_SIZE = 20
  * 접근 상태는 요청 시각 기준으로 서버가 계산한다: 이용 중 → (종료) → 7일 유예 → 차단(새 업로드
  * BILLING403). **유예·차단이 손댈 행**이라 배지 색이 그렇게 갈린다.
  *
- * 구독 행이 없는 기관(기간을 한 번도 등록하지 않은 곳)은 이 목록에 없다 — 기관 문의 개통 때
- * 함께 등록하거나(§3-4) 사용자 검색에서 찾아 등록한다. 기간 이력·개별 무효화는 조회 API가
- * 없어(BE CHMO-932) 사용자 상세에서 **이번 세션에 등록한 기간**만 되돌릴 수 있다.
+ * 구독 행이 없는 기관(기간을 한 번도 받지 않은 곳)은 이 목록에 없다 — 가입 체험(BE CHMO-940)이 행을
+ * 만들므로 이제 거의 모든 기관이 여기 보이고, 체험 전 가입자만 기관 문의 개통 때 함께 등록하거나(§3-4)
+ * 사용자 검색에서 찾아 등록한다. 기간 **이력**과 아무 기간이나 무효화는 사용자 상세(행 클릭)가 맡는다
+ * (CHMO-932 — 이력 API).
  */
 export function AdminOrganizationsPage() {
   const navigate = useNavigate()
@@ -97,13 +98,14 @@ export function AdminOrganizationsPage() {
       <AdminTopbar left="기관 구독" right="기간은 더하기만 · 가장 늦은 종료일까지 이용" />
       <div className="flex-1 space-y-4 overflow-y-auto px-7 py-6">
         <p className="text-xs text-admin-muted">
-          <b className="font-semibold text-admin-text">유예 기간</b>은 종료 뒤 7일이에요 · 지나면{' '}
-          <b className="font-semibold text-admin-text">차단</b>되어 새 사진을 올릴 수 없어요. 기간을 한 번도
-          등록하지 않은 기관은 여기 없어요 ·{' '}
+          기관 계정은 가입 때 <b className="font-semibold text-admin-text">체험 14일</b>이 자동으로 들어가요 ·{' '}
+          <b className="font-semibold text-admin-text">유예 기간</b>은 종료 뒤 7일, 지나면{' '}
+          <b className="font-semibold text-admin-text">차단</b>되어 새 사진을 올릴 수 없어요. 행을 누르면 사용자
+          상세에서 기간 이력을 보고 무효화할 수 있어요 · 여기 없는 기관은{' '}
           <Link to="/admin/users" className="text-accent hover:underline">
             사용자
           </Link>
-          에서 찾아 등록하거나 기관 문의를 개통할 때 함께 등록해요.
+          에서 찾아 등록해요.
         </p>
 
         {list.error ? (

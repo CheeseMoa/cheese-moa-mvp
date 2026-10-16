@@ -4,6 +4,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  PASS_PLAN_DAYS,
+  PASS_PLAN_OPTIONS,
   accessUntilToKstDate,
   emptySubscriptionPeriodDraft,
   formatKrw,
@@ -11,10 +13,54 @@ import {
   kstDateEndIso,
   kstDatePlusDays,
   kstDateStartIso,
+  passAccessUntilAfterGrant,
   todayKstDate,
+  validateBillingScope,
   validateCreditAdjust,
+  validatePassGrant,
   validateSubscriptionPeriod,
 } from './billing'
+
+describe('패스 지급·과금 범위 (CHMO-932)', () => {
+  it('플랜 일수 표는 BE PassPlan 그대로(1·3·7·30)이고 세그먼트 선택지는 그 표에서 나온다', () => {
+    expect(PASS_PLAN_DAYS).toEqual({ DAY_1: 1, DAY_3: 3, DAY_7: 7, DAY_30: 30 })
+    expect(PASS_PLAN_OPTIONS.map((o) => `${o.value}=${o.label}`)).toEqual([
+      'DAY_1=1일',
+      'DAY_3=3일',
+      'DAY_7=7일',
+      'DAY_30=30일',
+    ])
+  })
+
+  it('패스 지급 검증 — 메모는 필수·500자(장수 조정과 같은 규칙), 통과하면 trim한 메모와 플랜', () => {
+    expect(validatePassGrant({ plan: 'DAY_7', memo: '   ' }).errors.memo).not.toBeNull()
+    expect(validatePassGrant({ plan: 'DAY_7', memo: 'x'.repeat(501) }).errors.memo).not.toBeNull()
+    expect(validatePassGrant({ plan: 'DAY_30', memo: ' 설문 보상 ' })).toEqual({
+      errors: { memo: null },
+      input: { plan: 'DAY_30', memo: '설문 보상' },
+    })
+  })
+
+  it('지급 뒤 만료 — 살아 있는 패스가 있으면 그 만료 뒤에 이어 붙고, 없거나 지났으면 지금부터(BE SpacePass.activate)', () => {
+    const now = new Date('2026-10-16T03:00:00Z')
+    expect(passAccessUntilAfterGrant(null, 'DAY_7', now)).toBe('2026-10-23T03:00:00.000Z')
+    expect(passAccessUntilAfterGrant('2026-10-20T00:00:00Z', 'DAY_3', now)).toBe('2026-10-23T00:00:00.000Z')
+    // 이미 지난 패스는 누적 기준이 아니다
+    expect(passAccessUntilAfterGrant('2026-10-01T00:00:00Z', 'DAY_1', now)).toBe('2026-10-17T03:00:00.000Z')
+  })
+
+  it('과금 범위 검증 — 소유자는 양의 정수 userId, 메모 필수 500자', () => {
+    const base = { billingScope: 'INSTITUTION' as const, billingOwnerUserId: '52', memo: '유치원 계약 전환' }
+    expect(validateBillingScope(base)).toEqual({
+      errors: { billingOwnerUserId: null, memo: null },
+      input: { billingScope: 'INSTITUTION', billingOwnerUserId: 52, memo: '유치원 계약 전환' },
+    })
+    expect(validateBillingScope({ ...base, billingOwnerUserId: '' }).errors.billingOwnerUserId).not.toBeNull()
+    expect(validateBillingScope({ ...base, billingOwnerUserId: '0' }).errors.billingOwnerUserId).not.toBeNull()
+    expect(validateBillingScope({ ...base, billingOwnerUserId: '1.5' }).errors.billingOwnerUserId).not.toBeNull()
+    expect(validateBillingScope({ ...base, memo: '' }).input).toBeNull()
+  })
+})
 
 describe('KST 날짜 변환', () => {
   it('시작일은 그 날 0시, 종료일은 다음 날 0시(종료일 포함)로 +09:00을 붙여 보낸다', () => {

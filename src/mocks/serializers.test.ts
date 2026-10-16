@@ -89,6 +89,31 @@ import {
   toPassPlanResponse,
 } from './handlers/serializers'
 import { PASS_PLANS, approvePassOrder, createPassOrder } from './db'
+// 어드민 조회 확장·패스 지급 (CHMO-932)
+import {
+  grantSpacePass,
+  latestUploadOfEvent,
+  periodHistoryOfOrganizationUser,
+  revokeSpacePassGrant,
+  spacePassGrants,
+  spacePasses,
+  spacePassStateOf,
+} from './db'
+import {
+  toAdminBillingScopeResponse,
+  toAdminOrganizationSubscriptionHistoryResponse,
+  toAdminPassGrantResponse,
+  toAdminPassGrantRevokeResponse,
+  toAdminRecentUpload,
+  toAdminUserSummaryResponse,
+} from './handlers/serializers'
+import {
+  toAdminBillingScopeResult,
+  toAdminOrganizationSubscriptionHistory,
+  toAdminPassGrantResult,
+  toAdminPassGrantRevokeResult,
+  toAdminUserSummary,
+} from '../admin/api/mappers'
 import {
   toCurrentPass,
   toPassConfirmation,
@@ -851,6 +876,9 @@ describe('어드민 (CHMO-379 — BE CHMO-377·378 계약)', () => {
       // 운동회 28 + 봄 소풍 16 — 분석 중인 물놀이 20장은 앨범 매핑 전이라 제외(BE AlbumPhoto 기준)
       photoCount: 44,
       createdAt: '2026-05-01T09:00:00+09:00',
+      // 마지막 업로드 = 앨범 매핑 사진의 반영 시각 최댓값(운동회 시드 — 분석 중인 물놀이는 안 센다, CHMO-932)
+      lastUploadedAt: '2026-06-15T10:30:00+09:00',
+      last7DaysPhotoCount: 0, // 시드 사진은 전부 6월 — 지금 기준 7일 안엔 없다
     })
   })
 
@@ -1294,5 +1322,146 @@ describe('어드민 사용자 장수·기관 구독 (CHMO-931 — BE CHMO-912 �
     })
     // 무효화 응답은 nickname null — 매퍼가 그대로 null을 지킨다
     expect(toAdminOrganizationSubscription(toAdminOrganizationSubscriptionResponse(2, null, resolveInstitutionAccess(2), result.period)).nickname).toBeNull()
+  })
+})
+
+describe('어드민 조회 확장·패스 지급·과금 범위 (CHMO-932 — BE PR #317 계약)', () => {
+  // 패스 상태·지급 원장은 Db 시드 밖 모듈 상태라(결제와 같은 결) 테스트마다 손으로 비운다
+  beforeEach(() => {
+    spacePasses.clear()
+    spacePassGrants.length = 0
+  })
+
+  it('모임 상세 — 유형·과금 범위·소유자·기관 접근·마지막 업로드·멤버 계정 유형이 매퍼를 거쳐 살아 있다', () => {
+    const detail = toAdminGroupDetail(toAdminGroupDetailResponse(findGroup(1)!))
+    expect(detail.groupType).toBe('BUSINESS')
+    // 햇살반 시드는 과금 범위를 기관(서연맘 5)으로 못 박았다 — 생성자(이현정·개인)로 파생하지 않는다
+    expect(detail).toMatchObject({
+      billingScope: 'INSTITUTION',
+      billingOwnerUserId: 5,
+      billingOwnerNickname: '서연맘',
+      lastUploadedAt: '2026-06-15T10:30:00+09:00',
+    })
+    expect(detail.institution?.accessStatus).toBe('ACTIVE')
+    expect(detail.pass).toEqual({ active: false, accessUntil: null, grants: [] })
+    expect(detail.members[0]).toMatchObject({ nickname: '이현정', accountType: 'PERSONAL' })
+    expect(detail.members.find((m) => m.nickname === '김지은')?.accountType).toBe('ORGANIZATION')
+    expect(detail.events.find((e) => e.name === '봄 소풍')?.lastUploadedAt).toBe('2026-05-12T11:00:00+09:00')
+    // 빈 이벤트·분석 중(앨범 매핑 전) 이벤트는 반영 시각이 없다
+    expect(detail.events.find((e) => e.name === '가을 발표회 준비')?.lastUploadedAt).toBeNull()
+    expect(detail.events.find((e) => e.name === '여름 물놀이')?.lastUploadedAt).toBeNull()
+  })
+
+  it('과금 범위 파생 — 저장값이 없으면 생성자 계정 유형으로(별님반=김지은 기관 → 기관·차단, 달님반=이현정 → 개인), 저장값이 있으면 그게 이긴다', () => {
+    const star = toAdminGroupDetail(toAdminGroupDetailResponse(findGroup(3)!))
+    expect(star).toMatchObject({ billingScope: 'INSTITUTION', billingOwnerUserId: 2 })
+    expect(star.institution).toEqual({ accessStatus: 'BLOCKED', accessUntil: null, graceEndsAt: null })
+    const moon = toAdminGroupDetail(toAdminGroupDetailResponse(findGroup(2)!))
+    expect(moon).toMatchObject({ billingScope: 'PERSONAL', billingOwnerUserId: 1, institution: null })
+
+    const group = findGroup(2)!
+    group.billingScope = 'INSTITUTION'
+    group.billingOwnerUserId = 5
+    expect(toAdminBillingScopeResult(toAdminBillingScopeResponse(group))).toEqual({
+      groupId: 2,
+      billingScope: 'INSTITUTION',
+      billingOwnerUserId: 5,
+    })
+  })
+
+  it('최근 업로드 — 가장 최근 반영 사진의 업로더·모임 유형이 붙고, 제외 계정이 올린 사진은 시각 계산에서 빠진다', () => {
+    const event = findEvent(1)!
+    const latest = latestUploadOfEvent(1, [])!
+    const row = toAdminStats({ recentUploads: [toAdminRecentUpload(event, latest)] }).recentUploads[0]
+    expect(row).toEqual({
+      eventId: 1,
+      eventName: '6.15 운동회 오전',
+      groupId: 1,
+      groupType: 'BUSINESS',
+      lastUploadedAt: '2026-06-15T10:30:00+09:00',
+      photoCount: 28,
+      uploaderUserId: 1,
+      uploaderNickname: '이현정',
+    })
+    // 시드 사진은 전부 이현정이 올렸다 — 제외하면 이 이벤트는 최근 업로드에서 사라진다
+    expect(latestUploadOfEvent(1, [1])).toBeNull()
+    // 분석 중(앨범 매핑 전) 이벤트는 반영 시각이 없다
+    expect(latestUploadOfEvent(3, [])).toBeNull()
+  })
+
+  it('기관 구독 이력 — 무효화분 포함 최신순, 가입 체험(adminId null)은 TRIAL·운영자 등록은 ADMIN, 구독 행 없으면 빈 이력', () => {
+    const user7 = db.users.find((u) => u.id === 7)!
+    const trial = toAdminOrganizationSubscriptionHistory(
+      toAdminOrganizationSubscriptionHistoryResponse(
+        user7,
+        resolveInstitutionAccess(7),
+        periodHistoryOfOrganizationUser(7),
+      ),
+    )
+    expect(trial).toMatchObject({ userId: 7, accountType: 'ORGANIZATION', accessStatus: 'ACTIVE' })
+    expect(trial.periods).toHaveLength(1)
+    expect(trial.periods[0]).toMatchObject({ kind: 'TRIAL', adminId: null, amountKrw: 0, payerName: '체험' })
+
+    const user5 = db.users.find((u) => u.id === 5)!
+    const admin = toAdminOrganizationSubscriptionHistory(
+      toAdminOrganizationSubscriptionHistoryResponse(
+        user5,
+        resolveInstitutionAccess(5),
+        periodHistoryOfOrganizationUser(5),
+      ),
+    )
+    expect(admin.periods.map((p) => p.periodId)).toEqual([2, 1])
+    expect(admin.periods[0]).toMatchObject({ kind: 'ADMIN', adminId: 1, voidedAt: null })
+    expect(admin.periods[1]).toMatchObject({ kind: 'ADMIN', voidedBy: 1 })
+    expect(admin.periods[1].voidedAt).not.toBeNull()
+    expect(periodHistoryOfOrganizationUser(2)).toEqual([])
+  })
+
+  it('사용자 요약 — 속한 모임(승인 대기 포함)이 멤버십 순으로 붙고 소셜은 빈 배열(PIN), 모임 이름은 없다', () => {
+    const summary = toAdminUserSummary(toAdminUserSummaryResponse(db.users[0]))
+    expect(summary).toMatchObject({
+      userId: 1,
+      nickname: '이현정',
+      accountType: 'PERSONAL',
+      role: 'ADMIN',
+      socialProviders: [],
+    })
+    expect(summary.groups[0]).toEqual({ groupId: 1, groupType: 'BUSINESS', role: 'EDITOR', status: 'ACTIVE' })
+    expect(summary.groups.some((g) => g.groupType === 'GENERAL')).toBe(true)
+    expect(JSON.stringify(summary)).not.toContain('햇살반')
+
+    const pending = toAdminUserSummary(toAdminUserSummaryResponse(db.users.find((u) => u.id === 8)!))
+    expect(pending.groups[0]).toMatchObject({ groupId: 1, role: 'EDITOR', status: 'PENDING' })
+  })
+
+  it('패스 지급·회수 — 살아 있는 패스 만료 뒤에 누적, 회수는 지금 이전으로 줄이지 않고 이력은 남는다', () => {
+    const now = new Date('2026-10-16T03:00:00Z').getTime()
+    const first = grantSpacePass({ adminId: 1, groupId: 2, plan: 'DAY_7', memo: '설문 보상' }, now)
+    expect(toAdminPassGrantResult(toAdminPassGrantResponse(first))).toEqual({
+      grantId: first.id,
+      groupId: 2,
+      plan: 'DAY_7',
+      accessFrom: '2026-10-16T03:00:00.000Z',
+      accessUntil: '2026-10-23T03:00:00.000Z',
+    })
+    const second = grantSpacePass({ adminId: 1, groupId: 2, plan: 'DAY_3', memo: '추가' }, now + 60_000)
+    expect(second.accessFrom).toBe('2026-10-23T03:00:00.000Z')
+    expect(spacePassStateOf(2, now)).toEqual({ active: true, accessUntil: '2026-10-26T03:00:00.000Z' })
+
+    const detail = toAdminGroupDetail(toAdminGroupDetailResponse(findGroup(2)!, now))
+    expect(detail.pass).toMatchObject({ active: true, accessUntil: '2026-10-26T03:00:00.000Z' })
+    expect(detail.pass.grants.map((g) => g.grantId)).toEqual([second.id, first.id])
+
+    const revoked = revokeSpacePassGrant(1, second.id, now + 120_000)!
+    expect(
+      toAdminPassGrantRevokeResult(toAdminPassGrantRevokeResponse(revoked.grant, revoked.passAccessUntil)),
+    ).toMatchObject({ grantId: second.id, groupId: 2, passAccessUntil: '2026-10-23T03:00:00.000Z' })
+    // 이미 회수된 지급을 다시 회수해도 변화 없이 같은 결과
+    expect(revokeSpacePassGrant(1, second.id, now + 180_000)!.passAccessUntil).toBe('2026-10-23T03:00:00.000Z')
+    // 지급분이 지금 이전으로 소급되지 않는다 — 7일권을 6일 뒤에 회수하면 만료는 '지금'
+    const later = now + 6 * 24 * 3_600_000
+    expect(revokeSpacePassGrant(1, first.id, later)!.passAccessUntil).toBe(new Date(later).toISOString())
+    expect(spacePassStateOf(2, later + 1).active).toBe(false)
+    expect(revokeSpacePassGrant(1, 999)).toBeNull()
   })
 })
