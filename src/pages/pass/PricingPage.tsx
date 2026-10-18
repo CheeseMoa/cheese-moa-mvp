@@ -28,7 +28,7 @@ export function PricingPage() {
           alt="치즈모아 앨범 로고"
           width={160}
           height={160}
-          className="h-32 w-32 shrink-0 sm:h-40 sm:w-40"
+          className="h-32 w-32 shrink-0 object-contain sm:h-40 sm:w-40"
         />
         <div className="text-center sm:text-left">
           <h1 className="text-[28px] font-extrabold leading-tight tracking-[-0.4px] text-app-ink sm:text-[34px]">

@@ -20,6 +20,7 @@ React 18 + TypeScript + Vite + React Router 6 + Tailwind 3 모바일웹이다. �
 - 화면·라우트·미확정 사항: `docs/screen-spec.md`, `src/router.tsx`
 - API: `docs/api-spec.md`, `docs/api-changelog.md`, `src/types/api.ts`
 - 어드민: `docs/admin-spec.md` — 구현은 `src/admin/`에 격리한다.
+- 브랜드 로고는 `Chz` 문구 없는 책 이미지(`src/assets/brand/album.png`)를 사용한다. 공용 `Cheddar`가 어드민·공개 화면에 제공하며, 문구 있는 구 로고를 다시 사용하지 않는다.
 - 디자인: `docs/design/screen-system.dc.html`, `tailwind.config.js`(토큰 원천). 기존 디자인을 우선한다. UI 신규 설계는 `$frontend-design`, UI/접근성 리뷰는 `$web-design-guidelines`를 참고한다.
 - 미확정 결정은 `docs/screen-spec.md` §5에서 확인한다. 홈 관리자 배지·품질 제외 사진 라우팅·common 앨범 정의를 임의로 확정하지 않는다.
 - 외부 페이지 현지화: `src/i18n/`의 ko/en/ja와 외부 라우트 지연 로딩 경계를 사용한다. `?lang=` → 브라우저 선호 언어 → 영어 순이며 본체·어드민은 한국어를 유지한다. 초대 키·모임명은 번역하거나 분석에 넣지 않는다.

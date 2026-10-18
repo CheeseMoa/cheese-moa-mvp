@@ -61,5 +61,8 @@
   "support": "Support",
   "supportIntro": "Need help with CheeseMoa? Contact us by email.",
   "accountDeletion": "Account deletion guide",
-  "dataDeletion": "Data deletion guide"
+  "dataDeletion": "Data deletion guide",
+  "inviteEyebrow": "You’re invited to join",
+  "installTitle": "New to CheeseMoa?",
+  "installSteps": "Install the app and sign in, then open this invitation link again."
 }
