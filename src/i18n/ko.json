@@ -61,5 +61,8 @@
   "support": "고객 지원",
   "supportIntro": "치즈모아 이용 중 도움이 필요하면 이메일로 문의해 주세요.",
   "accountDeletion": "계정 삭제 안내",
-  "dataDeletion": "데이터 삭제 안내"
+  "dataDeletion": "데이터 삭제 안내",
+  "inviteEyebrow": "함께할 모임에 초대받았어요",
+  "installTitle": "치즈모아가 처음이신가요?",
+  "installSteps": "앱을 설치하고 로그인한 뒤, 이 초대 링크를 다시 열어 주세요."
 }

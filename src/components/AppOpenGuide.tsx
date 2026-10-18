@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { PhoneShell } from './PhoneShell'
-import { Button, Cheddar } from './ui'
+import { Cheddar } from './ui'
+import { IconCopy } from './ui/icons'
 import {
   APP_STORE_URL,
   PLAY_STORE_URL,
@@ -52,8 +52,6 @@ export function AppOpenGuide({ groupName, joinKey, role }: AppOpenGuideProps) {
 
   // 앱의 코드 입력은 대문자만 받는다. 혼합 대소문자 viewer 토큰·구형 키는 링크로 복구한다.
   const copyableCode = role !== 'viewer' && joinKey && JOIN_KEY_RE.test(joinKey) ? joinKey : null
-  const storeUrl = platform === 'android' ? PLAY_STORE_URL : APP_STORE_URL
-  const storeName = platform === 'android' ? 'Google Play' : 'App Store'
   const browserName = t(inAppBrowser === 'kakaotalk' ? 'kakaotalk' : 'instagram')
 
   const handleOpen = () => {
@@ -87,129 +85,191 @@ export function AppOpenGuide({ groupName, joinKey, role }: AppOpenGuideProps) {
   }
 
   return (
-    <PhoneShell>
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-safe-6 pt-8 text-text">
-        <PublicMetadata title={t('invite')} description={t('mobileIntro')} />
-        <LanguagePicker />
-        <header className="flex flex-col items-center text-center">
-          <Cheddar size={56} />
-          <p className="mt-5 w-full break-words text-sm [overflow-wrap:anywhere]">
-            {groupName ? t('groupInvite', { group: groupName }) : t('invite')}
-          </p>
-          <h1 className="mt-2 text-[24px] font-bold leading-snug text-heading">
-            {t(mobile ? 'mobileTitle' : 'desktopTitle')}
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed">
-            {t(mobile ? 'mobileIntro' : 'desktopIntro')}
-          </p>
+    <div className="min-h-dvh bg-app-bg text-app-ink sm:bg-app-chip sm:px-6 sm:py-8">
+      <PublicMetadata title={t('invite')} description={t('mobileIntro')} />
+      <div className="mx-auto max-w-[440px] bg-app-bg sm:rounded-[32px]">
+        <header className="flex items-center justify-between gap-3 px-6 py-4">
+          <span className="font-logo text-[21px]">
+            {locale === 'ko' ? '치즈모아' : 'CheeseMoa'}
+          </span>
+          <LanguagePicker compact />
         </header>
-
-        {mobile && inAppBrowser && (
-          <aside className="mt-5 rounded-[14px] bg-surface p-4 text-sm leading-relaxed">
-            <p className="font-bold">{t('browserHelp', { browser: browserName })}</p>
-            <p className="mt-1">
-              {t('browserSteps', { browser: platform === 'ios' ? 'Safari' : 'Chrome' })}
+        <main className="px-6 pb-safe-6 sm:px-8">
+          <section className="pb-7 pt-5 text-center" aria-labelledby="invite-title">
+            <div
+              aria-hidden="true"
+              className="relative mx-auto mb-6 flex h-32 w-32 items-center justify-center rounded-[36px] bg-app-yellowTint"
+            >
+              <Cheddar size={100} className="-rotate-6" />
+              <span className="absolute -right-2 bottom-1 flex h-9 w-9 items-center justify-center rounded-full border-4 border-app-bg bg-primary">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="3" />
+                  <path d="m4 7 8 6 8-6" />
+                </svg>
+              </span>
+            </div>
+            <p className="mb-2 text-sm font-medium text-app-inkSub">{t('inviteEyebrow')}</p>
+            <h1
+              id="invite-title"
+              className="text-[28px] font-bold leading-[1.3] tracking-[-0.035em] [overflow-wrap:anywhere] [text-wrap:balance]"
+            >
+              {groupName || t('brand')}
+            </h1>
+            <p className="mx-auto mt-3 max-w-sm break-keep text-[15px] leading-relaxed text-app-inkSub [text-wrap:balance]">
+              {t(mobile ? 'mobileIntro' : 'desktopIntro')}
             </p>
-          </aside>
-        )}
+          </section>
 
-        <div className="mt-6 flex flex-col gap-3">
-          {mobile ? (
-            <>
-              <p role="status" className="text-sm leading-relaxed">
-                {t(openState)}
-              </p>
-              <Button
-                variant="accent"
-                fullWidth
-                className="shrink-0"
+          {mobile && (
+            <div className="pb-6">
+              <button
+                type="button"
                 onClick={handleOpen}
                 disabled={openState === 'opening'}
+                className="press flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-primary px-5 py-3 text-base font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-app-ink disabled:opacity-60"
               >
                 {openState === 'opening'
                   ? t('openingButton')
                   : openState === 'idle'
                     ? t('openButton')
                     : t('retryButton')}
-              </Button>
-              <StoreLink
-                locale={locale}
-                store={platform === 'android' ? 'play' : 'appstore'}
-                href={storeUrl}
-                onClick={() => attempt.current?.prepareStore()}
-              >
-                {t('download', { store: storeName })}
-              </StoreLink>
-            </>
-          ) : (
-            <>
-              <StoreLink locale={locale} store="appstore" href={APP_STORE_URL}>
-                {t('download', { store: 'App Store' })}
-              </StoreLink>
-              <StoreLink locale={locale} store="play" href={PLAY_STORE_URL}>
-                {t('download', { store: 'Google Play' })}
-              </StoreLink>
-            </>
-          )}
-        </div>
-
-        <section
-          aria-labelledby="invite-return-title"
-          className="mt-6 rounded-[14px] border border-border p-4"
-        >
-          <h2 id="invite-return-title" className="text-[15px] font-bold text-heading">
-            {t('returnTitle')}
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed">{t('returnBody')}</p>
-          <button
-            type="button"
-            disabled={copying}
-            onClick={() => void handleCopy(t('inviteLink'), window.location.href)}
-            className="mt-3 min-h-11 w-full rounded-[10px] bg-surface px-3 py-2 text-sm font-bold disabled:opacity-50"
-          >
-            {t('copyLink')}
-          </button>
-          {copyableCode && (
-            <div className="mt-3 border-t border-border pt-3">
-              <p className="text-sm leading-relaxed">{t('codeHelp')}</p>
-              <button
-                type="button"
-                disabled={copying}
-                aria-label={t('copyCodeLabel', { code: copyableCode })}
-                onClick={() => void handleCopy(t('joinCode'), copyableCode)}
-                className="mt-2 flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-[10px] bg-surface px-3 py-2 text-sm disabled:opacity-50"
-              >
-                <span className="break-all font-bold">{copyableCode}</span>
-                <span>{t('copyCode')}</span>
+                <span aria-hidden="true">→</span>
               </button>
+              <p
+                role="status"
+                className={
+                  openState === 'idle'
+                    ? 'sr-only'
+                    : 'mt-3 text-center text-sm leading-relaxed text-app-inkSub'
+                }
+              >
+                {t(openState)}
+              </p>
             </div>
           )}
-          <p role="status" className="mt-2 text-sm leading-relaxed">
-            {copyMessage}
-          </p>
-          {manualCopy && (
-            <input
-              aria-label={t('manualCopy', { label: manualCopy.label })}
-              readOnly
-              value={manualCopy.value}
-              onFocus={(event) => event.currentTarget.select()}
-              className="mt-2 min-h-11 w-full min-w-0 rounded-[10px] border border-border bg-cream px-3 text-sm"
-            />
-          )}
-        </section>
 
-        <details className="mt-4 text-sm leading-relaxed">
-          <summary className="min-h-11 cursor-pointer py-3 font-bold text-heading">
-            {t('troubleTitle')}
-          </summary>
-          <ul className="list-disc space-y-3 pb-4 pl-5">
-            {['helpLogin', 'helpMember', 'helpExpired', 'helpStore'].map((key) => (
-              <li key={key}>{t(key)}</li>
-            ))}
-          </ul>
-        </details>
-      </main>
-    </PhoneShell>
+          <section
+            aria-labelledby="invite-install-title"
+            className="border-t border-app-border py-5 text-center"
+          >
+            <h2 id="invite-install-title" className="text-sm font-semibold">
+              {t('installTitle')}
+            </h2>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3">
+              {(!mobile || platform === 'ios') && (
+                <StoreLink
+                  locale={locale}
+                  store="appstore"
+                  href={APP_STORE_URL}
+                  onClick={() => attempt.current?.prepareStore()}
+                >
+                  {t('download', { store: 'App Store' })}
+                </StoreLink>
+              )}
+              {(!mobile || platform === 'android') && (
+                <StoreLink
+                  locale={locale}
+                  store="play"
+                  href={PLAY_STORE_URL}
+                  onClick={() => attempt.current?.prepareStore()}
+                >
+                  {t('download', { store: 'Google Play' })}
+                </StoreLink>
+              )}
+            </div>
+            <p className="mx-auto mt-2 max-w-sm break-keep text-[13px] leading-relaxed text-app-inkSub [text-wrap:balance]">
+              {t('installSteps')}
+            </p>
+          </section>
+
+          <section aria-label={t('inviteLink')} className="border-t border-app-border py-3">
+            {copyableCode && (
+              <div className="flex flex-wrap items-center justify-between gap-x-3 py-1">
+                <span className="text-sm text-app-inkSub">{t('joinCode')}</span>
+                <button
+                  type="button"
+                  disabled={copying}
+                  aria-label={t('copyCodeLabel', { code: copyableCode })}
+                  onClick={() => void handleCopy(t('joinCode'), copyableCode)}
+                  className="press flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 text-sm disabled:opacity-50"
+                >
+                  <span className="break-all font-semibold tracking-wider">{copyableCode}</span>
+                  <span aria-hidden="true" className="shrink-0 text-app-inkSub">
+                    <IconCopy size={16} />
+                  </span>
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={copying}
+              onClick={() => void handleCopy(t('inviteLink'), window.location.href)}
+              className="press flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-app-chip px-3 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              <span aria-hidden="true">
+                <IconCopy size={16} />
+              </span>
+              {t('copyLink')}
+            </button>
+            <p
+              role="status"
+              className={copyMessage ? 'mt-3 text-sm leading-relaxed text-app-inkSub' : 'sr-only'}
+            >
+              {copyMessage}
+            </p>
+            {manualCopy && (
+              <input
+                aria-label={t('manualCopy', { label: manualCopy.label })}
+                readOnly
+                value={manualCopy.value}
+                onFocus={(event) => event.currentTarget.select()}
+                className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-app-border bg-app-bg px-3 text-sm"
+              />
+            )}
+          </section>
+
+          {mobile && inAppBrowser && (
+            <details className="group border-t border-app-border text-sm leading-relaxed">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 py-3 font-medium [&::-webkit-details-marker]:hidden">
+                {t('browserHelp', { browser: browserName })}
+                <span aria-hidden="true" className="shrink-0 group-open:rotate-180">
+                  ⌄
+                </span>
+              </summary>
+              <p className="pb-4 text-app-inkSub">
+                {t('browserSteps', { browser: platform === 'ios' ? 'Safari' : 'Chrome' })}
+              </p>
+            </details>
+          )}
+          <details className="group border-t border-app-border text-sm leading-relaxed">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 py-3 font-medium [&::-webkit-details-marker]:hidden">
+              {t('troubleTitle')}
+              <span aria-hidden="true" className="shrink-0 group-open:rotate-180">
+                ⌄
+              </span>
+            </summary>
+            <div className="space-y-3 pb-4 text-app-inkSub">
+              <p>{t('returnBody')}</p>
+              {copyableCode && <p>{t('codeHelp')}</p>}
+              <ul className="list-disc space-y-3 pl-4">
+                {['helpLogin', 'helpMember', 'helpExpired', 'helpStore'].map((key) => (
+                  <li key={key}>{t(key)}</li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        </main>
+      </div>
+    </div>
   )
 }
 
@@ -231,7 +291,7 @@ function StoreLink({
     <a
       href={href}
       onClick={onClick}
-      className="press inline-flex min-h-12 w-full shrink-0 items-center justify-center rounded-[14px] border border-border bg-surface px-4 py-3 text-center text-[15px] font-bold text-text"
+      className="press inline-flex min-h-14 max-w-full shrink-0 items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-ink"
     >
       <img
         src={`/store-badges/${store}-${locale}.${store === 'appstore' ? 'svg' : 'png'}`}

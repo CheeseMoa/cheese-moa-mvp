@@ -61,5 +61,8 @@
   "support": "サポート",
   "supportIntro": "チーズモアのご利用でお困りの場合は、メールでお問い合わせください。",
   "accountDeletion": "アカウント削除のご案内",
-  "dataDeletion": "データ削除のご案内"
+  "dataDeletion": "データ削除のご案内",
+  "inviteEyebrow": "グループに招待されました",
+  "installTitle": "チーズモアは初めてですか？",
+  "installSteps": "アプリをインストールしてログインしたら、この招待リンクをもう一度開いてください。"
 }
