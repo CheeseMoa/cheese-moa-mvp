@@ -2,7 +2,11 @@ import { Link } from 'react-router-dom'
 import { PublicPageShell } from '../components/PublicPageShell'
 import { LegalDocBody } from '../components/LegalDocBody'
 import type { LegalDoc } from '../legal/types'
-import { accountDeletionGuide, dataDeletionGuide } from '../legal/deletionGuides'
+import { deletionGuide } from '../legal/deletionGuides.localized'
+import { usePublicLocale } from '../i18n/usePublicLocale'
+import { LanguagePicker } from '../i18n/LanguagePicker'
+import { PublicMetadata } from '../i18n/PublicMetadata'
+import { withLanguage } from '../i18n/locale'
 
 /**
  * 계정 삭제·데이터 삭제 안내 (CHMO-588) — Google Play 삭제 URL 요건 2종의 공개 페이지.
@@ -24,6 +28,7 @@ interface GuideAction {
 }
 
 function DeletionGuidePage({ doc, actions }: { doc: LegalDoc; actions: GuideAction[] }) {
+  const { locale, t } = usePublicLocale()
   const rowCls =
     'flex items-center justify-between px-4 py-3.5 text-[15px] text-app-ink active:bg-app-chip'
   const chevron = (
@@ -32,11 +37,15 @@ function DeletionGuidePage({ doc, actions }: { doc: LegalDoc; actions: GuideActi
     </span>
   )
   return (
-    <PublicPageShell title={doc.title}>
-      <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">{doc.title}</h1>
-      <LegalDocBody doc={doc} />
+    <PublicPageShell title={doc.title} translate={t} language={locale}>
+      <PublicMetadata title={doc.title} description={doc.intro ?? doc.title} />
+      <LanguagePicker />
+      <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">
+        {doc.title}
+      </h1>
+      <LegalDocBody doc={doc} versionLabel={t('version')} />
       <nav
-        aria-label="바로가기"
+        aria-label={t('shortcuts')}
         className="mt-8 divide-y divide-app-border overflow-hidden rounded-app border border-app-border bg-app-bg"
       >
         {actions.map((action) =>
@@ -58,24 +67,26 @@ function DeletionGuidePage({ doc, actions }: { doc: LegalDoc; actions: GuideActi
 }
 
 export function AccountDeletionPage() {
+  const { locale, t } = usePublicLocale()
   return (
     <DeletionGuidePage
-      doc={accountDeletionGuide}
+      doc={deletionGuide('account', locale)}
       actions={[
-        { label: '설정에서 계정 삭제하기', to: '/settings' },
-        { label: '개인정보 처리방침 보기', to: '/legal/privacy' },
+        { label: t('deleteSettings'), to: '/settings' },
+        { label: t('privacyAction'), to: withLanguage('/legal/privacy', locale) },
       ]}
     />
   )
 }
 
 export function DataDeletionPage() {
+  const { locale, t } = usePublicLocale()
   return (
     <DeletionGuidePage
-      doc={dataDeletionGuide}
+      doc={deletionGuide('data', locale)}
       actions={[
-        { label: '이메일로 삭제 요청하기', href: 'mailto:cheesemoa03@gmail.com' },
-        { label: '개인정보 처리방침 보기', to: '/legal/privacy' },
+        { label: t('deleteEmail'), href: 'mailto:cheesemoa03@gmail.com' },
+        { label: t('privacyAction'), to: withLanguage('/legal/privacy', locale) },
       ]}
     />
   )

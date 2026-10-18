@@ -22,6 +22,7 @@ React 18 + TypeScript + Vite + React Router 6 + Tailwind 3 모바일웹이다. �
 - 어드민: `docs/admin-spec.md` — 구현은 `src/admin/`에 격리한다.
 - 디자인: `docs/design/screen-system.dc.html`, `tailwind.config.js`(토큰 원천). 기존 디자인을 우선한다. UI 신규 설계는 `$frontend-design`, UI/접근성 리뷰는 `$web-design-guidelines`를 참고한다.
 - 미확정 결정은 `docs/screen-spec.md` §5에서 확인한다. 홈 관리자 배지·품질 제외 사진 라우팅·common 앨범 정의를 임의로 확정하지 않는다.
+- 외부 페이지 현지화: `src/i18n/`의 ko/en/ja와 외부 라우트 지연 로딩 경계를 사용한다. `?lang=` → 브라우저 선호 언어 → 영어 순이며 본체·어드민은 한국어를 유지한다. 초대 키·모임명은 번역하거나 분석에 넣지 않는다.
 - 법적 고지: `docs/legal/` 정본과 `src/legal/` 앱 노출 문구를 함께 확인한다. 보유기간·동의·버전·구현 완료 여부를 임의로 확정하지 않는다.
 - 상세 구현 배경·변경 이력: `docs/agent-context.md`의 관련 절만 읽는다. 과거 정책과 후속 반전이 함께 있으므로 최신 명세·코드와 대조한다.
 

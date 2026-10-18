@@ -93,6 +93,7 @@ const SCREENS: ReadonlyArray<readonly [pattern: string, screen: string]> = [
   ['/legal/biometric', 'legal-biometric'],
   ['/account-deletion', 'legal-account-deletion'],
   ['/data-deletion', 'legal-data-deletion'],
+  ['/support', 'support'],
   // 기간 이용권(CHMO-899) — 결제 복귀 주소의 쿼리(paymentKey 등)는 원래 싣지 않는다(경로만 매칭)
   ['/legal/refund', 'legal-refund'],
   ['/pricing', 'pricing'],

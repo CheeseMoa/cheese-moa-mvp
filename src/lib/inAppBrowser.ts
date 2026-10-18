@@ -16,8 +16,8 @@
  */
 import { isNativeApp } from '../native/bridge'
 
-/** 지금 다루는 인앱 브라우저는 카카오톡뿐 — 라인·인스타 등은 유입 경로가 생기면 넓힌다 */
-export type InAppBrowser = 'kakaotalk'
+/** 앱 열기가 제한될 수 있어 외부 브라우저 안내를 제공하는 유입 경로. */
+export type InAppBrowser = 'kakaotalk' | 'instagram'
 
 export type DevicePlatform = 'ios' | 'android' | 'other'
 
@@ -37,7 +37,10 @@ function maxTouchPoints(): number {
  */
 export function detectInAppBrowser(): InAppBrowser | null {
   if (isNativeApp()) return null
-  return /kakaotalk/i.test(userAgent()) ? 'kakaotalk' : null
+  const ua = userAgent()
+  if (/kakaotalk/i.test(ua)) return 'kakaotalk'
+  if (/instagram/i.test(ua)) return 'instagram'
+  return null
 }
 
 /**

@@ -1,4 +1,5 @@
-import { useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { usePublicLocale } from '../i18n/usePublicLocale'
 import { AppOpenGuide } from '../components/AppOpenGuide'
 import { parseJoinLinkInfo } from '../lib/joinLink'
 
@@ -12,11 +13,20 @@ import { parseJoinLinkInfo } from '../lib/joinLink'
  * 이미 멤버 사전 감지·ParentJoinPage)은 여기서 걷었다. 홈 [모임 참여하기](JoinGroupModal)의
  * viewer 코드 인계도 이 경로로 오므로 같은 안내에 착지한다 — 학부모 합류는 앱에서만.
  *
- * 링크 마커(lib/joinLink)는 모임명만 읽는다 — 안내 문구용. joinKey는 URL에 그대로 남아 앱이
- * 열릴 때 스킴/intent에 실려 간다.
+ * 링크 마커(lib/joinLink)는 모임 안내·역할별 복구 수단에 쓴다. joinKey는 원문을 보존해
+ * 앱 링크로 전달하고, 코드 입력을 지원하는 경우에만 복사 버튼을 제공한다(CHMO-953).
  */
 export function JoinPage() {
+  const { locale } = usePublicLocale()
+  const { joinKey } = useParams()
   const [searchParams] = useSearchParams()
-  const { groupName } = parseJoinLinkInfo(searchParams)
-  return <AppOpenGuide groupName={groupName} />
+  const { groupName, role } = parseJoinLinkInfo(searchParams)
+  return (
+    <AppOpenGuide
+      key={`${joinKey}-${locale}`}
+      groupName={groupName}
+      joinKey={joinKey}
+      role={role}
+    />
+  )
 }
