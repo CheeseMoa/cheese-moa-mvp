@@ -24,10 +24,14 @@ import { cx } from '../lib/cx'
 export function PublicPageShell({
   title,
   width = 'narrow',
+  translate,
+  language,
   children,
 }: {
   /** 상단 바 우측의 화면 이름(없으면 로고만) */
   title?: string
+  translate?: (key: string) => string
+  language?: string
   width?: 'wide' | 'narrow'
   children: ReactNode
 }) {
@@ -35,11 +39,21 @@ export function PublicPageShell({
   return (
     <div className="flex min-h-dvh flex-col bg-app-bg">
       <header className="border-b border-app-border bg-app-bg/95 backdrop-blur">
-        <div className={cx('mx-auto flex h-14 items-center justify-between px-4 sm:px-6', widthCls)}>
-          <Link to="/pricing" className="flex items-center gap-2" aria-label="치즈모아 요금 안내">
+        <div
+          className={cx('mx-auto flex h-14 items-center justify-between px-4 sm:px-6', widthCls)}
+        >
+          <Link
+            to="/pricing"
+            className="flex items-center gap-2"
+            aria-label={
+              translate ? `${translate('brand')} · ${translate('pricing')}` : '치즈모아 요금 안내'
+            }
+          >
             <Cheddar size={28} />
             {/* 워드마크는 Jua 전용(앱 brandStyle과 동일 규칙 — 본문에 번지지 않는다) */}
-            <span className="translate-y-[2px] font-logo text-[20px] text-app-ink">치즈모아</span>
+            <span className="translate-y-[2px] font-logo text-[20px] text-app-ink">
+              {language && language !== 'ko' ? 'CheeseMoa' : '치즈모아'}
+            </span>
           </Link>
           {title ? <span className="truncate pl-3 text-[14px] text-app-muted">{title}</span> : null}
         </div>
@@ -48,7 +62,7 @@ export function PublicPageShell({
         {children}
       </main>
       <div className={cx('mx-auto w-full px-4 pb-safe-9 sm:px-6', widthCls)}>
-        <SiteFooter />
+        <SiteFooter translate={translate} language={language} />
       </div>
     </div>
   )

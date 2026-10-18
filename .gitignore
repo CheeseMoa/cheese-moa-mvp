@@ -51,3 +51,7 @@ docs/thread/
 
 # 화면 캡처 (로컬 확인용 · 용량 큼 — git 추적 제외)
 docs/screenshots/
+
+# 에이전트 로컬 작업공간
+.worktrees/
+.codex/worktrees/

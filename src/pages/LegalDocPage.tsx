@@ -1,3 +1,7 @@
+import { usePublicLocale } from '../i18n/usePublicLocale'
+import { LanguagePicker } from '../i18n/LanguagePicker'
+import { PublicMetadata } from '../i18n/PublicMetadata'
+import { useLocation } from 'react-router-dom'
 import { PublicPageShell } from '../components/PublicPageShell'
 import { LegalDocBody } from '../components/LegalDocBody'
 import type { LegalDoc } from '../legal/types'
@@ -13,10 +17,28 @@ import type { LegalDoc } from '../legal/types'
  * 페이지 동일 — AC-6).
  */
 export function LegalDocPage({ doc }: { doc: LegalDoc }) {
+  const { locale, t } = usePublicLocale()
+  const { pathname } = useLocation()
+  const title = t(pathname.split('/').pop() ?? 'terms')
   return (
-    <PublicPageShell title={doc.title}>
-      <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">{doc.title}</h1>
-      <LegalDocBody doc={doc} />
+    <PublicPageShell title={title} translate={t} language={locale}>
+      <PublicMetadata
+        title={title}
+        description={locale === 'ko' ? doc.title : t('legalPending')}
+        koreanOnly
+      />
+      <LanguagePicker />
+      {locale !== 'ko' && (
+        <p role="note" className="mb-5 rounded-xl bg-app-yellowTint p-4 text-sm leading-relaxed">
+          {t('legalPending')}
+        </p>
+      )}
+      <div lang="ko">
+        <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">
+          {doc.title}
+        </h1>
+        <LegalDocBody doc={doc} />
+      </div>
     </PublicPageShell>
   )
 }

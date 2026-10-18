@@ -27,6 +27,15 @@ describe('detectInAppBrowser', () => {
     expect(detectInAppBrowser()).toBe('kakaotalk')
   })
 
+  it('인스타그램을 iOS·Android 양쪽에서 감지한다', () => {
+    stubUa(`${IOS_SAFARI_UA} Instagram 350.0.0.0`)
+    expect(detectInAppBrowser()).toBe('instagram')
+    stubUa(`${ANDROID_CHROME_UA} Instagram 350.0.0.0 Android`)
+    expect(detectInAppBrowser()).toBe('instagram')
+    stubUa(`${IOS_APP_UA} Instagram 350.0.0.0`)
+    expect(detectInAppBrowser()).toBeNull()
+  })
+
   it('일반 브라우저는 인앱이 아니다', () => {
     stubUa(IOS_SAFARI_UA)
     expect(detectInAppBrowser()).toBeNull()

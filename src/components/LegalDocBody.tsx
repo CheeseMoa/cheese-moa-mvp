@@ -10,12 +10,18 @@ import type { LegalDoc } from '../legal/types'
  * `app.*` 팔레트) — 장(챕터) 라벨 13/800/muted·조 제목 15/700/ink·본문 13.5/1.6/ink·인트로
  * 박스는 옐로 14% 틴트. 같은 문서를 웹 공개 페이지와 앱 시트 양쪽에서 같은 수치로 읽는다.
  */
-export function LegalDocBody({ doc }: { doc: LegalDoc }) {
+export function LegalDocBody({
+  doc,
+  versionLabel = '버전',
+}: {
+  doc: LegalDoc
+  versionLabel?: string
+}) {
   return (
     <>
       {/* 상태 표기(status)는 게시일 — "초안"류 미완성 고지는 쓰지 않는다(2026-08-03 출시 워딩 정리) */}
       <p className="text-[12px] text-app-muted">
-        버전 {doc.version} · {doc.status}
+        {versionLabel} {doc.version} · {doc.status}
       </p>
       {doc.intro ? (
         <p className="mt-4 rounded-[14px] bg-app-yellowTint p-3.5 text-[13.5px] leading-[1.6] text-app-ink">
@@ -36,7 +42,10 @@ export function LegalDocBody({ doc }: { doc: LegalDoc }) {
           ) : null}
           {section.body.map((block, j) =>
             Array.isArray(block) ? (
-              <ul key={j} className="mt-2 flex flex-col gap-1.5 text-[13.5px] leading-[1.6] text-app-ink">
+              <ul
+                key={j}
+                className="mt-2 flex flex-col gap-1.5 text-[13.5px] leading-[1.6] text-app-ink"
+              >
                 {block.map((item, k) => (
                   <li key={k} className="flex gap-1.5">
                     <span aria-hidden>·</span>
