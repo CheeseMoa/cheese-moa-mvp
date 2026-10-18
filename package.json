@@ -12,7 +12,10 @@
     "test:watch": "vitest",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "dev:mock": "VITE_ENABLE_MSW=true vite --port 5199",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "hooks:install": "bash scripts/install-hooks.sh"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.45.5",
