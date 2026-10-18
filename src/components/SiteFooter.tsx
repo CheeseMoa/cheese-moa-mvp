@@ -14,7 +14,15 @@ import { cx } from '../lib/cx'
  *
  * 팔레트는 PublicPageShell과 같은 앱 리디자인 토큰(`app.*` — CHMO-727).
  */
-export function SiteFooter({ className }: { className?: string }) {
+export function SiteFooter({
+  className,
+  translate,
+  language,
+}: {
+  className?: string
+  translate?: (key: string) => string
+  language?: string
+}) {
   const rows = businessInfoRows()
   const linkCls = 'text-[12px] text-app-muted underline-offset-2 hover:underline'
   return (
@@ -24,32 +32,44 @@ export function SiteFooter({ className }: { className?: string }) {
         className,
       )}
     >
-      <nav aria-label="약관 및 정책" className="flex flex-wrap gap-x-4 gap-y-1.5">
+      <nav
+        aria-label={translate?.('policies') ?? '약관 및 정책'}
+        className="flex flex-wrap gap-x-4 gap-y-1.5"
+      >
         <Link to="/pricing" className={linkCls}>
-          요금 안내
+          {translate?.('pricing') ?? '요금 안내'}
         </Link>
-        <Link to="/legal/terms" className={linkCls}>
-          이용약관
+        <Link to={language ? `/legal/terms?lang=${language}` : '/legal/terms'} className={linkCls}>
+          {translate?.('terms') ?? '이용약관'}
         </Link>
-        <Link to="/legal/privacy" className={cx(linkCls, 'font-bold text-app-ink')}>
-          개인정보처리방침
+        <Link
+          to={language ? `/legal/privacy?lang=${language}` : '/legal/privacy'}
+          className={cx(linkCls, 'font-bold text-app-ink')}
+        >
+          {translate?.('privacy') ?? '개인정보처리방침'}
         </Link>
-        <Link to="/legal/refund" className={linkCls}>
-          환불정책
+        <Link
+          to={language ? `/legal/refund?lang=${language}` : '/legal/refund'}
+          className={linkCls}
+        >
+          {translate?.('refund') ?? '환불정책'}
         </Link>
       </nav>
       {rows.length > 0 ? (
         <dl className="mt-3 flex flex-wrap gap-x-3 gap-y-0.5">
           {rows.map((row) => (
             <div key={row.key} className="flex gap-1">
-              <dt>{row.label}</dt>
+              <dt>{translate?.(row.key) ?? row.label}</dt>
               <dd className="text-app-inkSub">
                 {row.key === 'phone' ? (
                   <a href={telHref(row.value)} className="underline-offset-2 hover:underline">
                     {row.value}
                   </a>
                 ) : row.key === 'email' ? (
-                  <a href={`mailto:${BUSINESS_INFO.email}`} className="underline-offset-2 hover:underline">
+                  <a
+                    href={`mailto:${BUSINESS_INFO.email}`}
+                    className="underline-offset-2 hover:underline"
+                  >
                     {row.value}
                   </a>
                 ) : (
@@ -60,7 +80,7 @@ export function SiteFooter({ className }: { className?: string }) {
           ))}
         </dl>
       ) : null}
-      <p className="mt-3">© 치즈모아</p>
+      <p className="mt-3">© {translate?.('brand') ?? '치즈모아'}</p>
     </footer>
   )
 }

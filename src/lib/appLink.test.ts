@@ -73,6 +73,6 @@ describe('kakaoOpenExternalUrl', () => {
 
 describe('APP_STORE_URL', () => {
   it('출시된 iOS 앱 ID를 가리킨다 (CHMO-657)', () => {
-    expect(APP_STORE_URL).toBe('https://apps.apple.com/kr/app/id6797158719')
+    expect(APP_STORE_URL).toBe('https://apps.apple.com/app/id6797158719')
   })
 })

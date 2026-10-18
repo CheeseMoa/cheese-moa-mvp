@@ -4,7 +4,6 @@ import { CreatorGuard, GuestGuard, ViewerGuard } from './guards/RouteGuards'
 // 제작자 화면
 import { LandingPage } from './pages/LandingPage'
 import { SocialCallbackPage } from './pages/SocialCallbackPage'
-import { JoinPage } from './pages/JoinPage'
 import { HomePage } from './pages/HomePage'
 import { SignupConsentPage } from './pages/SignupConsentPage'
 import { OnboardingPage } from './pages/OnboardingPage'
@@ -27,16 +26,10 @@ import { ViewerEventsPage } from './pages/viewer/ViewerEventsPage'
 import { ViewerAlbumsPage } from './pages/viewer/ViewerAlbumsPage'
 import { ViewerAlbumDetailPage } from './pages/viewer/ViewerAlbumDetailPage'
 
-import { NotFoundPage } from './pages/NotFoundPage'
-
-// 약관·정책 전문 (CHMO-478)
-import { LegalDocPage } from './pages/LegalDocPage'
+// 약관·정책 데이터 — 가입 동의 화면과 같은 원문(CHMO-478)
 import { termsOfService } from './legal/terms'
 import { privacyPolicy } from './legal/privacy'
 import { biometricNotice } from './legal/biometric'
-
-// 계정 삭제·데이터 삭제 안내 (CHMO-588)
-import { AccountDeletionPage, DataDeletionPage } from './pages/DeletionGuidePage'
 
 // 기간 이용권 요금·결제·환불정책 (CHMO-899 — 토스페이먼츠 심사)
 import { refundPolicy } from './legal/refund'
@@ -50,6 +43,65 @@ import { PassFailPage, PassSuccessPage } from './pages/pass/PassResultPages'
  * 제작자 경로는 CreatorGuard, 뷰어 경로는 ViewerGuard로 감싼다.
  */
 export const router = createBrowserRouter([
+  {
+    lazy: async () => ({
+      Component: (await import('./i18n/PublicLocaleLayout')).PublicLocaleLayout,
+    }),
+    children: [
+      {
+        path: '/support',
+        lazy: async () => ({ Component: (await import('./pages/SupportPage')).SupportPage }),
+      },
+      {
+        path: '/join/:joinKey',
+        lazy: async () => ({ Component: (await import('./pages/JoinPage')).JoinPage }),
+      }, // 02-K 초대 링크 착지 = 앱 유도(CHMO-820) — 로그인 무관, GuestGuard 밖
+      {
+        path: '/legal/terms',
+        lazy: async () => {
+          const { LegalDocPage } = await import('./pages/LegalDocPage')
+          return { Component: () => <LegalDocPage doc={termsOfService} /> }
+        },
+      },
+      {
+        path: '/legal/privacy',
+        lazy: async () => {
+          const { LegalDocPage } = await import('./pages/LegalDocPage')
+          return { Component: () => <LegalDocPage doc={privacyPolicy} /> }
+        },
+      },
+      {
+        path: '/legal/biometric',
+        lazy: async () => {
+          const { LegalDocPage } = await import('./pages/LegalDocPage')
+          return { Component: () => <LegalDocPage doc={biometricNotice} /> }
+        },
+      },
+      {
+        path: '/account-deletion',
+        lazy: async () => ({
+          Component: (await import('./pages/DeletionGuidePage')).AccountDeletionPage,
+        }),
+      },
+      {
+        path: '/data-deletion',
+        lazy: async () => ({
+          Component: (await import('./pages/DeletionGuidePage')).DataDeletionPage,
+        }),
+      },
+      {
+        path: '/legal/refund',
+        lazy: async () => {
+          const { LegalDocPage } = await import('./pages/LegalDocPage')
+          return { Component: () => <LegalDocPage doc={refundPolicy} /> }
+        },
+      },
+      {
+        path: '*',
+        lazy: async () => ({ Component: (await import('./pages/NotFoundPage')).NotFoundPage }),
+      },
+    ],
+  },
   // ── 공개(비로그인 진입) — 토큰 보유 시 GuestGuard가 /home으로 ──
   {
     element: <GuestGuard />,
@@ -60,24 +112,12 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LandingPage /> },
     ],
   },
-  { path: '/join/:joinKey', element: <JoinPage /> }, // 02-K 초대 링크 착지 = 앱 유도(CHMO-820) — 로그인 무관, GuestGuard 밖
   { path: '/auth/callback', element: <SocialCallbackPage /> }, // 01-C 소셜 로그인 콜백(CHMO-359) — BE 리다이렉트 착지라 가드 밖
-
-  // ── 약관·정책 전문 — 설정·동의 화면·외부 공개 URL(스토어 심사 등) 공용이라 가드 밖 (CHMO-478) ──
-  { path: '/legal/terms', element: <LegalDocPage doc={termsOfService} /> },
-  { path: '/legal/privacy', element: <LegalDocPage doc={privacyPolicy} /> },
-  { path: '/legal/biometric', element: <LegalDocPage doc={biometricNotice} /> },
-
-  // ── 계정 삭제·데이터 삭제 안내 — Google Play 삭제 URL 요건, 스토어 등록정보에 실리는
-  //    공개 URL이라 가드 밖 (CHMO-588) ──
-  { path: '/account-deletion', element: <AccountDeletionPage /> },
-  { path: '/data-deletion', element: <DataDeletionPage /> },
 
   // ── 서비스·요금 안내와 결제 이용 안내·환불정책 — 결제대행사 심사가 로그인 없이 확인하는
   //    공개 URL이라 가드 밖 (CHMO-899). 결제 실패·취소 복귀도 서버를 부르지 않아 가드 밖이다 ──
   { path: '/pricing', element: <PricingPage /> },
   { path: '/pass/guide', element: <PassGuidePage /> },
-  { path: '/legal/refund', element: <LegalDocPage doc={refundPolicy} /> },
   { path: '/pass/fail', element: <PassFailPage /> },
 
   // ── 제작자(로그인) ──────────────────────────────────
@@ -229,7 +269,4 @@ export const router = createBrowserRouter([
         },
       ]
     : []),
-
-  // ── 404 ─────────────────────────────────────────────
-  { path: '*', element: <NotFoundPage /> },
 ])

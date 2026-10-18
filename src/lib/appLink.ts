@@ -13,7 +13,7 @@ export const APP_STORE_APP_ID = '6797158719'
  * App Store 상품 페이지. `itms-apps://`가 아니라 https인 이유는 웹뷰·브라우저 어디서 눌려도
  * 실패하지 않기 때문 — iOS는 이 주소를 App Store 앱으로 넘기고, 아니면 웹 페이지로 열린다.
  */
-export const APP_STORE_URL = `https://apps.apple.com/kr/app/id${APP_STORE_APP_ID}`
+export const APP_STORE_URL = `https://apps.apple.com/app/id${APP_STORE_APP_ID}`
 
 /** Android 패키지명 — 앱 리포 applicationId(CHMO-536). dev 번들(`.dev`)은 스토어에 없다. */
 export const ANDROID_PACKAGE = 'com.cheesemoa.app'
@@ -46,7 +46,7 @@ export function appSchemeUrl(pathWithQuery: string): string | null {
  * `package`를 직지정하므로 **`assetlinks.json` 검증 여부와 무관하게** 설치본이 열린다(검증이
  * 깨져 있던 기간에도 이 링크는 앱을 연다). 미설치면 브라우저가 스스로 `S.browser_fallback_url`
  * (Play)로 간다 — 별도 타이머 없이도 스토어 폴백이 성립하지만, intent를 모르는 브라우저를
- * 위해 호출부는 시간 폴백을 겹쳐 둔다.
+ * 위해 호출부는 수동 재시도·스토어 안내를 제공한다(CHMO-953).
  */
 export function androidIntentUrl(pathWithQuery: string): string | null {
   const trimmed = stripLeadingSlash(pathWithQuery)
