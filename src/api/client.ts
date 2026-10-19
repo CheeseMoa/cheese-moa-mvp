@@ -42,7 +42,8 @@ export class ApiRequestError extends Error {
  */
 export function toErrorMessage(err: unknown): string {
   if (err instanceof ApiRequestError) {
-    if (err.code === 'NETWORK_ERROR') return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
+    if (err.code === 'NETWORK_ERROR')
+      return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
     if (err.code !== 'UNKNOWN' && err.message) return err.message
     return '요청에 실패했어요. 잠시 후 다시 시도해 주세요.'
   }
@@ -242,6 +243,12 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   return (await sendRequest<T>(path, options, true)).result
 }
 
+/** 봉투와 함께 ETag 등 응답 헤더를 소비하는 API용. 인증 갱신·오류 처리는 동일하다. */
+export async function apiFetchWithHeaders<T>(path: string, options: ApiOptions = {}) {
+  const { result, headers } = await sendRequest<T>(path, options, true)
+  return { result, headers }
+}
+
 /**
  * 페이지네이션 응답용 fetch — result와 함께 봉투의 pageInfo를 꺼낸다(어드민 목록, CHMO-378).
  * 그 외 동작(재발급·에러 정규화·시각 보정)은 apiFetch와 동일하다.
@@ -262,7 +269,7 @@ async function sendRequest<T>(
   path: string,
   options: ApiOptions,
   allowRefresh: boolean,
-): Promise<{ result: T; pageInfo: BePageInfo | null }> {
+): Promise<{ result: T; pageInfo: BePageInfo | null; headers: Headers }> {
   const { auth = 'creator', viewerShareToken, body, headers, ...init } = options
 
   const finalHeaders = new Headers(headers)
@@ -305,7 +312,7 @@ async function sendRequest<T>(
   }
 
   if (res.status === 204) {
-    return { result: undefined as T, pageInfo: null }
+    return { result: undefined as T, pageInfo: null, headers: res.headers }
   }
 
   const isJson = res.headers.get('Content-Type')?.includes('application/json') ?? false
@@ -321,6 +328,7 @@ async function sendRequest<T>(
     return {
       result: normalizeTimestamps(payload.result) as T,
       pageInfo: toPageInfo(payload.pageInfo),
+      headers: res.headers,
     }
   }
 
@@ -329,5 +337,5 @@ async function sendRequest<T>(
     throw new ApiRequestError(res.status, 'UNKNOWN', res.statusText, requestId)
   }
 
-  return { result: payload as T, pageInfo: null }
+  return { result: payload as T, pageInfo: null, headers: res.headers }
 }

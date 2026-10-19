@@ -6,6 +6,16 @@
 
 ---
 
+## CHMO-957 — 운영 설정 (2026-10-19 · BE CHMO-958 PR #329)
+
+- 관리자 설정 조회·부분 변경·revision 충돌 감지·변경 사유·감사 이력·BEFORE/AFTER 복원 계약을 연결했다. 앱용 `/app/config`의 기존 최상위 JSON은 유지한다.
+- 기존 출석 설정 GET/PUT과 날짜별 통계를 재사용한다. PUT에 ETag 기반 `If-Match`와 UTF-8 percent 인코딩 `X-Change-Reason`을 전달한다.
+- 차감 시작일과 고정 가입자 기준일을 구분하고, 기간은 ISO Duration으로 교환한다. APP 호환 후속 전 일일 지급량·적립 상한 편집/해당 값 복원은 제한한다.
+- CHMO-934의 추가 인증·권한 보호가 준비되기 전 실제 서버 저장·복원은 FE에서도 잠근다. 로컬 MSW 검증과 실 BE 연동 검증을 구분하며 후자는 대기다.
+- 상세 계약은 [api-spec 운영 설정](api-spec.md#운영-설정--관리자-계약-chmo-957--be-chmo-958), 화면·제한은 [admin-spec §3-10](admin-spec.md#3-10-운영-설정-chmo-957--be-chmo-958).
+
+---
+
 ## CHMO-117 — 학부모 뷰어 (2026-07-08 · [PR #19](https://github.com/CheeseMoa/cheese-moa-mvp/pull/19))
 
 ### 1. `ViewerEvent` / `ViewerAlbum`에 `coverThumbnailUrl` 추가 (additive)
