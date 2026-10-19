@@ -277,6 +277,3 @@ export function attendancePayloadError(draft: Record<string, string>): string | 
   }
   return null
 }
-/** CHMO-934 미연결: 실제 서버 쓰기는 개방하지 않는다. 로컬 MSW만 저장 UX 검증 허용. */
-export const SETTINGS_WRITE_AVAILABLE =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_MSW === 'true'
