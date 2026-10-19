@@ -64,5 +64,19 @@
   "dataDeletion": "Data deletion guide",
   "inviteEyebrow": "You’re invited to join",
   "installTitle": "New to CheeseMoa?",
-  "installSteps": "Install the app and sign in, then open this invitation link again."
+  "installSteps": "Install the app and sign in, then open this invitation link again.",
+  "surveyTitle": "CheeseMoa survey",
+  "surveyChooseGroup": "Which group is this about?",
+  "surveyIntro": "We’ll fill in your nickname and the group you choose.",
+  "surveyLoading": "Loading your groups…",
+  "surveyNickname": "Your survey nickname",
+  "surveyContinue": "Continue to survey",
+  "surveyOpening": "Opening survey…",
+  "surveyGoogleHint": "Complete the remaining questions in Google Forms.",
+  "surveyNoGroups": "You have no active groups. Join a group in the app, then open this survey again.",
+  "surveyExpired": "This link has expired or is invalid. Open the event notice in the app to start again.",
+  "surveyUnavailable": "This survey is currently unavailable. Check the event dates in the app.",
+  "surveyFailed": "Couldn’t connect. Please try again.",
+  "surveyMembershipChanged": "Your membership has changed. Reload the group list.",
+  "surveyRetry": "Reload"
 }
