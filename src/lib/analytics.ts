@@ -58,6 +58,7 @@ const SERVER_ZONE = (import.meta.env.VITE_AMPLITUDE_SERVER_ZONE as string | unde
  * 새지는 않지만 그 화면이 분석에서 사라진다). 누락은 `analytics.test.ts`가 잡는다.
  */
 const SCREENS: ReadonlyArray<readonly [pattern: string, screen: string]> = [
+  ['/survey', 'survey'], // 이 경로 직접 진입은 main.tsx에서 추적 자체를 시작하지 않는다.
   // 인증·진입
   ['/', '01-landing'],
   ['/login', '01-landing'],
