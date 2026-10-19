@@ -1,3 +1,4 @@
+import stagingAttendance from '../../test/fixtures/attendance-settings-staging.json'
 /** 요청 직렬화·인증 인프라 검사. MSW 응답을 계약 증거로 사용하지 않는다. 실 BE 연동은 배포 후 별도. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -42,7 +43,10 @@ describe('운영 설정 요청·공용 응답 헤더', () => {
   })
   it('ETag가 누락되면 쓰기에 사용할 설정을 반환하지 않는다', async () => {
     stubFetch(() => jsonResponse(envelope({})))
-    await expect(getAttendanceSettings()).rejects.toThrow('revision')
+    await expect(getAttendanceSettings()).rejects.toMatchObject({
+      status: 200,
+      code: 'INVALID_SETTINGS_RESPONSE',
+    })
   })
   it('401 인증 갱신 뒤 최종 응답의 ETag를 반환한다', async () => {
     let count = 0
@@ -118,4 +122,31 @@ describe('저장 성공과 후속 재조회 실패 구분', () => {
     ).rejects.toBe(conflict)
     expect(read).not.toHaveBeenCalled()
   })
+})
+
+// 2026-10-19 Chrome Network에서 채집. 본문 200, ETag W/"0",
+// Access-Control-Expose-Headers: X-Request-Id, ETag. 인증정보는 보관하지 않는다.
+describe('스테이징 실응답 ETag 회귀', () => {
+  it('W/"0" 응답을 읽고 BE가 요구하는 If-Match "0"을 전송한다', async () => {
+    const calls = stubFetch(() => jsonResponse(stagingAttendance, 200, { ETag: 'W/"0"' }))
+    const current = await getAttendanceSettings()
+    expect(current.settings).toEqual(stagingAttendance.result)
+    expect(current.etag).toBe('"0"')
+    await updateAttendanceSettings(current.settings, current.etag, '응답 헤더 회귀 테스트')
+    expect(calls[1].headers.get('If-Match')).toBe('"0"')
+  })
+  it.each(['W/"12"', '"12"'])('숫자 revision %s만 정규화한다', async (etag) => {
+    stubFetch(() => jsonResponse(stagingAttendance, 200, { ETag: etag }))
+    expect((await getAttendanceSettings()).etag).toBe('"12"')
+  })
+  it.each(['W/"abc"', '0', '"0", "1"', 'w/"0"'])(
+    '유효하지 않은 태그 %s를 네트워크 오류로 분류하지 않는다',
+    async (etag) => {
+      stubFetch(() => jsonResponse(stagingAttendance, 200, { ETag: etag }))
+      await expect(getAttendanceSettings()).rejects.toMatchObject({
+        status: 200,
+        code: 'INVALID_SETTINGS_RESPONSE',
+      })
+    },
+  )
 })

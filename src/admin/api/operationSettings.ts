@@ -1,5 +1,5 @@
 /** CHMO-958 PR #329 DTO·컨트롤러 계약. 보안 추가 인증은 CHMO-934 확정 후 연결한다. */
-import { apiFetch, apiFetchWithHeaders } from '../../api/client'
+import { ApiRequestError, apiFetch, apiFetchWithHeaders } from '../../api/client'
 
 export type Platform = 'ios' | 'android'
 export type Locale = 'ko' | 'en' | 'ja'
@@ -92,9 +92,16 @@ export async function getAttendanceSettings(signal?: AbortSignal) {
     { signal },
   )
   const etag = headers.get('ETag')
-  if (!etag || !/^"[0-9]+"$/.test(etag))
-    throw new Error('출석 설정의 revision을 확인할 수 없어요. 다시 조회해 주세요.')
-  return { settings: result, etag }
+  // 스테이징 실측: W/"0". 이 API의 태그는 콘텐츠 해시가 아닌 숫자 revision이다.
+  // BE SettingsWriteHeaders는 If-Match에 강한 형태의 숫자 태그를 요구한다.
+  const revision = etag?.match(/^(?:W\/)?("[0-9]+")$/)?.[1]
+  if (!revision)
+    throw new ApiRequestError(
+      200,
+      'INVALID_SETTINGS_RESPONSE',
+      '출석 설정은 조회됐지만 변경 버전(ETag)을 읽지 못했어요. 다시 조회해 주세요.',
+    )
+  return { settings: result, etag: revision }
 }
 export const updateAttendanceSettings = (
   settings: AttendanceSettings,
