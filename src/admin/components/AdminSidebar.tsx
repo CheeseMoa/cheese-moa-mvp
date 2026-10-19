@@ -55,6 +55,11 @@ export function AdminSidebar({
         <SidebarLink to="/admin/push" label="혜택 푸시" />
       </nav>
 
+      <div className="mt-5 px-5 pb-1 text-[11px] font-medium text-admin-muted">서비스 정책</div>
+      <nav className="flex flex-col gap-1" aria-label="서비스 정책 메뉴">
+        <SidebarLink to="/admin/operation-settings" label="운영 설정" />
+      </nav>
+
       <div className="mt-auto border-t border-admin-border px-5 py-4">
         <div className="flex items-center gap-2.5">
           <span className="h-8 w-8 shrink-0 rounded-full bg-admin-bg" aria-hidden="true" />
