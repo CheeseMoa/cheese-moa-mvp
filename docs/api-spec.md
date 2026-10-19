@@ -504,4 +504,4 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·
 
 생략값은 보존한다. URL null은 삭제, enforcementStartsAt null은 차감 비활성화다. migrationCutoffAt은 수정·복원으로 바꾸지 않는다. 숫자 ID·revision, ISO 시각을 사용한다. 오류는 `SETTINGS400`(입력), `SETTINGS404`(이력 없음), `SETTINGS409`(충돌), `SETTINGS503`(쓰기 잠금), 기존 `VALID400`/`COMMON400`/`CAMPAIGN400` 및 인증·인가 오류다. FE는 충돌 자동 재시도·쓰기 잠금 우회를 하지 않는다.
 
-최근 추가 인증·조회/변경 권한 구분은 CHMO-934 미연결이다. 실제 서버 쓰기는 보호 계약 연결 전 FE에서도 잠근다. 무인증 `GET /app/config`는 봉투 없이 기존 최상위 minVersion/storeUrl을 유지한다.
+최근 추가 인증·조회/변경 권한 구분은 CHMO-934 미연결이다. 2026-10-19 사용자 지시에 따라 FE의 추가 인증 대기 잠금은 제거하며 기존 관리자 세션으로 저장·복원한다. 서버 검증·SETTINGS503 처리와 revision 충돌 검출은 유지한다. 무인증 `GET /app/config`는 봉투 없이 기존 최상위 minVersion/storeUrl을 유지한다.

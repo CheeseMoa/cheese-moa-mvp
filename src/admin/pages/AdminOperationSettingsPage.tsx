@@ -31,7 +31,6 @@ import {
   changedFields,
   fields,
   sections,
-  SETTINGS_WRITE_AVAILABLE,
   toDraft,
   fieldError,
   type SettingsSection,
@@ -161,7 +160,6 @@ export function AdminOperationSettingsPage() {
     })()
   async function save() {
     if (
-      !SETTINGS_WRITE_AVAILABLE ||
       restoreIncompatible ||
       busyRef.current ||
       !baseline ||
@@ -283,7 +281,11 @@ export function AdminOperationSettingsPage() {
         <AdminTopbar
           left="운영 설정"
           right={
-            SETTINGS_WRITE_AVAILABLE ? '로컬 목 · 실제 서버에 저장되지 않아요' : '저장·복원 잠금'
+            import.meta.env.VITE_ENABLE_MSW === 'true'
+              ? '로컬 목 · 실제 서버에 저장되지 않아요'
+              : /staging/.test(import.meta.env.VITE_API_ORIGIN ?? '')
+                ? '스테이징 서버'
+                : '운영 서버'
           }
         />
         <div className="p-6">
@@ -306,7 +308,11 @@ export function AdminOperationSettingsPage() {
       <AdminTopbar
         left="운영 설정"
         right={
-          SETTINGS_WRITE_AVAILABLE ? '로컬 목 · 실제 서버에 저장되지 않아요' : '저장·복원 잠금'
+          import.meta.env.VITE_ENABLE_MSW === 'true'
+            ? '로컬 목 · 실제 서버에 저장되지 않아요'
+            : /staging/.test(import.meta.env.VITE_API_ORIGIN ?? '')
+              ? '스테이징 서버'
+              : '운영 서버'
         }
       />
       <div className="mx-auto max-w-6xl space-y-5 px-7 py-6">
@@ -326,14 +332,6 @@ export function AdminOperationSettingsPage() {
             최신 설정 조회
           </button>
         </div>
-        {!SETTINGS_WRITE_AVAILABLE && (
-          <AdminNotice
-            title="조회·변경 검토만 가능해요"
-            lines={[
-              '추가 인증과 변경 권한 보호가 준비될 때까지 저장·복원을 잠가 두었어요. 설정을 편집하고 변경 전후 값은 확인할 수 있어요.',
-            ]}
-          />
-        )}
         {message && (
           <div
             role="status"
@@ -647,7 +645,6 @@ export function AdminOperationSettingsPage() {
               onConfirm={() => void save()}
               busy={busy}
               confirmDisabled={
-                !SETTINGS_WRITE_AVAILABLE ||
                 restoreIncompatible ||
                 !reason.trim() ||
                 reason.trim().length > 500 ||
@@ -715,11 +712,6 @@ export function AdminOperationSettingsPage() {
             />
             변경 전후 값·스토어 공개 상태·적용 범위와 영향을 확인했어요.
           </label>
-          {!SETTINGS_WRITE_AVAILABLE && (
-            <p role="status" className="mt-3 text-sm text-admin-muted">
-              추가 인증·변경 권한 보호 준비 전에는 저장·복원할 수 없어요.
-            </p>
-          )}
           {pending.kind === 'restore' && (
             <p className="mt-2 text-sm text-admin-muted">
               앱 고정 문구·게이지 후속 전에는 일일 지급량·출석 상한이 달라지는 복원도 제한해요.
