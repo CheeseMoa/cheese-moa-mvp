@@ -64,5 +64,19 @@
   "dataDeletion": "データ削除のご案内",
   "inviteEyebrow": "グループに招待されました",
   "installTitle": "チーズモアは初めてですか？",
-  "installSteps": "アプリをインストールしてログインしたら、この招待リンクをもう一度開いてください。"
+  "installSteps": "アプリをインストールしてログインしたら、この招待リンクをもう一度開いてください。",
+  "surveyTitle": "チーズモアのアンケート",
+  "surveyChooseGroup": "どのグループについてですか？",
+  "surveyIntro": "ニックネームと選んだグループ名を自動入力します。",
+  "surveyLoading": "グループを読み込んでいます。",
+  "surveyNickname": "回答に使用するニックネーム",
+  "surveyContinue": "アンケートへ進む",
+  "surveyOpening": "アンケートを開いています…",
+  "surveyGoogleHint": "Google Formsで残りの質問にご回答ください。",
+  "surveyNoGroups": "参加中のグループがありません。アプリでグループに参加してから、もう一度お開きください。",
+  "surveyExpired": "リンクの有効期限が切れているか、無効です。アプリのイベント案内からやり直してください。",
+  "surveyUnavailable": "現在、このアンケートには参加できません。アプリで開催期間をご確認ください。",
+  "surveyFailed": "接続できませんでした。もう一度お試しください。",
+  "surveyMembershipChanged": "グループの参加状況が変更されました。一覧を再読み込みしてください。",
+  "surveyRetry": "再読み込み"
 }

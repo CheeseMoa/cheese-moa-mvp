@@ -64,5 +64,19 @@
   "dataDeletion": "데이터 삭제 안내",
   "inviteEyebrow": "함께할 모임에 초대받았어요",
   "installTitle": "치즈모아가 처음이신가요?",
-  "installSteps": "앱을 설치하고 로그인한 뒤, 이 초대 링크를 다시 열어 주세요."
+  "installSteps": "앱을 설치하고 로그인한 뒤, 이 초대 링크를 다시 열어 주세요.",
+  "surveyTitle": "치즈모아 설문",
+  "surveyChooseGroup": "어느 모임의 이야기인가요?",
+  "surveyIntro": "닉네임과 선택한 모임 이름을 미리 채워 드려요.",
+  "surveyLoading": "모임을 불러오고 있어요.",
+  "surveyNickname": "설문에 입력할 닉네임",
+  "surveyContinue": "설문으로 이동",
+  "surveyOpening": "설문 여는 중…",
+  "surveyGoogleHint": "Google Forms에서 나머지 답변을 작성해 주세요.",
+  "surveyNoGroups": "참여 중인 모임이 없어요. 앱에서 모임에 참여한 뒤 설문을 열어 주세요.",
+  "surveyExpired": "연결이 만료되었거나 올바르지 않아요. 앱의 이벤트 안내에서 다시 시작해 주세요.",
+  "surveyUnavailable": "지금은 참여할 수 없는 설문이에요. 앱에서 이벤트 기간을 확인해 주세요.",
+  "surveyFailed": "잠시 연결하지 못했어요. 다시 시도해 주세요.",
+  "surveyMembershipChanged": "이 모임의 참여 상태가 바뀌었어요. 모임 목록을 다시 불러와 주세요.",
+  "surveyRetry": "다시 불러오기"
 }

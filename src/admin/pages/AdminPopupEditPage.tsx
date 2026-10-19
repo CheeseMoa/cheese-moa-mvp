@@ -4,6 +4,7 @@ import { ApiRequestError, toErrorMessage } from '../../api/client'
 import { useApi } from '../../hooks/useApi'
 import { useAlive } from '../../hooks/useAlive'
 import { useMutation } from '../../hooks/useMutation'
+import { isPopupSurveyForm } from '../../lib/popupSurvey'
 import {
   createAdminPopup,
   getAdminPopup,
@@ -606,7 +607,9 @@ function PopupForm({
                 label="링크"
                 htmlFor="popup-link"
                 error={errorOf('linkUrl')}
-                hint="https 주소만 쓸 수 있어요(구글폼 등)."
+                hint={isPopupSurveyForm(draft.linkUrl.trim())
+                  ? '이 설문은 앱에서 열면 모임 선택 후 본인 닉네임과 모임 이름이 자동 입력돼요. 관리자 미리보기에는 적용되지 않아요.'
+                  : 'https 주소만 쓸 수 있어요(구글폼 등).'}
               >
                 <input
                   id="popup-link"
