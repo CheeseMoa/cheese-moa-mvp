@@ -470,3 +470,8 @@
 | CHMO-931 | [FE] 사용자 장수·기관 구독 화면 + 기관 개통 시 기간 동봉 + 모임 목록 `유형` 열 — **목 검증 완료**(`/admin/users`·`/admin/users/:id`·`/admin/organizations`), 화면은 §3-8·3-9·§3-4. 실 BE 실측은 관리자 계정으로 운영에서(장수 카드는 `CREDIT_ENFORCEMENT_STARTS_AT` 설정 전엔 안내 상자) |
 | CHMO-940 | [BE] 선생님(기관) 가입 시 체험 14일 자동 부여 + 기존 기관 계정 백필 — **완료**(PR #316 main, 2026-10-16 운영 반영). §3-4 개통 창 문구·§3-9 안내가 이 사실을 따른다 |
 | CHMO-932 | [BE/FE] 어드민 조회 확장 — 최근 업로드 정렬·활동 지표·모임 과금 정보+과금 범위 변경·패스 지급·기관 구독 이력·사용자 요약·멤버 계정 유형·쓰기 멱등키 — BE **완료**(PR #317 develop 2026-10-16 · 운영 미배포), FE **목 검증 완료**(대시보드·모임 목록·모임 상세·사용자 상세·기관 구독·개통 창). 실 BE 실측은 BE 운영 배포 + 관리자 계정으로 |
+
+
+### CHMO-957 출석 설정 실서버 회귀 수정 (2026-10-19)
+
+개발 웹에서 staging-api의 출석 설정 GET이 HTTP 200·`ETag: W/"0"`·`Access-Control-Expose-Headers: X-Request-Id, ETag`로 응답하는 것을 Chrome Network에서 확인했다. FE가 강한 태그만 허용하여 정상 응답을 거부했고, 일반 Error가 useApi에서 NETWORK_ERROR로 변환됐다. 이 API의 숫자 revision 태그는 강한/약한 형태 모두 읽되, BE SettingsWriteHeaders 계약에 맞춰 PUT에는 `If-Match: "revision"`을 전송한다. 헤더 누락·잘못된 숫자 태그는 FE 로컬 오류 `INVALID_SETTINGS_RESPONSE`로 구분하고, 실패 뒤 계속 조회 중이라고 표시하지 않는다. 본문은 인증정보 없는 실응답 픽스처로 보관한다. 이 수정은 쓰기 잠금이나 보안 정책을 변경하지 않는다.

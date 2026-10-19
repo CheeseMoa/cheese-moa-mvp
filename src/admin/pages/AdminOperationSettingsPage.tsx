@@ -472,10 +472,11 @@ export function AdminOperationSettingsPage() {
                   {attendance.error && (
                     <AdminErrorMessage error={attendance.error} onRetry={attendance.refetch} />
                   )}
-                  {attendanceStale && (
+                  {!attendance.error && attendanceStale && (
                     <p role="status" className="text-sm text-admin-muted">
-                      출석 설정 revision을 확인하고 있어요. 값이 다르면 최신 설정을 다시 조회해
-                      주세요.
+                      {attendance.loading
+                        ? '출석 설정의 변경 버전을 확인하고 있어요.'
+                        : '다른 운영자가 설정을 변경했어요. 상단에서 최신 설정을 다시 조회해 주세요.'}
                     </p>
                   )}
                   <div className="grid gap-3 lg:grid-cols-3">
