@@ -24,7 +24,11 @@ import { AdminErrorMessage, AdminMessage } from './components/AdminMessage'
  */
 export function AdminLayout() {
   const adminHost = import.meta.env.VITE_ADMIN_HOST ?? 'admin.cheese-moa.com'
-  if (import.meta.env.PROD && window.location.hostname !== adminHost) {
+  if (
+    import.meta.env.PROD &&
+    window.location.hostname.endsWith('.cheese-moa.com') &&
+    window.location.hostname !== adminHost
+  ) {
     window.location.replace(
       `https://${adminHost}${window.location.pathname}${window.location.search}`,
     )
