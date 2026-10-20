@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { clearAuthTokens, getAccessToken } from '../lib/auth'
 import { useApi } from '../hooks/useApi'
 import { adminLogout, getAdminProfile, listAdminReports } from './api/admin'
@@ -23,6 +23,10 @@ import { AdminErrorMessage, AdminMessage } from './components/AdminMessage'
  * 폭이 셸 없이도 성립하도록 min-w를 걸어 좁은 창에선 가로 스크롤로 둔다(내부 운영자 전용).
  */
 export function AdminLayout() {
+  return <AdminLayoutContent />
+}
+
+function AdminLayoutContent() {
   // 로그인·계정 전환은 라우팅이 아니라 이 틱으로 게이트를 다시 돌린다(useApi 키에 섞인다)
   const [authTick, setAuthTick] = useState(0)
   const rerunGate = () => setAuthTick((t) => t + 1)
@@ -73,7 +77,10 @@ export function AdminLayout() {
       // apiFetch가 토큰을 지웠다 — 재로그인 표면도 여기(어드민)다
       return (
         <AdminGate>
-          <AdminLoginCard onSuccess={rerunGate} notice="세션이 만료됐어요 · 다시 로그인해 주세요." />
+          <AdminLoginCard
+            onSuccess={rerunGate}
+            notice="세션이 만료됐어요 · 다시 로그인해 주세요."
+          />
         </AdminGate>
       )
     }
@@ -95,12 +102,12 @@ export function AdminLayout() {
             >
               다른 계정으로 로그인
             </button>
-            <Link
-              to="/home"
+            <a
+              href="https://app.cheese-moa.com/home"
               className="text-[13px] text-admin-muted hover:text-admin-text hover:underline"
             >
               홈으로 돌아가기
-            </Link>
+            </a>
           </div>
         </AdminGate>
       )

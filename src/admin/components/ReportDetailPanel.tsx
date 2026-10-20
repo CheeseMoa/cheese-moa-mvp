@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
@@ -477,7 +478,7 @@ function ReportedPhoto({
       </p>
       {report.groupId !== null && report.groupName !== null ? (
         <Link
-          to={`/admin/groups/${report.groupId}`}
+          to={adminPath(`/groups/${report.groupId}`)}
           className="inline-block text-[13px] text-accent hover:underline"
         >
           모임 상세에서 보기 →
@@ -515,7 +516,7 @@ function GroupName({ groupId, groupName }: { groupId: number; groupName: string 
 function GroupRef({ groupId, groupName }: { groupId: number; groupName: string | null }) {
   if (groupName === null) return <GroupName groupId={groupId} groupName={null} />
   return (
-    <Link to={`/admin/groups/${groupId}`} className="text-accent hover:underline">
+    <Link to={adminPath(`/groups/${groupId}`)} className="text-accent hover:underline">
       {groupLabel(groupId)} · {groupName} →
     </Link>
   )
