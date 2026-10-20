@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi'
@@ -124,8 +125,9 @@ export function AdminGroupsPage() {
       <div className="flex-1 space-y-4 overflow-y-auto px-7 py-6">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-admin-muted">
-            마지막 업로드는 사진이 <b className="font-semibold text-admin-text">앨범에 반영된 시각</b>이에요 ·
-            분류 중인 업로드는 끝난 뒤에 잡혀요.
+            마지막 업로드는 사진이{' '}
+            <b className="font-semibold text-admin-text">앨범에 반영된 시각</b>이에요 · 분류 중인
+            업로드는 끝난 뒤에 잡혀요.
           </p>
           <div className="flex items-center gap-2">
             <select
@@ -171,8 +173,10 @@ export function AdminGroupsPage() {
               columns={columns}
               rows={list.data.items}
               rowKey={(g) => g.groupId}
-              onRowClick={(g) => navigate(`/admin/groups/${g.groupId}`)}
-              emptyText={groupType ? '이 유형의 모임이 아직 없어요.' : '아직 만들어진 모임이 없어요.'}
+              onRowClick={(g) => navigate(adminPath(`/groups/${g.groupId}`))}
+              emptyText={
+                groupType ? '이 유형의 모임이 아직 없어요.' : '아직 만들어진 모임이 없어요.'
+              }
               dimmed={list.loading}
             />
             {list.data.pageInfo && list.data.pageInfo.totalPages > 0 ? (

@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useCallback, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
@@ -43,9 +44,8 @@ import { useAdminOutlet } from '../outletContext'
 export function AdminGroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>()
   const { adminUserId } = useAdminOutlet()
-  const detail = useApi(
-    groupId ? `admin-group-${groupId}` : null,
-    (signal) => getAdminGroupDetail(groupId ?? '', signal),
+  const detail = useApi(groupId ? `admin-group-${groupId}` : null, (signal) =>
+    getAdminGroupDetail(groupId ?? '', signal),
   )
 
   const [toast, setToast] = useState<{ message: string; nonce: number } | null>(null)
@@ -125,7 +125,11 @@ export function AdminGroupDetailPage() {
   ]
 
   const eventColumns: AdminColumn<AdminGroupEvent>[] = [
-    { key: 'name', header: '이벤트명', render: (e) => <span className="font-medium">{e.name}</span> },
+    {
+      key: 'name',
+      header: '이벤트명',
+      render: (e) => <span className="font-medium">{e.name}</span>,
+    },
     {
       key: 'date',
       header: '날짜',
@@ -187,7 +191,9 @@ export function AdminGroupDetailPage() {
       header: '적용 구간',
       widthClassName: 'w-64',
       render: (g) => (
-        <span className={`whitespace-nowrap tabular-nums ${g.revokedAt ? 'line-through opacity-50' : ''}`}>
+        <span
+          className={`whitespace-nowrap tabular-nums ${g.revokedAt ? 'line-through opacity-50' : ''}`}
+        >
           {formatDateTime(g.accessFrom)} ~ {formatDateTime(g.accessUntil)}
         </span>
       ),
@@ -235,7 +241,10 @@ export function AdminGroupDetailPage() {
       <AdminTopbar
         left={
           <>
-            <Link to="/admin/groups" className="font-normal text-admin-muted hover:text-admin-text">
+            <Link
+              to={adminPath('/groups')}
+              className="font-normal text-admin-muted hover:text-admin-text"
+            >
               모임
             </Link>
             <span className="font-normal text-admin-muted">/</span>
@@ -251,7 +260,7 @@ export function AdminGroupDetailPage() {
             <div className="flex flex-col items-center gap-3 rounded-xl border border-admin-border bg-admin-surface px-5 py-10">
               <p className="text-[13px] text-admin-muted">모임을 찾을 수 없어요.</p>
               <Link
-                to="/admin/groups"
+                to={adminPath('/groups')}
                 className="h-8 rounded-lg border border-admin-border px-3 text-[13px] leading-8 hover:bg-admin-bg"
               >
                 모임 목록으로
@@ -292,7 +301,7 @@ export function AdminGroupDetailPage() {
                     <>
                       <Dot /> 소유자{' '}
                       <Link
-                        to={`/admin/users/${detail.data.billingOwnerUserId}`}
+                        to={adminPath(`/users/${detail.data.billingOwnerUserId}`)}
                         className="font-semibold text-accent hover:underline"
                       >
                         {detail.data.billingOwnerNickname ?? '(지워진 계정)'} #
@@ -307,18 +316,22 @@ export function AdminGroupDetailPage() {
                     패스{' '}
                     {detail.data.pass.active && detail.data.pass.accessUntil ? (
                       <>
-                        <Strong>이용 중</Strong> · {formatDateTime(detail.data.pass.accessUntil)}까지
+                        <Strong>이용 중</Strong> · {formatDateTime(detail.data.pass.accessUntil)}
+                        까지
                       </>
                     ) : (
                       <Strong>없음</Strong>
                     )}
-                    <span className="ml-1 text-xs">(패스가 없으면 올리는 사람의 장수가 줄어요)</span>
+                    <span className="ml-1 text-xs">
+                      (패스가 없으면 올리는 사람의 장수가 줄어요)
+                    </span>
                   </span>
                 ) : null}
 
                 {detail.data.institution ? (
                   <span className="flex items-center gap-1.5 text-admin-muted">
-                    기관 이용 <SubscriptionAccessBadge status={detail.data.institution.accessStatus} />
+                    기관 이용{' '}
+                    <SubscriptionAccessBadge status={detail.data.institution.accessStatus} />
                     {detail.data.institution.accessUntil ? (
                       <span>
                         {accessUntilToKstDate(detail.data.institution.accessUntil)}까지 · 유예 종료{' '}

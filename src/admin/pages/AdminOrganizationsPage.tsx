@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listAdminOrganizationSubscriptions } from '../api/admin'
@@ -30,8 +31,9 @@ const PAGE_SIZE = 20
  */
 export function AdminOrganizationsPage() {
   const navigate = useNavigate()
-  const list = useCursorList<AdminOrganizationSubscriptionRow>('admin-org-subscriptions', (cursor, signal) =>
-    listAdminOrganizationSubscriptions({ cursor, size: PAGE_SIZE }, signal),
+  const list = useCursorList<AdminOrganizationSubscriptionRow>(
+    'admin-org-subscriptions',
+    (cursor, signal) => listAdminOrganizationSubscriptions({ cursor, size: PAGE_SIZE }, signal),
   )
 
   const [registering, setRegistering] = useState<AdminOrganizationSubscriptionRow | null>(null)
@@ -98,11 +100,11 @@ export function AdminOrganizationsPage() {
       <AdminTopbar left="기관 구독" right="기간은 더하기만 · 가장 늦은 종료일까지 이용" />
       <div className="flex-1 space-y-4 overflow-y-auto px-7 py-6">
         <p className="text-xs text-admin-muted">
-          기관 계정은 가입 때 <b className="font-semibold text-admin-text">체험 14일</b>이 자동으로 들어가요 ·{' '}
-          <b className="font-semibold text-admin-text">유예 기간</b>은 종료 뒤 7일, 지나면{' '}
-          <b className="font-semibold text-admin-text">차단</b>되어 새 사진을 올릴 수 없어요. 행을 누르면 사용자
-          상세에서 기간 이력을 보고 무효화할 수 있어요 · 여기 없는 기관은{' '}
-          <Link to="/admin/users" className="text-accent hover:underline">
+          기관 계정은 가입 때 <b className="font-semibold text-admin-text">체험 14일</b>이 자동으로
+          들어가요 · <b className="font-semibold text-admin-text">유예 기간</b>은 종료 뒤 7일,
+          지나면 <b className="font-semibold text-admin-text">차단</b>되어 새 사진을 올릴 수 없어요.
+          행을 누르면 사용자 상세에서 기간 이력을 보고 무효화할 수 있어요 · 여기 없는 기관은{' '}
+          <Link to={adminPath('/users')} className="text-accent hover:underline">
             사용자
           </Link>
           에서 찾아 등록해요.
@@ -118,7 +120,7 @@ export function AdminOrganizationsPage() {
               columns={columns}
               rows={list.items}
               rowKey={(row) => row.subscriptionId}
-              onRowClick={(row) => navigate(`/admin/users/${row.userId}`)}
+              onRowClick={(row) => navigate(adminPath(`/users/${row.userId}`))}
               emptyText="이용 기간을 등록한 기관이 아직 없어요."
               dimmed={list.loading}
             />
@@ -142,7 +144,9 @@ export function AdminOrganizationsPage() {
             // 접근 상태가 바뀌었을 수 있다(차단 → 이용 중) — 목록을 다시 읽는다
             list.refetch()
             const until = accessUntilToKstDate(result.period.accessUntil)
-            showToast(`${result.nickname ?? `#${result.organizationUserId}`}의 이용 기간을 등록했어요 · ${until}까지`)
+            showToast(
+              `${result.nickname ?? `#${result.organizationUserId}`}의 이용 기간을 등록했어요 · ${until}까지`,
+            )
           }}
         />
       ) : null}

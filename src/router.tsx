@@ -1,4 +1,5 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, type RouteObject } from 'react-router-dom'
+import { createAdminRoutes, routesForHost } from './admin/routes'
 import { CreatorGuard, GuestGuard, ViewerGuard } from './guards/RouteGuards'
 
 // 제작자 화면
@@ -42,7 +43,7 @@ import { PassFailPage, PassSuccessPage } from './pages/pass/PassResultPages'
  * 전체 라우트 정의 (docs/screen-spec.md 화면 매핑).
  * 제작자 경로는 CreatorGuard, 뷰어 경로는 ViewerGuard로 감싼다.
  */
-export const router = createBrowserRouter([
+export const applicationRoutes: RouteObject[] = [
   {
     lazy: async () => ({
       Component: (await import('./i18n/PublicLocaleLayout')).PublicLocaleLayout,
@@ -173,96 +174,7 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── 관리자(내부 운영자) — CHMO-379 ──────────────────
-  // 코드는 src/admin/ 한 폴더에만 있고(격리 규칙 — admin-spec §2-2) 여기서는 lazy로만 잇는다:
-  // 어드민 번들은 /admin 진입자만 받는다(/dev/components 선례). 가드(GET /admin/me 판정)는
-  // AdminLayout이 소유한다 — 비로그인·비관리자 차단까지 어드민 청크 안의 일이다.
-  {
-    path: '/admin',
-    lazy: async () => ({ Component: (await import('./admin/AdminLayout')).AdminLayout }),
-    children: [
-      {
-        index: true,
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminDashboardPage')).AdminDashboardPage,
-        }),
-      },
-      {
-        path: 'reports',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminReportsPage')).AdminReportsPage,
-        }),
-      }, // 신고·문의 — 목록·상세 패널·답변(CHMO-862 · BE CHMO-861)
-      {
-        path: 'inquiries',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminInquiriesPage')).AdminInquiriesPage,
-        }),
-      }, // 기관 도입 문의 — 어드민의 첫 쓰기 화면(CHMO-811)
-      {
-        path: 'organizations',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminOrganizationsPage')).AdminOrganizationsPage,
-        }),
-      }, // 기관 구독 — 접근 상태·이용 기간 등록(CHMO-931 · BE CHMO-912)
-      {
-        path: 'users',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminUsersPage')).AdminUsersPage,
-        }),
-      }, // 사용자 검색(CHMO-931)
-      {
-        path: 'users/:userId',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminUserDetailPage')).AdminUserDetailPage,
-        }),
-      }, // 사용자 상세 — 무료 사진 장수·장부·기관 이용 기간(CHMO-931)
-      {
-        path: 'popups',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminPopupsPage')).AdminPopupsPage,
-        }),
-      }, // 이벤트 팝업 목록(CHMO-928 · BE CHMO-926)
-      {
-        // 작성(`new` — 복제는 `?from=:id`)과 수정(`:popupId`)이 같은 화면이다
-        path: 'popups/new',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminPopupEditPage')).AdminPopupEditPage,
-        }),
-      },
-      {
-        path: 'popups/:popupId',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminPopupEditPage')).AdminPopupEditPage,
-        }),
-      },
-      {
-        path: 'push',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminPushPage')).AdminPushPage,
-        }),
-      }, // 혜택 푸시 발송 — Firebase 콘솔 수동 발송 대체(CHMO-928)
-      {
-        path: 'operation-settings',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminOperationSettingsPage'))
-            .AdminOperationSettingsPage,
-        }),
-      },
-      {
-        path: 'groups',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminGroupsPage')).AdminGroupsPage,
-        }),
-      },
-      {
-        path: 'groups/:groupId',
-        lazy: async () => ({
-          Component: (await import('./admin/pages/AdminGroupDetailPage')).AdminGroupDetailPage,
-        }),
-      },
-    ],
-  },
+  ...createAdminRoutes('/admin'),
 
   // ── 개발용 (DEV 전용, 프로덕션 번들 제외) ──
   ...(import.meta.env.DEV
@@ -282,4 +194,8 @@ export const router = createBrowserRouter([
         },
       ]
     : []),
-])
+]
+
+export const router = createBrowserRouter(
+  routesForHost(window.location.hostname, applicationRoutes),
+)

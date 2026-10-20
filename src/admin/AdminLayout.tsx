@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { clearAuthTokens, getAccessToken } from '../lib/auth'
 import { useApi } from '../hooks/useApi'
 import { adminLogout, getAdminProfile, listAdminReports } from './api/admin'
@@ -102,12 +102,12 @@ function AdminLayoutContent() {
             >
               다른 계정으로 로그인
             </button>
-            <Link
-              to="/home"
+            <a
+              href="https://app.cheese-moa.com/home"
               className="text-[13px] text-admin-muted hover:text-admin-text hover:underline"
             >
               홈으로 돌아가기
-            </Link>
+            </a>
           </div>
         </AdminGate>
       )
