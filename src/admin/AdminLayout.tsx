@@ -23,17 +23,6 @@ import { AdminErrorMessage, AdminMessage } from './components/AdminMessage'
  * 폭이 셸 없이도 성립하도록 min-w를 걸어 좁은 창에선 가로 스크롤로 둔다(내부 운영자 전용).
  */
 export function AdminLayout() {
-  const adminHost = import.meta.env.VITE_ADMIN_HOST ?? 'admin.cheese-moa.com'
-  if (
-    import.meta.env.PROD &&
-    window.location.hostname.endsWith('.cheese-moa.com') &&
-    window.location.hostname !== adminHost
-  ) {
-    window.location.replace(
-      `https://${adminHost}${window.location.pathname}${window.location.search}`,
-    )
-    return null
-  }
   return <AdminLayoutContent />
 }
 
