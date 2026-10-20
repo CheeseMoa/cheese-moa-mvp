@@ -1,6 +1,6 @@
 /**
  * 어드민 엔드포인트 (CHMO-379 — BE CHMO-377·378) — 화면은 URL·응답 형태를 모른다(CHMO-192 원칙).
- * 전부 `/admin/*` 아래·기존 JWT 그대로(관리자 role 필요) — 비관리자는 ADMIN403(→ NOT_ADMIN),
+ * 전부 `/admin/*` 아래·관리자 비밀번호 JWT와 Cloudflare Access 필요 — 비관리자는 ADMIN403(→ NOT_ADMIN),
  * 무토큰은 COMMON401. 공유하는 것은 바닥 인프라(api/client)뿐이다(격리 규칙 2).
  */
 import { apiFetch, apiFetchPaged, type BePageInfo } from '../../api/client'
@@ -100,7 +100,7 @@ function idempotencyHeaders(key: string | undefined): { headers?: Record<string,
 
 export interface AdminCredentials {
   nickname: string
-  pin: string
+  password: string
 }
 
 /** BE AuthResponse — user 객체 없는 평면 필드(서비스 auth와 같은 계약) */
@@ -111,7 +111,7 @@ interface RawAuthTokens {
 }
 
 /**
- * POST /auth/login — 어드민 진입용 로그인(CHMO-594). 서비스와 같은 계정·같은 엔드포인트지만
+ * POST /auth/admin/login — 어드민 진입용 로그인(CHMO-934). 서비스와 같은 계정이지만
  * `src/api/auth.ts`를 import하지 않고 직접 부른다(격리 규칙 2 — 공유는 바닥 인프라뿐. 리포를
  * 가를 때 어드민도 자기 로그인 호출을 가져야 한다). 성공 시 토큰 저장까지 여기서 끝낸다 —
  * 호출부는 게이트(GET /admin/me) 재판정만 한다.
@@ -119,7 +119,7 @@ interface RawAuthTokens {
  * 그 계정이 서비스 화면으로 로그인하면 그때 걸린다.
  */
 export async function adminLogin(credentials: AdminCredentials): Promise<void> {
-  const raw = await apiFetch<RawAuthTokens>('/auth/login', {
+  const raw = await apiFetch<RawAuthTokens>('/auth/admin/login', {
     method: 'POST',
     auth: 'none',
     body: credentials,

@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useNavigate, useBlocker } from 'react-router-dom'
 import { ApiRequestError, redirectIfUnauthorized } from '../../api/client'
@@ -110,7 +111,7 @@ export function AdminOperationSettingsPage() {
   }, [dirty, busy])
   useEffect(() => {
     for (const error of [request.error, history.error, attendance.error])
-      if (error) redirectIfUnauthorized(error, navigate)
+      if (error) redirectIfUnauthorized(error, navigate, { to: adminPath() })
   }, [request.error, history.error, attendance.error, navigate])
   useEffect(() => {
     if (showErrors && (errors.length || payloadError)) errorSummary.current?.focus()
@@ -233,7 +234,7 @@ export function AdminOperationSettingsPage() {
           setCursor(null)
           busyRef.current = false
           setBusy(false)
-          if (refreshError) redirectIfUnauthorized(refreshError, navigate)
+          if (refreshError) redirectIfUnauthorized(refreshError, navigate, { to: adminPath() })
         },
         onError: (msg, error) => {
           const code = error instanceof ApiRequestError ? error.code : ''
@@ -543,7 +544,7 @@ export function AdminOperationSettingsPage() {
                 ['popups', '이벤트 팝업'],
                 ['push', '혜택 푸시'],
               ].map(([path, label]) => (
-                <Link key={path} to={`/admin/${path}`}>
+                <Link key={path} to={adminPath(`/${path}`)}>
                   {label}
                 </Link>
               ))}
@@ -811,7 +812,7 @@ function AttendanceStats() {
     getAttendanceStatistics(date, signal),
   )
   useEffect(() => {
-    if (stats.error) redirectIfUnauthorized(stats.error, navigate)
+    if (stats.error) redirectIfUnauthorized(stats.error, navigate, { to: adminPath() })
   }, [stats.error, navigate])
   return (
     <FormSection

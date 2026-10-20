@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiRequestError, toErrorMessage } from '../../api/client'
@@ -21,21 +22,11 @@ import type {
 } from '../api/types'
 import { AdminTopbar } from '../components/AdminTopbar'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
-import {
-  AdminNotice,
-  AdminSwitch,
-  ChoiceGroup,
-  Field,
-  FormSection,
-} from '../components/AdminForm'
+import { AdminNotice, AdminSwitch, ChoiceGroup, Field, FormSection } from '../components/AdminForm'
 import { inputClassName, textareaClassName } from '../lib/formStyles'
 import { PopupPhonePreview } from '../components/PopupPhonePreview'
 import { PopupStatusBadge } from '../components/StatusBadge'
-import {
-  formatCount,
-  linkHost,
-  popupLinkTargetLabel,
-} from '../lib/format'
+import { formatCount, linkHost, popupLinkTargetLabel } from '../lib/format'
 import {
   POPUP_IMAGE_MAX_BYTES,
   POPUP_IMAGE_TYPES,
@@ -168,13 +159,15 @@ function validate(draft: PopupDraft): Partial<Record<DraftField, string>> {
   if (!draft.image) errors.image = '이미지를 올려 주세요.'
 
   if (!draft.imageAlt.trim()) errors.imageAlt = '이미지 대신 읽어 줄 문구를 적어 주세요.'
-  else if (draft.imageAlt.length > POPUP_LIMITS.imageAlt) errors.imageAlt = '500자 이하로 줄여 주세요.'
+  else if (draft.imageAlt.length > POPUP_LIMITS.imageAlt)
+    errors.imageAlt = '500자 이하로 줄여 주세요.'
 
   if (draft.ctaLabel.length > POPUP_LIMITS.ctaLabel) errors.ctaLabel = '50자 이하로 줄여 주세요.'
 
   const link = draft.linkUrl.trim()
   if (!link) errors.linkUrl = '눌렀을 때 열 주소를 적어 주세요.'
-  else if (/^http:\/\//i.test(link)) errors.linkUrl = 'http 주소는 쓸 수 없어요 · https로 바꿔 주세요.'
+  else if (/^http:\/\//i.test(link))
+    errors.linkUrl = 'http 주소는 쓸 수 없어요 · https로 바꿔 주세요.'
   else if (!isHttpsLink(link)) {
     errors.linkUrl = 'https://로 시작하는 웹 주소만 쓸 수 있어요(공백·앱 주소 불가).'
   }
@@ -188,7 +181,11 @@ function validate(draft: PopupDraft): Partial<Record<DraftField, string>> {
   }
 
   const priority = Number(draft.priority)
-  if (draft.priority.trim() === '' || !Number.isInteger(priority) || Math.abs(priority) > 2 ** 31 - 1) {
+  if (
+    draft.priority.trim() === '' ||
+    !Number.isInteger(priority) ||
+    Math.abs(priority) > 2 ** 31 - 1
+  ) {
     errors.priority = '정수로 적어 주세요.'
   }
 
@@ -238,7 +235,7 @@ export function AdminPopupEditPage() {
             onRetry={source.error.status === 404 ? undefined : source.refetch}
           />
           <Link
-            to="/admin/popups"
+            to={adminPath('/popups')}
             className="mt-3 inline-block text-[13px] text-admin-muted hover:text-admin-text hover:underline"
           >
             ‹ 팝업 목록으로
@@ -264,7 +261,7 @@ export function AdminPopupEditPage() {
       key={sourceId ?? 'new'}
       initial={draft}
       editing={isEdit ? (source.data ?? null) : null}
-      onDone={(message) => navigate('/admin/popups', { state: { toast: message } })}
+      onDone={(message) => navigate(adminPath('/popups'), { state: { toast: message } })}
     />
   )
 }
@@ -274,7 +271,7 @@ function EditTopbar({ isEdit, popup }: { isEdit: boolean; popup: AdminPopup | nu
     <AdminTopbar
       left={
         <>
-          <Link to="/admin/popups" className="text-admin-muted hover:text-admin-text">
+          <Link to={adminPath('/popups')} className="text-admin-muted hover:text-admin-text">
             이벤트 팝업
           </Link>
           <span className="text-admin-muted">›</span>
@@ -391,7 +388,9 @@ function PopupForm({
       locale: draft.locale,
       // 손대지 않은 시각은 원본 그대로 보낸다 — 입력칸은 분 단위라 23:59:59가 23:59:00으로 깎인다
       startsAt:
-        editing && draft.startsLocal === isoToKstInput(editing.startsAt) ? editing.startsAt : starts,
+        editing && draft.startsLocal === isoToKstInput(editing.startsAt)
+          ? editing.startsAt
+          : starts,
       endsAt: editing && draft.endsLocal === isoToKstInput(editing.endsAt) ? editing.endsAt : ends,
       priority: Number(draft.priority),
       hideOption: draft.hideToday ? 'TODAY' : 'NONE',
@@ -455,16 +454,18 @@ function PopupForm({
             <AdminNotice
               title="저장하기 전에"
               lines={[
-                <>앱 <b className="font-semibold">2.7.0 이상</b>에서만 보여요.</>,
+                <>
+                  앱 <b className="font-semibold">2.7.0 이상</b>에서만 보여요.
+                </>,
                 '링크를 연 사람에게는 이 팝업이 기간이 끝날 때까지 다시 뜨지 않아요.',
                 '구독·이용권을 웹 결제로 안내하는 링크는 스토어 정책 위반이에요.',
                 ...(editing
                   ? [
                       <>
-                        내용을 고쳐도 이미 '오늘 하루 보지 않기'를 누른 사람에게는 오늘 안 보여요. 다시
-                        보이게 하려면 새 팝업으로 만들어 주세요.{' '}
+                        내용을 고쳐도 이미 '오늘 하루 보지 않기'를 누른 사람에게는 오늘 안 보여요.
+                        다시 보이게 하려면 새 팝업으로 만들어 주세요.{' '}
                         <Link
-                          to={`/admin/popups/new?from=${editing.popupId}`}
+                          to={adminPath(`/popups/new?from=${editing.popupId}`)}
                           className="font-semibold underline underline-offset-2"
                         >
                           복제해서 새로 만들기
@@ -540,8 +541,8 @@ function PopupForm({
                     </p>
                     {offRatio ? (
                       <p className="text-xs text-admin-muted">
-                        권장 비율(4:5)과 달라 앱에서 위아래나 양옆이 잘려요 · 오른쪽 미리보기가 실제로
-                        잘리는 모양이에요.
+                        권장 비율(4:5)과 달라 앱에서 위아래나 양옆이 잘려요 · 오른쪽 미리보기가
+                        실제로 잘리는 모양이에요.
                       </p>
                     ) : null}
                     <button
@@ -585,7 +586,10 @@ function PopupForm({
               </Field>
             </FormSection>
 
-            <FormSection title="버튼·링크" description="이미지와 버튼, 어느 쪽을 눌러도 같은 링크가 열려요.">
+            <FormSection
+              title="버튼·링크"
+              description="이미지와 버튼, 어느 쪽을 눌러도 같은 링크가 열려요."
+            >
               <Field
                 label="버튼 문구"
                 htmlFor="popup-cta"
@@ -607,9 +611,11 @@ function PopupForm({
                 label="링크"
                 htmlFor="popup-link"
                 error={errorOf('linkUrl')}
-                hint={isPopupSurveyForm(draft.linkUrl.trim())
-                  ? '이 설문은 앱에서 열면 모임 선택 후 본인 닉네임과 모임 이름이 자동 입력돼요. 관리자 미리보기에는 적용되지 않아요.'
-                  : 'https 주소만 쓸 수 있어요(구글폼 등).'}
+                hint={
+                  isPopupSurveyForm(draft.linkUrl.trim())
+                    ? '이 설문은 앱에서 열면 모임 선택 후 본인 닉네임과 모임 이름이 자동 입력돼요. 관리자 미리보기에는 적용되지 않아요.'
+                    : 'https 주소만 쓸 수 있어요(구글폼 등).'
+                }
               >
                 <input
                   id="popup-link"
@@ -633,7 +639,10 @@ function PopupForm({
             </FormSection>
 
             <FormSection title="누구에게 · 언제">
-              <Field label="대상" hint="가입할 때 고른 계정 유형 기준이에요(모임에서의 역할과 무관).">
+              <Field
+                label="대상"
+                hint="가입할 때 고른 계정 유형 기준이에요(모임에서의 역할과 무관)."
+              >
                 <ChoiceGroup
                   label="대상"
                   value={draft.audience}
@@ -653,7 +662,11 @@ function PopupForm({
                 />
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="시작 (한국 시간)" htmlFor="popup-starts" error={errorOf('startsLocal')}>
+                <Field
+                  label="시작 (한국 시간)"
+                  htmlFor="popup-starts"
+                  error={errorOf('startsLocal')}
+                >
                   <input
                     id="popup-starts"
                     type="datetime-local"
@@ -667,7 +680,9 @@ function PopupForm({
                   label="끝 (한국 시간)"
                   htmlFor="popup-ends"
                   error={errorOf('endsLocal')}
-                  hint={endedAlready ? '이미 지난 시각이에요 · 저장해도 앱에 보이지 않아요.' : undefined}
+                  hint={
+                    endedAlready ? '이미 지난 시각이에요 · 저장해도 앱에 보이지 않아요.' : undefined
+                  }
                 >
                   <input
                     id="popup-ends"
@@ -735,7 +750,7 @@ function PopupForm({
 
             <div className="flex items-center justify-end gap-2 pb-8">
               <Link
-                to="/admin/popups"
+                to={adminPath('/popups')}
                 className="inline-flex h-10 items-center rounded-lg border border-admin-border bg-admin-surface px-4 text-[13px] text-admin-text hover:bg-admin-bg"
               >
                 취소
@@ -762,8 +777,8 @@ function PopupForm({
             <p className="text-xs leading-relaxed text-admin-muted">
               {draft.linkUrl.trim() && isHttpsLink(draft.linkUrl.trim())
                 ? `누르면 ${popupLinkTargetLabel(draft.linkTarget)}로 ${linkHost(draft.linkUrl.trim())} 이(가) 열려요.`
-                : '링크를 적으면 무엇이 열리는지 여기에 보여요.'}
-              {' '}아래 줄 문구는 앱이 언어에 맞춰 넣어요.
+                : '링크를 적으면 무엇이 열리는지 여기에 보여요.'}{' '}
+              아래 줄 문구는 앱이 언어에 맞춰 넣어요.
             </p>
           </aside>
         </div>

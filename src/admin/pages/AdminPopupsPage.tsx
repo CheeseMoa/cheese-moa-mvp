@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
@@ -239,12 +240,12 @@ export function AdminPopupsPage() {
                   {
                     key: 'edit',
                     label: '수정',
-                    onSelect: () => navigate(`/admin/popups/${p.popupId}`),
+                    onSelect: () => navigate(adminPath(`/popups/${p.popupId}`)),
                   },
                   {
                     key: 'duplicate',
                     label: '복제해서 새로 만들기',
-                    onSelect: () => navigate(`/admin/popups/new?from=${p.popupId}`),
+                    onSelect: () => navigate(adminPath(`/popups/new?from=${p.popupId}`)),
                   },
                 ],
               },
@@ -296,7 +297,7 @@ export function AdminPopupsPage() {
               새로고침
             </button>
             <Link
-              to="/admin/popups/new"
+              to={adminPath('/popups/new')}
               className="inline-flex h-9 items-center rounded-lg border border-primary bg-primary px-4 text-[13px] font-semibold text-admin-text hover:brightness-95"
             >
               ＋ 새 팝업
@@ -306,8 +307,8 @@ export function AdminPopupsPage() {
 
         {/* 상태 이름만으로는 앱에서 무슨 일이 일어나는지 알 수 없다 — 노출 규칙을 한 줄로 */}
         <p className="text-xs text-admin-muted">
-          앱은 홈에 들어갈 때 <b className="font-semibold text-admin-text">한 번에 하나만</b>{' '}
-          띄워요 · 노출 중인 팝업이 여럿이면 우선순위가 높은 것부터 · 앱 2.7.0 이상에서만 보여요.
+          앱은 홈에 들어갈 때 <b className="font-semibold text-admin-text">한 번에 하나만</b> 띄워요
+          · 노출 중인 팝업이 여럿이면 우선순위가 높은 것부터 · 앱 2.7.0 이상에서만 보여요.
         </p>
 
         {list.error ? (
@@ -320,7 +321,7 @@ export function AdminPopupsPage() {
               columns={columns}
               rows={rows}
               rowKey={(p) => p.popupId}
-              onRowClick={(p) => navigate(`/admin/popups/${p.popupId}`)}
+              onRowClick={(p) => navigate(adminPath(`/popups/${p.popupId}`))}
               emptyText={tab.emptyText}
               dimmed={list.loading}
             />

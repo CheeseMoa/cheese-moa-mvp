@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchAdminUsers } from '../api/admin'
@@ -60,7 +61,9 @@ export function AdminUsersPage() {
       header: '',
       align: 'right',
       widthClassName: 'w-36',
-      render: () => <span className="whitespace-nowrap text-xs text-accent">장수 · 이용 기간 →</span>,
+      render: () => (
+        <span className="whitespace-nowrap text-xs text-accent">장수 · 이용 기간 →</span>
+      ),
     },
   ]
 
@@ -112,8 +115,10 @@ export function AdminUsersPage() {
               columns={columns}
               rows={list.items}
               rowKey={(u) => u.userId}
-              onRowClick={(u) => navigate(`/admin/users/${u.userId}`)}
-              emptyText={query ? `'${query}'에 맞는 사용자가 없어요.` : '아직 가입한 사용자가 없어요.'}
+              onRowClick={(u) => navigate(adminPath(`/users/${u.userId}`))}
+              emptyText={
+                query ? `'${query}'에 맞는 사용자가 없어요.` : '아직 가입한 사용자가 없어요.'
+              }
               dimmed={list.loading}
             />
             <AdminLoadMore

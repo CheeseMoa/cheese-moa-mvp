@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { NavLink } from 'react-router-dom'
 import { Cheddar } from '../../components/ui/Cheddar'
 import type { AdminProfile } from '../api/types'
@@ -32,32 +33,32 @@ export function AdminSidebar({
       </div>
 
       <nav className="mt-1 flex flex-col gap-1" aria-label="관리자 메뉴">
-        <SidebarLink to="/admin" end label="대시보드" />
+        <SidebarLink to={adminPath('')} end label="대시보드" />
         {/* 기관 문의는 매일 처리하는 일이라 조회 화면(모임)보다 위에 둔다 — CHMO-811 */}
         {/* 신고·문의는 사용자가 답을 기다리는 일이라 가장 위(대시보드 바로 아래) — CHMO-862 */}
         <SidebarLink
-          to="/admin/reports"
+          to={adminPath('/reports')}
           label="신고·문의"
           count={pendingReportCount}
           countLabel="처리 대기"
         />
-        <SidebarLink to="/admin/inquiries" label="기관 문의" />
+        <SidebarLink to={adminPath('/inquiries')} label="기관 문의" />
         {/* 기관 구독은 기관 문의(개통)의 다음 일이라 바로 아래 — CHMO-931 */}
-        <SidebarLink to="/admin/organizations" label="기관 구독" />
-        <SidebarLink to="/admin/users" label="사용자" />
-        <SidebarLink to="/admin/groups" label="모임" />
+        <SidebarLink to={adminPath('/organizations')} label="기관 구독" />
+        <SidebarLink to={adminPath('/users')} label="사용자" />
+        <SidebarLink to={adminPath('/groups')} label="모임" />
       </nav>
 
       {/* 사용자에게 먼저 말을 거는 도구 — 처리·조회(위)와 성격이 달라 묶음을 가른다(CHMO-928) */}
       <div className="mt-5 px-5 pb-1 text-[11px] font-medium text-admin-muted">알림·홍보</div>
       <nav className="flex flex-col gap-1" aria-label="알림·홍보 메뉴">
-        <SidebarLink to="/admin/popups" label="이벤트 팝업" />
-        <SidebarLink to="/admin/push" label="혜택 푸시" />
+        <SidebarLink to={adminPath('/popups')} label="이벤트 팝업" />
+        <SidebarLink to={adminPath('/push')} label="혜택 푸시" />
       </nav>
 
       <div className="mt-5 px-5 pb-1 text-[11px] font-medium text-admin-muted">서비스 정책</div>
       <nav className="flex flex-col gap-1" aria-label="서비스 정책 메뉴">
-        <SidebarLink to="/admin/operation-settings" label="운영 설정" />
+        <SidebarLink to={adminPath('/operation-settings')} label="운영 설정" />
       </nav>
 
       <div className="mt-auto border-t border-admin-border px-5 py-4">

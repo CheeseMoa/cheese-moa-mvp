@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi'
@@ -107,7 +108,9 @@ export function AdminDashboardPage() {
       align: 'right',
       widthClassName: 'w-32',
       render: (u) => (
-        <span className="whitespace-nowrap tabular-nums">{formatMonthDayTime(u.lastUploadedAt)}</span>
+        <span className="whitespace-nowrap tabular-nums">
+          {formatMonthDayTime(u.lastUploadedAt)}
+        </span>
       ),
     },
   ]
@@ -147,13 +150,13 @@ export function AdminDashboardPage() {
               label="처리 대기 신고·문의"
               value={pendingReportCount}
               unit="건"
-              to="/admin/reports"
+              to={adminPath('/reports')}
             />
             <StatCard
               label="대기 중 기관 문의"
               value={pendingInquiryCount}
               unit="건"
-              to="/admin/inquiries"
+              to={adminPath('/inquiries')}
             />
           </div>
         </Section>
@@ -171,7 +174,7 @@ export function AdminDashboardPage() {
                     최근 사진이 반영된 이벤트 10개 · 시각은 분류가 끝나 앨범에 들어간 때예요
                   </p>
                 </div>
-                <Link to="/admin/groups" className="text-[13px] text-accent hover:underline">
+                <Link to={adminPath('/groups')} className="text-[13px] text-accent hover:underline">
                   모임 목록(최근 업로드순) →
                 </Link>
               </div>
@@ -179,7 +182,7 @@ export function AdminDashboardPage() {
                 columns={uploadColumns}
                 rows={stats.data.recentUploads}
                 rowKey={(u) => u.eventId}
-                onRowClick={(u) => navigate(`/admin/groups/${u.groupId}`)}
+                onRowClick={(u) => navigate(adminPath(`/groups/${u.groupId}`))}
                 emptyText="아직 반영된 사진이 없어요."
               />
             </section>
@@ -206,10 +209,7 @@ export function AdminDashboardPage() {
             <section className="rounded-xl border border-admin-border bg-admin-surface">
               <div className="flex items-center justify-between border-b border-admin-border px-5 py-3">
                 <h2 className="text-[14px] font-semibold">최근 생성된 모임</h2>
-                <Link
-                  to="/admin/groups"
-                  className="text-[13px] text-accent hover:underline"
-                >
+                <Link to={adminPath('/groups')} className="text-[13px] text-accent hover:underline">
                   모임 목록 전체보기 →
                 </Link>
               </div>
@@ -217,7 +217,7 @@ export function AdminDashboardPage() {
                 columns={recentColumns}
                 rows={stats.data.recentGroups}
                 rowKey={(g) => g.groupId}
-                onRowClick={(g) => navigate(`/admin/groups/${g.groupId}`)}
+                onRowClick={(g) => navigate(adminPath(`/groups/${g.groupId}`))}
                 emptyText="아직 만들어진 모임이 없어요."
               />
             </section>
