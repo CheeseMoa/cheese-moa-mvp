@@ -475,3 +475,8 @@
 ### CHMO-957 출석 설정 실서버 회귀 수정 (2026-10-19)
 
 개발 웹에서 staging-api의 출석 설정 GET이 HTTP 200·`ETag: W/"0"`·`Access-Control-Expose-Headers: X-Request-Id, ETag`로 응답하는 것을 Chrome Network에서 확인했다. FE가 강한 태그만 허용하여 정상 응답을 거부했고, 일반 Error가 useApi에서 NETWORK_ERROR로 변환됐다. 이 API의 숫자 revision 태그는 강한/약한 형태 모두 읽되, BE SettingsWriteHeaders 계약에 맞춰 PUT에는 `If-Match: "revision"`을 전송한다. 헤더 누락·잘못된 숫자 태그는 FE 로컬 오류 `INVALID_SETTINGS_RESPONSE`로 구분하고, 실패 뒤 계속 조회 중이라고 표시하지 않는다. 본문은 인증정보 없는 실응답 픽스처로 보관한다. 이 수정은 쓰기 잠금이나 보안 정책을 변경하지 않는다.
+
+
+### 2026-10-20 운영 설정 단독 릴리스 검증
+
+CHMO-957 변경만 현재 main에 적용하며 기존 CHMO-960 법적 고지는 그대로 보존한다. BE CHMO-958 배포·정책 보존 확인 후 FE를 main에 반영한다. Node 20 기준 `npm run verify`(574건·typecheck·lint·production build) 통과. 실 BE에서 저장·복원과 원상 복원은 앞서 개발 서버에서 확인했으며, 운영 배포 확인은 설정을 변경하지 않는 조회로 수행한다. 운영 정책·잔액·최소 버전·발송은 테스트로 변경하지 않는다.
