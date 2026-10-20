@@ -12,6 +12,7 @@ import {
 } from './lib/analytics'
 import { startPushTokenSync } from './lib/push'
 import { isPopupSurveyPage } from './lib/popupSurvey'
+import { isAdminHost } from './lib/appHost'
 import './index.css'
 
 /**
@@ -75,14 +76,14 @@ async function main() {
   }
   // 추적도 같은 원칙 — 실패해도 화면은 뜬다(분석 때문에 앱이 안 열리는 일은 없어야 한다)
   try {
-    if (!isPopupSurveyPage(window.location.pathname)) startAnalytics()
+    if (!isAdminHost() && !isPopupSurveyPage(window.location.pathname)) startAnalytics()
   } catch (err) {
     console.error('[analytics] 초기화 실패 — 추적 없이 계속 진행합니다.', err)
   }
   // FCM 토큰 회전 구독 (CHMO-667) — 앱 생애 1회. 브라우저에선 이벤트가 오지 않아 무해하고,
   // 해제할 일이 없어(앱이 살아 있는 내내 유효) 반환된 구독 해제 함수를 버린다
   try {
-    if (!isPopupSurveyPage(window.location.pathname)) startPushTokenSync()
+    if (!isAdminHost() && !isPopupSurveyPage(window.location.pathname)) startPushTokenSync()
   } catch (err) {
     console.error('[push] 토큰 동기화 구독 실패 — 알림 없이 계속 진행합니다.', err)
   }

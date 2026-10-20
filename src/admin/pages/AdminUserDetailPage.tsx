@@ -1,3 +1,4 @@
+import { adminPath } from '../paths'
 import { useCallback, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiRequestError } from '../../api/client'
@@ -114,7 +115,9 @@ export function AdminUserDetailPage() {
         setVoidBusy(false)
         setVoiding(null)
         history.refetch()
-        showToast(`기간을 무효화했어요 · 지금 상태: ${subscriptionAccessLabel(result.accessStatus)}`)
+        showToast(
+          `기간을 무효화했어요 · 지금 상태: ${subscriptionAccessLabel(result.accessStatus)}`,
+        )
       },
       onError: (message, err) => {
         setVoidBusy(false)
@@ -150,15 +153,23 @@ export function AdminUserDetailPage() {
             <div className="mt-0.5 text-xs text-admin-muted">
               {row.groupId !== null ? (
                 <Link
-                  to={`/admin/groups/${row.groupId}`}
+                  to={adminPath(`/groups/${row.groupId}`)}
                   className="text-accent hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {groupLabel(row.groupId)}
                 </Link>
               ) : null}
-              {row.groupName ? ` · ${row.groupName}` : row.groupId !== null ? ' · (지워진 모임)' : ''}
-              {row.eventName ? ` › ${row.eventName}` : row.eventId !== null ? ' › (지워진 이벤트)' : ''}
+              {row.groupName
+                ? ` · ${row.groupName}`
+                : row.groupId !== null
+                  ? ' · (지워진 모임)'
+                  : ''}
+              {row.eventName
+                ? ` › ${row.eventName}`
+                : row.eventId !== null
+                  ? ' › (지워진 이벤트)'
+                  : ''}
             </div>
           ) : null}
           {row.memo ? <div className="mt-0.5 text-xs text-admin-muted">{row.memo}</div> : null}
@@ -173,7 +184,11 @@ export function AdminUserDetailPage() {
       render: (row) => (
         <span
           className={`font-medium tabular-nums ${
-            row.delta > 0 ? 'text-admin-status-published' : row.delta < 0 ? 'text-warn' : 'text-admin-muted'
+            row.delta > 0
+              ? 'text-admin-status-published'
+              : row.delta < 0
+                ? 'text-warn'
+                : 'text-admin-muted'
           }`}
         >
           {formatSignedCount(row.delta)}
@@ -189,7 +204,8 @@ export function AdminUserDetailPage() {
     },
   ]
 
-  const dim = (period: AdminSubscriptionHistoryPeriod) => (period.voidedAt ? 'line-through opacity-50' : '')
+  const dim = (period: AdminSubscriptionHistoryPeriod) =>
+    period.voidedAt ? 'line-through opacity-50' : ''
 
   const periodColumns: AdminColumn<AdminSubscriptionHistoryPeriod>[] = [
     {
@@ -228,7 +244,8 @@ export function AdminUserDetailPage() {
       widthClassName: 'w-40',
       render: (p) => (
         <span className={`whitespace-nowrap text-xs text-admin-muted ${dim(p)}`}>
-          {formatDateTime(p.createdAt)} · {p.adminId === null ? '서버(체험)' : `관리자 #${p.adminId}`}
+          {formatDateTime(p.createdAt)} ·{' '}
+          {p.adminId === null ? '서버(체험)' : `관리자 #${p.adminId}`}
         </span>
       ),
     },
@@ -261,7 +278,10 @@ export function AdminUserDetailPage() {
       <AdminTopbar
         left={
           <>
-            <Link to="/admin/users" className="font-normal text-admin-muted hover:text-admin-text">
+            <Link
+              to={adminPath('/users')}
+              className="font-normal text-admin-muted hover:text-admin-text"
+            >
               사용자
             </Link>
             <span className="font-normal text-admin-muted">/</span>
@@ -273,9 +293,11 @@ export function AdminUserDetailPage() {
       <div className="flex-1 space-y-4 overflow-y-auto px-7 py-6">
         {!valid || userGone ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-admin-border bg-admin-surface px-5 py-10">
-            <p className="text-[13px] text-admin-muted">사용자를 찾을 수 없어요 · 계정이 지워졌을 수 있어요.</p>
+            <p className="text-[13px] text-admin-muted">
+              사용자를 찾을 수 없어요 · 계정이 지워졌을 수 있어요.
+            </p>
             <Link
-              to="/admin/users"
+              to={adminPath('/users')}
               className="h-8 rounded-lg border border-admin-border px-3 text-[13px] leading-8 hover:bg-admin-bg"
             >
               사용자 검색으로
@@ -398,8 +420,8 @@ export function AdminUserDetailPage() {
                   <div>
                     <h2 className="text-[14px] font-semibold">기관 이용 기간</h2>
                     <p className="mt-0.5 text-xs text-admin-muted">
-                      기관 범위 모임은 장수 대신 이용 기간으로 올려요 · 가입 때 체험 14일이 자동으로 들어가고, 종료 뒤
-                      7일 유예 그 뒤 차단
+                      기관 범위 모임은 장수 대신 이용 기간으로 올려요 · 가입 때 체험 14일이 자동으로
+                      들어가고, 종료 뒤 7일 유예 그 뒤 차단
                     </p>
                   </div>
                   <button
@@ -428,7 +450,9 @@ export function AdminUserDetailPage() {
                           {history.data.graceEndsAt ? formatDate(history.data.graceEndsAt) : '—'}
                         </span>
                       ) : (
-                        <span className="text-admin-muted">등록된 기간이 없어요 · 지금 업로드가 막혀요</span>
+                        <span className="text-admin-muted">
+                          등록된 기간이 없어요 · 지금 업로드가 막혀요
+                        </span>
                       )}
                     </p>
                     <div className="border-t border-admin-border">
@@ -475,7 +499,9 @@ export function AdminUserDetailPage() {
           onRegistered={(result) => {
             setRegistering(false)
             history.refetch()
-            showToast(`이용 기간을 등록했어요 · ${accessUntilToKstDate(result.period.accessUntil)}까지`)
+            showToast(
+              `이용 기간을 등록했어요 · ${accessUntilToKstDate(result.period.accessUntil)}까지`,
+            )
           }}
         />
       ) : null}
@@ -506,12 +532,13 @@ export function AdminUserDetailPage() {
 function GroupChip({ membership }: { membership: AdminUserGroupMembership }) {
   return (
     <Link
-      to={`/admin/groups/${membership.groupId}`}
+      to={adminPath(`/groups/${membership.groupId}`)}
       className="inline-flex items-center gap-1.5 rounded-lg border border-admin-border bg-admin-surface px-2.5 py-1 text-[12px] hover:border-primary hover:bg-admin-nav"
     >
       <span className="font-medium">{groupLabel(membership.groupId)}</span>
       <span className="text-admin-muted">
-        {groupTypeLabel(membership.groupType)} · {memberRoleLabel(membership.role, membership.groupType)}
+        {groupTypeLabel(membership.groupType)} ·{' '}
+        {memberRoleLabel(membership.role, membership.groupType)}
       </span>
       {membership.status === 'PENDING' ? (
         <span className="rounded bg-admin-status-analyzing/15 px-1 py-px text-[11px] text-admin-status-analyzing">
