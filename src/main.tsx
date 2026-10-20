@@ -69,6 +69,16 @@ function startAnalytics() {
 
 // 목 API 초기화는 베스트 에포트 — 실패해도 앱은 항상 렌더한다(흰 화면 방지).
 async function main() {
+  if (
+    window.location.hostname === 'app.cheese-moa.com' &&
+    /^\/admin(?:\/|$)/.test(window.location.pathname)
+  ) {
+    const adminPath = window.location.pathname.replace(/^\/admin(?:\/|$)/, '/')
+    window.location.replace(
+      `https://admin.cheese-moa.com${adminPath}${window.location.search}${window.location.hash}`,
+    )
+    return
+  }
   try {
     await enableMocking()
   } catch (err) {
