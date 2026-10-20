@@ -1,3 +1,4 @@
+import { operationSettingsHandlers } from './operationSettings'
 import type { RequestHandler } from 'msw'
 import { authHandlers } from './auth'
 import { adminHandlers, adminInquiryHandlers, adminReportHandlers } from './admin'
@@ -30,6 +31,7 @@ import { shareHandlers } from './share'
 export const handlers: RequestHandler[] = [
   ...authHandlers,
   ...adminHandlers,
+  ...operationSettingsHandlers,
   ...adminInquiryHandlers,
   ...adminReportHandlers,
   ...adminBillingHandlers,

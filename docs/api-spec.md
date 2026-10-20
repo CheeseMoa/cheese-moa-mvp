@@ -485,3 +485,23 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·
 - 인증 토큰/뷰어 토큰은 메모리+localStorage 저장(뷰어 토큰은 **모임 공유 token별** 분리).
 - 인물 이름은 `personId` 단위 공유 → 목업도 앨범 단위가 아니라 **`personId`별 이름 맵**으로 보관해, rename 시 같은 `personId`의 모든 이벤트 앨범이 함께 바뀌도록 시뮬레이션.
 - 사진은 다대다 → 목업 픽스처에서 사진을 `albumIds` 배열로 보유. move는 source 제거+target 추가, delete는 **해당(source) 앨범만 `albumIds`에서 제거**(다른 앨범 유지, `albumIds`가 비면 어떤 앨범에도 안 보임).
+
+
+## 운영 설정 — 관리자 계약 (CHMO-957 · BE CHMO-958)
+
+기존 회원 JWT 관리자 검사와 BE `{isSuccess, code, message, result}` 봉투를 사용한다. 구현·권한 개방 상태 및 정책 의미는 [admin-spec §3-10](admin-spec.md#3-10-운영-설정-chmo-957--be-chmo-958)을 따른다. 아래는 BE PR #329 소스·문서 대조 계약이며 실 BE 응답 채집은 대기다.
+
+| 동작 | API | 핵심 계약 |
+|---|---|---|
+| 조회 | `GET /admin/operation-settings` | result `{revision, updatedAt, settings:{app, credit, institution, attendancePush}, readOnly:{uploadLimits, appCompatibilityNotes}}` |
+| 부분 변경 | `PATCH /admin/operation-settings` | `{expectedRevision, reason, changes}` · 변경하는 leaf만 전송 · 성공 result는 조회와 동일 |
+| 이력 | `GET /admin/operation-settings/history?size=20&cursor=…` | result `{items, nextCursor, hasNext}` · 각 행 `{historyId,revision,actorUserId,changedAt,reason,before,after,scope,restoredFrom}` · scope=GLOBAL |
+| 복원 | `POST /admin/operation-settings/history/{historyId}/restore` | `{expectedRevision, reason, snapshot:BEFORE 또는 AFTER}` · 전체 편집 가능 설정을 새 변경으로 복원 · 성공 result는 조회와 동일 |
+| 출석 조회·수정 | `GET` / `PUT /admin/notifications/daily-attendance/settings` | GET result `{enabled,sendTime,copy:{ko,en,ja}}`, 각 문구 `{title,body}`. 응답 ETag `"revision"`을 PUT의 If-Match로 전달. X-Change-Reason은 `encodeURIComponent(reason)` · JSON은 전체 출석 설정 |
+| 출석 통계 | `GET /admin/notifications/daily-attendance/statistics?date=YYYY-MM-DD` | result `{date,selectedUsers,acceptedUsers,attendanceAfterAttemptUsers,uploadAfterAttemptUsers,deliveries:[{status,count}],recentFailures:[{deliveryId,status,failureCode}]}` |
+
+`app`은 기존 최상위 공개 응답의 `minVersion:{ios,android}`, 선택 `storeUrl:{ios?,android?}`와 같은 구조다. 무료 정책 `credit`은 signupGrant·dailyGrant·cap·migrationGrant·enforcementStartsAt·migrationCutoffAt, 기관은 trialPeriod·gracePeriod(ISO Duration)다. 업로드 상한은 perRequest·perEvent·perGroup이다.
+
+생략값은 보존한다. URL null은 삭제, enforcementStartsAt null은 차감 비활성화다. migrationCutoffAt은 수정·복원으로 바꾸지 않는다. 숫자 ID·revision, ISO 시각을 사용한다. 오류는 `SETTINGS400`(입력), `SETTINGS404`(이력 없음), `SETTINGS409`(충돌), `SETTINGS503`(쓰기 잠금), 기존 `VALID400`/`COMMON400`/`CAMPAIGN400` 및 인증·인가 오류다. FE는 충돌 자동 재시도·쓰기 잠금 우회를 하지 않는다.
+
+최근 추가 인증·조회/변경 권한 구분은 CHMO-934 미연결이다. 2026-10-19 사용자 지시에 따라 FE의 추가 인증 대기 잠금은 제거하며 기존 관리자 세션으로 저장·복원한다. 서버 검증·SETTINGS503 처리와 revision 충돌 검출은 유지한다. 무인증 `GET /app/config`는 봉투 없이 기존 최상위 minVersion/storeUrl을 유지한다.

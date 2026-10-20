@@ -243,6 +243,13 @@ export const router = createBrowserRouter([
         }),
       }, // 혜택 푸시 발송 — Firebase 콘솔 수동 발송 대체(CHMO-928)
       {
+        path: 'operation-settings',
+        lazy: async () => ({
+          Component: (await import('./admin/pages/AdminOperationSettingsPage'))
+            .AdminOperationSettingsPage,
+        }),
+      },
+      {
         path: 'groups',
         lazy: async () => ({
           Component: (await import('./admin/pages/AdminGroupsPage')).AdminGroupsPage,

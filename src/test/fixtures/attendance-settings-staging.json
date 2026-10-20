@@ -1,0 +1,23 @@
+{
+  "isSuccess": true,
+  "code": "COMMON200",
+  "message": "성공입니다.",
+  "result": {
+    "enabled": false,
+    "sendTime": "19:00",
+    "copy": {
+      "ko": {
+        "title": "오늘 출석 선물을 받아보세요",
+        "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+      },
+      "en": {
+        "title": "Claim your daily check-in gift",
+        "body": "Open CheeseMoa to collect your free photo credits."
+      },
+      "ja": {
+        "title": "今日のログイン特典を受け取りましょう",
+        "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+      }
+    }
+  }
+}
