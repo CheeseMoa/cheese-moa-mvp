@@ -62,6 +62,10 @@ export function EventDetailPage() {
   )
   const [showCompletion, setShowCompletion] = useState(false)
   const completionSeen = useRef(false)
+  useEffect(() => {
+    completionSeen.current = false
+    setShowCompletion(false)
+  }, [eventId])
   const kickActive =
     kick != null && kick.eventId === eventId && !!event && event.photoCount < kick.expected &&
     event.progress?.percent !== 100
@@ -80,7 +84,7 @@ export function EventDetailPage() {
     setShowCompletion(true)
     const timer = setTimeout(() => setShowCompletion(false), 900)
     return () => clearTimeout(timer)
-  }, [event?.progress?.percent, event?.progress?.processed])
+  }, [eventId, event?.progress?.percent, event?.progress?.processed])
   const analysisVisible = analysisActive || showCompletion ||
     (event?.progress?.percent === 100 && !completionSeen.current)
 
@@ -183,7 +187,7 @@ export function EventDetailPage() {
                 {/* 분석중 — 2초 자동 폴링(위 effect). 진행률 따라 쥐가 치즈로 다가가고, 완료되면 앨범 그리드로 자연 전환 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-6 py-14 text-center">
                   <p className="text-[19px] text-heading">AI가 사진을 분류하고 있어요</p>
-                  <ChaseProgress progress={event.progress ?? null} />
+                  <ChaseProgress key={eventId} progress={event.progress ?? null} />
                   <p className="mt-4 text-[13px] leading-relaxed text-muted">
                     완료되면 아이별 앨범이 자동으로 열려요.
                     <br />
