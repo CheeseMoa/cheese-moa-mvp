@@ -31,13 +31,13 @@ import type { Album, AnalysisProgress, EventItem, GroupType } from '../types/api
 
 /**
  * 이벤트 상세 진입점 — 이벤트 상태로 화면을 분기한다(GET /events/:id).
- * - empty → 06-E 빈 이벤트(node 211:1572): 📷 빈 상태 + [사진 업로드]→06-U
+ * - empty → 06-E 빈 이벤트(node 211:1572): 사진 빈 상태 + [사진 업로드]→06-U
  * - 분석 진행(analyzing 상태, progress non-null, 또는 업로드 직후 킥) → 분석중: 2초 간격
  *   자동 폴링(BE 요청 주기) — 진행률(progress)과 함께 갱신되고, 완료되면 앨범 그리드로 자연
  *   전환. published 이벤트의 사진 추가는 상태 전이 없는 증분 분석이라(CHMO-215·216) progress로
  *   판정하되, 등록 직후의 progress null 공백은 업로드 화면이 넘긴 킥이 메운다(CHMO-443).
  * - 그 외(review/ready/published) → 08 앨범 그리드(EventAlbumGrid, node 211:1619)
- * 어느 상태든 헤더 ⚙ = 이벤트 설정(이름 수정 + 이벤트 삭제 — CHMO-278).
+ * 어느 상태든 헤더 설정 = 이벤트 설정(이름 수정 + 이벤트 삭제 — CHMO-278).
  */
 /** 업로드 화면이 navigate state로 넘기는 '분석 시작' 킥(CHMO-443) */
 interface AnalysisKick {
@@ -60,13 +60,29 @@ export function EventDetailPage() {
   const [kick, setKick] = useState<AnalysisKick | null>(
     () => (location.state as { analysisKick?: AnalysisKick } | null)?.analysisKick ?? null,
   )
+  const [showCompletion, setShowCompletion] = useState(false)
+  const completionSeen = useRef(false)
   const kickActive =
-    kick != null && kick.eventId === eventId && !!event && event.photoCount < kick.expected
+    kick != null && kick.eventId === eventId && !!event && event.photoCount < kick.expected &&
+    event.progress?.percent !== 100
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트는 사진을 추가해도
   // 공개를 유지한 채 증분 분석이 돌아 상태가 안 바뀌고(CHMO-215·216), 상세 응답의 progress
   // (분석 job 중에만 non-null)로만 진행을 알 수 있다 — 로딩바·폴링은 두 경우 모두 켠다.
   const analysisActive =
-    !!event && (event.status === 'analyzing' || event.progress != null || kickActive)
+    !!event && (event.status === 'analyzing' || (event.progress != null && event.progress.percent < 100) || kickActive)
+  useEffect(() => {
+    if (event?.progress?.percent !== 100) {
+      completionSeen.current = false
+      return
+    }
+    if (completionSeen.current) return
+    completionSeen.current = true
+    setShowCompletion(true)
+    const timer = setTimeout(() => setShowCompletion(false), 900)
+    return () => clearTimeout(timer)
+  }, [event?.progress?.percent, event?.progress?.processed])
+  const analysisVisible = analysisActive || showCompletion ||
+    (event?.progress?.percent === 100 && !completionSeen.current)
 
   // 킥 안전 종료 — 분석이 실패하면 photoCount가 기대치에 영영 닿지 않으므로(CHMO-218 계열)
   // 30초 뒤엔 킥을 내리고 그리드로 복귀시킨다. 정상 경로는 그 전에 progress가 이어받는다.
@@ -90,10 +106,10 @@ export function EventDetailPage() {
   // 분석중 자동 폴링 — 2초마다 진행률·상태를 다시 확인하고(BE 요청 주기), 완료되면 앨범
   // 그리드로 자연 전환. 폴링 실패해도 인터벌은 유지되므로 일시적 네트워크 오류는 다음 주기에 회복된다.
   useEffect(() => {
-    if (!analysisActive) return
+    if (!analysisVisible) return
     const timer = setInterval(eventApi.refetch, 2000)
     return () => clearInterval(timer)
-  }, [analysisActive, eventApi.refetch])
+  }, [analysisVisible, eventApi.refetch])
 
   // 분석이 끝나면 앨범 목록을 다시 읽는다 — 앨범 요청을 위로 올린 대가다(CHMO-401). 종전엔
   // 그리드가 완료 시점에 마운트되며 최신 목록을 받았는데, 이제는 분석 중에 받아 둔 목록(대개
@@ -101,14 +117,14 @@ export function EventDetailPage() {
   const wasAnalyzing = useRef(false)
   const refetchAlbums = albumsApi.refetch
   useEffect(() => {
-    if (analysisActive) {
+    if (analysisVisible) {
       wasAnalyzing.current = true
       return
     }
     if (!wasAnalyzing.current) return
     wasAnalyzing.current = false
     refetchAlbums()
-  }, [analysisActive, refetchAlbums])
+  }, [analysisVisible, refetchAlbums])
 
   // 보조 fetch(모임명)의 401은 ErrorState를 거치지 않아 여기서 직접 복귀시킨다
   // (eventApi 401은 아래 ErrorState unauthorizedTo가 처리)
@@ -117,7 +133,7 @@ export function EventDetailPage() {
   const base = `/groups/${groupId}/events/${eventId}`
 
   // 08. 이벤트 상세 = 앨범 그리드(검수 허브) — 분석 완료 시 여기로 자연 전환
-  if (event && event.status !== 'empty' && !analysisActive) {
+  if (event && event.status !== 'empty' && !analysisVisible) {
     return (
       <EventAlbumGrid
         event={event}
@@ -149,7 +165,7 @@ export function EventDetailPage() {
                 {/* 06-E. 빈 이벤트 — 사진 없는 이벤트의 초기 화면 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-8 py-16 text-center">
                   <span aria-hidden className="text-4xl">
-                    📷
+                    사진
                   </span>
                   <p className="mt-3 text-sm text-muted">아직 사진이 없어요</p>
                 </div>
@@ -241,7 +257,16 @@ function RunnerSprite({ url, w, h, durMs }: { url: string; w: number; h: number;
 }
 
 function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
-  const percent = progress?.percent
+  const [percent, setPercent] = useState(progress?.percent ?? 0)
+  const completed = percent >= 100
+  useEffect(() => {
+    setPercent((current) => Math.max(current, progress?.percent ?? 0))
+  }, [progress?.percent])
+  useEffect(() => {
+    if (completed) return
+    const timer = setInterval(() => setPercent((current) => Math.max(current, Math.min(90, current + 1))), 1000)
+    return () => clearInterval(timer)
+  }, [completed])
   return (
     <div
       role="progressbar"
@@ -264,28 +289,17 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
           // translateX(-71px) = 고양이(67)+간격(4) 되감기 — 0%엔 쥐만 무대 왼쪽 끝에 보이고
           // 고양이는 무대 밖에서 대기하다 진행되며 들어온다(등장 연출). left의 -0.48px/%는
           // 쥐 폭(48px)만큼 이동량을 줄여 100%에 쥐가 오른쪽 끝(치즈)에 정확히 닿게 한다
-          className={`absolute bottom-0 flex translate-x-[-71px] items-end gap-1 ${percent == null ? 'animate-chase-roam' : ''}`}
-          style={
-            percent == null ? undefined : { left: `calc(${percent}% - ${percent * 0.48}px)` }
-          }
+          className="absolute bottom-0 flex translate-x-[-71px] items-end gap-1 transition-[left] duration-500"
+          style={{ left: `calc(${percent}% - ${percent * 0.48}px)` }}
         >
           <RunnerSprite url={catUrl} w={67} h={52} durMs={700} />
           <RunnerSprite url={mouseUrl} w={48} h={44} durMs={350} />
         </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${percent ?? 0}%` }} />
+        <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${percent}%` }} />
       </div>
-      {progress ? (
-        <p className="mt-3 text-sm font-bold text-heading">
-          {progress.percent}%
-          <span className="ml-1.5 font-normal text-muted">
-            · {progress.processed}/{progress.total}장 분류
-          </span>
-        </p>
-      ) : (
-        <p className="mt-3 text-sm text-muted">사진을 살펴보는 중…</p>
-      )}
+      <p className="mt-3 text-sm font-bold text-heading">{percent}%</p>
     </div>
   )
 }
@@ -305,14 +319,14 @@ interface EventAlbumGridProps {
  * 08. 이벤트 상세 = 앨범 그리드 · node 211:1619
  * 분석 완료 상태의 검수 허브. ① 인물·공통 = 3열 메인 그리드(커버+검토 테두리/배지) ·
  * ② 공개해도 멤버에게 안 보이는 앨범(분류어려움·눈감음·흔들림) = 하단 별도 섹션.
- * 헤더 ⚙ = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
+ * 헤더 설정 = 이벤트 설정(이름 수정 + 삭제) · 헤더 중앙 타이틀 = 이벤트명(본문 큰 제목 폐지, CHMO-522).
  * 하단 [＋ 사진 추가]→06-U 재업로드(CHMO-606) · [공개 전 요약보기]→14. 앨범 탭 → 09 앨범 상세.
  * 인물 앨범은 카드 이름 줄 탭 = 앨범 설정 시트(이름 수정 + 멤버 연결 — CHMO-400 자리를 CHMO-522가
  * 넓혔다, 09 진입 없이 바로) + 09 앨범 상세 헤더 [✎ 앨범 설정] 병행.
  *
  * **모임 유형 분기(CHMO-612)** — 일반(GENERAL) 모임엔 검수·공개 단계가 없어(ADR 020) 이 화면이
  * 관리 도구가 아니라 구경 화면이 된다: 검토 테두리·배지, [공개 전 요약보기], publish-gate 힌트,
- * 재공개 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·⚙ 이벤트
+ * 재공개 안내가 전부 빠지고 하단엔 [＋ 사진 추가] 하나만 남는다. 앨범 만들기 타일·설정 이벤트
  * 설정·09 진입은 유형과 무관하다(전원 동일 권한이라 막을 이유가 없다).
  */
 function EventAlbumGrid({
@@ -546,7 +560,7 @@ function EventAlbumGrid({
           submitLabel="만들기"
           submittingLabel="만드는 중…"
           submit={(name) => createPersonAlbum(event.id, { name })}
-          successMessage="🧀 앨범을 만들었어요"
+          successMessage="앨범을 만들었어요"
           onRenamed={albumsApi.refetch}
           note="사진 없이 먼저 만들어 둬요. 다른 앨범에서 사진을 골라 [옮기기]로 이 앨범에 모을 수 있어요."
         />
@@ -596,11 +610,11 @@ function CreateAlbumTile({ onClick }: { onClick: () => void }) {
   )
 }
 
-/** 헤더 우측 ⚙ — 이벤트 설정 진입점(06-E·분석중·08 공통, 모임 상세 ⚙와 동일 꼴) */
+/** 헤더 우측 설정 — 이벤트 설정 진입점(06-E·분석중·08 공통, 모임 상세 설정와 동일 꼴) */
 function EventSettingsButton({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" aria-label="이벤트 설정" onClick={onClick} className="text-lg text-muted">
-      ⚙
+    <button type="button" aria-label="이벤트 설정" onClick={onClick} className="text-sm text-muted">
+      설정
     </button>
   )
 }
@@ -608,7 +622,7 @@ function EventSettingsButton({ onClick }: { onClick: () => void }) {
 interface EventSettingsProps {
   event: EventItem
   groupId: string
-  /** 이름 수정 모달 열림 — 트리거(⚙)는 호출부 헤더가 소유 */
+  /** 이름 수정 모달 열림 — 트리거(설정)는 호출부 헤더가 소유 */
   open: boolean
   onClose: () => void
   /** 이름 수정 성공 후 이벤트 상세 갱신(refetch) */
@@ -616,7 +630,7 @@ interface EventSettingsProps {
 }
 
 /**
- * ⚙ 이벤트 설정 = 이름 수정(RenameModal) + 이벤트 삭제(CHMO-278 — DELETE /events/:id).
+ * 설정 이벤트 설정 = 이름 수정(RenameModal) + 이벤트 삭제(CHMO-278 — DELETE /events/:id).
  * 삭제는 위험 동작이라 설정 모달 하단 진입 + ConfirmDialog 확인을 거친다(모임 삭제와 동일 패턴).
  * 성공 시 05 모임 상세로 복귀(뒤로가기로 죽은 상세에 돌아오지 않게 replace).
  */
@@ -631,7 +645,7 @@ function EventSettings({ event, groupId, open, onClose, onEventUpdated }: EventS
     setDeleting(true)
     await mutate(() => deleteEvent(event.id), {
       onSuccess: () => {
-        toast.show('🧀 이벤트를 삭제했어요')
+        toast.show('이벤트를 삭제했어요')
         navigate(`/groups/${groupId}`, { replace: true })
       },
       onError: (msg) => {
@@ -652,7 +666,7 @@ function EventSettings({ event, groupId, open, onClose, onEventUpdated }: EventS
         placeholder="예) 6.15 운동회 오전"
         initialName={event.name}
         submit={(name) => renameEvent(event.id, name)}
-        successMessage="🧀 이벤트 이름을 바꿨어요"
+        successMessage="이벤트 이름을 바꿨어요"
         onRenamed={onEventUpdated}
         dangerLabel="이벤트 삭제"
         onDangerRequest={() => {
