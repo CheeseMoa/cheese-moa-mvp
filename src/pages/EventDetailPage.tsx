@@ -60,33 +60,14 @@ export function EventDetailPage() {
   const [kick, setKick] = useState<AnalysisKick | null>(
     () => (location.state as { analysisKick?: AnalysisKick } | null)?.analysisKick ?? null,
   )
-  const [showCompletion, setShowCompletion] = useState(false)
-  const completionSeen = useRef(false)
-  useEffect(() => {
-    completionSeen.current = false
-    setShowCompletion(false)
-  }, [eventId])
   const kickActive =
     kick != null && kick.eventId === eventId && !!event && event.photoCount < kick.expected &&
     event.progress?.percent !== 100
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트는 사진을 추가해도
   // 공개를 유지한 채 증분 분석이 돌아 상태가 안 바뀌고(CHMO-215·216), 상세 응답의 progress
   // (분석 job 중에만 non-null)로만 진행을 알 수 있다 — 로딩바·폴링은 두 경우 모두 켠다.
-  const analysisActive =
-    !!event && (event.status === 'analyzing' || (event.progress != null && event.progress.percent < 100) || kickActive)
-  useEffect(() => {
-    if (event?.progress?.percent !== 100) {
-      completionSeen.current = false
-      return
-    }
-    if (completionSeen.current) return
-    completionSeen.current = true
-    setShowCompletion(true)
-    const timer = setTimeout(() => setShowCompletion(false), 900)
-    return () => clearTimeout(timer)
-  }, [eventId, event?.progress?.percent, event?.progress?.processed])
-  const analysisVisible = analysisActive || showCompletion ||
-    (event?.progress?.percent === 100 && !completionSeen.current)
+  const analysisVisible = !!event && event.progress?.percent !== 100 &&
+    (event.status === 'analyzing' || event.progress != null || kickActive)
 
   // 킥 안전 종료 — 분석이 실패하면 photoCount가 기대치에 영영 닿지 않으므로(CHMO-218 계열)
   // 30초 뒤엔 킥을 내리고 그리드로 복귀시킨다. 정상 경로는 그 전에 progress가 이어받는다.
@@ -186,7 +167,10 @@ export function EventDetailPage() {
               <>
                 {/* 분석중 — 2초 자동 폴링(위 effect). 진행률 따라 쥐가 치즈로 다가가고, 완료되면 앨범 그리드로 자연 전환 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-6 py-14 text-center">
-                  <p className="text-[19px] text-heading">AI가 사진을 분류하고 있어요</p>
+                  <div className="flex items-center gap-2.5">
+                    <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-[3px] border-photo border-t-primary" />
+                    <p className="text-[19px] text-heading">AI가 사진을 분류하고 있어요</p>
+                  </div>
                   <ChaseProgress key={eventId} progress={event.progress ?? null} />
                   <p className="mt-4 text-[13px] leading-relaxed text-muted">
                     완료되면 아이별 앨범이 자동으로 열려요.
