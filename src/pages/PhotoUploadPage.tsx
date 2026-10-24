@@ -68,7 +68,7 @@ async function registrationLanded(eventId: string, photoCountBefore: number): Pr
     return (
       latest.photoCount > photoCountBefore ||
       latest.status === 'analyzing' ||
-      latest.progress != null
+      (latest.progress != null && latest.progress.percent < 100)
     )
   } catch {
     return false
@@ -148,7 +148,8 @@ export function PhotoUploadPage() {
   const eventPath = `/groups/${groupId}/events/${eventId}`
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트의 사진 추가는 상태
   // 전이 없는 증분 분석이라(CHMO-215·216) 상세 응답의 progress로만 진행을 알 수 있다(CHMO-442).
-  const analysisActive = !!event && (event.status === 'analyzing' || event.progress != null)
+  const analysisActive = !!event &&
+    (event.status === 'analyzing' || (event.progress != null && event.progress.percent < 100))
   // 재업로드 허용(CHMO-606) — 분석 중에만 잠근다. 사진이 있는 이벤트도 이어 올릴 수 있다.
   const uploadLocked = !!event && analysisActive
   // 피커 분기(스크롤 밖 하단 CTA 액션바가 있는 상태) — 이때는 main이 아니라 바가 바닥 여백을 소유한다
@@ -389,7 +390,7 @@ export function PhotoUploadPage() {
       setPhotos((prev) =>
         prev.map((p) => (registeredKeys.has(p.key) ? { ...p, registered: true } : p)),
       )
-      const notices = ['🧀 사진 분류를 시작했어요']
+      const notices = ['사진 분류를 시작했어요']
       if (registered.duplicateCount)
         notices.push(`이미 있는 사진 ${registered.duplicateCount}장은 제외했어요`)
       // 부분 실패(CHMO-693) — 나머지는 이미 분류에 들어갔으니 실패가 아니라 '빠진 장' 안내다
@@ -434,7 +435,7 @@ export function PhotoUploadPage() {
       // "실패"로 굳는다 — 실제로 등록·분류가 시작됐으면 에러 대신 상세로 인계한다(CHMO-486).
       if (registerAttempted && (await registrationLanded(eventId, photoCountBefore))) {
         if (!alive.current) return
-        toast.show('🧀 사진 분류를 시작했어요')
+        toast.show('사진 분류를 시작했어요')
         leave(eventPath, { replace: true })
         return
       }

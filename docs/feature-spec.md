@@ -158,7 +158,7 @@ unreviewed(미검토) → reviewed(검토완료)
 **F4.3 AI 분석 실행**
 - US: 올린 사진을 아이별로 자동 분류한다.
 - AC: **등록(③)이 곧 분석 시작이다** — `[사진 분류하기]`가 등록을 호출하면 서버가 사진을 기록하고 이벤트를 `analyzing`(배지 `분류중`)으로 전이한 뒤 분류를 발행한다(FE가 `POST /analyze`를 따로 부르지 않는다 — 부르면 같은 사진이 두 job으로 발행된다) → 완료 시 `review`로 전환, 이벤트 상세(08) 앨범 그리드 생성.
-- 진행률: 이벤트 상세가 **2초 간격 폴링**(`GET /events/:id`)으로 `progress`(`{processed,total,percent}`)를 읽어 쥐→치즈 프로그레스로 표시한다(CHMO-244·287). `progress`는 분석 job 중에만 non-null이고 목록 응답엔 없다 — null이면 인디터미넌트 폴백. 등록 직후엔 AI 첫 진행률 전이라 progress가 잠시 null인 공백이 있어, 06-U가 navigate state로 '분석 시작' 킥을 넘겨 상세가 폴링을 켠다(CHMO-443).
+- 진행률: 이벤트 상세가 **2초 간격 폴링**(`GET /events/:id`)으로 `progress`(`{processed,total,percent}`)를 읽어 쥐→치즈 프로그레스와 회전 표시를 보여 준다(CHMO-244·287·970). 실제 진행률을 받기 전에도 예상값은 1초마다 최대 90%까지 움직인다. 등록 직후엔 AI 첫 진행률 전이라 progress가 잠시 null인 공백이 있어, 06-U가 navigate state로 '분석 시작' 킥을 넘겨 상세가 폴링을 켠다(CHMO-443). 서버의 완료 100% 조회 유예는 15초지만 화면은 완료 응답을 받는 즉시 앨범 그리드로 전환한다.
 - 화면: 06-U → 08 · API: `POST /events/:id/photos`(등록=분석 시작), `GET /events/:id`(진행률 폴링)
 
 ### F5. 앨범 / 검수
