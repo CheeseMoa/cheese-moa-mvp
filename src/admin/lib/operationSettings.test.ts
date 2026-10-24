@@ -53,7 +53,7 @@ const validate = (path: string, value: string) =>
   )
 describe('운영 설정 변경 폼 — BE CHMO-958 소스 규칙 대조', () => {
   it('공개 실응답의 버전·스토어 형식을 읽고 한 플랫폼만 변경 요청에 담는다', () => {
-    // 공개 GET만 실측했다. 관리자 저장 결과와 공개 설정의 일치는 dev 로그인 후 별도 검증한다.
+    // 공개 GET 본문 픽스처. 관리자 저장 후 공개 설정 일치의 실측 기록은 admin-spec에 둔다.
     const current = { ...values, app: stagingAppConfig }
     const draft = toDraft(current)
     expect(draft['app.minVersion.ios']).toBe(stagingAppConfig.minVersion.ios)

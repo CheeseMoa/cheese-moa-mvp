@@ -385,11 +385,11 @@
 
 **코드리뷰 보완(2026-10-19)**: 편집 기준은 화면 진입마다 새로 조회하고 페이지 전용 캐시는 이탈 시 폐기한다. 저장 후 조회 실패의 401도 기존 세션 만료 흐름으로 전달하며 쓰기를 반복하지 않는다. 저장 중 새로고침도 이탈 경고를 적용한다. 존재하지 않는 날짜의 자동 보정을 막는다. 이력 첫 페이지가 바뀌면 이전 커서 목록을 폐기한다.
 
-**실 BE 검증 대기**: CHMO-959에서 관리자 조회·통계·이력, CHMO-934 관리자 인증의 비관리자/세션 만료·권한 회수, 충돌·저장 실패·복원, 저장 후 무인증 `GET /app/config` 일치를 dev 실서버에서 확인한다. 출석 ETag는 2026-10-19 실응답 회귀 테스트가 있다. 운영 설정·과금·잔액·최소 버전이나 실제 전체 발송은 테스트로 변경하지 않는다.
+**실 BE 검증 현황**: CHMO-959에서 dev 관리자 조회·저장·이력·복원·revision 충돌·공개 `GET /app/config` 일치와 출석 PUT의 ETag를 실측했다(아래 기록). CHMO-934 관리자 인증의 비관리자/세션 만료·권한 회수 및 서버 쓰기 OFF는 대기다. 운영 과금·잔액·최소 버전이나 실제 전체 발송은 테스트로 변경하지 않는다.
 
 #### CHMO-978 퀘스트·기관 월 구독 확장 (2026-10-24)
 
-기존 운영 설정의 **퀘스트·보상** 구분에 `quest.enabled`, `createGroupReward`, `uploadPhotoReward`, `inviteFriendReward`를 연결한다. BE CHMO-973 `QuestPolicy`·`SettingsValues`·`OperationSettingsStore`와 [운영 가이드](https://github.com/CheeseMoa/CheeseMoa-BE/blob/72833762934039e927123bb6272d2cfea7755ee3/docs/guides/first-action-quests.md)를 대조했다. FE 구현 및 로컬 목 화면 검증이며 실서버 저장·실제 지급 검증은 대기다.
+기존 운영 설정의 **퀘스트·보상** 구분에 `quest.enabled`, `createGroupReward`, `uploadPhotoReward`, `inviteFriendReward`를 연결한다. BE CHMO-973 `QuestPolicy`·`SettingsValues`·`OperationSettingsStore`와 [운영 가이드](https://github.com/CheeseMoa/CheeseMoa-BE/blob/72833762934039e927123bb6272d2cfea7755ee3/docs/guides/first-action-quests.md)를 대조했다. FE 구현 및 로컬 목 화면 검증을 완료했다. 실서버에서 현재 퀘스트·구독 조회, 다른 설정 저장과 옛 이력 복원 시 정책 보존을 확인했다. 퀘스트 보상 자체 변경·실제 지급 검증은 별도다.
 
 - 서버 현재 값을 그대로 표시한다. 보상은 양의 정수이고 친구 초대 완료 보상은 다른 두 보상 각각보다 크며 최대 10,000장이다. 한 보상만 바꿔도 나머지 현재 보상과 함께 검증한다. 오류는 입력칸과 포커스를 받는 오류 요약에 표시한다.
 - 변경한 필드만 현재 revision·사유와 PATCH한다. 다른 보상과 다른 운영 설정을 기본값으로 덮어쓰지 않는다. 적용 영향은 입력 영역과 저장 확인 양쪽에 표시한다.
@@ -408,31 +408,37 @@
 - [x] 퀘스트·보상 → 0장 입력 후 변경 내용 확인 → 오류 안내, 저장 확인창 진입 차단.
 - [x] 퀘스트·보상 → 모임 만들기 보상을 친구 초대 보상과 같게 변경 → 친구 초대 보상 오류 안내.
 - [x] 퀘스트·보상 → 활성·45장으로 변경 → 전후 값·신규 참여자 적용 안내·사유·확인 후 저장 및 재조회.
-- [x] 변경 이력 → 변경 전 복원 검토 → 퀘스트 전후 값 확인 후 새 사유로 복원, 새 revision·복원 원본 이력 확인. 저장·복원은 모두 로컬 목에서만 실행했다.
+- [x] 변경 이력 → 변경 전 복원 검토 → 퀘스트 전후 값 확인 후 새 사유로 복원, 새 revision·복원 원본 이력 확인. 이 퀘스트 값 변경·복원 시나리오는 로컬 목에서 실행했다.
 - [x] 기관 월 구독 → 안내 비활성·구매 활성 → 오류 및 확인창 진입 차단. 두 값 활성 → 사유·영향 확인 후 목 저장·재조회(revision 1), 변경 전 복원 → 비활성 복구(revision 2)와 원본 이력 확인.
-- [ ] dev 실서버에서 지정된 테스트 데이터로 부분 저장·재조회·이력·복원, 권한 거절·쓰기 비활성·revision 충돌·순단을 확인한다.
+- [x] dev 실서버 부분 저장·재조회·이력·복원·revision 충돌과 신규 정책 보존 확인(아래 CHMO-959 기록).
+- [ ] dev 실서버 세션 만료·권한 회수·비관리자·쓰기 비활성·순단 확인.
 - [ ] BE/APP에서 기존 참여자의 보상 보존, OFF→ON 재처리 멱등, 기존 구독 유지 및 신규 구매 차단을 확인한다.
 
 #### CHMO-959 dev 실서버 검증 기록 (2026-10-24)
 
-상태: **일부 조회 검증 완료, 관리자 인증 후 쓰기 검증 대기**. 978 UI 구현·자동 검증과 959 실제 dev AC를 구분한다. 검증 완료 전 Jira 959 완료·develop 머지는 진행하지 않는다.
+상태: **관리자 저장·충돌·복원·공개 설정 일치 완료, 인증 예외·서버 쓰기 OFF 검증 대기**. 978 UI 구현·자동 검증과 959 실제 dev AC를 구분한다. 사용자의 2026-10-24 즉시 머지 지시에 따라 남은 인증 예외·쓰기 OFF 검증은 후속으로 두고 develop→main 릴리스를 진행한다. Jira 959는 실제 AC를 모두 충족할 때 완료한다.
 
-- 대상: `.env.development`의 `staging-api.cheese-moa.com`, MSW를 끈 로컬 관리자 화면. 비밀번호·토큰·Access assertion은 기록하지 않는다.
-- 브라우저 직접 GET `/app/config`: 봉투 없이 `minVersion.ios/android=2.5.0`, 양 스토어 URL을 확인했다. **관리자 저장 후 일치 검증은 아니다.** 본문을 `src/test/fixtures/app-config-staging.json`에 채집했다.
-- 브라우저 무인증 GET `/admin/operation-settings`: `{isSuccess:false,code:"COMMON401",message:"인증이 필요합니다."}`, `result` 키 없음. 본문을 `src/test/fixtures/operation-settings-unauthenticated-staging.json`에 채집했다. 브라우저 본문 관측이며 HTTP 상태·헤더는 채집하지 않았다. 회귀 테스트의 HTTP 401은 인증 계약에 따른 입력이다.
-- Python 기본 HTTP 클라이언트 요청은 Cloudflare HTTP 403·오류 1010이었다. 브라우저 GET은 가능하므로 이를 관리자 권한 거절의 증거로 사용하지 않는다.
-- 공개 응답의 버전/URL 표시·부분 요청과 `result` 없는 인증 오류 처리를 실응답 본문으로 회귀 검증한다. 권한 회수·만료·쓰기 잠금·충돌 테스트의 합성 응답을 실서버 증거라고 보고하지 않는다.
+- 대상: `staging-api.cheese-moa.com`, MSW를 끈 `http://localhost:5198/admin/operation-settings`. 기존에 로그인된 dev 관리자 세션을 사용했다. 비밀번호·토큰·Access assertion은 읽거나 기록하지 않았다.
+- 2026-10-24 10:14~10:23 KST: revision 3에서 시작해 **revision 8로 종료**했다. 임시 iOS 스토어 URL·비활성 출석 알림 제목을 모두 복원했다. 마지막 GET의 전체 `settings`가 revision 4 이력의 `before`(검증 전 revision 3)와 정확히 일치함을 대조했다. 감사 이력만 남는다.
+- 실응답 픽스처: `src/test/fixtures/operation-settings-staging.json`. Vite staging 프록시에서 허용한 운영 설정·이력·복원·출석 응답의 본문·HTTP 상태·ETag만 채집하고 임시 계측 코드는 제거했다. 이력의 `actorUserId`는 합성 ID, `reason`은 테스트 라벨로 비식별화했다. 나머지 값과 누락 키를 보존했다. 현재 조회·전체 이력·옛 이력 복원·출석 GET/PUT·HTTP 409를 API/폼 계약 회귀에 사용한다.
+- 공개 `/app/config`는 브라우저 직접 GET으로 저장 전·후·복원 후 확인했다. 기존 `app-config-staging.json`은 최초 공개 GET 본문이다. 저장 후 임시 iOS URL은 관리자 값과 같았으며 양 최소 버전 2.5.0·Android URL은 바뀌지 않았다. 공개 GET의 HTTP 상태·헤더는 별도 채집하지 않았다.
+- 최초 무인증 GET `/admin/operation-settings`는 `{isSuccess:false,code:"COMMON401",message:"인증이 필요합니다."}`, `result` 키 없음. `operation-settings-unauthenticated-staging.json`은 브라우저 본문 관측이며 HTTP 상태·헤더는 채집하지 않았다. 해당 회귀 테스트의 HTTP 401은 인증 계약에 따른 입력이다.
+- Python 기본 HTTP 요청의 Cloudflare HTTP 403·오류 1010은 관리자 권한 거절 증거가 아니다. 만료·권한 회수·비관리자·쓰기 OFF 합성 응답을 실서버 증거로 간주하지 않는다.
 
-| 진입 → 조작 | 기대 결과 | 실서버 상태 |
+| 진입 → 조작 | 기대 결과 | 실서버 결과 |
 |---|---|---|
-| dev 관리자 로그인 → 운영 설정 | 최신 revision·현재 설정 조회, 실제 연결 호스트 확인 | 로그인 대기 |
-| 지정된 dev 테스트 leaf 1개 변경 → 사유 입력·저장 → 재조회 | revision 증가, 다른 leaf/퀘스트/구독 정책 보존 | 대기 |
-| 변경 이력 → 전후 확인 → BEFORE 복원 | 새 revision·사유·restoredFrom, 원래 설정 회복 | 대기 |
-| 두 관리자 화면에서 같은 revision 편집 → 순차 저장 | 두 번째 SETTINGS409, 입력 보존·자동 재시도 없음 | 대기 |
-| 잘못된 입력·순단·서버 쓰기 OFF 조건 | 검증 실패/SETTINGS503 구분, 입력 보존 | 대기 |
-| 지정 테스트 계정의 만료·권한 회수·비관리자 조건 | 공용 인증 갱신/로그인 또는 권한 거절, 쓰기 불가 | 대기 |
-| dev 앱 설정 저장 → 무인증 `/app/config` 재조회 → 복원 | 관리자와 공개 minVersion/storeUrl 일치 | 최초 공개 GET만 완료 |
-| 옛 이력 복원·다른 섹션 부분 저장·출석 PUT | 누락 신규 정책 현재 값 유지, 수정하지 않은 정책 보존 | 소스·단위 검증만 완료 |
+| 로그인된 dev 관리자 → 운영 설정 | 최신 revision·현재 설정·연결 호스트 조회 | revision 3, staging 호스트, 활성 퀘스트 30/100/200·구독 false/false 확인 |
+| 앱 버전·스토어 → iOS URL에 `?chmo959=dev-check` 추가 → 사유·확인 후 저장 | 한 leaf만 변경, revision 증가, 다른 정책 보존 | revision 4, 재조회·이력의 차이는 iOS URL 하나 |
+| 다른 탭의 revision 3 → Android URL 수정·저장 | SETTINGS409, 입력 보존·자동 재시도 없음 | 실제 HTTP 409·result 없는 SETTINGS409, 입력 유지·재조회 전 저장 차단 |
+| 이력 4 → BEFORE 복원·새 사유 | 새 revision·restoredFrom·원래 설정 회복 | revision 5, restoredFrom=4, 원래 URL 복구 |
+| 공개 `/app/config` → 저장 후·복원 후 재조회 | 관리자 minVersion/storeUrl과 일치 | 임시 iOS URL 반영·원복 확인, 나머지 값 유지 |
+| 이력 2 → AFTER 복원 | 누락 신규 정책을 현재 값으로 보존 | revision 6, quest·institutionSubscription이 없는 실제 옛 스냅샷 복원 후 활성 퀘스트 30/100/200·구독 false/false 유지 |
+| 출석 알림(비활성) → 한국어 제목에 검증 문구 추가·저장 | 별도 PUT·If-Match, 수정하지 않은 정책 보존 | GET ETag W/"6" → PUT 200 W/"7", revision 7의 차이는 제목 하나, 발송은 비활성 유지 |
+| 이력 7 → BEFORE 복원 | 새 revision, 모든 임시 변경 회복 | revision 8, restoredFrom=7, 전체 설정이 검증 전과 동일 |
+| 퀘스트·보상 → 생성 보상 0 입력·변경 내용 확인 → 30으로 되돌림 | 오류·확인창 진입 차단, 서버 쓰기 없음 | 실제 현재 값으로 FE 검증 확인, revision 8 유지. 서버 SETTINGS400 실측은 아님 |
+| 지정 계정의 만료·권한 회수·비관리자, 서버 쓰기 OFF·순단 | 인증 갱신/로그인·권한 거절·SETTINGS503 구분, 입력 보존 | 지정 테스트 계정·dev 서버 제어 경로 대기(2026-10-24 사용자에게 문의함) |
+
+릴리스 조건: BE CHMO-978 PR #347 커밋 `672fb20`은 [BE main 대상 PR #350](https://github.com/CheeseMoa/CheeseMoa-BE/pull/350)의 merge commit `b340927`에 포함됨을 확인했다(2026-10-24 10:06:57 KST 병합). 다만 10:26 KST 현재 원격 `main` ref 조회는 404/없음으로, 브랜치 복구·현재 배포 상태는 별도 확인이 필요하다. 사용자가 BE main 병합을 확인하고 FE 즉시 머지를 재지시했으므로, 원격 main ref 상태나 남은 인증 검증을 추가 승인 조건으로 삼지 않는다. 미검증 범위는 릴리스 기록에 남긴다.
 
 운영 최소 버전·잔액·전체 발송을 테스트로 변경하지 않는다. `dailyGrant`·`cap` 편집 제한을 유지한다. 판매 ON·출시 게이트 개방·양 플랫폼 Sandbox는 별도 출시 검증이다.
 

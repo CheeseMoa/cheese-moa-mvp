@@ -1,0 +1,1120 @@
+{
+  "source": {
+    "host": "staging-api.cheese-moa.com",
+    "capturedOn": "2026-10-24",
+    "transport": "MSW off; Vite staging proxy response body/status/ETag only",
+    "sanitization": "actorUserId replaced with synthetic IDs; reason replaced with test labels. Other response values and absent keys preserved."
+  },
+  "current": {
+    "path": "/admin/operation-settings",
+    "method": "GET",
+    "status": 200,
+    "body": {
+      "isSuccess": true,
+      "code": "COMMON200",
+      "message": "성공입니다.",
+      "result": {
+        "revision": 8,
+        "settings": {
+          "app": {
+            "minVersion": {
+              "ios": "2.5.0",
+              "android": "2.5.0"
+            },
+            "storeUrl": {
+              "ios": "https://apps.apple.com/app/id6797158719",
+              "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+            }
+          },
+          "credit": {
+            "enforcementStartsAt": null,
+            "migrationCutoffAt": null,
+            "signupGrant": 50,
+            "dailyGrant": 10,
+            "cap": 500,
+            "migrationGrant": 500,
+            "configured": false
+          },
+          "institution": {
+            "trialPeriod": "PT336H",
+            "gracePeriod": "PT168H"
+          },
+          "attendancePush": {
+            "enabled": false,
+            "sendTime": "19:00",
+            "copy": {
+              "ko": {
+                "title": "오늘 출석 선물을 받아보세요",
+                "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+              },
+              "en": {
+                "title": "Claim your daily check-in gift",
+                "body": "Open CheeseMoa to collect your free photo credits."
+              },
+              "ja": {
+                "title": "今日のログイン特典を受け取りましょう",
+                "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+              }
+            }
+          },
+          "quest": {
+            "enabled": true,
+            "createGroupReward": 30,
+            "uploadPhotoReward": 100,
+            "inviteFriendReward": 200
+          },
+          "institutionSubscription": {
+            "offerEnabled": false,
+            "purchaseEnabled": false
+          }
+        },
+        "updatedAt": "2026-10-24T01:23:09.594667Z",
+        "readOnly": {
+          "uploadLimits": {
+            "perRequest": 500,
+            "perEvent": 1000,
+            "perGroup": 5000
+          },
+          "appCompatibilityNotes": [
+            "일일 지급량 변경 전 APP의 10장 고정 문구 변경 필요",
+            "출석 적립 상한 변경 전 APP 출석 팝업의 500장 고정 게이지 변경 필요"
+          ]
+        }
+      }
+    }
+  },
+  "history": {
+    "path": "/admin/operation-settings/history",
+    "method": "GET",
+    "status": 200,
+    "body": {
+      "isSuccess": true,
+      "code": "COMMON200",
+      "message": "성공입니다.",
+      "result": {
+        "items": [
+          {
+            "historyId": 8,
+            "revision": 8,
+            "actorUserId": 1002,
+            "changedAt": "2026-10-24T01:23:09.594667Z",
+            "reason": "검증 이력 8 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요 (CHMO-959 dev 검증)",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": 7
+          },
+          {
+            "historyId": 7,
+            "revision": 7,
+            "actorUserId": 1002,
+            "changedAt": "2026-10-24T01:22:24.562360Z",
+            "reason": "검증 이력 7 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요 (CHMO-959 dev 검증)",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": null
+          },
+          {
+            "historyId": 6,
+            "revision": 6,
+            "actorUserId": 1002,
+            "changedAt": "2026-10-24T01:21:34.748370Z",
+            "reason": "검증 이력 6 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": 2
+          },
+          {
+            "historyId": 5,
+            "revision": 5,
+            "actorUserId": 1002,
+            "changedAt": "2026-10-24T01:20:28.288478Z",
+            "reason": "검증 이력 5 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719?chmo959=dev-check",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": 4
+          },
+          {
+            "historyId": 4,
+            "revision": 4,
+            "actorUserId": 1002,
+            "changedAt": "2026-10-24T01:17:59.501203Z",
+            "reason": "검증 이력 4 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719?chmo959=dev-check",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              },
+              "institutionSubscription": {
+                "offerEnabled": false,
+                "purchaseEnabled": false
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": null
+          },
+          {
+            "historyId": 3,
+            "revision": 3,
+            "actorUserId": 0,
+            "changedAt": "2026-10-21T11:21:24.895550Z",
+            "reason": "검증 이력 3 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": false,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              },
+              "quest": {
+                "enabled": true,
+                "createGroupReward": 30,
+                "uploadPhotoReward": 100,
+                "inviteFriendReward": 200
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": null
+          },
+          {
+            "historyId": 2,
+            "revision": 2,
+            "actorUserId": 1001,
+            "changedAt": "2026-10-19T13:20:59.191107Z",
+            "reason": "검증 이력 2 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift (dev save check)",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": 1
+          },
+          {
+            "historyId": 1,
+            "revision": 1,
+            "actorUserId": 1001,
+            "changedAt": "2026-10-19T13:20:31.162785Z",
+            "reason": "검증 이력 1 (사유 비식별화)",
+            "before": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              }
+            },
+            "after": {
+              "app": {
+                "minVersion": {
+                  "ios": "2.5.0",
+                  "android": "2.5.0"
+                },
+                "storeUrl": {
+                  "ios": "https://apps.apple.com/app/id6797158719",
+                  "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+                }
+              },
+              "credit": {
+                "enforcementStartsAt": null,
+                "migrationCutoffAt": null,
+                "signupGrant": 50,
+                "dailyGrant": 10,
+                "cap": 500,
+                "migrationGrant": 500,
+                "configured": false
+              },
+              "institution": {
+                "trialPeriod": "PT336H",
+                "gracePeriod": "PT168H"
+              },
+              "attendancePush": {
+                "enabled": false,
+                "sendTime": "19:00",
+                "copy": {
+                  "ko": {
+                    "title": "오늘 출석 선물을 받아보세요",
+                    "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+                  },
+                  "en": {
+                    "title": "Claim your daily check-in gift (dev save check)",
+                    "body": "Open CheeseMoa to collect your free photo credits."
+                  },
+                  "ja": {
+                    "title": "今日のログイン特典を受け取りましょう",
+                    "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+                  }
+                }
+              }
+            },
+            "scope": "GLOBAL",
+            "restoredFrom": null
+          }
+        ],
+        "nextCursor": null,
+        "hasNext": false
+      }
+    }
+  },
+  "legacyRestore": {
+    "path": "/admin/operation-settings/history/2/restore",
+    "method": "POST",
+    "status": 200,
+    "body": {
+      "isSuccess": true,
+      "code": "COMMON200",
+      "message": "성공입니다.",
+      "result": {
+        "revision": 6,
+        "settings": {
+          "app": {
+            "minVersion": {
+              "ios": "2.5.0",
+              "android": "2.5.0"
+            },
+            "storeUrl": {
+              "ios": "https://apps.apple.com/app/id6797158719",
+              "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+            }
+          },
+          "credit": {
+            "enforcementStartsAt": null,
+            "migrationCutoffAt": null,
+            "signupGrant": 50,
+            "dailyGrant": 10,
+            "cap": 500,
+            "migrationGrant": 500,
+            "configured": false
+          },
+          "institution": {
+            "trialPeriod": "PT336H",
+            "gracePeriod": "PT168H"
+          },
+          "attendancePush": {
+            "enabled": false,
+            "sendTime": "19:00",
+            "copy": {
+              "ko": {
+                "title": "오늘 출석 선물을 받아보세요",
+                "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+              },
+              "en": {
+                "title": "Claim your daily check-in gift",
+                "body": "Open CheeseMoa to collect your free photo credits."
+              },
+              "ja": {
+                "title": "今日のログイン特典を受け取りましょう",
+                "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+              }
+            }
+          },
+          "quest": {
+            "enabled": true,
+            "createGroupReward": 30,
+            "uploadPhotoReward": 100,
+            "inviteFriendReward": 200
+          },
+          "institutionSubscription": {
+            "offerEnabled": false,
+            "purchaseEnabled": false
+          }
+        },
+        "updatedAt": "2026-10-24T01:21:34.748370Z",
+        "readOnly": {
+          "uploadLimits": {
+            "perRequest": 500,
+            "perEvent": 1000,
+            "perGroup": 5000
+          },
+          "appCompatibilityNotes": [
+            "일일 지급량 변경 전 APP의 10장 고정 문구 변경 필요",
+            "출석 적립 상한 변경 전 APP 출석 팝업의 500장 고정 게이지 변경 필요"
+          ]
+        }
+      }
+    }
+  },
+  "attendanceBefore": {
+    "path": "/admin/notifications/daily-attendance/settings",
+    "method": "GET",
+    "status": 200,
+    "etag": "W/\"6\"",
+    "body": {
+      "isSuccess": true,
+      "code": "COMMON200",
+      "message": "성공입니다.",
+      "result": {
+        "enabled": false,
+        "sendTime": "19:00",
+        "copy": {
+          "ko": {
+            "title": "오늘 출석 선물을 받아보세요",
+            "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+          },
+          "en": {
+            "title": "Claim your daily check-in gift",
+            "body": "Open CheeseMoa to collect your free photo credits."
+          },
+          "ja": {
+            "title": "今日のログイン特典を受け取りましょう",
+            "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+          }
+        }
+      }
+    }
+  },
+  "attendanceUpdate": {
+    "path": "/admin/notifications/daily-attendance/settings",
+    "method": "PUT",
+    "status": 200,
+    "etag": "W/\"7\"",
+    "body": {
+      "isSuccess": true,
+      "code": "COMMON200",
+      "message": "성공입니다.",
+      "result": {
+        "enabled": false,
+        "sendTime": "19:00",
+        "copy": {
+          "ko": {
+            "title": "오늘 출석 선물을 받아보세요 (CHMO-959 dev 검증)",
+            "body": "치즈모아를 열고 무료 사진 장수를 받아보세요."
+          },
+          "en": {
+            "title": "Claim your daily check-in gift",
+            "body": "Open CheeseMoa to collect your free photo credits."
+          },
+          "ja": {
+            "title": "今日のログイン特典を受け取りましょう",
+            "body": "CheeseMoaを開いて無料の写真枚数を受け取りましょう。"
+          }
+        }
+      }
+    }
+  },
+  "conflict": {
+    "path": "/admin/operation-settings",
+    "method": "PATCH",
+    "status": 409,
+    "body": {
+      "isSuccess": false,
+      "code": "SETTINGS409",
+      "message": "설정이 변경되었습니다. 다시 조회해 주세요."
+    }
+  }
+}

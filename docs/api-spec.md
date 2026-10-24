@@ -489,7 +489,7 @@ FE가 각 파일을 `uploadUrl`로 직접 `PUT`한다(동시 실행 수 제한·
 
 ## 운영 설정 — 관리자 계약 (CHMO-957 · BE CHMO-958)
 
-CHMO-934 관리자 비밀번호 인증·DB 관리자 역할·Cloudflare Access 검사와 BE `{isSuccess, code, message, result}` 봉투를 사용한다. 구현·권한 개방 상태 및 정책 의미는 [admin-spec §3-10](admin-spec.md#3-10-운영-설정-chmo-957--be-chmo-958)을 따른다. 아래는 BE PR #329 소스·문서 대조 계약이며 실 BE 응답 채집은 대기다.
+CHMO-934 관리자 비밀번호 인증·DB 관리자 역할·Cloudflare Access 검사와 BE `{isSuccess, code, message, result}` 봉투를 사용한다. 구현·권한 개방 상태 및 정책 의미는 [admin-spec §3-10](admin-spec.md#3-10-운영-설정-chmo-957--be-chmo-958)을 따른다. 아래는 BE PR #329·#347 소스/문서와 2026-10-24 staging 실응답 대조 계약이다. 채집 범위·미검증 인증 예외는 [admin-spec CHMO-959 기록](admin-spec.md#chmo-959-dev-실서버-검증-기록-2026-10-24)을 따른다.
 
 | 동작 | API | 핵심 계약 |
 |---|---|---|
@@ -506,7 +506,7 @@ CHMO-978 FE 확장: `quest`는 `{enabled:boolean, createGroupReward:number, uplo
 
 **기관 월 구독:** BE CHMO-978 PR #347은 `institutionSubscription:{offerEnabled:boolean,purchaseEnabled:boolean}`을 제공한다. `purchaseEnabled=true`이면 `offerEnabled=true`가 필수이며 위반은 SETTINGS400이다. 앱용 `enabled`·계정별 `purchasable`은 판매 준비·계정 자격까지 합친 결과이며 관리자 변경 필드가 아니다. 수동 이용·가입 체험과 유예 종료 이후 구매 정책, 기존 구독 유지, 출시 게이트는 BE가 소유한다.
 
-**구버전 호환:** 현재 `SettingsValues`는 누락된 quest를 OFF·30/100/200, institutionSubscription을 false/false로 보충한다. 이력은 별도 `SettingsHistoryValues`로 누락/null을 보존하고, 복원 시 해당 정책의 현재 값을 유지한다. FE는 이력을 `기록 없음 · 복원 시 현재 값 유지`로 표시하고 실제 복원될 값을 비교한다. 현재 응답 자체의 누락·불완전한 값을 기본값으로 합성하거나 PATCH하지 않는다. 월 구독 계약이 없는 구 서버의 누락 퀘스트 이력은 안전한 복원을 확인할 수 없어 제한한다. 구/신 서버 혼재 시 정책 쓰기를 중단해야 한다. 이는 소스 대조이며 운영 설정 전체의 실 BE 응답 픽스처·dev 저장 검증은 대기다.
+**구버전 호환:** 현재 `SettingsValues`는 누락된 quest를 OFF·30/100/200, institutionSubscription을 false/false로 보충한다. 이력은 별도 `SettingsHistoryValues`로 누락/null을 보존하고, 복원 시 해당 정책의 현재 값을 유지한다. FE는 이력을 `기록 없음 · 복원 시 현재 값 유지`로 표시하고 실제 복원될 값을 비교한다. 현재 응답 자체의 누락·불완전한 값을 기본값으로 합성하거나 PATCH하지 않는다. 월 구독 계약이 없는 구 서버의 누락 퀘스트 이력은 안전한 복원을 확인할 수 없어 제한한다. 구/신 서버 혼재 시 정책 쓰기를 중단해야 한다. 2026-10-24 staging에서 옛 이력의 두 정책 누락과 복원 후 활성 퀘스트 보존을 실측했다. 운영 설정 전체 조회·이력·복원·출석 PUT·SETTINGS409 응답은 `src/test/fixtures/operation-settings-staging.json`에 비식별화해 보관한다.
 
 생략값은 보존한다. URL null은 삭제, enforcementStartsAt null은 차감 비활성화다. migrationCutoffAt은 수정·복원으로 바꾸지 않는다. 숫자 ID·revision, ISO 시각을 사용한다. 오류는 `SETTINGS400`(입력), `SETTINGS404`(이력 없음), `SETTINGS409`(충돌), `SETTINGS503`(쓰기 잠금), 기존 `VALID400`/`COMMON400`/`CAMPAIGN400` 및 인증·인가 오류다. FE는 충돌 자동 재시도·쓰기 잠금 우회를 하지 않는다.
 

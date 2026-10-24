@@ -1,6 +1,6 @@
 import stagingAttendance from '../../test/fixtures/attendance-settings-staging.json'
 import stagingUnauthenticated from '../../test/fixtures/operation-settings-unauthenticated-staging.json'
-/** 요청 직렬화·인증 인프라 검사. MSW 응답을 계약 증거로 사용하지 않는다. 실 BE 연동은 배포 후 별도. */
+/** 요청 직렬화·인증 인프라 검사. 실응답 회귀는 operationSettings.staging.test.ts에서 구분한다. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   changeOperationSettings,
