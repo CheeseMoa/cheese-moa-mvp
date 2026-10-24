@@ -45,8 +45,9 @@ export function LegalDocPage({ doc }: { doc: LegalDoc }) {
           >
             <h2 className="mb-4 text-xl font-bold">{appStorePurchaseNotice.title}</h2>
             <p className="mb-4 text-sm leading-relaxed">
-              아래 이용약관의 웹 단건 이용권 안내와 구분되는 앱 스토어 상품의 결제·구독 안내입니다.
-              가입 약관의 동의 버전을 변경하거나 기존 결제의 환불 권리를 축소하지 않습니다.
+              이용약관 제9조에 따라 별도로 안내하는 앱 스토어 상품의 결제·구독 조건입니다. 앱에서
+              유료 상품을 구매하는 경우에 적용되며, 기존 웹 직접 결제에는 구매 당시 조건과 환불
+              기준이 적용됩니다.
             </p>
             <LegalDocBody doc={appStorePurchaseNotice} />
           </section>
