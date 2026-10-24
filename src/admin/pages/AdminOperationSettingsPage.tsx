@@ -33,7 +33,17 @@ import {
   fields,
   sections,
   toDraft,
-  fieldError,
+  hasQuestSettings,
+  hasSubscriptionSettings,
+  subscriptionImpact,
+  missingHistoryPolicies,
+  missingPolicyMessage,
+  restorePreview,
+  questImpact,
+  restoreCompatibilityError,
+  settingsEnvironmentLabel,
+  settingsErrors,
+  settingDisplay,
   type SettingsSection,
 } from '../lib/operationSettings'
 
@@ -42,6 +52,10 @@ const button =
 const primary = `${button} border-primary bg-primary font-semibold`
 type Tab = SettingsSection | 'history' | 'limits'
 type Pending = { kind: 'save' } | { kind: 'restore'; item: SettingsHistory; snapshot: Snapshot }
+const environment = settingsEnvironmentLabel(
+  import.meta.env.VITE_API_ORIGIN,
+  import.meta.env.VITE_ENABLE_MSW === 'true',
+)
 
 export function AdminOperationSettingsPage() {
   const navigate = useNavigate()
@@ -69,10 +83,7 @@ export function AdminOperationSettingsPage() {
   const changes = baseline && section ? changedFields(baseline.settings, draft, section.key) : []
   const dirty = changes.length > 0
   const blocker = useBlocker(dirty || busy)
-  const errors = changes.flatMap((f) => {
-    const error = fieldError(f, draft[f.path])
-    return error ? [{ path: f.path, label: f.label, error }] : []
-  })
+  const errors = baseline && section ? settingsErrors(baseline.settings, draft, section.key) : []
   const payloadError = tab === 'attendancePush' && baseline ? attendancePayloadError(draft) : null
   const history = useApi(tab === 'history' ? 'admin-operation-settings-history' : null, (signal) =>
     getSettingsHistory(undefined, signal),
@@ -149,19 +160,22 @@ export function AdminOperationSettingsPage() {
       },
     })
   }
-  const restoreIncompatible =
-    pending?.kind === 'restore' &&
-    baseline !== null &&
-    (() => {
-      const target = pending.snapshot === 'BEFORE' ? pending.item.before : pending.item.after
-      return (
-        target.credit.dailyGrant !== baseline.settings.credit.dailyGrant ||
-        target.credit.cap !== baseline.settings.credit.cap
-      )
-    })()
+  const restoreTarget =
+    pending?.kind === 'restore'
+      ? pending.snapshot === 'BEFORE'
+        ? pending.item.before
+        : pending.item.after
+      : null
+  const restoreError =
+    pending?.kind === 'restore' && baseline
+      ? restoreCompatibilityError(
+          baseline.settings,
+          pending.snapshot === 'BEFORE' ? pending.item.before : pending.item.after,
+        )
+      : null
   async function save() {
     if (
-      restoreIncompatible ||
+      restoreError ||
       busyRef.current ||
       !baseline ||
       !pending ||
@@ -279,16 +293,7 @@ export function AdminOperationSettingsPage() {
   if (!baseline)
     return (
       <>
-        <AdminTopbar
-          left="운영 설정"
-          right={
-            import.meta.env.VITE_ENABLE_MSW === 'true'
-              ? '로컬 목 · 실제 서버에 저장되지 않아요'
-              : /staging/.test(import.meta.env.VITE_API_ORIGIN ?? '')
-                ? '스테이징 서버'
-                : '운영 서버'
-          }
-        />
+        <AdminTopbar left="운영 설정" right={environment} />
         <div className="p-6">
           {request.error ? (
             <AdminErrorMessage error={request.error} onRetry={request.refetch} />
@@ -299,6 +304,10 @@ export function AdminOperationSettingsPage() {
       </>
     )
   const activeFields = fields.filter((f) => f.path.startsWith(`${tab}.`))
+  const questUnavailable = tab === 'quest' && !hasQuestSettings(baseline.settings)
+  const subscriptionUnavailable =
+    tab === 'institutionSubscription' && !hasSubscriptionSettings(baseline.settings)
+  const policyUnavailable = questUnavailable || subscriptionUnavailable
   const compatibilityLocked = (path: string) =>
     path === 'credit.dailyGrant' || path === 'credit.cap'
   const attendanceStale =
@@ -306,16 +315,7 @@ export function AdminOperationSettingsPage() {
     (!attendance.data || attendance.data.etag !== `"${baseline.revision}"`)
   return (
     <>
-      <AdminTopbar
-        left="운영 설정"
-        right={
-          import.meta.env.VITE_ENABLE_MSW === 'true'
-            ? '로컬 목 · 실제 서버에 저장되지 않아요'
-            : /staging/.test(import.meta.env.VITE_API_ORIGIN ?? '')
-              ? '스테이징 서버'
-              : '운영 서버'
-        }
-      />
+      <AdminTopbar left="운영 설정" right={environment} />
       <div className="mx-auto max-w-6xl space-y-5 px-7 py-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -371,6 +371,7 @@ export function AdminOperationSettingsPage() {
             onSubmit={(e) => {
               e.preventDefault()
               setShowErrors(true)
+              if (errors.length || payloadError) errorSummary.current?.focus()
               if (!errors.length && !payloadError && dirty) {
                 setPending({ kind: 'save' })
                 setAcknowledged(false)
@@ -378,6 +379,18 @@ export function AdminOperationSettingsPage() {
             }}
           >
             <FormSection title={section.label} description={section.description}>
+              {tab === 'quest' && <AdminNotice title="퀘스트 적용 범위" lines={questImpact} />}
+              {tab === 'institutionSubscription' && (
+                <AdminNotice title="월 구독 적용 범위" lines={subscriptionImpact} />
+              )}
+              {policyUnavailable && (
+                <AdminNotice
+                  title={`${questUnavailable ? '퀘스트' : '월 구독'} 설정을 확인할 수 없어요`}
+                  lines={[
+                    '서버에서 이 설정 전체를 제공하지 않았어요. 기본값으로 채우지 않고 편집을 잠갔어요. 서버 업데이트 후 최신 설정을 조회해 주세요.',
+                  ]}
+                />
+              )}
               {tab === 'credit' && (
                 <AdminNotice
                   lines={[
@@ -406,7 +419,7 @@ export function AdminOperationSettingsPage() {
               <div className="grid gap-5 md:grid-cols-2">
                 {activeFields.map((f) => {
                   const error = showErrors ? errors.find((e) => e.path === f.path)?.error : null
-                  const disabled = busy || compatibilityLocked(f.path)
+                  const disabled = busy || policyUnavailable || compatibilityLocked(f.path)
                   return (
                     <div key={f.path} className={f.kind === 'body' ? 'md:col-span-2' : ''}>
                       <label htmlFor={f.path} className="mb-1.5 block text-[13px] font-semibold">
@@ -417,9 +430,12 @@ export function AdminOperationSettingsPage() {
                           id={f.path}
                           value={draft[f.path]}
                           disabled={disabled}
-                          className={inputClassName()}
+                          className={inputClassName(Boolean(error))}
+                          aria-invalid={Boolean(error)}
+                          aria-describedby={`${f.path}-hint`}
                           onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
                         >
+                          {draft[f.path] === '' && <option value="">조회되지 않음</option>}
                           <option value="false">비활성</option>
                           <option value="true">활성</option>
                         </select>
@@ -446,7 +462,9 @@ export function AdminOperationSettingsPage() {
                           }
                           step={f.kind === 'datetime' ? 1 : undefined}
                           inputMode={
-                            f.kind === 'amount' || f.kind === 'days' ? 'numeric' : undefined
+                            f.kind === 'amount' || f.kind === 'reward' || f.kind === 'days'
+                              ? 'numeric'
+                              : undefined
                           }
                           disabled={disabled}
                           value={draft[f.path]}
@@ -512,7 +530,7 @@ export function AdminOperationSettingsPage() {
                 <button
                   type="submit"
                   className={primary}
-                  disabled={!dirty || busy || conflict || attendanceStale}
+                  disabled={!dirty || busy || conflict || attendanceStale || policyUnavailable}
                 >
                   변경 내용 확인
                 </button>
@@ -630,7 +648,7 @@ export function AdminOperationSettingsPage() {
             </button>
           }
         >
-          <SettingsDiff before={historyDetail.before} after={historyDetail.after} />
+          <SettingsDiff before={historyDetail.before} after={historyDetail.after} historical />
         </AdminDialog>
       )}
       {pending && (
@@ -646,7 +664,7 @@ export function AdminOperationSettingsPage() {
               onConfirm={() => void save()}
               busy={busy}
               confirmDisabled={
-                restoreIncompatible ||
+                Boolean(restoreError) ||
                 !reason.trim() ||
                 reason.trim().length > 500 ||
                 !acknowledged ||
@@ -659,8 +677,9 @@ export function AdminOperationSettingsPage() {
             <div className="space-y-2">
               {changes.map((f) => (
                 <p key={f.path} className="break-words text-sm">
-                  <strong>{f.label}</strong>: {toDraft(baseline.settings)[f.path] || '없음'} →{' '}
-                  {draft[f.path] || '없음'}
+                  <strong>{f.label}</strong>:{' '}
+                  {settingDisplay(f, toDraft(baseline.settings)[f.path])} →{' '}
+                  {settingDisplay(f, draft[f.path])}
                 </p>
               ))}
             </div>
@@ -669,26 +688,43 @@ export function AdminOperationSettingsPage() {
               <p className="mb-3 text-sm">
                 이력 #{pending.item.historyId}의{' '}
                 {pending.snapshot === 'BEFORE' ? '변경 전' : '변경 후'} 전체 설정을 적용해요. 고정
-                가입자 기준일은 유지돼요.
+                가입자 기준일과 이력에 기록되지 않은 새 정책은 현재 값을 유지해요.
               </p>
               <SettingsDiff
                 before={baseline.settings}
-                after={pending.snapshot === 'BEFORE' ? pending.item.before : pending.item.after}
+                after={restorePreview(baseline.settings, restoreTarget!)}
               />
             </>
           )}
           <div className="my-4">
-            <AdminNotice
-              title="전체 사용자에게 적용돼요"
-              lines={[
-                '앱 버전은 해당 스토어에 실제 공개됐는지 확인하고 근거를 사유에 남겨 주세요.',
-                '최초 장부 지급은 기존 잔액을 재설정하지 않아요. 출석 상한을 낮춰도 기존 잔액은 삭감하지 않아요.',
-                '유예는 실제 기관 이용 종료일에 현재 기간을 더해 즉시 계산해요. 기존 만료 기관의 접근도 달라질 수 있어요.',
-                '차감 시작일을 비우면 장수·출석 API와 차감 판정이 비활성화돼요. 고정 가입자 기준일은 보존돼요.',
-                '출석 발송 시각이 지난 뒤 21시 전에 활성화하면 당일 다음 주기에 발송될 수 있어요.',
-                '복원은 이미 발생한 지급·발송·체험 효과를 취소하지 않아요.',
-              ]}
-            />
+            {(tab === 'quest' || pending.kind === 'restore') && (
+              <AdminNotice title="퀘스트 보상 적용" lines={questImpact} />
+            )}
+            {(tab === 'institutionSubscription' || pending.kind === 'restore') && (
+              <AdminNotice title="월 구독 적용 범위" lines={subscriptionImpact} />
+            )}
+            {restoreTarget && missingHistoryPolicies(restoreTarget).length > 0 && (
+              <AdminNotice
+                title="이력에 없는 정책"
+                lines={missingHistoryPolicies(restoreTarget).map(
+                  (label) => `${label}: ${missingPolicyMessage}`,
+                )}
+              />
+            )}
+            {(pending.kind === 'restore' ||
+              (tab !== 'quest' && tab !== 'institutionSubscription')) && (
+              <AdminNotice
+                title="설정 변경의 적용 범위"
+                lines={[
+                  '앱 버전은 해당 스토어에 실제 공개됐는지 확인하고 근거를 사유에 남겨 주세요.',
+                  '최초 장부 지급은 기존 잔액을 재설정하지 않아요. 출석 상한을 낮춰도 기존 잔액은 삭감하지 않아요.',
+                  '유예는 실제 기관 이용 종료일에 현재 기간을 더해 즉시 계산해요. 기존 만료 기관의 접근도 달라질 수 있어요.',
+                  '차감 시작일을 비우면 장수·출석 API와 차감 판정이 비활성화돼요. 고정 가입자 기준일은 보존돼요.',
+                  '출석 발송 시각이 지난 뒤 21시 전에 활성화하면 당일 다음 주기에 발송될 수 있어요.',
+                  '복원은 이미 발생한 지급·발송·체험 효과를 취소하지 않아요.',
+                ]}
+              />
+            )}
           </div>
           <label htmlFor="settings-reason" className="text-sm font-semibold">
             변경 사유 (1~500자)
@@ -711,11 +747,15 @@ export function AdminOperationSettingsPage() {
               onChange={(e) => setAcknowledged(e.target.checked)}
               className="mt-1 h-4 w-4"
             />
-            변경 전후 값·스토어 공개 상태·적용 범위와 영향을 확인했어요.
+            {pending.kind === 'save' && tab === 'quest'
+              ? '변경 전후 값·신규 참여자 적용·중단 및 재개 영향을 확인했어요.'
+              : pending.kind === 'save' && tab === 'institutionSubscription'
+                ? '변경 전후 값·신규 구매 조건·기존 구독 유지와 출시 준비 조건을 확인했어요.'
+                : '변경 전후 값·스토어 공개 상태·적용 범위와 영향을 확인했어요.'}
           </label>
-          {pending.kind === 'restore' && (
-            <p className="mt-2 text-sm text-admin-muted">
-              앱 고정 문구·게이지 후속 전에는 일일 지급량·출석 상한이 달라지는 복원도 제한해요.
+          {restoreError && (
+            <p role="alert" className="mt-2 text-sm text-warn">
+              {restoreError}
             </p>
           )}
         </AdminDialog>
@@ -779,15 +819,36 @@ export function AdminOperationSettingsPage() {
 function SettingsDiff({
   before,
   after,
+  historical = false,
 }: {
   before: OperationSettings['settings']
   after: OperationSettings['settings']
+  historical?: boolean
 }) {
   const a = toDraft(before)
   const b = toDraft(after)
   const changed = fields.filter((f) => a[f.path] !== b[f.path])
+  const display = (
+    f: (typeof fields)[number],
+    values: OperationSettings['settings'],
+    draft: Record<string, string>,
+  ) =>
+    historical &&
+    ((f.path.startsWith('quest.') && values.quest == null) ||
+      (f.path.startsWith('institutionSubscription.') && values.institutionSubscription == null))
+      ? missingPolicyMessage
+      : settingDisplay(f, draft[f.path])
   return (
     <div className="space-y-2">
+      {historical &&
+        (['before', 'after'] as const).map((side) => {
+          const missing = missingHistoryPolicies(side === 'before' ? before : after)
+          return missing.length ? (
+            <p key={side} className="text-sm text-admin-muted">
+              변경 {side === 'before' ? '전' : '후'} · {missing.join(', ')}: {missingPolicyMessage}
+            </p>
+          ) : null
+        })}
       {changed.length === 0 && (
         <p className="text-sm text-admin-muted">편집 가능한 값의 차이가 없어요.</p>
       )}
@@ -795,7 +856,7 @@ function SettingsDiff({
         <div key={f.path} className="rounded-lg bg-admin-bg p-3 text-sm">
           <p className="font-semibold">{f.label}</p>
           <p className="mt-1 whitespace-pre-wrap break-words">
-            {a[f.path] || '없음'} → {b[f.path] || '없음'}
+            {display(f, before, a)} → {display(f, after, b)}
           </p>
         </div>
       ))}
