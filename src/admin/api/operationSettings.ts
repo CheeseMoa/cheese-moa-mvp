@@ -1,4 +1,4 @@
-/** CHMO-958 PR #329 DTO·컨트롤러 계약. 보안 추가 인증은 CHMO-934 확정 후 연결한다. */
+/** CHMO-958/978 운영 설정 DTO. 인증은 공용 관리자 client 계층을 사용한다. */
 import { ApiRequestError, apiFetch, apiFetchWithHeaders } from '../../api/client'
 
 export type Platform = 'ios' | 'android'
@@ -7,6 +7,17 @@ export interface AttendanceSettings {
   enabled: boolean
   sendTime: string
   copy: Record<Locale, { title: string; body: string }>
+}
+/** BE CHMO-973 QuestPolicy. 구 서버 응답·옛 이력에는 없을 수 있다. */
+export interface QuestSettings {
+  enabled: boolean
+  createGroupReward: number
+  uploadPhotoReward: number
+  inviteFriendReward: number
+}
+export interface InstitutionSubscriptionSettings {
+  offerEnabled: boolean
+  purchaseEnabled: boolean
 }
 export interface OperationValues {
   app: { minVersion: Record<Platform, string>; storeUrl?: Partial<Record<Platform, string>> }
@@ -20,6 +31,9 @@ export interface OperationValues {
   }
   institution: { trialPeriod: string; gracePeriod: string }
   attendancePush: AttendanceSettings
+  // 구 서버 응답에는 없을 수 있고, CHMO-978 이전 이력은 null을 보존한다.
+  quest?: QuestSettings | null
+  institutionSubscription?: InstitutionSubscriptionSettings | null
 }
 export interface OperationSettings {
   revision: number

@@ -21,6 +21,13 @@ export function createOperationSettingsDemo(): OperationSettings {
         migrationCutoffAt: '2026-01-01T00:00:00Z',
       },
       institution: { trialPeriod: 'PT336H', gracePeriod: 'PT168H' },
+      quest: {
+        enabled: false,
+        createGroupReward: 30,
+        uploadPhotoReward: 100,
+        inviteFriendReward: 200,
+      },
+      institutionSubscription: { offerEnabled: false, purchaseEnabled: false },
       attendancePush: {
         enabled: false,
         sendTime: '19:00',
