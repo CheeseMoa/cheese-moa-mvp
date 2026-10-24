@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom'
 import { PublicPageShell } from '../components/PublicPageShell'
 import { LegalDocBody } from '../components/LegalDocBody'
 import type { LegalDoc } from '../legal/types'
+import { appStorePurchaseNotice } from '../legal/refund'
 
 /**
  * 약관·정책 전문 공용 렌더러 (CHMO-478) — /legal/* 문서 데이터만 바꿔 공유한다.
@@ -37,6 +38,19 @@ export function LegalDocPage({ doc }: { doc: LegalDoc }) {
         <h1 className="mb-5 text-[26px] font-extrabold tracking-[-0.4px] text-app-ink">
           {doc.title}
         </h1>
+        {pathname === '/legal/terms' && (
+          <section
+            aria-label="앱 스토어 결제·구독 안내"
+            className="mb-8 border-b border-app-border pb-8"
+          >
+            <h2 className="mb-4 text-xl font-bold">{appStorePurchaseNotice.title}</h2>
+            <p className="mb-4 text-sm leading-relaxed">
+              아래 이용약관의 웹 단건 이용권 안내와 구분되는 앱 스토어 상품의 결제·구독 안내입니다.
+              가입 약관의 동의 버전을 변경하거나 기존 결제의 환불 권리를 축소하지 않습니다.
+            </p>
+            <LegalDocBody doc={appStorePurchaseNotice} />
+          </section>
+        )}
         <LegalDocBody doc={doc} />
       </div>
     </PublicPageShell>
