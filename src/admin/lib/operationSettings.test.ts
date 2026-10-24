@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import stagingAppConfig from '../../test/fixtures/app-config-staging.json'
 import {
   attendanceDisplay,
   attendancePayloadError,
@@ -8,6 +9,13 @@ import {
   fieldError,
   fields,
   toDraft,
+  hasQuestSettings,
+  hasSubscriptionSettings,
+  missingHistoryPolicies,
+  restorePreview,
+  restoreCompatibilityError,
+  settingsEnvironmentLabel,
+  settingsErrors,
 } from './operationSettings'
 import type { OperationValues } from '../api/operationSettings'
 
@@ -33,12 +41,29 @@ const values: OperationValues = {
     },
   },
 }
+const withQuest: OperationValues = {
+  ...values,
+  quest: { enabled: true, createGroupReward: 45, uploadPhotoReward: 120, inviteFriendReward: 300 },
+  institutionSubscription: { offerEnabled: true, purchaseEnabled: true },
+}
 const validate = (path: string, value: string) =>
   fieldError(
     fields.find((f) => f.path === path)!,
     value,
   )
 describe('운영 설정 변경 폼 — BE CHMO-958 소스 규칙 대조', () => {
+  it('공개 실응답의 버전·스토어 형식을 읽고 한 플랫폼만 변경 요청에 담는다', () => {
+    // 공개 GET만 실측했다. 관리자 저장 결과와 공개 설정의 일치는 dev 로그인 후 별도 검증한다.
+    const current = { ...values, app: stagingAppConfig }
+    const draft = toDraft(current)
+    expect(draft['app.minVersion.ios']).toBe(stagingAppConfig.minVersion.ios)
+    expect(draft['app.storeUrl.android']).toBe(stagingAppConfig.storeUrl.android)
+    for (const field of fields.filter((f) => f.path.startsWith('app.')))
+      expect(fieldError(field, draft[field.path])).toBeNull()
+    expect(buildChanges(current, { ...draft, 'app.minVersion.ios': '2.5.1' }, 'app')).toEqual({
+      app: { minVersion: { ios: '2.5.1' } },
+    })
+  })
   it('한 플랫폼만 변경하면 다른 플랫폼·URL을 요청에 넣지 않는다', () => {
     const draft = { ...toDraft(values), 'app.minVersion.ios': '3.1.0' }
     expect(buildChanges(values, draft, 'app')).toEqual({ app: { minVersion: { ios: '3.1.0' } } })
@@ -125,6 +150,159 @@ describe('운영 설정 변경 폼 — BE CHMO-958 소스 규칙 대조', () => 
         'attendancePush.copy.ko.body': '가'.repeat(600),
       }),
     ).toContain('ko')
+  })
+})
+
+describe('퀘스트 운영 설정 — CHMO-973 QuestPolicy 및 CHMO-978', () => {
+  it('서버의 현재 보상을 표시하며 OFF만 변경하면 보상·다른 설정은 전송하지 않는다', () => {
+    const draft = toDraft(withQuest)
+    expect(draft['quest.createGroupReward']).toBe('45')
+    expect(draft['quest.uploadPhotoReward']).toBe('120')
+    expect(buildChanges(withQuest, { ...draft, 'quest.enabled': 'false' }, 'quest')).toEqual({
+      quest: { enabled: false },
+    })
+    expect(buildChanges(withQuest, { ...draft, 'credit.signupGrant': '77' }, 'credit')).toEqual({
+      credit: { signupGrant: 77 },
+    })
+  })
+  it('구 서버 응답의 누락을 기본 보상·OFF로 바꾸거나 PATCH하지 않는다', () => {
+    expect(hasQuestSettings(values)).toBe(false)
+    expect(toDraft(values)['quest.enabled']).toBe('')
+    expect(toDraft(values)['quest.createGroupReward']).toBe('')
+    expect(buildChanges(values, { ...toDraft(values), 'quest.enabled': 'true' }, 'quest')).toEqual(
+      {},
+    )
+  })
+  it.each(['0', '-1', '1.5', '1e2', '', '10001', 'NaN'])(
+    '보상 %j는 양의 정수·상한 검증에서 거절한다',
+    (value) => {
+      expect(
+        settingsErrors(
+          withQuest,
+          { ...toDraft(withQuest), 'quest.createGroupReward': value },
+          'quest',
+        ),
+      ).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: 'quest.createGroupReward' })]),
+      )
+    },
+  )
+  it.each([
+    ['quest.createGroupReward', '300'],
+    ['quest.uploadPhotoReward', '301'],
+    ['quest.inviteFriendReward', '120'],
+  ])('수정한 %s와 기존 보상도 함께 비교한다', (path, value) => {
+    const errors = settingsErrors(withQuest, { ...toDraft(withQuest), [path]: value }, 'quest')
+    expect(errors).toHaveLength(1)
+    expect(errors[0].path).toBe('quest.inviteFriendReward')
+  })
+  it('유효한 상한·하한을 받으며 숫자 타입으로 수정한 보상만 보낸다', () => {
+    const draft = {
+      ...toDraft(withQuest),
+      'quest.createGroupReward': '1',
+      'quest.inviteFriendReward': '10000',
+    }
+    expect(settingsErrors(withQuest, draft, 'quest')).toEqual([])
+    expect(buildChanges(withQuest, draft, 'quest')).toEqual({
+      quest: { createGroupReward: 1, inviteFriendReward: 10000 },
+    })
+  })
+  it('수정하지 않은 퀘스트는 다른 설정 저장을 방해하지 않는다', () => {
+    expect(
+      settingsErrors(values, { ...toDraft(values), 'app.minVersion.ios': '3.1.0' }, 'app'),
+    ).toEqual([])
+  })
+  it('옛 이력의 누락·null 정책은 현재 값을 유지하고 명시된 정책만 복원한다', () => {
+    expect(restoreCompatibilityError(withQuest, values)).toBeNull()
+    expect(restoreCompatibilityError(values, withQuest)).toContain('퀘스트')
+    expect(restorePreview(withQuest, values).quest).toEqual(withQuest.quest)
+    expect(
+      restorePreview(withQuest, { ...values, quest: null, institutionSubscription: null }),
+    ).toMatchObject({
+      quest: withQuest.quest,
+      institutionSubscription: withQuest.institutionSubscription,
+    })
+    expect(missingHistoryPolicies(values)).toEqual(['퀘스트·보상', '기관 월 구독'])
+    const legacyResolved = {
+      ...values,
+      quest: {
+        enabled: false,
+        createGroupReward: 30,
+        uploadPhotoReward: 100,
+        inviteFriendReward: 200,
+      },
+    }
+    expect(restoreCompatibilityError(withQuest, legacyResolved)).toBeNull()
+    expect(toDraft(legacyResolved)['quest.enabled']).toBe('false')
+    expect(toDraft(legacyResolved)['quest.createGroupReward']).toBe('30')
+    expect(restoreCompatibilityError(values, values)).toBeNull()
+  })
+  it('옛 서버에서는 퀘스트가 없는 이력의 복원을 허용하지 않는다', () => {
+    expect(
+      restoreCompatibilityError({ ...withQuest, institutionSubscription: undefined }, values),
+    ).toContain('퀘스트')
+  })
+  it('복원 미리보기에서 고정 가입자 기준일을 유지하고 일일 지급·상한 변경은 막는다', () => {
+    const old = { ...values, credit: { ...values.credit, migrationCutoffAt: null, cap: 100 } }
+    expect(restorePreview(withQuest, old).credit.migrationCutoffAt).toBe(
+      values.credit.migrationCutoffAt,
+    )
+    expect(restoreCompatibilityError(withQuest, old)).toContain('출석 상한')
+  })
+})
+
+describe('기관 월 구독 운영 설정 — CHMO-978', () => {
+  it('구매만 중단할 때 안내·퀘스트·기관 체험을 변경하지 않는다', () => {
+    const draft = { ...toDraft(withQuest), 'institutionSubscription.purchaseEnabled': 'false' }
+    expect(settingsErrors(withQuest, draft, 'institutionSubscription')).toEqual([])
+    expect(buildChanges(withQuest, draft, 'institutionSubscription')).toEqual({
+      institutionSubscription: { purchaseEnabled: false },
+    })
+  })
+  it('안내 OFF·구매 ON은 현재 값과 합쳐 검증하며 두 값을 함께 끌 수 있다', () => {
+    const draft: Record<string, string> = {
+      ...toDraft(withQuest),
+      'institutionSubscription.offerEnabled': 'false',
+    }
+    expect(settingsErrors(withQuest, draft, 'institutionSubscription')).toEqual([
+      expect.objectContaining({ path: 'institutionSubscription.purchaseEnabled' }),
+    ])
+    draft['institutionSubscription.purchaseEnabled'] = 'false'
+    expect(settingsErrors(withQuest, draft, 'institutionSubscription')).toEqual([])
+    expect(buildChanges(withQuest, draft, 'institutionSubscription')).toEqual({
+      institutionSubscription: { offerEnabled: false, purchaseEnabled: false },
+    })
+  })
+  it('구 서버의 누락·불완전한 응답을 OFF로 합성하거나 전송하지 않는다', () => {
+    expect(hasSubscriptionSettings(values)).toBe(false)
+    expect(toDraft(values)['institutionSubscription.offerEnabled']).toBe('')
+    expect(
+      buildChanges(
+        values,
+        { ...toDraft(values), 'institutionSubscription.offerEnabled': 'true' },
+        'institutionSubscription',
+      ),
+    ).toEqual({})
+    const invalid = {
+      ...withQuest,
+      institutionSubscription: { offerEnabled: true },
+    } as OperationValues
+    expect(hasSubscriptionSettings(invalid)).toBe(false)
+    expect(restoreCompatibilityError(withQuest, invalid)).toContain('월 구독')
+  })
+})
+
+describe('운영 설정 대상 환경', () => {
+  it('목·운영·개발 대상을 구분하고 모르는 호스트를 운영이라고 단정하지 않는다', () => {
+    expect(settingsEnvironmentLabel(undefined, true)).toContain('로컬 목')
+    expect(settingsEnvironmentLabel(undefined, false)).toContain('운영 서버')
+    expect(settingsEnvironmentLabel('https://api.cheese-moa.com', false)).toContain('운영 서버')
+    expect(settingsEnvironmentLabel('https://dev.example.com', false)).toBe(
+      '연결 서버 · dev.example.com',
+    )
+    expect(settingsEnvironmentLabel('http://localhost:8080', false)).toBe(
+      '연결 서버 · localhost:8080',
+    )
   })
 })
 

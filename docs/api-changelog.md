@@ -6,6 +6,17 @@
 
 ---
 
+## CHMO-959 — dev 조회 실응답 회귀 검증 (2026-10-24, 진행 중)
+
+- staging 공개 `/app/config`와 무인증 `/admin/operation-settings`의 실제 본문을 채집했다. 공개 설정 형식과 result 없는 COMMON401 처리를 회귀 검증한다.
+- 관리자 로그인·저장·충돌·복원·권한 회수·쓰기 잠금 및 저장 후 공개 설정 일치는 미검증이다. 범위별 증빙과 남은 절차는 [admin-spec의 CHMO-959 기록](admin-spec.md#chmo-959-dev-실서버-검증-기록-2026-10-24)에 둔다.
+
+## CHMO-978 — 퀘스트·월 구독 운영 설정 FE 연결 (2026-10-24)
+
+- BE CHMO-973의 `quest.enabled`·세 보상과 CHMO-978 PR #347의 `institutionSubscription.offerEnabled`·`purchaseEnabled`를 기존 조회/부분 PATCH/이력/복원에 연결한다. 보상 양의 정수·초대 보상 우위·10,000장 상한, 안내 OFF·구매 ON 거절을 현재 값과 함께 검사한다.
+- 현재 정책 기본값 보충과 이력 누락을 구분한다. 옛 이력의 null/누락 정책은 현재 값을 유지하며 FE는 이를 명시한다. 복원 미리보기에서도 고정 가입자 기준일과 누락 정책을 보존한다.
+- 소스 규칙·요청·폼 테스트와 로컬 목 브라우저 검증이다. 실 BE 저장·보상 지급·APP 및 Sandbox는 별도이며 운영 판매를 활성화하지 않았다.
+
 ## CHMO-957 — 운영 설정 (2026-10-19 · BE CHMO-958 PR #329)
 
 - 관리자 설정 조회·부분 변경·revision 충돌 감지·변경 사유·감사 이력·BEFORE/AFTER 복원 계약을 연결했다. 앱용 `/app/config`의 기존 최상위 JSON은 유지한다.

@@ -1,10 +1,12 @@
 import stagingAttendance from '../../test/fixtures/attendance-settings-staging.json'
+import stagingUnauthenticated from '../../test/fixtures/operation-settings-unauthenticated-staging.json'
 /** 요청 직렬화·인증 인프라 검사. MSW 응답을 계약 증거로 사용하지 않는다. 실 BE 연동은 배포 후 별도. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   changeOperationSettings,
   saveAndReloadSettings,
   getAttendanceSettings,
+  getOperationSettings,
   getAttendanceStatistics,
   getSettingsHistory,
   restoreSettings,
@@ -16,6 +18,14 @@ import { envelope } from '../../test/fixtures/be'
 
 beforeEach(() => setAuthTokens({ accessToken: 'test-at', refreshToken: 'test-rt' }))
 describe('운영 설정 요청·공용 응답 헤더', () => {
+  it('실서버의 result 없는 COMMON401 봉투를 성공 설정으로 소비하지 않는다', async () => {
+    setAuthTokens({ accessToken: '', refreshToken: '' })
+    stubFetch(() => jsonResponse(stagingUnauthenticated, 401))
+    await expect(getOperationSettings()).rejects.toMatchObject({
+      status: 401,
+      code: 'UNAUTHORIZED',
+    })
+  })
   it('부분 변경과 현재 revision·사유를 보낸다', async () => {
     const calls = stubFetch(() => jsonResponse(envelope({})))
     await changeOperationSettings(42, '스토어 공개 확인', { app: { minVersion: { ios: '3.1.0' } } })
@@ -60,9 +70,11 @@ describe('운영 설정 요청·공용 응답 헤더', () => {
     expect((await getAttendanceSettings()).etag).toBe('"99"')
   })
   it.each([
+    [400, 'SETTINGS400'],
     [409, 'SETTINGS409'],
     [503, 'SETTINGS503'],
     [403, 'ADMIN403'],
+    [500, 'COMMON500'],
   ])('실패 %i를 성공으로 소비하지 않는다', async (status, code) => {
     stubFetch(() => jsonResponse({ isSuccess: false, code, message: '실패', result: null }, status))
     await expect(

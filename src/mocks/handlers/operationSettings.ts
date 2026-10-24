@@ -45,6 +45,28 @@ function merge(target: Record<string, unknown>, patch: Record<string, unknown>) 
     else target[key] = value
   }
 }
+// 로컬 화면에서 서버 거절도 시연한다. 실 BE 계약 검증의 대체물이 아니다.
+function validQuest(values: OperationValues): boolean {
+  const q = values.quest
+  return Boolean(
+    q &&
+    typeof q.enabled === 'boolean' &&
+    [q.createGroupReward, q.uploadPhotoReward, q.inviteFriendReward].every(Number.isInteger) &&
+    q.createGroupReward > 0 &&
+    q.uploadPhotoReward > 0 &&
+    q.inviteFriendReward <= 10000 &&
+    q.inviteFriendReward > Math.max(q.createGroupReward, q.uploadPhotoReward),
+  )
+}
+function validSubscription(values: OperationValues): boolean {
+  const p = values.institutionSubscription
+  return Boolean(
+    p &&
+    typeof p.offerEnabled === 'boolean' &&
+    typeof p.purchaseEnabled === 'boolean' &&
+    (!p.purchaseEnabled || p.offerEnabled),
+  )
+}
 export const operationSettingsHandlers = [
   http.get(api('/app/config'), () => HttpResponse.json(current.settings.app)),
   http.get(api('/admin/operation-settings'), ({ request }) => {
@@ -65,6 +87,9 @@ export const operationSettingsHandlers = [
       return failure(400, 'SETTINGS400', '변경 내용을 확인해 주세요.')
     const next = structuredClone(current.settings)
     merge(next as unknown as Record<string, unknown>, input.changes)
+    if (!validQuest(next)) return failure(400, 'SETTINGS400', '퀘스트 보상 설정을 확인해 주세요.')
+    if (!validSubscription(next))
+      return failure(400, 'SETTINGS400', '월 구독 설정을 확인해 주세요.')
     return record(user.id, input.reason, next)
   }),
   http.get(api('/admin/operation-settings/history'), ({ request }) => {
@@ -88,6 +113,12 @@ export const operationSettingsHandlers = [
     const item = history.find((h) => h.historyId === Number(params.id))
     if (!item) return failure(404, 'SETTINGS404', '이력을 찾을 수 없어요.')
     const next = structuredClone(input.snapshot === 'BEFORE' ? item.before : item.after)
+    // CHMO-978: 원본 이력에 없던 새 정책은 현재 값을 유지한다.
+    next.quest ??= current.settings.quest
+    next.institutionSubscription ??= current.settings.institutionSubscription
+    if (!validQuest(next)) return failure(400, 'SETTINGS400', '퀘스트 보상 설정을 확인해 주세요.')
+    if (!validSubscription(next))
+      return failure(400, 'SETTINGS400', '월 구독 설정을 확인해 주세요.')
     next.credit.migrationCutoffAt = current.settings.credit.migrationCutoffAt
     return record(user.id, input.reason, next, item.historyId)
   }),
