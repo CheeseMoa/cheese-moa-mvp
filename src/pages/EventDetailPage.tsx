@@ -26,6 +26,7 @@ import { getGroup } from '../api/groups'
 import { createPersonAlbum } from '../api/albums'
 import { deleteEvent, getEvent, listEventAlbums, renameEvent } from '../api/events'
 import { sortAlbumsForDisplay } from '../lib/albumSort'
+import { advanceAnalysisProgress } from '../lib/analysisProgress'
 import { hasSeenCoachHint } from '../lib/onboarding'
 import type { Album, AnalysisProgress, EventItem, GroupType } from '../types/api'
 
@@ -61,12 +62,17 @@ export function EventDetailPage() {
     () => (location.state as { analysisKick?: AnalysisKick } | null)?.analysisKick ?? null,
   )
   const kickActive =
-    kick != null && kick.eventId === eventId && !!event && event.photoCount < kick.expected &&
+    kick != null &&
+    kick.eventId === eventId &&
+    !!event &&
+    event.photoCount < kick.expected &&
     event.progress?.percent !== 100
   // 분석 진행 판정 — analyzing 상태 또는 progress 존재. published 이벤트는 사진을 추가해도
   // 공개를 유지한 채 증분 분석이 돌아 상태가 안 바뀌고(CHMO-215·216), 상세 응답의 progress
   // (분석 job 중에만 non-null)로만 진행을 알 수 있다 — 로딩바·폴링은 두 경우 모두 켠다.
-  const analysisVisible = !!event && event.progress?.percent !== 100 &&
+  const analysisVisible =
+    !!event &&
+    event.progress?.percent !== 100 &&
     (event.status === 'analyzing' || event.progress != null || kickActive)
 
   // 킥 안전 종료 — 분석이 실패하면 photoCount가 기대치에 영영 닿지 않으므로(CHMO-218 계열)
@@ -158,7 +164,11 @@ export function EventDetailPage() {
                   {/* replace로 들어간다 — 06-U는 히스토리에 남지 않는 '지나가는 화면'이라(CHMO-486
                       내비 관용) 06-E 자리를 대신 차지해야 업로드 후 뒤로가기가 모임 상세로 곧장
                       빠진다. push로 두면 히스토리에 06-E·06-U가 남아 뒤로가기가 두 번 헛돈다 */}
-                  <Button variant="accent" fullWidth onClick={() => navigate(`${base}/upload`, { replace: true })}>
+                  <Button
+                    variant="accent"
+                    fullWidth
+                    onClick={() => navigate(`${base}/upload`, { replace: true })}
+                  >
                     사진 업로드
                   </Button>
                 </div>
@@ -168,7 +178,10 @@ export function EventDetailPage() {
                 {/* 분석중 — 2초 자동 폴링(위 effect). 진행률 따라 쥐가 치즈로 다가가고, 완료되면 앨범 그리드로 자연 전환 */}
                 <div className="mt-4 flex flex-col items-center rounded-[20px] bg-surface px-6 py-14 text-center">
                   <div className="flex items-center gap-2.5">
-                    <span aria-hidden className="h-5 w-5 animate-spin rounded-full border-[3px] border-photo border-t-primary" />
+                    <span
+                      aria-hidden
+                      className="h-5 w-5 animate-spin rounded-full border-[3px] border-photo border-t-primary"
+                    />
                     <p className="text-[19px] text-heading">AI가 사진을 분류하고 있어요</p>
                   </div>
                   <ChaseProgress key={eventId} progress={event.progress ?? null} />
@@ -216,12 +229,9 @@ export function EventDetailPage() {
  * 사진 분류 진행률 — 쥐가 치즈를 쫓고 고양이가 그 쥐를 쫓는 프로그레스 바(CHMO-287 · 710).
  * 캐릭터는 픽셀 아트 달리기 스프라이트 시트(`assets/chase/` — 사용자 제공 원본(리포 밖,
  * 6프레임×3행 검정 배경 시트)에서 배경 제거·프레임 정렬 추출, 레시피는 CHMO-710 코멘트).
- * GET /events/:id의 progress를 그대로 그린다(percent 계산은 BE 몫).
- * progress가 아직 null이면(등록 직후 등) 트랙 위를 왕복하는 인디터미넌트로 폴백.
- * 위치·바 너비에 CSS transition을 걸지 않는다 — 타임라인이 멈춘 렌더링 환경
- * (숨김 탭·임베디드 프리뷰)에선 transition이 걸린 속성이 첫 값에 얼어붙어, 폴링으로
- * 스타일이 갱신돼도 화면이 영영 안 움직인다. 진행 위치는 상태라 장식(총총거림)과 달리
- * 어느 환경에서든 즉시 반영돼야 한다.
+ * GET /events/:id의 progress를 목표로 부드럽게 따라간다(percent 계산은 BE 몫).
+ * progress가 아직 null이면(등록 직후 등) 0%에 머물고 제목의 회전 표시가 분류 중임을 알린다.
+ * 새 서버 값을 받으면 짧은 타이머로 숫자와 위치가 함께 목표값까지 따라간다.
  */
 /**
  * 달리기 스프라이트(6프레임 가로 스트립)를 steps() 배경 이동으로 재생한다.
@@ -246,15 +256,13 @@ function RunnerSprite({ url, w, h, durMs }: { url: string; w: number; h: number;
 
 function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
   const [percent, setPercent] = useState(progress?.percent ?? 0)
-  const completed = percent >= 100
   useEffect(() => {
-    setPercent((current) => Math.max(current, progress?.percent ?? 0))
-  }, [progress?.percent])
-  useEffect(() => {
-    if (completed) return
-    const timer = setInterval(() => setPercent((current) => Math.max(current, Math.min(90, current + 1))), 1000)
+    const timer = setInterval(
+      () => setPercent((current) => advanceAnalysisProgress(current, progress?.percent ?? null)),
+      75,
+    )
     return () => clearInterval(timer)
-  }, [completed])
+  }, [progress?.percent])
   return (
     <div
       role="progressbar"
@@ -285,7 +293,10 @@ function ChaseProgress({ progress }: { progress: AnalysisProgress | null }) {
         </span>
       </div>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-photo">
-        <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${percent}%` }} />
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-500"
+          style={{ width: `${percent}%` }}
+        />
       </div>
       <p className="mt-3 text-sm font-bold text-heading">{percent}%</p>
     </div>
