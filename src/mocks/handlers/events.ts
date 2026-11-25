@@ -63,6 +63,7 @@ import {
   uploadContentTypeOf,
   uploadExtensionOf,
 } from '../../lib/upload'
+import { mockServiceMode, serviceReadOnlyFailure } from './operationSettings'
 
 // 재업로드 허용(CHMO-606 — BE 소스 대조 2026-08-06): presign·등록 어디에도 1회 게이트·분석중
 // 게이트가 없다(CHMO-485는 미구현으로 폐기 수순). 분석 중 재등록은 새 job이 이전 job을
@@ -154,6 +155,14 @@ export const eventHandlers = [
     if (!user) return unauthorized()
     const event = teacherEvent(user, toId(params.id))
     if (event instanceof Response) return event
+    // 읽기 전용 중에는 빈 이벤트만 지운다(BE CHMO-993 §3.6 DeleteMomentUseCase — 업로드 취소로 남은
+    // 빈 새 이벤트 정리용). 권한·존재 확인이 먼저고, 앨범이나 사진이 하나라도 있으면 막는다
+    if (
+      mockServiceMode() !== 'NORMAL' &&
+      (db.albums.some((a) => a.eventId === event.id) ||
+        db.photos.some((p) => p.eventId === event.id))
+    )
+      return serviceReadOnlyFailure()
     deleteEventCascade(event.id)
     return ok(null)
   }),
