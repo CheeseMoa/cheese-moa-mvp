@@ -298,7 +298,7 @@ export function ServiceModeSummary({ service, to }: { service: ServiceSettings; 
                 const copy = noticeOf(service, l)
                 return `${LOCALE_LABEL[l]} ${noticeSource(copy.title, copy.body)}`
               }).join(' · ')}`,
-              '진행 중이던 AI 분석과 전환 전에 시작한 업로드 마무리는 끝까지 처리돼요.',
+              '전송 중이던 업로드도 등록되지 않고 취소돼요. 다시 운영하면 새로 올려야 해요. 이미 등록된 사진의 AI 분석은 끝까지 처리돼요.',
             ]}
           />
         </>

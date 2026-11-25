@@ -133,6 +133,9 @@ function publicService() {
 export function mockServiceMode(): string {
   return current.settings.service?.mode ?? 'NORMAL'
 }
+/** BE `SERVICE503` 봉투 — 허용 목록을 통과한 요청을 유스케이스가 막을 때(사진이 있는 이벤트 삭제)도 쓴다 */
+export const serviceReadOnlyFailure = () =>
+  failure(503, 'SERVICE503', '서비스 재정비 중에는 사진 보기와 저장만 할 수 있습니다.')
 
 /**
  * 읽기 전용 운영 중 쓰기 차단 — BE ReadOnlyModeInterceptor.ALLOWED(메서드 + 매핑 경로 패턴)를 옮겼다.
@@ -161,8 +164,9 @@ const ALLOWED_WRITES = [
   'POST /billing/store-notifications/apple',
   'POST /billing/store-notifications/google',
   'DELETE /groups/{groupId}/subscription',
-  'POST /upload-batches/{batchId}/complete',
+  // 업로드는 전부 막는다(2026-11-25 재조율) — complete는 빠지고 취소와 빈 새 이벤트 정리만 연다
   'DELETE /upload-batches/{batchId}',
+  'DELETE /events/{eventId}',
   'POST /events/{eventId}/viewed',
   'POST /groups/{groupId}/persons/{personId}/viewed',
   'POST /me/favorite-persons/{personId}/viewed',
@@ -177,7 +181,7 @@ export const serviceReadOnlyGuard = http.all(api('/*'), ({ request }) => {
   if (path.startsWith('/admin/')) return
   if (ALLOWED_WRITES.some(({ method, path: p }) => method === request.method && p.test(path)))
     return
-  return failure(503, 'SERVICE503', '서비스 재정비 중에는 사진 보기와 저장만 할 수 있습니다.')
+  return serviceReadOnlyFailure()
 })
 function validSubscription(values: OperationValues): boolean {
   const p = values.institutionSubscription
