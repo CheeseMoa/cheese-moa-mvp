@@ -76,7 +76,7 @@ export const SERVICE_PAUSE_COPY: Record<
   },
 }
 
-/** 전환 확인창의 영향 요약(BE CHMO-993 스펙 §2 정책 결정·§3.3 허용 목록 대조) */
+/** 전환 확인창의 영향 요약(BE CHMO-993 스펙 §2 정책 결정·§3.3 허용 목록 대조, 2026-11-25 업로드 전부 차단 재조율 반영) */
 export const READ_ONLY_KEEPS = [
   '사진 보기·저장·공유',
   '기존 회원 로그인',
@@ -87,7 +87,7 @@ export const READ_ONLY_KEEPS = [
   '이미 스토어에서 결제된 거래의 지급·환불 반영',
 ]
 export const READ_ONLY_STOPS = [
-  '사진 올리기',
+  '사진 올리기(전송 중이던 업로드 포함)',
   '모임 만들기·참여·초대',
   '공개·사진 정리·얼굴 가리기',
   '댓글·좋아요',
