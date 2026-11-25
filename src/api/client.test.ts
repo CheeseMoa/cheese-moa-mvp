@@ -88,6 +88,19 @@ describe('apiFetch — 실패', () => {
     })
   })
 
+  it('읽기 전용 운영 차단은 서버 문구 대신 앱과 같은 안내로 말한다 (CHMO-994)', async () => {
+    stubFetch(() =>
+      jsonResponse(
+        errorEnvelope('SERVICE503', '서비스 재정비 중에는 사진 보기와 저장만 할 수 있습니다.'),
+        503,
+      ),
+    )
+
+    const err = await apiFetch('/groups', { method: 'POST', body: {} }).catch((e: unknown) => e)
+    expect(err).toMatchObject({ status: 503, code: 'SERVICE_READ_ONLY' })
+    expect(toErrorMessage(err)).toBe('지금은 사진 보기와 저장만 할 수 있어요.')
+  })
+
   it('봉투가 아닌 실패는 UNKNOWN — 원문이 사용자에게 새지 않는다', async () => {
     stubFetch(() => textResponse('Bad Gateway', 502))
 

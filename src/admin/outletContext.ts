@@ -18,6 +18,11 @@ export interface AdminOutletContext {
    * 항상 값이 있다.
    */
   adminUserId: number
+  /**
+   * 서비스 상태(CHMO-994) — 셸이 화면 이동마다 읽어 읽기 전용 띠를 건다. 운영 설정 화면이 전환·복원·
+   * 재조회에 성공하면 이 함수로 띠를 즉시 맞춘다(다음 화면 이동까지 옛 상태가 남지 않게).
+   */
+  refreshServiceStatus: () => void
 }
 
 export function useAdminOutlet(): AdminOutletContext {

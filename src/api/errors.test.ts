@@ -34,6 +34,10 @@ describe('toFeErrorCode', () => {
     expect(toFeErrorCode('OAUTH502')).toBe('SOCIAL_PROVIDER_ERROR')
   })
 
+  it('읽기 전용 운영 중 쓰기 차단을 의미 코드로 옮긴다 (BE CHMO-993 티켓 계약 · 실서버 채집 전)', () => {
+    expect(toFeErrorCode('SERVICE503')).toBe('SERVICE_READ_ONLY')
+  })
+
   it('매핑에 없는 코드는 그대로 통과시킨다 — 화면은 status로 분기하고 BE message는 이미 한국어다', () => {
     expect(toFeErrorCode(BE_ERRORS.VALID400.payload.code)).toBe('VALID400')
     expect(toFeErrorCode(BE_ERRORS.PHOTO400.payload.code)).toBe('PHOTO400')

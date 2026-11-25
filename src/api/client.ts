@@ -36,6 +36,9 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** 읽기 전용 운영 중 쓰기 요청이 막혔을 때의 안내(CHMO-994 · 앱 errorServiceReadOnly와 같은 뜻) */
+export const SERVICE_READ_ONLY_MESSAGE = '지금은 사진 보기와 저장만 할 수 있어요.'
+
 /**
  * 표준 에러 포맷이 아닌 응답(code UNKNOWN)과 네트워크 실패(useApi가 감싼 NETWORK_ERROR 포함)는
  * 영어 statusText·"TypeError: Failed to fetch" 같은 원문이 새지 않게 일반 문구로.
@@ -44,6 +47,8 @@ export function toErrorMessage(err: unknown): string {
   if (err instanceof ApiRequestError) {
     if (err.code === 'NETWORK_ERROR')
       return '네트워크 오류가 발생했어요. 잠시 후 다시 시도해 주세요.'
+    // 서비스 일시 중단(CHMO-993·994) — 앱(CHMO-995)과 같은 문구로 이유를 말한다
+    if (err.code === 'SERVICE_READ_ONLY') return SERVICE_READ_ONLY_MESSAGE
     if (err.code !== 'UNKNOWN' && err.message) return err.message
     return '요청에 실패했어요. 잠시 후 다시 시도해 주세요.'
   }

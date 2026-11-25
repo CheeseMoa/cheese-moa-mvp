@@ -15,7 +15,9 @@ import {
   restoreSettings,
   updateAttendanceSettings,
   type AttendanceSettings,
+  type Locale,
   type OperationSettings,
+  type ServiceMode,
   type SettingsHistory,
   type Snapshot,
 } from '../api/operationSettings'
@@ -23,6 +25,13 @@ import { AdminTopbar } from '../components/AdminTopbar'
 import { AdminErrorMessage, AdminMessage } from '../components/AdminMessage'
 import { AdminDialog, AdminDialogActions } from '../components/AdminDialog'
 import { AdminNotice, FormSection } from '../components/AdminForm'
+import {
+  ServiceModeSummary,
+  ServiceNoticeEditor,
+  ServiceStatusCard,
+  type ModeChange,
+} from '../components/ServiceStatusPanel'
+import { useAdminOutlet } from '../outletContext'
 import { inputClassName, textareaClassName } from '../lib/formStyles'
 import { formatDateTime } from '../lib/format'
 import {
@@ -34,6 +43,7 @@ import {
   sections,
   toDraft,
   hasQuestSettings,
+  hasServiceSettings,
   hasSubscriptionSettings,
   subscriptionImpact,
   missingHistoryPolicies,
@@ -46,12 +56,16 @@ import {
   settingDisplay,
   type SettingsSection,
 } from '../lib/operationSettings'
+import { READ_ONLY_CONFIRM_PHRASE, latestModeChange, serviceModeLabel } from '../lib/serviceStatus'
 
 const button =
   'min-h-10 rounded-lg border border-admin-border bg-admin-surface px-4 text-[13px] hover:bg-admin-bg disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary'
 const primary = `${button} border-primary bg-primary font-semibold`
 type Tab = SettingsSection | 'history' | 'limits'
-type Pending = { kind: 'save' } | { kind: 'restore'; item: SettingsHistory; snapshot: Snapshot }
+type Pending =
+  | { kind: 'save' }
+  | { kind: 'restore'; item: SettingsHistory; snapshot: Snapshot }
+  | { kind: 'mode'; mode: ServiceMode }
 const environment = settingsEnvironmentLabel(
   import.meta.env.VITE_API_ORIGIN,
   import.meta.env.VITE_ENABLE_MSW === 'true',
@@ -60,6 +74,8 @@ const environment = settingsEnvironmentLabel(
 export function AdminOperationSettingsPage() {
   const navigate = useNavigate()
   const mutate = useMutation()
+  // 상단 읽기 전용 띠(AdminLayout)를 저장·재조회 직후에 맞춘다
+  const { refreshServiceStatus } = useAdminOutlet()
   // 편집 기준은 진입마다 재조회한다. 공유 캐시의 이전 revision을 채택하지 않는다.
   const instanceId = useId()
   const readKey = `admin-operation-settings:${instanceId}`
@@ -67,11 +83,15 @@ export function AdminOperationSettingsPage() {
   useEffect(() => () => invalidateApiCacheKey(readKey), [readKey])
   const [baseline, setBaseline] = useState<OperationSettings | null>(null)
   const [draft, setDraft] = useState<Record<string, string>>({})
-  const [tab, setTab] = useState<Tab>('app')
+  const [tab, setTab] = useState<Tab>('service')
+  const [noticeLocale, setNoticeLocale] = useState<Locale>('ko')
   const [nextTab, setNextTab] = useState<Tab | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [reason, setReason] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
+  // 읽기 전용으로 바꾸는 저장(전환·복원)만 확인 문구를 직접 입력받는다
+  const [phrase, setPhrase] = useState('')
+  useEffect(() => setPhrase(''), [pending])
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const [message, setMessage] = useState('')
@@ -85,8 +105,10 @@ export function AdminOperationSettingsPage() {
   const blocker = useBlocker(dirty || busy)
   const errors = baseline && section ? settingsErrors(baseline.settings, draft, section.key) : []
   const payloadError = tab === 'attendancePush' && baseline ? attendancePayloadError(draft) : null
-  const history = useApi(tab === 'history' ? 'admin-operation-settings-history' : null, (signal) =>
-    getSettingsHistory(undefined, signal),
+  // 서비스 상태 카드의 마지막 전환 기록도 같은 이력 첫 페이지에서 찾는다
+  const history = useApi(
+    tab === 'history' || tab === 'service' ? 'admin-operation-settings-history' : null,
+    (signal) => getSettingsHistory(undefined, signal),
   )
   const [older, setOlder] = useState<SettingsHistory[]>([])
   const [cursor, setCursor] = useState<number | null>(null)
@@ -152,6 +174,7 @@ export function AdminOperationSettingsPage() {
         setBusy(false)
         busyRef.current = false
         attendance.refetch()
+        refreshServiceStatus()
       },
       onError: (msg) => {
         setMessage(msg)
@@ -173,6 +196,24 @@ export function AdminOperationSettingsPage() {
           pending.snapshot === 'BEFORE' ? pending.item.before : pending.item.after,
         )
       : null
+  // 복원이 서비스 상태를 바꾸면 전환과 같은 무게로 확인받는다
+  const restoreMode =
+    pending?.kind === 'restore' && baseline && restoreTarget
+      ? restorePreview(baseline.settings, restoreTarget).service?.mode
+      : undefined
+  const restoreModeChange =
+    pending?.kind === 'restore' &&
+    typeof restoreMode === 'string' &&
+    typeof baseline?.settings.service?.mode === 'string' &&
+    restoreMode !== baseline.settings.service.mode
+      ? { from: baseline.settings.service.mode, to: restoreMode }
+      : null
+  const needsPhrase =
+    (pending?.kind === 'mode' && pending.mode === 'READ_ONLY') ||
+    restoreModeChange?.to === 'READ_ONLY'
+  const phraseOk = phrase.trim() === READ_ONLY_CONFIRM_PHRASE
+  const confirmed =
+    pending?.kind === 'mode' ? !needsPhrase || phraseOk : acknowledged && (!needsPhrase || phraseOk)
   async function save() {
     if (
       restoreError ||
@@ -180,7 +221,7 @@ export function AdminOperationSettingsPage() {
       !baseline ||
       !pending ||
       conflict ||
-      !acknowledged ||
+      !confirmed ||
       !reason.trim() ||
       reason.trim().length > 500 ||
       (pending.kind === 'save' && (errors.length > 0 || Boolean(payloadError)))
@@ -194,7 +235,11 @@ export function AdminOperationSettingsPage() {
     await mutate(
       () =>
         saveAndReloadSettings(async () => {
-          if (action.kind === 'restore')
+          if (action.kind === 'mode')
+            await changeOperationSettings(baseline.revision, reason.trim(), {
+              service: { mode: action.mode },
+            })
+          else if (action.kind === 'restore')
             await restoreSettings(
               action.item.historyId,
               baseline.revision,
@@ -240,10 +285,13 @@ export function AdminOperationSettingsPage() {
           setMessage(
             refreshFailed
               ? '저장은 완료됐지만 재조회하지 못했어요. 다시 저장하지 말고 최신 설정을 조회하세요.'
-              : '저장 후 서버 설정을 다시 확인했어요.',
+              : action.kind === 'mode'
+                ? `${action.mode === 'READ_ONLY' ? '읽기 전용 운영을 시작했어요' : '평소 운영으로 돌아왔어요'}. 서버 설정을 다시 확인했어요.`
+                : '저장 후 서버 설정을 다시 확인했어요.',
           )
           history.refetch()
           attendance.refetch()
+          refreshServiceStatus()
           setOlder([])
           setCursor(null)
           busyRef.current = false
@@ -307,7 +355,23 @@ export function AdminOperationSettingsPage() {
   const questUnavailable = tab === 'quest' && !hasQuestSettings(baseline.settings)
   const subscriptionUnavailable =
     tab === 'institutionSubscription' && !hasSubscriptionSettings(baseline.settings)
+  const serviceAvailable = hasServiceSettings(baseline.settings)
   const policyUnavailable = questUnavailable || subscriptionUnavailable
+  const allHistory = history.data ? [...history.data.items, ...older] : []
+  const lastModeChange = latestModeChange(allHistory)
+  const modeChange: ModeChange = history.error
+    ? { state: 'error', retry: history.refetch }
+    : !history.data
+      ? { state: 'loading' }
+      : lastModeChange
+        ? { state: 'found', item: lastModeChange }
+        : history.data.hasNext || cursor !== null
+          ? { state: 'notInPage' }
+          : { state: 'none' }
+  const noticeErrors =
+    tab === 'service' && showErrors ? Object.fromEntries(errors.map((e) => [e.path, e.error])) : {}
+  const noticeLocaleOf = (path: string) =>
+    (['ko', 'en', 'ja'] as const).find((l) => path.startsWith(`service.notice.${l}.`))
   const compatibilityLocked = (path: string) =>
     path === 'credit.dailyGrant' || path === 'credit.cap'
   const attendanceStale =
@@ -316,326 +380,378 @@ export function AdminOperationSettingsPage() {
   return (
     <>
       <AdminTopbar left="운영 설정" right={environment} />
-      <div className="mx-auto max-w-6xl space-y-5 px-7 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold">서비스 운영 설정</h1>
-            <p className="mt-1 text-xs text-admin-muted">
-              revision {baseline.revision} · 마지막 변경 {formatDateTime(baseline.updatedAt)}
-              {dirty ? ' · 미저장 변경 있음' : ''}
-            </p>
-          </div>
-          <button
-            className={button}
-            disabled={busy}
-            onClick={() => (dirty ? setReloadConfirm(true) : void reload())}
-          >
-            최신 설정 조회
-          </button>
-        </div>
-        {message && (
-          <div
-            role="status"
-            className="rounded-lg border border-admin-border bg-admin-surface p-4 text-sm"
-          >
-            {message}
-          </div>
-        )}
-        {conflict && (
-          <AdminNotice
-            title="최신 설정 확인이 필요해요"
-            lines={[
-              '현재 입력은 보존했어요. 내용을 기록한 뒤 최신 설정을 조회하면 입력을 서버 값으로 교체해요. 자동으로 덮어쓰거나 재시도하지 않아요.',
-            ]}
-          />
-        )}
-        <nav aria-label="운영 설정 구분" className="flex flex-wrap gap-2">
-          {[
-            ...sections.map((s) => ({ key: s.key, label: s.label })),
-            { key: 'limits' as const, label: '안전 상한·바로가기' },
-            { key: 'history' as const, label: '변경 이력' },
-          ].map((s) => (
+      {/* 셸이 h-screen이라 본문이 직접 스크롤해야 한다(다른 어드민 화면과 같은 구조) */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-6xl space-y-5 px-7 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold">서비스 운영 설정</h1>
+              <p className="mt-1 text-xs text-admin-muted">
+                revision {baseline.revision} · 마지막 변경 {formatDateTime(baseline.updatedAt)}
+                {dirty ? ' · 미저장 변경 있음' : ''}
+              </p>
+            </div>
             <button
-              key={s.key}
-              className={`${button} ${tab === s.key ? 'border-primary bg-admin-nav font-semibold' : ''}`}
-              aria-current={tab === s.key ? 'page' : undefined}
-              onClick={() => switchTab(s.key)}
+              className={button}
               disabled={busy}
+              onClick={() => (dirty ? setReloadConfirm(true) : void reload())}
             >
-              {s.label}
+              최신 설정 조회
             </button>
-          ))}
-        </nav>
-        {section && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              setShowErrors(true)
-              if (errors.length || payloadError) errorSummary.current?.focus()
-              if (!errors.length && !payloadError && dirty) {
-                setPending({ kind: 'save' })
-                setAcknowledged(false)
+          </div>
+          {message && (
+            <div
+              role="status"
+              className="rounded-lg border border-admin-border bg-admin-surface p-4 text-sm"
+            >
+              {message}
+            </div>
+          )}
+          {conflict && (
+            <AdminNotice
+              title="최신 설정 확인이 필요해요"
+              lines={[
+                '현재 입력은 보존했어요. 내용을 기록한 뒤 최신 설정을 조회하면 입력을 서버 값으로 교체해요. 자동으로 덮어쓰거나 재시도하지 않아요.',
+              ]}
+            />
+          )}
+          <nav aria-label="운영 설정 구분" className="flex flex-wrap gap-2">
+            {[
+              ...sections.map((s) => ({ key: s.key, label: s.label })),
+              { key: 'limits' as const, label: '안전 상한·바로가기' },
+              { key: 'history' as const, label: '변경 이력' },
+            ].map((s) => (
+              <button
+                key={s.key}
+                className={`${button} ${tab === s.key ? 'border-primary bg-admin-nav font-semibold' : ''}`}
+                aria-current={tab === s.key ? 'page' : undefined}
+                onClick={() => switchTab(s.key)}
+                disabled={busy}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
+          {tab === 'service' && (
+            <ServiceStatusCard
+              service={serviceAvailable ? baseline.settings.service! : null}
+              change={modeChange}
+              lockReason={
+                busy
+                  ? '처리 중이에요.'
+                  : conflict
+                    ? '최신 설정을 먼저 조회해 주세요.'
+                    : dirty
+                      ? '저장하지 않은 안내 문구가 있어요. 먼저 저장하거나 되돌린 뒤 전환해 주세요.'
+                      : null
               }
-            }}
-          >
-            <FormSection title={section.label} description={section.description}>
-              {tab === 'quest' && <AdminNotice title="퀘스트 적용 범위" lines={questImpact} />}
-              {tab === 'institutionSubscription' && (
-                <AdminNotice title="월 구독 적용 범위" lines={subscriptionImpact} />
-              )}
-              {policyUnavailable && (
-                <AdminNotice
-                  title={`${questUnavailable ? '퀘스트' : '월 구독'} 설정을 확인할 수 없어요`}
-                  lines={[
-                    '서버에서 이 설정 전체를 제공하지 않았어요. 기본값으로 채우지 않고 편집을 잠갔어요. 서버 업데이트 후 최신 설정을 조회해 주세요.',
-                  ]}
-                />
-              )}
-              {tab === 'credit' && (
-                <AdminNotice
-                  lines={[
-                    `고정 가입자 기준일: ${baseline.settings.credit.migrationCutoffAt ? formatDateTime(baseline.settings.credit.migrationCutoffAt) : '없음 (모든 계정에 신규 가입 정책 적용)'} · 편집·복원으로 바뀌지 않아요.`,
-                    '차감 시작일이 미래여도 출석 API는 사용할 수 있어요. 비우면 장수·출석 API가 비활성화되며 업로드 차감 판정은 DISABLED가 돼요.',
-                    ...baseline.readOnly.appCompatibilityNotes,
-                  ]}
-                />
-              )}
-              {showErrors && (errors.length > 0 || payloadError) && (
-                <div
-                  ref={errorSummary}
-                  tabIndex={-1}
-                  role="alert"
-                  className="rounded-lg border border-warn p-3 text-sm text-warn"
-                >
-                  <p>입력값을 확인해 주세요.</p>
-                  {errors.map((e) => (
-                    <a className="block underline" key={e.path} href={`#${e.path}`}>
-                      {e.label}: {e.error}
-                    </a>
-                  ))}
-                  {payloadError && <p>{payloadError}</p>}
-                </div>
-              )}
-              <div className="grid gap-5 md:grid-cols-2">
-                {activeFields.map((f) => {
-                  const error = showErrors ? errors.find((e) => e.path === f.path)?.error : null
-                  const disabled = busy || policyUnavailable || compatibilityLocked(f.path)
-                  return (
-                    <div key={f.path} className={f.kind === 'body' ? 'md:col-span-2' : ''}>
-                      <label htmlFor={f.path} className="mb-1.5 block text-[13px] font-semibold">
-                        {f.label}
-                      </label>
-                      {f.kind === 'boolean' ? (
-                        <select
-                          id={f.path}
-                          value={draft[f.path]}
-                          disabled={disabled}
-                          className={inputClassName(Boolean(error))}
-                          aria-invalid={Boolean(error)}
-                          aria-describedby={`${f.path}-hint`}
-                          onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
-                        >
-                          {draft[f.path] === '' && <option value="">조회되지 않음</option>}
-                          <option value="false">비활성</option>
-                          <option value="true">활성</option>
-                        </select>
-                      ) : f.kind === 'body' ? (
-                        <textarea
-                          id={f.path}
-                          rows={3}
-                          disabled={disabled}
-                          value={draft[f.path]}
-                          className={textareaClassName(Boolean(error))}
-                          aria-invalid={Boolean(error)}
-                          aria-describedby={`${f.path}-hint`}
-                          onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
-                        />
-                      ) : (
-                        <input
-                          id={f.path}
-                          type={
-                            f.kind === 'datetime'
-                              ? 'datetime-local'
-                              : f.kind === 'time'
-                                ? 'time'
-                                : 'text'
-                          }
-                          step={f.kind === 'datetime' ? 1 : undefined}
-                          inputMode={
-                            f.kind === 'amount' || f.kind === 'reward' || f.kind === 'days'
-                              ? 'numeric'
-                              : undefined
-                          }
-                          disabled={disabled}
-                          value={draft[f.path]}
-                          className={inputClassName(Boolean(error))}
-                          aria-invalid={Boolean(error)}
-                          aria-describedby={`${f.path}-hint`}
-                          onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
-                        />
-                      )}
-                      <p
-                        id={`${f.path}-hint`}
-                        className={`mt-1 text-xs leading-relaxed ${error ? 'text-warn' : 'text-admin-muted'}`}
+              onRequestMode={(mode) => setPending({ kind: 'mode', mode })}
+              onOpenHistory={() => switchTab('history')}
+              onOpenAppTab={() => switchTab('app')}
+            />
+          )}
+          {section && (tab !== 'service' || serviceAvailable) && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                setShowErrors(true)
+                const firstLocale = errors.length ? noticeLocaleOf(errors[0].path) : undefined
+                if (tab === 'service' && firstLocale) setNoticeLocale(firstLocale)
+                if (errors.length || payloadError) errorSummary.current?.focus()
+                if (!errors.length && !payloadError && dirty) {
+                  setPending({ kind: 'save' })
+                  setAcknowledged(false)
+                }
+              }}
+            >
+              <FormSection
+                title={tab === 'service' ? '앱 안내 문구' : section.label}
+                description={section.description}
+              >
+                {tab === 'quest' && <AdminNotice title="퀘스트 적용 범위" lines={questImpact} />}
+                {tab === 'institutionSubscription' && (
+                  <AdminNotice title="월 구독 적용 범위" lines={subscriptionImpact} />
+                )}
+                {policyUnavailable && (
+                  <AdminNotice
+                    title={`${questUnavailable ? '퀘스트' : '월 구독'} 설정을 확인할 수 없어요`}
+                    lines={[
+                      '서버에서 이 설정 전체를 제공하지 않았어요. 기본값으로 채우지 않고 편집을 잠갔어요. 서버 업데이트 후 최신 설정을 조회해 주세요.',
+                    ]}
+                  />
+                )}
+                {tab === 'credit' && (
+                  <AdminNotice
+                    lines={[
+                      `고정 가입자 기준일: ${baseline.settings.credit.migrationCutoffAt ? formatDateTime(baseline.settings.credit.migrationCutoffAt) : '없음 (모든 계정에 신규 가입 정책 적용)'} · 편집·복원으로 바뀌지 않아요.`,
+                      '차감 시작일이 미래여도 출석 API는 사용할 수 있어요. 비우면 장수·출석 API가 비활성화되며 업로드 차감 판정은 DISABLED가 돼요.',
+                      ...baseline.readOnly.appCompatibilityNotes,
+                    ]}
+                  />
+                )}
+                {showErrors && (errors.length > 0 || payloadError) && (
+                  <div
+                    ref={errorSummary}
+                    tabIndex={-1}
+                    role="alert"
+                    className="rounded-lg border border-warn p-3 text-sm text-warn"
+                  >
+                    <p>입력값을 확인해 주세요.</p>
+                    {errors.map((e) => (
+                      <a
+                        className="block underline"
+                        key={e.path}
+                        href={`#${e.path}`}
+                        onClick={(event) => {
+                          // 다른 언어의 칸은 그려져 있지 않다. 언어를 바꾼 뒤 그 칸으로 간다.
+                          const locale = noticeLocaleOf(e.path)
+                          if (!locale || locale === noticeLocale) return
+                          event.preventDefault()
+                          setNoticeLocale(locale)
+                          requestAnimationFrame(() => document.getElementById(e.path)?.focus())
+                        }}
                       >
-                        {error || f.hint}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-              {tab === 'attendancePush' && (
-                <>
-                  {attendance.error && (
-                    <AdminErrorMessage error={attendance.error} onRetry={attendance.refetch} />
-                  )}
-                  {!attendance.error && attendanceStale && (
-                    <p role="status" className="text-sm text-admin-muted">
-                      {attendance.loading
-                        ? '출석 설정의 변경 버전을 확인하고 있어요.'
-                        : '다른 운영자가 설정을 변경했어요. 상단에서 최신 설정을 다시 조회해 주세요.'}
-                    </p>
-                  )}
-                  <div className="grid gap-3 lg:grid-cols-3">
-                    {(['ko', 'en', 'ja'] as const).map((locale) => {
-                      const copy = attendanceDisplay(
-                        locale,
-                        draft[`attendancePush.copy.${locale}.title`],
-                        draft[`attendancePush.copy.${locale}.body`],
-                      )
+                        {e.label}: {e.error}
+                      </a>
+                    ))}
+                    {payloadError && <p>{payloadError}</p>}
+                  </div>
+                )}
+                {tab === 'service' ? (
+                  <ServiceNoticeEditor
+                    draft={draft}
+                    onChange={(path, value) => setDraft({ ...draft, [path]: value })}
+                    locale={noticeLocale}
+                    onLocale={setNoticeLocale}
+                    errors={noticeErrors}
+                    disabled={busy}
+                  />
+                ) : (
+                  <div className="grid gap-5 md:grid-cols-2">
+                    {activeFields.map((f) => {
+                      const error = showErrors ? errors.find((e) => e.path === f.path)?.error : null
+                      const disabled = busy || policyUnavailable || compatibilityLocked(f.path)
                       return (
-                        <div
-                          key={locale}
-                          className="rounded-xl border border-admin-border bg-admin-bg p-4"
-                        >
-                          <p className="mb-2 text-xs text-admin-muted">
-                            {locale} 알림 미리보기 · 누르면 앱을 열어요
-                          </p>
-                          <p className="break-words text-sm font-semibold">{copy.title}</p>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-xs">
-                            {copy.body}
+                        <div key={f.path} className={f.kind === 'body' ? 'md:col-span-2' : ''}>
+                          <label
+                            htmlFor={f.path}
+                            className="mb-1.5 block text-[13px] font-semibold"
+                          >
+                            {f.label}
+                          </label>
+                          {f.kind === 'boolean' ? (
+                            <select
+                              id={f.path}
+                              value={draft[f.path]}
+                              disabled={disabled}
+                              className={inputClassName(Boolean(error))}
+                              aria-invalid={Boolean(error)}
+                              aria-describedby={`${f.path}-hint`}
+                              onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
+                            >
+                              {draft[f.path] === '' && <option value="">조회되지 않음</option>}
+                              <option value="false">비활성</option>
+                              <option value="true">활성</option>
+                            </select>
+                          ) : f.kind === 'body' ? (
+                            <textarea
+                              id={f.path}
+                              rows={3}
+                              disabled={disabled}
+                              value={draft[f.path]}
+                              className={textareaClassName(Boolean(error))}
+                              aria-invalid={Boolean(error)}
+                              aria-describedby={`${f.path}-hint`}
+                              onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
+                            />
+                          ) : (
+                            <input
+                              id={f.path}
+                              type={
+                                f.kind === 'datetime'
+                                  ? 'datetime-local'
+                                  : f.kind === 'time'
+                                    ? 'time'
+                                    : 'text'
+                              }
+                              step={f.kind === 'datetime' ? 1 : undefined}
+                              inputMode={
+                                f.kind === 'amount' || f.kind === 'reward' || f.kind === 'days'
+                                  ? 'numeric'
+                                  : undefined
+                              }
+                              disabled={disabled}
+                              value={draft[f.path]}
+                              className={inputClassName(Boolean(error))}
+                              aria-invalid={Boolean(error)}
+                              aria-describedby={`${f.path}-hint`}
+                              onChange={(e) => setDraft({ ...draft, [f.path]: e.target.value })}
+                            />
+                          )}
+                          <p
+                            id={`${f.path}-hint`}
+                            className={`mt-1 text-xs leading-relaxed ${error ? 'text-warn' : 'text-admin-muted'}`}
+                          >
+                            {error || f.hint}
                           </p>
                         </div>
                       )
                     })}
                   </div>
-                </>
-              )}
-              <div className="flex items-center justify-between border-t border-admin-border pt-4">
-                <p className="text-xs text-admin-muted">
-                  {dirty
-                    ? `${changes.length}개 항목 변경 · 아직 저장하지 않았어요`
-                    : '변경사항이 없어요'}
-                </p>
-                <button
-                  type="submit"
-                  className={primary}
-                  disabled={!dirty || busy || conflict || attendanceStale || policyUnavailable}
-                >
-                  변경 내용 확인
-                </button>
+                )}
+                {tab === 'attendancePush' && (
+                  <>
+                    {attendance.error && (
+                      <AdminErrorMessage error={attendance.error} onRetry={attendance.refetch} />
+                    )}
+                    {!attendance.error && attendanceStale && (
+                      <p role="status" className="text-sm text-admin-muted">
+                        {attendance.loading
+                          ? '출석 설정의 변경 버전을 확인하고 있어요.'
+                          : '다른 운영자가 설정을 변경했어요. 상단에서 최신 설정을 다시 조회해 주세요.'}
+                      </p>
+                    )}
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      {(['ko', 'en', 'ja'] as const).map((locale) => {
+                        const copy = attendanceDisplay(
+                          locale,
+                          draft[`attendancePush.copy.${locale}.title`],
+                          draft[`attendancePush.copy.${locale}.body`],
+                        )
+                        return (
+                          <div
+                            key={locale}
+                            className="rounded-xl border border-admin-border bg-admin-bg p-4"
+                          >
+                            <p className="mb-2 text-xs text-admin-muted">
+                              {locale} 알림 미리보기 · 누르면 앱을 열어요
+                            </p>
+                            <p className="break-words text-sm font-semibold">{copy.title}</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words text-xs">
+                              {copy.body}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+                <div className="flex items-center justify-between border-t border-admin-border pt-4">
+                  <p className="text-xs text-admin-muted">
+                    {dirty
+                      ? `${changes.length}개 항목 변경 · 아직 저장하지 않았어요`
+                      : '변경사항이 없어요'}
+                  </p>
+                  <button
+                    type="submit"
+                    className={primary}
+                    disabled={!dirty || busy || conflict || attendanceStale || policyUnavailable}
+                  >
+                    변경 내용 확인
+                  </button>
+                </div>
+              </FormSection>
+            </form>
+          )}
+          {tab === 'attendancePush' && <AttendanceStats />}
+          {tab === 'limits' && (
+            <FormSection
+              title="업로드 안전 상한"
+              description="앱 호환성과 처리 용량 검토가 필요한 코드 고정값이에요. 이 화면에서는 조회만 해요."
+            >
+              <dl className="grid gap-4 sm:grid-cols-3">
+                {Object.entries(baseline.readOnly.uploadLimits).map(([key, value]) => (
+                  <div key={key}>
+                    <dt className="text-xs text-admin-muted">
+                      {{ perRequest: '요청당', perEvent: '이벤트당', perGroup: '모임당' }[key]}
+                    </dt>
+                    <dd className="mt-1 text-lg font-semibold">{value.toLocaleString()}장</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="flex flex-wrap gap-4 text-sm underline">
+                {[
+                  ['users', '사용자별 장수 지급·회수'],
+                  ['organizations', '기관 이용 기간'],
+                  ['groups', '모임 패스'],
+                  ['popups', '이벤트 팝업'],
+                  ['push', '혜택 푸시'],
+                ].map(([path, label]) => (
+                  <Link key={path} to={adminPath(`/${path}`)}>
+                    {label}
+                  </Link>
+                ))}
               </div>
             </FormSection>
-          </form>
-        )}
-        {tab === 'attendancePush' && <AttendanceStats />}
-        {tab === 'limits' && (
-          <FormSection
-            title="업로드 안전 상한"
-            description="앱 호환성과 처리 용량 검토가 필요한 코드 고정값이에요. 이 화면에서는 조회만 해요."
-          >
-            <dl className="grid gap-4 sm:grid-cols-3">
-              {Object.entries(baseline.readOnly.uploadLimits).map(([key, value]) => (
-                <div key={key}>
-                  <dt className="text-xs text-admin-muted">
-                    {{ perRequest: '요청당', perEvent: '이벤트당', perGroup: '모임당' }[key]}
-                  </dt>
-                  <dd className="mt-1 text-lg font-semibold">{value.toLocaleString()}장</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="flex flex-wrap gap-4 text-sm underline">
-              {[
-                ['users', '사용자별 장수 지급·회수'],
-                ['organizations', '기관 이용 기간'],
-                ['groups', '모임 패스'],
-                ['popups', '이벤트 팝업'],
-                ['push', '혜택 푸시'],
-              ].map(([path, label]) => (
-                <Link key={path} to={adminPath(`/${path}`)}>
-                  {label}
-                </Link>
-              ))}
-            </div>
-          </FormSection>
-        )}
-        {tab === 'history' && (
-          <FormSection
-            title="변경 이력"
-            description="복원은 현재 검증을 거치는 새 변경이에요. 이미 지급한 장수·발송·체험은 되돌리지 않아요."
-          >
-            {history.error ? (
-              <AdminErrorMessage error={history.error} onRetry={history.refetch} />
-            ) : !history.data ? (
-              <AdminMessage text="변경 이력을 불러오고 있어요…" />
-            ) : (
-              <>
-                {[...history.data.items, ...older].length === 0 && (
-                  <p className="text-sm text-admin-muted">기록된 변경이 없어요.</p>
-                )}
-                {[...history.data.items, ...older].map((item) => (
-                  <article
-                    key={item.historyId}
-                    className="space-y-3 rounded-lg border border-admin-border p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm font-semibold">
-                        revision {item.revision} · 운영자 #{item.actorUserId} ·{' '}
-                        {formatDateTime(item.changedAt)}
-                      </p>
-                      <button className={button} onClick={() => setHistoryDetail(item)}>
-                        전후 값 보기
-                      </button>
-                    </div>
-                    <p className="whitespace-pre-wrap break-words text-sm">{item.reason}</p>
-                    <p className="text-xs text-admin-muted">
-                      적용 범위: 전체 서비스
-                      {item.restoredFrom ? ` · 이력 #${item.restoredFrom} 복원` : ''}
-                    </p>
-                    <div className="flex gap-2">
-                      {(['BEFORE', 'AFTER'] as const).map((snapshot) => (
-                        <button
-                          key={snapshot}
-                          className={button}
-                          onClick={() => {
-                            setPending({ kind: 'restore', item, snapshot })
-                            setAcknowledged(false)
-                          }}
-                        >
-                          이 {snapshot === 'BEFORE' ? '변경 전' : '변경 후'} 값 복원 검토
+          )}
+          {tab === 'history' && (
+            <FormSection
+              title="변경 이력"
+              description="복원은 현재 검증을 거치는 새 변경이에요. 이미 지급한 장수·발송·체험은 되돌리지 않아요."
+            >
+              {history.error ? (
+                <AdminErrorMessage error={history.error} onRetry={history.refetch} />
+              ) : !history.data ? (
+                <AdminMessage text="변경 이력을 불러오고 있어요…" />
+              ) : (
+                <>
+                  {[...history.data.items, ...older].length === 0 && (
+                    <p className="text-sm text-admin-muted">기록된 변경이 없어요.</p>
+                  )}
+                  {[...history.data.items, ...older].map((item) => (
+                    <article
+                      key={item.historyId}
+                      className="space-y-3 rounded-lg border border-admin-border p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold">
+                          revision {item.revision} · 운영자 #{item.actorUserId} ·{' '}
+                          {formatDateTime(item.changedAt)}
+                        </p>
+                        <button className={button} onClick={() => setHistoryDetail(item)}>
+                          전후 값 보기
                         </button>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-                {historyError && (
-                  <p role="alert" className="text-sm text-warn">
-                    {historyError}
-                  </p>
-                )}
-                {(cursor !== null || (older.length === 0 && history.data.hasNext)) && (
-                  <button
-                    className={button}
-                    disabled={historyBusy}
-                    onClick={() => void moreHistory()}
-                  >
-                    {historyBusy ? '조회 중…' : '이전 이력 더 보기'}
-                  </button>
-                )}
-              </>
-            )}
-          </FormSection>
-        )}
+                      </div>
+                      <p className="whitespace-pre-wrap break-words text-sm">{item.reason}</p>
+                      <p className="text-xs text-admin-muted">
+                        적용 범위: 전체 서비스
+                        {item.restoredFrom ? ` · 이력 #${item.restoredFrom} 복원` : ''}
+                      </p>
+                      <div className="flex gap-2">
+                        {(['BEFORE', 'AFTER'] as const).map((snapshot) => (
+                          <button
+                            key={snapshot}
+                            className={button}
+                            onClick={() => {
+                              setPending({ kind: 'restore', item, snapshot })
+                              setAcknowledged(false)
+                            }}
+                          >
+                            이 {snapshot === 'BEFORE' ? '변경 전' : '변경 후'} 값 복원 검토
+                          </button>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                  {historyError && (
+                    <p role="alert" className="text-sm text-warn">
+                      {historyError}
+                    </p>
+                  )}
+                  {(cursor !== null || (older.length === 0 && history.data.hasNext)) && (
+                    <button
+                      className={button}
+                      disabled={historyBusy}
+                      onClick={() => void moreHistory()}
+                    >
+                      {historyBusy ? '조회 중…' : '이전 이력 더 보기'}
+                    </button>
+                  )}
+                </>
+              )}
+            </FormSection>
+          )}
+        </div>
       </div>
       {historyDetail && (
         <AdminDialog
@@ -653,13 +769,29 @@ export function AdminOperationSettingsPage() {
       )}
       {pending && (
         <AdminDialog
-          title={pending.kind === 'save' ? '운영 설정 변경 확인' : '이전 설정 복원 확인'}
+          title={
+            pending.kind === 'mode'
+              ? pending.mode === 'READ_ONLY'
+                ? '읽기 전용으로 전환'
+                : '평소 운영으로 복귀'
+              : pending.kind === 'save'
+                ? '운영 설정 변경 확인'
+                : '이전 설정 복원 확인'
+          }
           onClose={() => setPending(null)}
           busy={busy}
           widthClassName="max-w-3xl"
           footer={
             <AdminDialogActions
-              confirmLabel={pending.kind === 'save' ? '설정 저장' : '새 변경으로 복원'}
+              confirmLabel={
+                pending.kind === 'mode'
+                  ? pending.mode === 'READ_ONLY'
+                    ? '읽기 전용으로 전환'
+                    : '평소 운영으로 복귀'
+                  : pending.kind === 'save'
+                    ? '설정 저장'
+                    : '새 변경으로 복원'
+              }
               onCancel={() => setPending(null)}
               onConfirm={() => void save()}
               busy={busy}
@@ -667,16 +799,18 @@ export function AdminOperationSettingsPage() {
                 Boolean(restoreError) ||
                 !reason.trim() ||
                 reason.trim().length > 500 ||
-                !acknowledged ||
+                !confirmed ||
                 conflict
               }
             />
           }
         >
-          {pending.kind === 'save' ? (
+          {pending.kind === 'mode' ? (
+            <ServiceModeSummary service={baseline.settings.service!} to={pending.mode} />
+          ) : pending.kind === 'save' ? (
             <div className="space-y-2">
               {changes.map((f) => (
-                <p key={f.path} className="break-words text-sm">
+                <p key={f.path} className="whitespace-pre-wrap break-words text-sm">
                   <strong>{f.label}</strong>:{' '}
                   {settingDisplay(f, toDraft(baseline.settings)[f.path])} →{' '}
                   {settingDisplay(f, draft[f.path])}
@@ -694,6 +828,16 @@ export function AdminOperationSettingsPage() {
                 before={baseline.settings}
                 after={restorePreview(baseline.settings, restoreTarget!)}
               />
+              {restoreModeChange && (
+                <div className="mt-3">
+                  <AdminNotice
+                    title="서비스 상태가 바뀌어요"
+                    lines={[
+                      `이 복원은 서비스 상태를 ${serviceModeLabel(restoreModeChange.from)}에서 ${serviceModeLabel(restoreModeChange.to)}(으)로 바꿔요. 저장하면 다음 요청부터 적용돼요.`,
+                    ]}
+                  />
+                </div>
+              )}
             </>
           )}
           <div className="my-4">
@@ -711,8 +855,22 @@ export function AdminOperationSettingsPage() {
                 )}
               />
             )}
+            {pending.kind === 'save' && tab === 'service' && (
+              <AdminNotice
+                title="안내 문구 적용"
+                lines={[
+                  baseline.settings.service?.mode === 'NORMAL'
+                    ? '지금은 평소 운영이라 저장해도 사용자에게 보이지 않아요. 읽기 전용으로 전환하면 이 문구가 나가요.'
+                    : '읽기 전용 운영 중이라 앱이 다음 실행·복귀 때 이 문구를 보여요.',
+                  '비운 칸은 앱 기본 문구가 나가요.',
+                ]}
+              />
+            )}
             {(pending.kind === 'restore' ||
-              (tab !== 'quest' && tab !== 'institutionSubscription')) && (
+              (pending.kind === 'save' &&
+                tab !== 'quest' &&
+                tab !== 'institutionSubscription' &&
+                tab !== 'service')) && (
               <AdminNotice
                 title="설정 변경의 적용 범위"
                 lines={[
@@ -739,20 +897,40 @@ export function AdminOperationSettingsPage() {
             className={`${textareaClassName()} mt-2`}
             rows={3}
           />
-          <label className="mt-3 flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              disabled={busy}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1 h-4 w-4"
-            />
-            {pending.kind === 'save' && tab === 'quest'
-              ? '변경 전후 값·신규 참여자 적용·중단 및 재개 영향을 확인했어요.'
-              : pending.kind === 'save' && tab === 'institutionSubscription'
-                ? '변경 전후 값·신규 구매 조건·기존 구독 유지와 출시 준비 조건을 확인했어요.'
-                : '변경 전후 값·스토어 공개 상태·적용 범위와 영향을 확인했어요.'}
-          </label>
+          {needsPhrase && (
+            <div className="mt-3">
+              <label htmlFor="settings-phrase" className="text-sm font-semibold">
+                확인을 위해 「{READ_ONLY_CONFIRM_PHRASE}」을 입력해 주세요
+              </label>
+              <input
+                id="settings-phrase"
+                value={phrase}
+                autoComplete="off"
+                disabled={busy}
+                onChange={(e) => setPhrase(e.target.value)}
+                aria-invalid={phrase.trim() !== '' && !phraseOk}
+                className={`${inputClassName(phrase.trim() !== '' && !phraseOk)} mt-2`}
+              />
+            </div>
+          )}
+          {pending.kind !== 'mode' && (
+            <label className="mt-3 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                disabled={busy}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+                className="mt-1 h-4 w-4"
+              />
+              {pending.kind === 'save' && tab === 'quest'
+                ? '변경 전후 값·신규 참여자 적용·중단 및 재개 영향을 확인했어요.'
+                : pending.kind === 'save' && tab === 'institutionSubscription'
+                  ? '변경 전후 값·신규 구매 조건·기존 구독 유지와 출시 준비 조건을 확인했어요.'
+                  : pending.kind === 'save' && tab === 'service'
+                    ? '변경 전후 문구와 미리보기를 확인했어요.'
+                    : '변경 전후 값·스토어 공개 상태·적용 범위와 영향을 확인했어요.'}
+            </label>
+          )}
           {restoreError && (
             <p role="alert" className="mt-2 text-sm text-warn">
               {restoreError}
@@ -835,7 +1013,8 @@ function SettingsDiff({
   ) =>
     historical &&
     ((f.path.startsWith('quest.') && values.quest == null) ||
-      (f.path.startsWith('institutionSubscription.') && values.institutionSubscription == null))
+      (f.path.startsWith('institutionSubscription.') && values.institutionSubscription == null) ||
+      (f.path.startsWith('service.') && values.service == null))
       ? missingPolicyMessage
       : settingDisplay(f, draft[f.path])
   return (

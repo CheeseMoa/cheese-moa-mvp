@@ -1,4 +1,4 @@
-/** CHMO-958/978 운영 설정 DTO. 인증은 공용 관리자 client 계층을 사용한다. */
+/** CHMO-958/978/993 운영 설정 DTO. 인증은 공용 관리자 client 계층을 사용한다. */
 import { ApiRequestError, apiFetch, apiFetchWithHeaders } from '../../api/client'
 
 export type Platform = 'ios' | 'android'
@@ -19,6 +19,21 @@ export interface InstitutionSubscriptionSettings {
   offerEnabled: boolean
   purchaseEnabled: boolean
 }
+/**
+ * BE CHMO-993 서비스 상태(`ServiceSettings`). NORMAL 밖의 모르는 값도 문자열로 보존한다(앱은 읽기
+ * 전용으로 해석). 관리자 응답은 세 언어 키를 항상 싣고, 언어·필드 null은 앱 기본 문구를 쓴다는 뜻이다.
+ * updatedAt은 mode·notice가 실제로 바뀐 저장 시각(서버 관리 · PATCH로 보내면 SETTINGS400, 바뀐 적 없으면 null).
+ */
+export type ServiceMode = 'NORMAL' | 'READ_ONLY'
+export interface ServiceNoticeCopy {
+  title?: string | null
+  body?: string | null
+}
+export interface ServiceSettings {
+  mode: ServiceMode | (string & {})
+  notice?: Partial<Record<Locale, ServiceNoticeCopy | null>> | null
+  updatedAt?: string | null
+}
 export interface OperationValues {
   app: { minVersion: Record<Platform, string>; storeUrl?: Partial<Record<Platform, string>> }
   credit: {
@@ -34,6 +49,8 @@ export interface OperationValues {
   // 구 서버 응답에는 없을 수 있고, CHMO-978 이전 이력은 null을 보존한다.
   quest?: QuestSettings | null
   institutionSubscription?: InstitutionSubscriptionSettings | null
+  // BE CHMO-993 배포 전 응답과 그 이전 이력에는 없다.
+  service?: ServiceSettings | null
 }
 export interface OperationSettings {
   revision: number
