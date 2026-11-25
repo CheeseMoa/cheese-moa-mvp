@@ -37,6 +37,8 @@
  *   CHMO-926 PR #312 develop 머지분. 어드민 화면(CHMO-928)이 쓴다. 실서버 채집은 BE 배포 후).
  * + 2026-10-16 BE 소스 대조(ADMIN409 — 어드민 쓰기 Idempotency-Key 충돌, CHMO-932 PR #317
  *   ErrorStatus.ADMIN_REQUEST_CONFLICT. 실서버 채집은 BE 배포 후).
+ * + 2026-11-17 BE 소스 대조(SERVICE503 — 서비스 일시 중단(읽기 전용) 쓰기·새 가입 차단, CHMO-993
+ *   브랜치의 ErrorStatus.SERVICE_READ_ONLY · ReadOnlyModeInterceptor. 실서버 채집은 BE 배포 후).
  * 새 코드를 확인하면 여기에만 추가하면 된다.
  */
 const BE_CODE_MAP: Record<string, string> = {
@@ -191,6 +193,11 @@ const BE_CODE_MAP: Record<string, string> = {
   BILLING502: 'PAYMENT_GATEWAY_ERROR',
   /** 결제 설정 비활성·환율 조회 실패·오래된 환율·시장 키 미설정(503) — 잠시 후 다시 */
   BILLING503: 'BILLING_UNAVAILABLE',
+  /**
+   * 서비스 일시 중단 중 쓰기 요청(503 — BE CHMO-993). 운영자가 어드민에서 읽기 전용을 켰다는 뜻이라
+   * 재시도해도 풀리지 않는다. 문구는 FE가 소유한다(`toErrorMessage` — BE 메시지 대신 앱과 같은 말).
+   */
+  SERVICE503: 'SERVICE_READ_ONLY',
   /** 지원하지 않는 소셜 프로바이더(400) — 경로 변수가 BE 미구현 값 (CHMO-359) */
   OAUTH400: 'UNSUPPORTED_SOCIAL_PROVIDER',
   /** 소셜 인가 실패(401) — 사용자 동의 취소·일회용 코드 무효/만료/재사용 */

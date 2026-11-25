@@ -6,6 +6,7 @@ import { createOperationSettingsDemo } from '../operationSettingsData'
 import type {
   AttendanceSettings,
   OperationValues,
+  ServiceSettings,
   SettingsHistory,
 } from '../../admin/api/operationSettings'
 let current = createOperationSettingsDemo()
@@ -19,11 +20,14 @@ function record(
   restoredFrom: number | null = null,
 ) {
   const before = structuredClone(current.settings)
+  const now = new Date().toISOString()
+  // BE ServiceSettings.stampedAgainst — mode·notice가 실제로 바뀐 저장에서만 변경 시각을 바꾼다
+  if (next.service) next.service = stamped(next.service, before.service, now)
   current = {
     ...current,
     revision: current.revision + 1,
     settings: next,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   }
   history.unshift({
     historyId: history.length + 1,
@@ -58,6 +62,123 @@ function validQuest(values: OperationValues): boolean {
     q.inviteFriendReward > Math.max(q.createGroupReward, q.uploadPhotoReward),
   )
 }
+// ── 서비스 일시 중단(BE CHMO-993 브랜치 ServiceSettings·SettingsPolicy·ReadOnlyModeInterceptor 대조) ──
+const NOTICE_LOCALES = ['ko', 'en', 'ja'] as const
+type Notices = Record<
+  (typeof NOTICE_LOCALES)[number],
+  { title: string | null; body: string | null }
+>
+/** 관리자 응답 모양 — 세 언어 키를 항상 싣고 앞뒤 공백을 걷어낸다(BE Notice 생성자) */
+function normalizeService(service: ServiceSettings | null | undefined): ServiceSettings {
+  const notice = Object.fromEntries(
+    NOTICE_LOCALES.map((locale) => {
+      const copy = service?.notice?.[locale]
+      const strip = (text: unknown) => (typeof text === 'string' ? text.trim() : (text ?? null))
+      return [locale, { title: strip(copy?.title), body: strip(copy?.body) }]
+    }),
+  ) as Notices
+  return { mode: service?.mode ?? 'NORMAL', notice, updatedAt: service?.updatedAt ?? null }
+}
+function stamped(
+  next: ServiceSettings,
+  before: ServiceSettings | null | undefined,
+  now: string,
+): ServiceSettings {
+  const changed =
+    !before ||
+    next.mode !== before.mode ||
+    JSON.stringify(next.notice) !== JSON.stringify(normalizeService(before).notice)
+  return { ...next, updatedAt: changed ? now : (before.updatedAt ?? null) }
+}
+/** PATCH 원문 검사 — 섹션 null·빈 객체·mode null·모르는 언어·서버 관리 updatedAt은 SETTINGS400 */
+function validServicePatch(changes: Record<string, unknown>): boolean {
+  if (!('service' in changes)) return true
+  const service = changes.service as Record<string, unknown> | null
+  if (!service || typeof service !== 'object' || Object.keys(service).length === 0) return false
+  if ('updatedAt' in service || ('mode' in service && service.mode == null)) return false
+  const notice = service.notice as Record<string, unknown> | null | undefined
+  return notice == null || Object.keys(notice).every((key) => NOTICE_LOCALES.includes(key as never))
+}
+/** 병합 결과 검사 — 제목 1~40·본문 1~300(앞뒤 공백 제거 뒤 코드 포인트), 공백만은 불가 */
+function validService(values: OperationValues): boolean {
+  const service = values.service
+  if (!service) return true
+  if (service.mode !== 'NORMAL' && service.mode !== 'READ_ONLY') return false
+  const valid = (text: unknown, max: number) =>
+    text == null || (typeof text === 'string' && text.length > 0 && [...text].length <= max)
+  return NOTICE_LOCALES.every((locale) => {
+    const copy = service.notice?.[locale]
+    return valid(copy?.title, 40) && valid(copy?.body, 300)
+  })
+}
+/** 공개 /app/config의 service — 채운 언어·필드만, updatedAt은 null이면 생략(BE PublicAppConfigResponse) */
+function publicService() {
+  const service = normalizeService(current.settings.service)
+  const notice = Object.fromEntries(
+    NOTICE_LOCALES.map((locale) => [
+      locale,
+      Object.fromEntries(
+        Object.entries(service.notice?.[locale] ?? {}).filter(([, text]) => text != null),
+      ),
+    ]).filter(([, copy]) => Object.keys(copy).length > 0),
+  )
+  return {
+    mode: service.mode,
+    ...(Object.keys(notice).length ? { notice } : {}),
+    ...(service.updatedAt ? { updatedAt: service.updatedAt } : {}),
+  }
+}
+
+/** 로컬 목의 현재 서비스 모드 — 쓰기 차단 핸들러가 읽는다 */
+export function mockServiceMode(): string {
+  return current.settings.service?.mode ?? 'NORMAL'
+}
+
+/**
+ * 읽기 전용 운영 중 쓰기 차단 — BE ReadOnlyModeInterceptor.ALLOWED(메서드 + 매핑 경로 패턴)를 옮겼다.
+ * 로컬 화면에서 SERVICE503 안내를 확인하는 용도이며 BE 규칙을 검증하지 않는다. 소셜 가입 코드 교환
+ * 차단처럼 서버 상태가 필요한 판정은 목에서 하지 않는다(통과시킨다).
+ */
+const ALLOWED_WRITES = [
+  'POST /auth/admin/login',
+  'POST /auth/login',
+  'POST /auth/refresh',
+  'POST /auth/logout',
+  'POST /auth/social/{provider}/callback',
+  'POST /auth/social/exchange',
+  'DELETE /me',
+  'POST /me/devices',
+  'DELETE /me/devices/{token}',
+  'PATCH /me/push-settings',
+  'POST /agreements',
+  'POST /me/reports',
+  'POST /me/reports/attachments/presign',
+  'POST /me/reports/{reportId}/read',
+  'POST /groups/{groupId}/in-app-purchases/apple/verify',
+  'POST /groups/{groupId}/in-app-purchases/google/verify',
+  'POST /pass-purchases/verify',
+  'POST /institution-subscriptions/verify',
+  'POST /billing/store-notifications/apple',
+  'POST /billing/store-notifications/google',
+  'DELETE /groups/{groupId}/subscription',
+  'POST /upload-batches/{batchId}/complete',
+  'DELETE /upload-batches/{batchId}',
+  'POST /events/{eventId}/viewed',
+  'POST /groups/{groupId}/persons/{personId}/viewed',
+  'POST /me/favorite-persons/{personId}/viewed',
+].map((entry) => {
+  const [method, pattern] = entry.split(' ')
+  return { method, path: new RegExp(`^${pattern.replace(/\{[^}]+\}/g, '[^/]+')}$`) }
+})
+export const serviceReadOnlyGuard = http.all(api('/*'), ({ request }) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return
+  if (mockServiceMode() === 'NORMAL') return
+  const path = new URL(request.url).pathname.replace(/^\/api\/v1/, '')
+  if (path.startsWith('/admin/')) return
+  if (ALLOWED_WRITES.some(({ method, path: p }) => method === request.method && p.test(path)))
+    return
+  return failure(503, 'SERVICE503', '서비스 재정비 중에는 사진 보기와 저장만 할 수 있습니다.')
+})
 function validSubscription(values: OperationValues): boolean {
   const p = values.institutionSubscription
   return Boolean(
@@ -68,7 +189,10 @@ function validSubscription(values: OperationValues): boolean {
   )
 }
 export const operationSettingsHandlers = [
-  http.get(api('/app/config'), () => HttpResponse.json(current.settings.app)),
+  // 봉투 없는 공개 응답. service는 NORMAL이어도 내려주고 notice는 채운 언어·필드만 싣는다.
+  http.get(api('/app/config'), () =>
+    HttpResponse.json({ ...current.settings.app, service: publicService() }),
+  ),
   http.get(api('/admin/operation-settings'), ({ request }) => {
     const user = adminGate(request)
     return user instanceof Response ? user : ok(current)
@@ -85,11 +209,15 @@ export const operationSettingsHandlers = [
       return failure(409, 'SETTINGS409', '설정이 변경되었어요.')
     if (!input.reason?.trim() || input.reason.length > 500 || !input.changes)
       return failure(400, 'SETTINGS400', '변경 내용을 확인해 주세요.')
+    if (!validServicePatch(input.changes))
+      return failure(400, 'SETTINGS400', '서비스 상태 설정을 확인해 주세요.')
     const next = structuredClone(current.settings)
     merge(next as unknown as Record<string, unknown>, input.changes)
+    next.service = normalizeService(next.service)
     if (!validQuest(next)) return failure(400, 'SETTINGS400', '퀘스트 보상 설정을 확인해 주세요.')
     if (!validSubscription(next))
       return failure(400, 'SETTINGS400', '월 구독 설정을 확인해 주세요.')
+    if (!validService(next)) return failure(400, 'SETTINGS400', '서비스 상태 설정을 확인해 주세요.')
     return record(user.id, input.reason, next)
   }),
   http.get(api('/admin/operation-settings/history'), ({ request }) => {
@@ -116,6 +244,8 @@ export const operationSettingsHandlers = [
     // CHMO-978: 원본 이력에 없던 새 정책은 현재 값을 유지한다.
     next.quest ??= current.settings.quest
     next.institutionSubscription ??= current.settings.institutionSubscription
+    // CHMO-993: 이 기능 이전 이력(service 없음)으로 복원하면 현재 값을 유지한다
+    next.service = normalizeService(next.service ?? current.settings.service)
     if (!validQuest(next)) return failure(400, 'SETTINGS400', '퀘스트 보상 설정을 확인해 주세요.')
     if (!validSubscription(next))
       return failure(400, 'SETTINGS400', '월 구독 설정을 확인해 주세요.')

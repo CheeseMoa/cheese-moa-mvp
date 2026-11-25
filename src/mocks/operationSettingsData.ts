@@ -28,6 +28,16 @@ export function createOperationSettingsDemo(): OperationSettings {
         inviteFriendReward: 200,
       },
       institutionSubscription: { offerEnabled: false, purchaseEnabled: false },
+      // BE CHMO-993 ServiceSettings.defaults()의 관리자 응답 모양(세 언어 키 · 바뀐 적 없으면 updatedAt null)
+      service: {
+        mode: 'NORMAL',
+        notice: {
+          ko: { title: null, body: null },
+          en: { title: null, body: null },
+          ja: { title: null, body: null },
+        },
+        updatedAt: null,
+      },
       attendancePush: {
         enabled: false,
         sendTime: '19:00',

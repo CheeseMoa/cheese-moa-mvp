@@ -3,10 +3,13 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { clearAuthTokens, getAccessToken } from '../lib/auth'
 import { useApi } from '../hooks/useApi'
 import { adminLogout, getAdminProfile, listAdminReports } from './api/admin'
+import { getOperationSettings } from './api/operationSettings'
 import type { AdminOutletContext } from './outletContext'
 import { AdminSidebar } from './components/AdminSidebar'
 import { AdminLoginCard } from './components/AdminLoginCard'
 import { AdminErrorMessage, AdminMessage } from './components/AdminMessage'
+import { AdminServiceBanner } from './components/AdminServiceBanner'
+import { isPausedMode } from './lib/serviceStatus'
 
 /**
  * 어드민 셸 + 진입 가드 (CHMO-379·594) — /admin/* 전체를 감싼다.
@@ -48,6 +51,17 @@ function AdminLayoutContent() {
   const pendingReportCount = pendingReports.data?.pageInfo?.totalElements ?? null
   const refreshPendingReports = pendingReports.refetch
 
+  /**
+   * 서비스 상태(CHMO-994 AC-4) — 읽기 전용을 켜 둔 채 잊지 않게 모든 화면 위에 띠를 건다.
+   * 전용 조회 API가 없어 운영 설정 조회를 쓴다. 실패하거나 구 서버라 값이 없으면 띠를 걸지 않는다
+   * (모르는 것을 "멈췄다"고 말하지 않는다). 운영 설정 화면은 편집 기준을 따로 다시 읽는다.
+   */
+  const serviceStatus = useApi(profile.data ? 'admin-service-status' : null, (signal) =>
+    getOperationSettings(signal),
+  )
+  const serviceMode = serviceStatus.data?.settings.service?.mode ?? null
+  const refreshServiceStatus = serviceStatus.refetch
+
   // 화면을 옮길 때마다 배지를 다시 읽는다 — 새 신고는 앱에서 들어오고 푸시가 없다. 첫 진입은
   // 위 조회가 맡으므로 경로가 **바뀔 때만**(StrictMode 이중 실행에도 한 번만 돌도록 이전 값 비교)
   const { pathname } = useLocation()
@@ -56,12 +70,14 @@ function AdminLayoutContent() {
     if (lastPathname.current === pathname) return
     lastPathname.current = pathname
     refreshPendingReports()
-  }, [pathname, refreshPendingReports])
+    // 다른 운영자가 바꾼 서비스 상태도 화면을 옮길 때 맞춘다
+    refreshServiceStatus()
+  }, [pathname, refreshPendingReports, refreshServiceStatus])
 
   const adminUserId = profile.data?.userId ?? 0
   const outletContext = useMemo<AdminOutletContext>(
-    () => ({ pendingReportCount, refreshPendingReports, adminUserId }),
-    [pendingReportCount, refreshPendingReports, adminUserId],
+    () => ({ pendingReportCount, refreshPendingReports, adminUserId, refreshServiceStatus }),
+    [pendingReportCount, refreshPendingReports, adminUserId, refreshServiceStatus],
   )
 
   if (!authed) {
@@ -142,6 +158,7 @@ function AdminLayoutContent() {
         }}
       />
       <main className="flex min-w-0 flex-1 flex-col">
+        {isPausedMode(serviceMode) && <AdminServiceBanner mode={serviceMode!} />}
         <Outlet context={outletContext} />
       </main>
     </div>

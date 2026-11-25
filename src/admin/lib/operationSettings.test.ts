@@ -222,7 +222,8 @@ describe('퀘스트 운영 설정 — CHMO-973 QuestPolicy 및 CHMO-978', () => 
       quest: withQuest.quest,
       institutionSubscription: withQuest.institutionSubscription,
     })
-    expect(missingHistoryPolicies(values)).toEqual(['퀘스트·보상', '기관 월 구독'])
+    // CHMO-994: 서비스 상태(BE CHMO-993)도 그 이전 이력에는 없다
+    expect(missingHistoryPolicies(values)).toEqual(['퀘스트·보상', '기관 월 구독', '서비스 상태'])
     const legacyResolved = {
       ...values,
       quest: {
