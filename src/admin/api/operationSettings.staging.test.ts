@@ -63,7 +63,12 @@ describe('CHMO-959 staging 운영 설정 실응답 계약', () => {
     const history = await getSettingsHistory()
     const legacy = history.items.find((item) => item.revision === 2)!
     const restored = history.items.find((item) => item.revision === 6)!
-    expect(missingHistoryPolicies(legacy.after)).toEqual(['퀘스트·보상', '기관 월 구독'])
+    // 서비스 상태(BE CHMO-993)는 이 채집 이후 계약이라 현재 응답·모든 이력에 없다
+    expect(missingHistoryPolicies(legacy.after)).toEqual([
+      '퀘스트·보상',
+      '기관 월 구독',
+      '서비스 상태',
+    ])
     expect(restoreCompatibilityError(restored.before, legacy.after)).toBeNull()
     const response = await restoreSettings(legacy.historyId, 5, '옛 이력 복원 검증', 'AFTER')
     expect(bodyOf(calls[1])).toEqual({

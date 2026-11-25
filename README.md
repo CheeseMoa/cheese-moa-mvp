@@ -4,7 +4,7 @@
 
 - 기준 프레임: **390 × 844**
 - 스택: React 18 + Vite + TypeScript · react-router v6 · Tailwind CSS v3 · API 목 레이어 MSW
-- 소스 오브 트루스: [`docs/`](./docs) (기능·화면·API 명세)
+- 소스 오브 트루스: [`docs/`](./docs) (기능·화면·API 명세). 분류 진행 표시 구현은 [`docs/analysis-progress-display.md`](./docs/analysis-progress-display.md)를 참고한다.
 
 ## 개발
 

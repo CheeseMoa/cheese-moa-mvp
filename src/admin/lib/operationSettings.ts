@@ -1,8 +1,21 @@
 import type { Locale, OperationValues, SettingsChanges } from '../api/operationSettings'
 import { CAMPAIGN_FOOTER } from './promotion'
+import {
+  NOTICE_BODY_MAX,
+  NOTICE_TITLE_MAX,
+  noticeLength,
+  noticeText,
+  serviceModeLabel,
+} from './serviceStatus'
 
 export type SettingsSection =
-  'app' | 'credit' | 'institution' | 'attendancePush' | 'quest' | 'institutionSubscription'
+  | 'service'
+  | 'app'
+  | 'credit'
+  | 'institution'
+  | 'attendancePush'
+  | 'quest'
+  | 'institutionSubscription'
 export interface SettingField {
   path: string
   label: string
@@ -17,9 +30,18 @@ export interface SettingField {
     | 'boolean'
     | 'title'
     | 'body'
+    | 'mode'
+    | 'noticeTitle'
+    | 'noticeBody'
   hint?: string
 }
 export const sections: { key: SettingsSection; label: string; description: string }[] = [
+  {
+    key: 'service',
+    label: '서비스 상태',
+    description:
+      '읽기 전용 운영 중에 앱 시작 화면에 나갈 안내 문구예요. 비운 칸은 앱 기본 문구가 나가요. 상태를 바꾸지 않고 문구만 미리 저장할 수 있어요.',
+  },
   {
     key: 'app',
     label: '앱 버전·스토어',
@@ -53,6 +75,22 @@ export const sections: { key: SettingsSection; label: string; description: strin
   },
 ]
 export const fields: SettingField[] = [
+  // 모드는 전용 전환 확인창으로만 바꾼다. 이 항목은 이력 전후 비교·표시에 쓴다.
+  { path: 'service.mode', label: '서비스 상태', kind: 'mode' },
+  ...(['ko', 'en', 'ja'] as const).flatMap((locale) => [
+    {
+      path: `service.notice.${locale}.title`,
+      label: `${locale} 안내 제목`,
+      kind: 'noticeTitle' as const,
+      hint: `최대 ${NOTICE_TITLE_MAX}자. 비우면 앱 기본 제목이 나가요.`,
+    },
+    {
+      path: `service.notice.${locale}.body`,
+      label: `${locale} 안내 본문`,
+      kind: 'noticeBody' as const,
+      hint: `최대 ${NOTICE_BODY_MAX}자, 줄바꿈 가능. 비우면 앱 기본 본문이 나가요.`,
+    },
+  ]),
   ...(['ios', 'android'] as const).flatMap((p) => [
     {
       path: `app.minVersion.${p}`,
@@ -209,9 +247,15 @@ export function changedFields(
 ) {
   if (section === 'quest' && !hasQuestSettings(values)) return []
   if (section === 'institutionSubscription' && !hasSubscriptionSettings(values)) return []
+  if (section === 'service' && !hasServiceSettings(values)) return []
   const original = toDraft(values)
+  // 안내 문구는 서버가 앞뒤 공백을 걷어내므로 공백만 다른 값은 변경이 아니다
+  const comparable = (f: SettingField, value: string) =>
+    f.kind === 'noticeTitle' || f.kind === 'noticeBody' ? noticeText(value) : value
   return fields.filter(
-    (f) => f.path.startsWith(`${section}.`) && draft[f.path] !== original[f.path],
+    (f) =>
+      f.path.startsWith(`${section}.`) &&
+      comparable(f, draft[f.path]) !== comparable(f, original[f.path]),
   )
 }
 export function buildChanges(
@@ -237,7 +281,9 @@ export function buildChanges(
                 : null
               : f.kind === 'url'
                 ? value || null
-                : value,
+                : f.kind === 'noticeTitle' || f.kind === 'noticeBody'
+                  ? noticeText(value) || null
+                  : value,
     )
   })
   return changes
@@ -303,6 +349,16 @@ export function fieldError(field: SettingField, value: string): string | null {
       return value.trim().length > 0 && value.length <= (field.kind === 'title' ? 100 : 1000)
         ? null
         : `${field.kind === 'title' ? '제목은 1~100' : '본문은 1~1,000'}자로 입력하세요.`
+    case 'noticeTitle':
+    case 'noticeBody': {
+      const max = field.kind === 'noticeTitle' ? NOTICE_TITLE_MAX : NOTICE_BODY_MAX
+      if (value && !noticeText(value)) return '공백만 넣을 수 없어요. 비우면 앱 기본 문구가 나가요.'
+      return noticeLength(value) <= max
+        ? null
+        : `${field.kind === 'noticeTitle' ? '제목' : '본문'}은 ${max}자까지 입력할 수 있어요.`
+    }
+    case 'mode':
+      return value === 'NORMAL' || value === 'READ_ONLY' ? null : '서비스 상태를 확인해 주세요.'
     default:
       return null
   }
@@ -331,6 +387,7 @@ export function missingHistoryPolicies(values: OperationValues): string[] {
   return [
     ...(values.quest == null ? ['퀘스트·보상'] : []),
     ...(values.institutionSubscription == null ? ['기관 월 구독'] : []),
+    ...(values.service == null ? ['서비스 상태'] : []),
   ]
 }
 
@@ -341,7 +398,13 @@ export function restorePreview(current: OperationValues, target: OperationValues
     credit: { ...target.credit, migrationCutoffAt: current.credit.migrationCutoffAt },
     quest: target.quest ?? current.quest,
     institutionSubscription: target.institutionSubscription ?? current.institutionSubscription,
+    service: target.service ?? current.service,
   }
+}
+
+/** BE CHMO-993 배포 전 서버는 service를 주지 않는다. 기본값으로 채우지 않고 편집을 잠근다. */
+export function hasServiceSettings(values: OperationValues): boolean {
+  return typeof values.service?.mode === 'string' && values.service.mode !== ''
 }
 
 /** 누락을 OFF·기본 보상으로 채우면 구 서버에 없는 정책을 저장할 수 있어 구분한다. */
@@ -359,6 +422,9 @@ export function hasQuestSettings(values: OperationValues): boolean {
 export function settingDisplay(field: SettingField, value: string): string {
   if (field.kind === 'boolean' && (value === 'true' || value === 'false'))
     return value === 'true' ? '활성' : '비활성'
+  if (field.kind === 'mode') return value ? serviceModeLabel(value) : '없음'
+  if (field.kind === 'noticeTitle' || field.kind === 'noticeBody')
+    return noticeText(value) || '앱 기본 문구'
   return value || '없음'
 }
 
@@ -419,6 +485,8 @@ export function restoreCompatibilityError(
     (!hasSubscriptionSettings(current) || !hasSubscriptionSettings(target))
   )
     return '현재 설정과 이력의 월 구독 항목을 확인할 수 없어 전체 복원을 진행할 수 없어요. 최신 설정을 조회해 주세요.'
+  if (target.service != null && (!hasServiceSettings(current) || !hasServiceSettings(target)))
+    return '현재 설정과 이력의 서비스 상태를 확인할 수 없어 전체 복원을 진행할 수 없어요. 최신 설정을 조회해 주세요.'
   if (
     target.credit.dailyGrant !== current.credit.dailyGrant ||
     target.credit.cap !== current.credit.cap

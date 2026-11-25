@@ -6,6 +6,13 @@
 
 ---
 
+## CHMO-994 · 서비스 일시 중단(읽기 전용) 스위치 (2026-11-17 · BE CHMO-993 PR #376 dev 배포 · 2026-11-25 운영 반영 확인)
+
+- 운영 설정에 `service.mode`(NORMAL·READ_ONLY)와 언어별 `service.notice`를 기존 조회·부분 PATCH·이력·복원으로 연결했다. 모드 전환과 문구 저장은 서로 다른 PATCH다.
+- 공개 `/app/config`에 `service`가 추가된다(봉투 없음 유지). 읽기 전용 쓰기·새 가입 차단 `SERVICE503`을 `SERVICE_READ_ONLY`로 정규화하고 FE 문구로 안내한다.
+- 티켓 계약으로 먼저 쓴 뒤 BE 구현 브랜치 소스와 대조해 맞췄다: 관리자 응답의 `service.updatedAt`(서버 관리), 문구 앞뒤 공백 제거·코드 포인트 길이, 세 언어 키 항상 응답, 구독 해지 허용·결제 전부 차단, 소셜 가입 코드 교환 차단.
+- 2026-10-24 staging 실응답(서비스 상태 없음)으로 구 서버 잠금·이력 누락 표시를 회귀 검증한다. 공개 `/app/config`의 새 계약은 2026-11-17 dev 실응답(`app-config-service-staging.json`)으로 검증한다. 관리자 운영 설정의 `service` 실응답은 dev 관리자 로그인 뒤 채집한다(후속).
+
 ## CHMO-959 — dev 저장·충돌·복원 실응답 회귀 검증 (2026-10-24, 진행 중)
 
 - staging 관리자 부분 PATCH·재조회·이력·BEFORE 복원, 두 탭의 HTTP 409/SETTINGS409와 입력 보존, 저장 후 공개 `/app/config` 일치를 확인했다.

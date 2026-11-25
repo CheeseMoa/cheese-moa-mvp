@@ -1,0 +1,28 @@
+{
+  "source": {
+    "host": "staging-api.cheese-moa.com",
+    "capturedOn": "2026-11-17",
+    "deploy": "BE develop ff01bda5 (PR #376, CHMO-993) Deploy run 44035150406",
+    "transport": "unauthenticated curl GET, body and HTTP status only",
+    "sanitization": "none needed (public config, no user data)"
+  },
+  "normal": {
+    "path": "/app/config",
+    "method": "GET",
+    "status": 200,
+    "contentType": "application/json",
+    "body": {
+      "minVersion": {
+        "ios": "2.5.0",
+        "android": "2.5.0"
+      },
+      "storeUrl": {
+        "ios": "https://apps.apple.com/app/id6797158719",
+        "android": "https://play.google.com/store/apps/details?id=com.cheesemoa.app"
+      },
+      "service": {
+        "mode": "NORMAL"
+      }
+    }
+  }
+}

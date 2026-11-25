@@ -66,7 +66,8 @@ function AlertIcon() {
  * 불명확(결제사 통신 실패·네트워크)이면 새 결제를 만들지 않고 같은 주문을 다시 확인해야 이중
  * 결제가 안 난다(BE가 orderId 조회로 성공 여부를 조정 — CHMO-847 AC-17).
  */
-type FailureKind = 'uncertain' | 'rejected' | 'conflict' | 'unavailable' | 'forbidden' | 'other'
+type FailureKind =
+  'uncertain' | 'rejected' | 'conflict' | 'unavailable' | 'forbidden' | 'paused' | 'other'
 
 function failureKindOf(err: unknown): FailureKind {
   if (!(err instanceof ApiRequestError)) return 'uncertain'
@@ -80,6 +81,10 @@ function failureKindOf(err: unknown): FailureKind {
       return 'conflict'
     case 'BILLING_UNAVAILABLE':
       return 'unavailable'
+    // 읽기 전용 운영(CHMO-993)은 승인 요청 자체를 거절한 확정 결과다. 503이라고 '결과 불명'으로
+    // 두면 같은 주문으로 다시 확인하라고 안내하게 되는데, 그 재확인도 계속 막힌다.
+    case 'SERVICE_READ_ONLY':
+      return 'paused'
     case 'BILLING_NOT_SUPPORTED':
     case 'FORBIDDEN_ROLE':
     case 'PENDING_APPROVAL':
@@ -106,6 +111,10 @@ const FAILURE_COPY: Record<FailureKind, { title: string; body: string }> = {
   unavailable: {
     title: '지금은 결제를 승인할 수 없어요',
     body: '결제 서비스가 잠시 응답하지 않아요. 잠시 후 같은 주문으로 다시 확인해 주세요.',
+  },
+  paused: {
+    title: '지금은 결제를 진행할 수 없어요',
+    body: '서비스를 새로 다듬는 동안 새 결제를 잠시 멈췄어요. 요금은 청구되지 않았어요.',
   },
   forbidden: {
     title: '이 모임에서는 이용권을 구매할 수 없어요',
@@ -290,7 +299,7 @@ export function PassSuccessPage() {
         </p>
       ) : null}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        {RETRYABLE.has(failure.kind) && paymentKey ? (
+        {failure.kind === 'paused' ? null : RETRYABLE.has(failure.kind) && paymentKey ? (
           <AppPillButton disabled={busy} onClick={confirm} className="sm:w-60">
             {busy ? '확인 중…' : '같은 주문으로 다시 확인'}
           </AppPillButton>

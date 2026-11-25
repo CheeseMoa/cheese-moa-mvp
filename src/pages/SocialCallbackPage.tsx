@@ -110,6 +110,10 @@ export function SocialCallbackPage() {
         if (err instanceof ApiRequestError && err.code === 'SOCIAL_AUTH_FAILED') {
           // OAUTH401 = 가입 대기 코드 만료(TTL 10분)·소진 — 재시도가 무의미하니 재로그인부터
           setExchangeError('가입 유효 시간이 지났어요. 다시 로그인해 주세요.')
+        } else if (err instanceof ApiRequestError && err.code === 'SERVICE_READ_ONLY') {
+          // 읽기 전용 운영 중 새 가입 차단(BE CHMO-993 §3.4 — 코드는 소비되지 않지만 운영이
+          // 돌아올 때까지 이 폼에서 다시 내도 계속 막힌다). 앱 servicePausedSignupBlocked와 같은 말
+          setExchangeError('지금은 새로 가입할 수 없어요. 이미 가입한 계정으로 로그인해 주세요.')
         } else {
           // VALID400(필수 미동의·버전 불일치 등) — 코드가 소비되지 않아 이 폼에서 재시도 가능
           setConsentError(msg)
